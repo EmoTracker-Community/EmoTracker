@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows;
 
 namespace EmoTracker.Extensions.NoteTaking
 {
@@ -18,7 +17,7 @@ namespace EmoTracker.Extensions.NoteTaking
 
         public int Priority { get { return -300; } }
 
-        public FrameworkElement StatusBarControl
+        public object StatusBarControl
         {
             get
             {

@@ -1,5 +1,6 @@
-﻿using ConnectorLib;
+using ConnectorLib;
 using EmoTracker.Core;
+using EmoTracker.Core.Services;
 using EmoTracker.Data;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
@@ -9,8 +10,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Threading;
 
 namespace EmoTracker.Extensions.AutoTracker
 {
@@ -24,7 +23,7 @@ namespace EmoTracker.Extensions.AutoTracker
 
         public int Priority { get { return -100; } }
 
-        public FrameworkElement StatusBarControl
+        public object StatusBarControl
         {
             get
             {
@@ -442,16 +441,16 @@ namespace EmoTracker.Extensions.AutoTracker
             SetConnectorTypeCommand = new DelegateCommand(SetConnectorType);
         }
 
-        DispatcherTimer mUpdateTimer;
+        System.Timers.Timer mUpdateTimer;
 
         public void Start()
         {
             ScriptManager.Instance.SetGlobalObject("AutoTracker", this);
             ScriptManager.Instance.SetMemoryWatchService(this);
 
-            mUpdateTimer = new System.Windows.Threading.DispatcherTimer();
-            mUpdateTimer.Tick += new EventHandler(UpdateMemoryHooks);
-            mUpdateTimer.Interval = new TimeSpan(0, 0, 0, 0, 30);
+            mUpdateTimer = new System.Timers.Timer(30);
+            mUpdateTimer.Elapsed += (s, e) => UpdateMemoryHooks(s, e);
+            mUpdateTimer.AutoReset = true;
             mUpdateTimer.Start();
         }
 
@@ -546,11 +545,11 @@ namespace EmoTracker.Extensions.AutoTracker
                     }
                     finally
                     {
-                        Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                        Dispatch.BeginInvoke(() =>
                         {
                             Error = bError;
                             mActiveUpdateTask = null;
-                        }));
+                        });
                     }
                 });
             }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -40,9 +40,9 @@ namespace EmoTracker.Extensions.BontaMultiworld
 
         public int Priority { get { return -99; } }
 
-        MultiWorldExtensionView mStatusIndicator;
+        object mStatusIndicator;
 
-        public FrameworkElement StatusBarControl
+        public object StatusBarControl
         {
             get
             {
@@ -117,14 +117,14 @@ namespace EmoTracker.Extensions.BontaMultiworld
 
         protected void RefreshCommandAvailability()
         {
-            Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            Dispatch.BeginInvoke(() =>
             {
                 ConnectCmd?.RaiseCanExecuteChanged();
                 DisconnectCmd?.RaiseCanExecuteChanged();
                 JoinGameCmd?.RaiseCanExecuteChanged();
                 ForfeitCmd?.RaiseCanExecuteChanged();
                 PopOutCmd?.RaiseCanExecuteChanged();
-            }));
+            });
         }
 
         protected override void NotifyPropertyChanged([CallerMemberName] string propertyName = null)

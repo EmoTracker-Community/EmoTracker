@@ -12,7 +12,6 @@ using System.Speech.Recognition;
 using System.Speech.Synthesis;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows;
 
 namespace EmoTracker.Extensions.VoiceRecognition
 {
@@ -80,7 +79,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
             set { SetProperty(ref mbListening, value); }
         }
 
-        public FrameworkElement StatusBarControl
+        public object StatusBarControl
         {
             get; set;
         }

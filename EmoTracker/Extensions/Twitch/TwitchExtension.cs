@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Core.Services;
 using EmoTracker.Data;
 using EmoTracker.Data.Items;
@@ -54,7 +54,7 @@ namespace EmoTracker.Extensions.Twitch
         DefaultPermissions mDefaultPermissions = DefaultPermissions.Moderator;
         ConnectionState mConnectionState = ConnectionState.Disconnected;
         DisconnectReason mDisconnectReason = DisconnectReason.Unknown;
-        FrameworkElement mStatusControl;
+        object mStatusControl;
         TwitchClient mClient;
         bool mbActive = false;
 
@@ -68,11 +68,11 @@ namespace EmoTracker.Extensions.Twitch
             {
                 if (SetProperty(ref mConnectionState, value))
                 {
-                    Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                    Dispatch.BeginInvoke(() =>
                     {
                         ConnectCommand.RaiseCanExecuteChanged();
                         DisconnectCommand.RaiseCanExecuteChanged();
-                    }));
+                    });
                 }
             }
         }
@@ -83,7 +83,7 @@ namespace EmoTracker.Extensions.Twitch
 
         public int Priority { get { return 0; } }
 
-        public FrameworkElement StatusBarControl
+        public object StatusBarControl
         {
             get
             {
@@ -233,10 +233,10 @@ namespace EmoTracker.Extensions.Twitch
 
         private void OnLeftChannel(object sender, OnLeftChannelArgs e)
         {
-            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+            Dispatch.BeginInvoke(() =>
             {
                 Disconnect(DisconnectReason.Error);
-            }));
+            });
         }
 
         private void OnChannelStateChanged(object sender, OnChannelStateChangedArgs e)
@@ -245,38 +245,38 @@ namespace EmoTracker.Extensions.Twitch
 
         private void OnConnected(object sender, OnConnectedArgs e)
         {
-            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+            Dispatch.BeginInvoke(() =>
             {
                 ConnectionState = ConnectionState.Connected;
                 mClient.JoinChannel(ApplicationSettings.Instance.TwitchChannelName);
-            }));
+            });
         }
 
         private void OnConnectionError(object sender, OnConnectionErrorArgs e)
         {
-            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+            Dispatch.BeginInvoke(() =>
             {
                 if (e.Error != null)
                     MessageBox.Show(e.Error.Message, "Twitch Connection Error");
                 MessageBox.Show(e.ToString(), "Twitch Connection Error");
 
                 Disconnect(DisconnectReason.Error);
-            }));
+            });
         }
 
         private void OnDisconnected(object sender, OnDisconnectedEventArgs e)
         {
-            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+            Dispatch.BeginInvoke(() =>
             {
                 mClient = null;
 
                 Disconnect(DisconnectReason.Unknown);
-            }));
+            });
         }
 
         private void HandleCommand(string[] args, ChatMessage src)
         {
-            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+            Dispatch.BeginInvoke(() =>
             {
                 try
                 {
@@ -289,10 +289,10 @@ namespace EmoTracker.Extensions.Twitch
                         {
                             if (args[0].StartsWith("reset", StringComparison.OrdinalIgnoreCase))
                             {
-                                Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                                Dispatch.BeginInvoke(() =>
                                 {
                                     ApplicationModel.Instance.RefreshCommand.Execute(null);
-                                }));
+                                });
                                 return;
                             }
 
@@ -323,7 +323,7 @@ namespace EmoTracker.Extensions.Twitch
 
                         if (UserIsAllowed(src))
                         {
-                            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                            Dispatch.BeginInvoke(() =>
                             {
                                 ITrackableItem[] items = ItemDatabase.Instance.FindProvidingItemsForCode(args[0]);
                                 foreach (ITrackableItem item in items)
@@ -400,11 +400,11 @@ namespace EmoTracker.Extensions.Twitch
                                         }
                                     }
                                 }
-                            }));
+                            });
 
                             if (args[0].StartsWith("flush", StringComparison.OrdinalIgnoreCase))
                             {
-                                Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                                Dispatch.BeginInvoke(() =>
                                 {
                                     if (!src.IsBroadcaster && (System.DateTime.Now - mLastVFXCommandTime) < new System.TimeSpan(0, 0, 0, 30))
                                     {
@@ -419,13 +419,13 @@ namespace EmoTracker.Extensions.Twitch
                                     {
                                         main.BroadcastView.Flush();
                                     }
-                                }));
+                                });
                                 return;
                             }
 
                             if (args[0].StartsWith("rain", StringComparison.OrdinalIgnoreCase))
                             {
-                                Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                                Dispatch.BeginInvoke(() =>
                                 {
                                     if (!src.IsBroadcaster && (System.DateTime.Now - mLastVFXCommandTime) < new System.TimeSpan(0, 0, 0, 30))
                                     {
@@ -451,7 +451,7 @@ namespace EmoTracker.Extensions.Twitch
                                                 main.BroadcastView.Rain(img);
                                         }
                                     }
-                                }));
+                                });
                                 return;
                             }
                         }
@@ -460,7 +460,7 @@ namespace EmoTracker.Extensions.Twitch
                 catch
                 {
                 }
-            }));
+            });
         }
 
         private string FindUserInCollection(string user, List<string> collection)

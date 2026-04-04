@@ -5,13 +5,9 @@
     <OutputType>Library</OutputType>
     <RootNamespace>EmoTracker.Data</RootNamespace>
     <AssemblyName>EmoTracker.Data</AssemblyName>
-    <TargetFramework>net472</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Reference Include="System.IO.Compression" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\EmoTracker.Core\EmoTracker.Core.csproj" />
