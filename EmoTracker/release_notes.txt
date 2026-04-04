@@ -1,0 +1,3 @@
+EmoTracker 2.1.0.0
+
+Welcome to EmoTracker 2.1.0.0, the first release to be distributed via a standard windows installer rather than ClickOnce.

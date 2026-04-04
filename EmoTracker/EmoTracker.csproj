@@ -1,0 +1,592 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <UsingTask TaskName="ShaderBuildTask.PixelShaderCompile" AssemblyName="ShaderBuildTask, Version=1.0.3072.18169, Culture=neutral, PublicKeyToken=44e467d1687af125" />
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{37EF8519-4426-455F-9D23-292839365EE0}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>EmoTracker</RootNamespace>
+    <AssemblyName>EmoTracker</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <WarningLevel>4</WarningLevel>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <IsWebBootstrapper>true</IsWebBootstrapper>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
+    <TargetFrameworkProfile />
+    <PublishUrl>ftp://emosaru.com/emotracker/live/</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Web</InstallFrom>
+    <UpdateEnabled>true</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>false</MapFileExtensions>
+    <InstallUrl>http://www.emosaru.com/emotracker/live/</InstallUrl>
+    <ProductName>EmoTracker</ProductName>
+    <PublisherName>EmoSaru</PublisherName>
+    <WebPage>publish.htm</WebPage>
+    <OpenBrowserOnPublish>false</OpenBrowserOnPublish>
+    <ApplicationRevision>61</ApplicationRevision>
+    <ApplicationVersion>0.2.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <CreateDesktopShortcut>true</CreateDesktopShortcut>
+    <PublishWizardCompleted>true</PublishWizardCompleted>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <Prefer32Bit>false</Prefer32Bit>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestCertificateThumbprint>167B9052FD6E100C3615635E17B6FCFA74A17F88</ManifestCertificateThumbprint>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestKeyFile>EmoTracker_TemporaryKey.pfx</ManifestKeyFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateManifests>false</GenerateManifests>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignManifests>false</SignManifests>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetZone>Custom</TargetZone>
+  </PropertyGroup>
+  <PropertyGroup />
+  <PropertyGroup>
+    <ApplicationIcon>emohead_icon_transparent_7h3_icon.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>false</SignAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyOriginatorKeyFile>EmoTracker_TemporaryKey.pfx</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Optimized|AnyCPU'">
+    <OutputPath>bin\Optimized\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Beta|AnyCPU'">
+    <OutputPath>bin\Beta\</OutputPath>
+    <DefineConstants>TRACE;BETA</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <OutputPath>bin\x64\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Optimized|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x64\Optimized\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Beta|x64'">
+    <OutputPath>bin\x64\Beta\</OutputPath>
+    <DefineConstants>TRACE;BETA</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x86\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
+    <OutputPath>bin\x86\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Optimized|x86'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x86\Optimized\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Beta|x86'">
+    <OutputPath>bin\x86\Beta\</OutputPath>
+    <DefineConstants>TRACE;BETA</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x86</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>true</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="ConnectorLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=cfd87750c06b9e76, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\External\ConnectorLib\ConnectorLib.dll</HintPath>
+    </Reference>
+    <Reference Include="ConnectorLib.sd2snes, Version=1.0.0.0, Culture=neutral, PublicKeyToken=cfd87750c06b9e76, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\External\ConnectorLib\ConnectorLib.sd2snes.dll</HintPath>
+    </Reference>
+    <Reference Include="PresentationFramework.Aero" />
+    <Reference Include="System" />
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Speech" />
+    <Reference Include="System.Xml" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Xaml">
+      <RequiredTargetFramework>4.0</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+  </ItemGroup>
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <Compile Include="ApplicationModel.cs" />
+    <Compile Include="Extensions\AutoTracker\AutoTrackerExtension.cs" />
+    <Compile Include="Extensions\AutoTracker\AutoTrackerExtensionView.xaml.cs">
+      <DependentUpon>AutoTrackerExtensionView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\AutoTracker\IUpdateWithConnector.cs" />
+    <Compile Include="Extensions\AutoTracker\MemoryTimer.cs" />
+    <Compile Include="Extensions\AutoTracker\MemorySegment.cs" />
+    <Compile Include="Extensions\AutoTracker\MemoryUpdateResult.cs" />
+    <Compile Include="Extensions\BontaMultiworld\MultiWorldClientSession.cs" />
+    <Compile Include="Extensions\BontaMultiworld\MultiWorldConnectionDialog.xaml.cs">
+      <DependentUpon>MultiWorldConnectionDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\BontaMultiworld\MultiWorldExtension.cs" />
+    <Compile Include="Extensions\BontaMultiworld\MultiWorldExtensionView.xaml.cs">
+      <DependentUpon>MultiWorldExtensionView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\BontaMultiworld\MultiWorldLogWindow.xaml.cs">
+      <DependentUpon>MultiWorldLogWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\Extension.cs" />
+    <Compile Include="Extensions\ExtensionManager.cs" />
+    <Compile Include="Extensions\NDI\NDIExtension.cs" />
+    <Compile Include="Extensions\NDI\NDIStatusIndicator.xaml.cs">
+      <DependentUpon>NDIStatusIndicator.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\NoteTaking\NoteTakingExtension.cs" />
+    <Compile Include="Extensions\Twitch\TwitchExtension.cs" />
+    <Compile Include="Extensions\Twitch\TwitchStatusIndicator.xaml.cs">
+      <DependentUpon>TwitchStatusIndicator.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\VariantSwitcher\VariantSwitcherExtension.cs" />
+    <Compile Include="Extensions\VariantSwitcher\VariantSwitcherControl.xaml.cs">
+      <DependentUpon>VariantSwitcherControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Extensions\VoiceRecognition\VoiceRecognitionExtension.cs" />
+    <Compile Include="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.xaml.cs">
+      <DependentUpon>VoiceRecognitionStatusIndicator.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Notifications\MarkdownNotification.cs" />
+    <Compile Include="Notifications\Notification.cs" />
+    <None Include="PluginManager.cs" />
+    <Compile Include="Services\DispatchService.cs" />
+    <Compile Include="Services\LogService.cs" />
+    <Compile Include="UI\AppUpdateWindow.xaml.cs">
+      <DependentUpon>AppUpdateWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\CapturableItemControl.xaml.cs">
+      <DependentUpon>CapturableItemControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\ChestListControl.xaml.cs">
+      <DependentUpon>ChestListControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\GroupedLocationListControl.xaml.cs">
+      <DependentUpon>GroupedLocationListControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\ItemGridControl.xaml.cs">
+      <DependentUpon>ItemGridControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\LayoutControl.xaml.cs">
+      <DependentUpon>LayoutControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\LocationControl.xaml.cs">
+      <DependentUpon>LocationControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\LocationMapControl.xaml.cs">
+      <DependentUpon>LocationMapControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\DeveloperConsole.xaml.cs">
+      <DependentUpon>DeveloperConsole.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\Notes\MarkdownTextNoteControl.xaml.cs">
+      <DependentUpon>MarkdownTextNoteControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\NoteTakingIconPopup.xaml.cs">
+      <DependentUpon>NoteTakingIconPopup.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\NoteTakingSiteView.xaml.cs">
+      <DependentUpon>NoteTakingSiteView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\BroadcastView.xaml.cs">
+      <DependentUpon>BroadcastView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\OverrideExportDialog.xaml.cs">
+      <DependentUpon>OverrideExportDialog.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\PackageManagerWindow.xaml.cs">
+      <DependentUpon>PackageManagerWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\TrackableItemControl.xaml.cs">
+      <DependentUpon>TrackableItemControl.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Update\AppUpdate.cs" />
+    <Compile Include="Utility\DiscordRPC.cs" />
+    <Page Include="Extensions\AutoTracker\AutoTrackerExtensionView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Extensions\BontaMultiworld\MultiWorldConnectionDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Extensions\BontaMultiworld\MultiWorldExtensionView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Extensions\BontaMultiworld\MultiWorldLogWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Extensions\NDI\NDIStatusIndicator.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Extensions\Twitch\TwitchStatusIndicator.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Extensions\VariantSwitcher\VariantSwitcherControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="MainWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Include="App.xaml.cs">
+      <DependentUpon>App.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MainWindow.xaml.cs">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Page Include="UI\AppUpdateWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\CapturableItemControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\ChestListControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\GroupedLocationListControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\ItemGridControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\LayoutControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\LocationControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\LocationMapControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\BroadcastView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\DeveloperConsole.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\Notes\MarkdownTextNoteControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\NoteTakingIconPopup.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\NoteTakingSiteView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\OverrideExportDialog.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\PackageManagerWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UI\TrackableItemControl.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Properties\AssemblyInfo.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+    <Resource Include="Resources\Fonts\Font Awesome 5 Brands-Regular-400.otf" />
+    <Resource Include="Resources\Fonts\Font Awesome 5 Free-Regular-400.otf" />
+    <Resource Include="Resources\Fonts\Font Awesome 5 Free-Solid-900.otf" />
+    <Resource Include="Resources\flush.wav" />
+    <Resource Include="emohead_icon_transparent_7h3_icon.ico" />
+    <Resource Include="emotracker_icon.ico" />
+    <Resource Include="Resources\icon_gear.png" />
+    <Resource Include="Resources\icon_delete_user_data.png" />
+    <Resource Include="Resources\icon_refresh.png" />
+    <Resource Include="Resources\chest_closed.png" />
+    <Resource Include="Resources\chest_open.png" />
+    <Resource Include="Resources\wood_tile_2.jpg" />
+    <Resource Include="Resources\knit_tile.jpg" />
+    <Resource Include="Resources\wood_tile.jpg" />
+    <Resource Include="Resources\gradient_bar.png" />
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <None Include="app.manifest" />
+    <None Include="EmoTracker_TemporaryKey.pfx" />
+    <None Include="Properties\app.manifest">
+      <SubType>Designer</SubType>
+    </None>
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.6.1">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4.6.1 %28x86 and x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="release_notes.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\rain.wav" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\birbs.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\dumbs.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\numpties.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EmoTracker.Core\EmoTracker.Core.csproj">
+      <Project>{49c7d6e4-54ac-40d8-865d-f242c0e1247c}</Project>
+      <Name>EmoTracker.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\EmoTracker.Data\EmoTracker.Data.csproj">
+      <Project>{8b95a4e0-8f5b-4894-b1a4-945e20c989e8}</Project>
+      <Name>EmoTracker.Data</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\EmoTracker.UI\EmoTracker.UI.csproj">
+      <Project>{4565f6d4-bb80-407c-b926-79f62f03cfa6}</Project>
+      <Name>EmoTracker.UI</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\External\NDI\NDILibDotNet2\NDILibDotNet2.csproj">
+      <Project>{7195bfa6-8095-4618-96f6-8577db13fb43}</Project>
+      <Name>NDILibDotNet2</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\ndi.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\PackageManager\default_game_banner.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\filetype_json.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\filetype_lua.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Markdig.Wpf">
+      <Version>0.5.0.1</Version>
+    </PackageReference>
+    <PackageReference Include="Newtonsoft.Json">
+      <Version>13.0.4</Version>
+    </PackageReference>
+    <PackageReference Include="Serilog">
+      <Version>4.3.1</Version>
+    </PackageReference>
+    <PackageReference Include="Serilog.Sinks.Console">
+      <Version>6.1.1</Version>
+    </PackageReference>
+    <PackageReference Include="Serilog.Sinks.File">
+      <Version>7.0.0</Version>
+    </PackageReference>
+    <PackageReference Include="TwitchLib">
+      <Version>3.5.3</Version>
+    </PackageReference>
+    <PackageReference Include="WebSocketSharp">
+      <Version>1.0.3-rc11</Version>
+    </PackageReference>
+    <PackageReference Include="WpfScreenHelper">
+      <Version>2.1.1</Version>
+    </PackageReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>xcopy /s /y "$(SolutionDir)\External\ConnectorLib\EasyHook32*" "$(TargetDir)"
+xcopy /s /y "$(SolutionDir)\External\ConnectorLib\EasyHook64*" "$(TargetDir)"
+xcopy /s /y "$(SolutionDir)\External\ConnectorLib\EasyLoad32*" "$(TargetDir)"
+xcopy /s /y "$(SolutionDir)\External\ConnectorLib\EasyLoad64*" "$(TargetDir)"
+xcopy /s /y "$(SolutionDir)\External\ConnectorLib\Connectors\bizhawk\*.*" "$(TargetDir)\Connectors\bizhawk\*.*"
+xcopy /s /y "$(SolutionDir)\External\ConnectorLib\Connectors\snes9x\*.*" "$(TargetDir)\Connectors\snes9x\*.*"
+xcopy /s /y "$(SolutionDir)\External\ConnectorLib\Connectors\common\*.*" "$(TargetDir)\Connectors\bizhawk\*.*"
+xcopy /s /y "$(SolutionDir)\External\ConnectorLib\Connectors\common\*.*" "$(TargetDir)\Connectors\snes9x\*.*"
+xcopy /s /y "$(SolutionDir)\External\Discord\*.*" "$(TargetDir)"
+xcopy /s /y "$(SolutionDir)\External\NDI\distrib\x86\*.*" "$(TargetDir)"
+xcopy /s /y "$(SolutionDir)\External\NDI\distrib\x64\*.*" "$(TargetDir)"
+del /F /Q "$(TargetDir)\lua53.dll"
+del /F /Q "$(TargetDir)\liblua*"
+
+if $(ConfigurationName) == Release (
+echo.
+echo -------------------------------------------------------------------------------------
+echo Generating Installer...
+cd
+echo -------------------------------------------------------------------------------------
+"C:\Program Files (x86)\Inno Setup 5\ISCC.exe" $(SolutionDir)\Installer\emotracker_setup.iss
+)</PostBuildEvent>
+  </PropertyGroup>
+</Project>

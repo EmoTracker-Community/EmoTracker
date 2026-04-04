@@ -1,0 +1,354 @@
+﻿using EmoTracker.Core;
+using EmoTracker.Core.Services;
+using EmoTracker.Data.JSON;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+
+namespace EmoTracker.Data
+{
+    public enum MultiworldNotificationLevel
+    {
+        None = 0,
+        Normal = 1,
+        Verbose = 2
+    }
+
+    public class ApplicationSettings : ObservableSingleton<ApplicationSettings>
+    {
+        double mInitialWidth = -1.0;
+        double mInitialHeight = -1.0;
+        double mNDIFrameRate = 30.0;
+        int mNDIOutputScale = 1;
+        bool mbAlwaysOnTop = false;
+        bool mbEnableDiscordRichPresence = false;
+        bool mbEnableVoice = true;
+        bool mbEnableBontaMultiWorld = false;
+        bool mbIgnoreBontaMultiWorldRomCheck = false;
+        bool mbPromptOnRefreshClose = false;
+
+        private bool mbDisplayAllLocations = false;
+        private bool mbIgnoreAllLogic = false;
+        private bool mbAutoUnpinLocationsOnClear = true;
+        private bool mbAlwaysAllowClearing = false;
+        private bool mbPinLocationsOnItemCapture = true;
+
+        public bool IgnoreAllLogic
+        {
+            get { return mbIgnoreAllLogic; }
+            set
+            {
+                if (SetProperty(ref mbIgnoreAllLogic, value))
+                    LocationDatabase.Instance.RefeshAccessibility();
+            }
+        }
+
+        public bool AutoUnpinLocationsOnClear
+        {
+            get { return mbAutoUnpinLocationsOnClear; }
+            set { SetProperty(ref mbAutoUnpinLocationsOnClear, value); }
+        }
+
+        public bool AlwaysAllowClearing
+        {
+            get { return mbAlwaysAllowClearing; }
+            set { SetProperty(ref mbAlwaysAllowClearing, value); }
+        }
+
+        public bool PinLocationsOnItemCapture
+        {
+            get { return mbPinLocationsOnItemCapture; }
+            set { SetProperty(ref mbPinLocationsOnItemCapture, value); }
+        }
+
+        public bool DisplayAllLocations
+        {
+            get { return mbDisplayAllLocations; }
+            set { SetProperty(ref mbDisplayAllLocations, value); }
+        }
+
+        bool mbFastTooltips = false;
+        public bool FastToolTips
+        {
+            get { return mbFastTooltips; }
+            set { SetProperty(ref mbFastTooltips, value); }
+        }
+
+        string mServiceBaseURL = "https://emotracker-community.github.io/EmoTracker-Service/service/";
+        string mTwitchChannelName;
+        string mLastActivePackage;
+        string mLastActivePackageVariant;
+        string mCommandLinePackage;
+        string mCommandLinePackageVariant;
+
+        ObservableCollection<string> mPackageRepositories = new ObservableCollection<string>();
+
+        MultiworldNotificationLevel mMultiworldNotificationLevel = MultiworldNotificationLevel.Normal;
+        public MultiworldNotificationLevel MultiworldNotificationLevel
+        {
+            get { return mMultiworldNotificationLevel; }
+            set { SetProperty(ref mMultiworldNotificationLevel, value); }
+        }
+
+        public double InitialWidth
+        {
+            get { return mInitialWidth; }
+            set { SetProperty(ref mInitialWidth, value); }
+        }
+
+        public double InitialHeight
+        {
+            get { return mInitialHeight; }
+            set { SetProperty(ref mInitialHeight, value); }
+        }
+
+        public bool AlwaysOnTop
+        {
+            get { return mbAlwaysOnTop; }
+            set { SetProperty(ref mbAlwaysOnTop, value); }
+        }
+
+        public bool EnableVoiceControl
+        {
+            get { return mbEnableVoice; }
+            set { SetProperty(ref mbEnableVoice, value); }
+        }
+
+        public bool EnableBontaMultiWorld
+        {
+            get { return mbEnableBontaMultiWorld; }
+            set { SetProperty(ref mbEnableBontaMultiWorld, value); }
+        }
+
+        public bool IgnoreBontaMultiWorldRomCheck
+        {
+            get { return mbIgnoreBontaMultiWorldRomCheck; }
+            set { SetProperty(ref mbIgnoreBontaMultiWorldRomCheck, value); }
+        }
+
+        public bool PromptOnRefreshClose
+        {
+            get { return mbPromptOnRefreshClose; }
+            set { SetProperty(ref mbPromptOnRefreshClose, value); }
+        }
+
+        public bool EnableDiscordRichPresence
+        {
+            get { return mbEnableDiscordRichPresence; }
+            set { SetProperty(ref mbEnableDiscordRichPresence, value); }
+        }
+
+        public string ServiceBaseURL
+        {
+            get { return mServiceBaseURL; }
+            set { SetProperty(ref mServiceBaseURL, value); }
+        }
+
+        public string LastActivePackage
+        {
+            get { return mLastActivePackage; }
+            set { SetProperty(ref mLastActivePackage, value); }
+        }
+
+        public string LastActivePackageVariant
+        {
+            get { return mLastActivePackageVariant; }
+            set { SetProperty(ref mLastActivePackageVariant, value); }
+        }
+
+        public string CommandLinePackage
+        {
+            get { return mCommandLinePackage;  }
+            set { SetProperty(ref mCommandLinePackage, value); }
+        }
+
+        public string CommandLinePackageVariant
+        {
+            get { return mCommandLinePackageVariant; }
+            set { SetProperty(ref mCommandLinePackageVariant, value); }
+        }
+
+        public string TwitchChannelName
+        {
+            get { return mTwitchChannelName; }
+            set { SetProperty(ref mTwitchChannelName, value); }
+        }
+        public double NdiFrameRate
+        {
+            get { return mNDIFrameRate; }
+            set { SetProperty(ref mNDIFrameRate, Math.Max(value, 1.0)); }
+        }
+        public int NdiOutputScale
+        {
+            get { return mNDIOutputScale; }
+            set { SetProperty(ref mNDIOutputScale, Math.Max(value, 1)); }
+        }
+
+        public IEnumerable<string> AdditionalRepositories
+        {
+            get { return mPackageRepositories; }
+        }
+
+        public ApplicationSettings()
+        {
+            LoadSettings();
+
+            this.PropertyChanged += LocalPropertyChanged;
+            mPackageRepositories.CollectionChanged += RepositoriesModified;
+        }
+
+        private void RepositoriesModified(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+        }
+
+        private void LocalPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            WriteSettings();
+        }
+
+        private void LoadSettings()
+        {
+            try
+            {
+                string path = Path.Combine(UserDirectory.Path, "application_settings.json");
+                if (File.Exists(path))
+                {
+                    using (StreamReader reader = new StreamReader(File.OpenRead(Path.Combine(UserDirectory.Path, "application_settings.json"))))
+                    {
+                        JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
+
+                        InitialWidth = root.GetValue<double>("initial_width", -1.0);
+                        InitialHeight = root.GetValue<double>("initial_height", -1.0);
+                        NdiFrameRate = root.GetValue<double>("ndi_frame_rate", 30.0);
+                        NdiOutputScale = root.GetValue<int>("ndi_output_scale", 1);
+                        AlwaysOnTop = root.GetValue<bool>("always_on_top", false);
+                        EnableDiscordRichPresence = root.GetValue<bool>("discord_rich_presence", false);
+                        EnableVoiceControl = root.GetValue<bool>("enable_voice_control", true);
+                        EnableBontaMultiWorld = root.GetValue<bool>("enable_bonta_alttpr_multiworld", false);
+                        IgnoreBontaMultiWorldRomCheck = root.GetValue<bool>("ignore_bonta_alttpr_multiworld_rom_check", false);
+                        MultiworldNotificationLevel = root.GetEnumValue<MultiworldNotificationLevel>("multiworld_notification_level", MultiworldNotificationLevel.Normal);
+                        PromptOnRefreshClose = root.GetValue<bool>("prompt_on_refresh_close", false);
+                        LastActivePackage = root.GetValue<string>("last_active_package");
+                        LastActivePackageVariant = root.GetValue<string>("last_active_package_variant");
+                        TwitchChannelName = root.GetValue<string>("twitch_channel");
+                        ServiceBaseURL = root.GetValue<string>("service_base_url", ServiceBaseURL);
+
+                        IgnoreAllLogic = root.GetValue<bool>("tracking_ignore_all_logic", false);
+                        AlwaysAllowClearing = root.GetValue<bool>("tracking_always_allow_clearing_locations", false);
+                        DisplayAllLocations = root.GetValue<bool>("tracking_display_all_locations", false);
+                        AutoUnpinLocationsOnClear = root.GetValue<bool>("tracking_auto_unpin_locations_on_clear", true);
+                        PinLocationsOnItemCapture = root.GetValue<bool>("tracking_pin_locations_on_item_capture", true);
+
+                        FastToolTips = root.GetValue<bool>("assistance_fast_tool_tips", false);
+
+                        JArray repositories = root.GetValue<JArray>("package_repositories");
+                        if (repositories != null)
+                        {
+                            foreach (string url in repositories)
+                            {
+                                if (!string.IsNullOrWhiteSpace(url) && !mPackageRepositories.Contains(url, StringComparer.OrdinalIgnoreCase))
+                                    mPackageRepositories.Add(url);
+                            }
+                        }
+                    }
+                }
+
+                string[] cargs = Environment.GetCommandLineArgs();
+                for(int n = 0; n < cargs.Length; n++)
+                {
+                    if (String.Equals(cargs[n], "--pack"))
+                    {
+                        n++;
+                        if (n > cargs.Length-1)
+                            { break; }
+
+                        CommandLinePackage = cargs[n];
+
+                    }
+                    if (String.Equals(cargs[n], "--variant"))
+                    {
+                        n++;
+                        if (n > cargs.Length - 1)
+                        { break; }
+
+                        CommandLinePackageVariant = cargs[n];
+
+                    }
+
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private void WriteSettings()
+        {
+            try
+            {
+                using (StreamWriter writer = new StreamWriter(File.Open(Path.Combine(UserDirectory.Path, "application_settings.json"), FileMode.Create)))
+                {
+                    using (JsonTextWriter jsonWriter = new JsonTextWriter(writer))
+                    {
+                        jsonWriter.AutoCompleteOnClose = true;
+                        jsonWriter.Formatting = Formatting.Indented;
+
+                        JObject root = new JObject();
+
+                        if (InitialWidth >= 0.0)
+                            root.Add("initial_width", JToken.FromObject(InitialWidth));
+
+                        if (InitialHeight >= 0.0)
+                            root.Add("initial_height", JToken.FromObject(InitialHeight));
+
+                        if (NdiFrameRate > 1.0)
+                            root.Add("ndi_frame_rate", JToken.FromObject(NdiFrameRate));
+
+                        if (NdiOutputScale > 1)
+                            root.Add("ndi_output_scale", JToken.FromObject(NdiOutputScale));
+
+                        root.Add("always_on_top", JToken.FromObject(AlwaysOnTop));
+                        root.Add("discord_rich_presence", JToken.FromObject(EnableDiscordRichPresence));
+                        root.Add("enable_voice_control", JToken.FromObject(EnableVoiceControl));
+                        root.Add("prompt_on_refresh_close", JToken.FromObject(PromptOnRefreshClose));
+                        root.Add("ignore_bonta_alttpr_multiworld_rom_check", JToken.FromObject(IgnoreBontaMultiWorldRomCheck));
+                        root.Add("multiworld_notification_level", JToken.FromObject(MultiworldNotificationLevel));
+
+                        if (!string.IsNullOrWhiteSpace(ServiceBaseURL))
+                            root.Add("service_base_url", JToken.FromObject(ServiceBaseURL));
+
+                        if (!string.IsNullOrWhiteSpace(LastActivePackage))
+                            root.Add("last_active_package", JToken.FromObject(LastActivePackage));
+
+                        if (!string.IsNullOrWhiteSpace(LastActivePackageVariant))
+                            root.Add("last_active_package_variant", JToken.FromObject(LastActivePackageVariant));
+
+                        if (!string.IsNullOrWhiteSpace(TwitchChannelName))
+                            root.Add("twitch_channel", JToken.FromObject(TwitchChannelName));
+
+                        root.Add("tracking_ignore_all_logic", JToken.FromObject(IgnoreAllLogic));
+                        root.Add("tracking_always_allow_clearing_locations", JToken.FromObject(AlwaysAllowClearing));
+                        root.Add("tracking_display_all_locations", JToken.FromObject(DisplayAllLocations));
+                        root.Add("tracking_auto_unpin_locations_on_clear", JToken.FromObject(AutoUnpinLocationsOnClear));
+                        root.Add("tracking_pin_locations_on_item_capture", JToken.FromObject(PinLocationsOnItemCapture));
+
+                        root.Add("assistance_fast_tool_tips", JToken.FromObject(FastToolTips));
+
+                        JArray reposVal = JArray.FromObject(AdditionalRepositories);
+                        if (reposVal != null)
+                            root.Add("package_repositories", reposVal);
+
+                        jsonWriter.WriteToken(root.CreateReader());
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+}

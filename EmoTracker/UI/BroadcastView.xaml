@@ -1,0 +1,24 @@
+﻿<Window x:Class="EmoTracker.UI.BroadcastView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:EmoTracker.UI"
+        xmlns:app="clr-namespace:EmoTracker"
+        xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+        xmlns:items="clr-namespace:EmoTracker.Data.Items"
+        xmlns:NDI="clr-namespace:NewTek.NDI.WPF;assembly=NDIlibDotNet2"
+        mc:Ignorable="d"
+        DataContext="{Binding Path=BroadcastLayout, Source={x:Static app:ApplicationModel.Instance}}"
+        Title="EmoTracker: Broadcast View" MinWidth="200" MinHeight="100" SizeToContent="WidthAndHeight" ResizeMode="CanMinimize" WindowStyle="SingleBorderWindow" Background="#FF212121">
+    <Grid>
+        <NDI:NdiSendContainer Name="NDIHost" NdiWidth="{Binding ActualWidth, ElementName=BroadcastContainer}" NdiHeight="{Binding ActualHeight, ElementName=BroadcastContainer}" NdiName="EmoTracker Broadcast View" NdiDropShadow="{Binding Root.BroadcastShadow}" NdiIntegerScale="{Binding Path=NdiOutputScale, Source={x:Static data:ApplicationSettings.Instance}}" NdiFrameRateNumerator="{Binding Path=NdiFrameRate, Source={x:Static data:ApplicationSettings.Instance}}" NdiFrameRateDenominator="1">
+            <NDI:NdiSendContainer.Content>
+                <Grid Name="BroadcastContainer">
+                    <local:LayoutControl x:Name="HostedLayout" DataContext="{Binding}" IsEnabled="False" />
+                    <Canvas Name="OverlayCanvas" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                </Grid>
+            </NDI:NdiSendContainer.Content>
+        </NDI:NdiSendContainer>
+    </Grid>
+</Window>

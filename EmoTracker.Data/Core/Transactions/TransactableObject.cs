@@ -1,0 +1,113 @@
+﻿using EmoTracker.Core;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+
+namespace EmoTracker.Data.Core.Transactions
+{
+    public class TransactableObject : ObservableObject
+    {
+        static Dictionary<Type, Dictionary<string, bool>> mGlobalReadFromOpenTransactionCache = new Dictionary<Type, Dictionary<string, bool>>();
+
+        Dictionary<string, bool> mLocalReadFromOpenTransactionCache;
+        Dictionary<string, object> mPropertyStore = new Dictionary<string, object>();
+
+        private bool ShouldReadFromOpenTransaction(System.Type hostType, string propertyName)
+        {
+            bool bAllowRead = false;
+
+            if (mLocalReadFromOpenTransactionCache == null)
+            {
+                if (!mGlobalReadFromOpenTransactionCache.TryGetValue(hostType, out mLocalReadFromOpenTransactionCache))
+                    mGlobalReadFromOpenTransactionCache[hostType] = mLocalReadFromOpenTransactionCache = new Dictionary<string, bool>();
+            }
+
+            if (mLocalReadFromOpenTransactionCache.TryGetValue(propertyName, out bAllowRead))
+                return bAllowRead;
+
+            PropertyInfo propInfo = hostType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            if (propInfo != null)
+            {
+                TransactablePropertyReadBehaviorAttribute a = Attribute.GetCustomAttribute(propInfo, typeof(TransactablePropertyReadBehaviorAttribute)) as TransactablePropertyReadBehaviorAttribute;
+                if (a != null)
+                {
+                    bAllowRead = a.ReadBehavior == TransactablePropertyReadBehavior.AllowOpenTransactionRead;
+                }
+            }
+
+            mLocalReadFromOpenTransactionCache[propertyName] = bAllowRead;
+            return bAllowRead;
+        }
+
+        private T GetCurrentTransactablePropertyValue<T>(string propertyName)
+        {
+            object abstractValue;
+            if (mPropertyStore.TryGetValue(propertyName, out abstractValue))
+            {
+                try
+                {
+                    T value = (T)abstractValue;
+                    return value;
+                }
+                catch
+                {
+                    throw new InvalidCastException(string.Format("Failed to read property '{0}' as type `{1}`", propertyName, typeof(T)));
+                }
+            }
+
+            return default(T);
+        }
+
+        public T GetTransactableProperty<T>([CallerMemberName] string propertyName = null, bool bForceReadFromOpenTransaction = false)
+        {
+            if (bForceReadFromOpenTransaction || ShouldReadFromOpenTransaction(this.GetType(), propertyName))
+            {
+                ITransactionScope scope = TransactionProcessor.Current.CurrentScope;
+                if (scope != null)
+                {
+                    if (scope.Transaction != null && scope.Transaction.HasPropertyValue(this, propertyName))
+                        return scope.Transaction.GetPropertyValue<T>(this, propertyName);
+                }
+            }
+
+            return GetCurrentTransactablePropertyValue<T>(propertyName);
+        }
+        protected bool ForceSetTransactableProperty<T>(T value, Action<T> onTransactionProcessed = null, [CallerMemberName] string propertyName = null)
+        {
+            if (!SetTransactableProperty(value, onTransactionProcessed, propertyName) && onTransactionProcessed != null)
+                onTransactionProcessed(value);
+
+            return true;
+        }
+
+
+        protected bool SetTransactableProperty<T>(T value, Action<T> onTransactionProcessed = null, [CallerMemberName] string propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(GetTransactableProperty<T>(propertyName), value))
+                return false;
+
+            TransactionProcessor.Current.WriteProperty(this, propertyName, value, (transactionState) =>
+            {
+                if (transactionState.Status == TransactionStatus.Completed)
+                {
+                    try
+                    {
+                        T resultValue = transactionState.GetPropertyValue<T>(this, propertyName);
+                        NotifyPropertyChanging(propertyName);
+                            
+                        mPropertyStore[propertyName] = resultValue;
+                        onTransactionProcessed?.Invoke(resultValue);
+
+                        NotifyPropertyChanged(propertyName);
+                    }
+                    catch
+                    {
+                    }
+                }
+            });
+
+            return true;
+        }
+    }
+}
