@@ -1,0 +1,503 @@
+﻿<UserControl x:Class="EmoTracker.UI.LayoutControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:app="clr-namespace:EmoTracker"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             xmlns:locations="clr-namespace:EmoTracker.Data.Locations"
+             xmlns:layout="clr-namespace:EmoTracker.Data.Layout;assembly=EmoTracker.Data"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             mc:Ignorable="d" 
+             d:DesignHeight="300" d:DesignWidth="300">
+    <Grid>
+        <Grid.Resources>
+            <ItemsPanelTemplate x:Key="OrientatedStackPanel">
+                <StackPanel Orientation="{Binding Orientation, Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+            </ItemsPanelTemplate>
+            <ItemsPanelTemplate x:Key="OrientatedWrapPanel">
+                <WrapPanel Orientation="{Binding Orientation, Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+            </ItemsPanelTemplate>
+            <ItemsPanelTemplate x:Key="GridPanel">
+                <Grid />
+            </ItemsPanelTemplate>
+            <ItemsPanelTemplate x:Key="DockPanel">
+                <DockPanel LastChildFill="True" />
+            </ItemsPanelTemplate>
+            <ItemsPanelTemplate x:Key="CanvasPanel">
+                <Canvas />
+            </ItemsPanelTemplate>
+            <Style x:Key="LayoutItemStyle" TargetType="FrameworkElement">
+                <Setter Property="IsHitTestVisible" Value="{Binding HitTestVisible}" />
+                <Setter Property="Margin" Value="{Binding Margin}" />
+                <Setter Property="HorizontalAlignment" Value="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+                <Setter Property="VerticalAlignment" Value="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+                <Setter Property="TextBlock.Foreground" Value="WhiteSmoke" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding OverrideScale}" Value="true">
+                        <Setter Property="LayoutTransform">
+                            <Setter.Value>
+                                <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}" />
+                            </Setter.Value>
+                        </Setter>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideBackground}" Value="true">
+                        <Setter Property="Control.Background" Value="{Binding Background}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideForeground}" Value="true">
+                        <Setter Property="TextBlock.Foreground" Value="{Binding Foreground}" />
+                    </DataTrigger>                    
+                    <DataTrigger Binding="{Binding OverrideDockLocation}" Value="true">
+                        <Setter Property="DockPanel.Dock" Value="{Binding DockLocation}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideWidth}" Value="true">
+                        <Setter Property="Width" Value="{Binding Width}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideHeight}" Value="true">
+                        <Setter Property="Height" Value="{Binding Height}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideMinWidth}" Value="true">
+                        <Setter Property="MinWidth" Value="{Binding MinWidth}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideMinHeight}" Value="true">
+                        <Setter Property="MinHeight" Value="{Binding MinHeight}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideMaxWidth}" Value="true">
+                        <Setter Property="MaxWidth" Value="{Binding MaxWidth}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideMaxHeight}" Value="true">
+                        <Setter Property="MaxHeight" Value="{Binding MaxHeight}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding DropShadow}" Value="true">
+                        <Setter Property="Effect">
+                            <Setter.Value>
+                                <DropShadowEffect BlurRadius="15" ShadowDepth="0" Opacity="0.8" />
+                            </Setter.Value>
+                        </Setter>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="LayoutItemCanvasStyle" TargetType="FrameworkElement">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding OverrideCanvasX}" Value="true">
+                        <Setter Property="Canvas.Left" Value="{Binding CanvasX}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideCanvasY}" Value="true">
+                        <Setter Property="Canvas.Top" Value="{Binding CanvasY}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding OverrideCanvasDepth}" Value="true">
+                        <Setter Property="Canvas.ZIndex" Value="{Binding CanvasDepth}" />
+                    </DataTrigger>                    
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="LayoutItemTabStyle" TargetType="FrameworkElement">
+                <Style.Triggers>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="LayoutItemDockStyle" TargetType="FrameworkElement">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding OverrideDockLocation}" Value="true">
+                        <Setter Property="DockPanel.Dock" Value="{Binding DockLocation}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="LayoutItemArrayStyle" TargetType="FrameworkElement">
+                <Setter Property="HorizontalAlignment" Value="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+                <Setter Property="VerticalAlignment" Value="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+            </Style>
+            <Style x:Key="LayoutItemsControlRaw" TargetType="ItemsControl">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Style}" Value="Wrap">
+                        <Setter Property="ItemsPanel" Value="{StaticResource OrientatedWrapPanel}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Style}" Value="Stack">
+                        <Setter Property="ItemsPanel" Value="{StaticResource OrientatedStackPanel}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="LayoutItemsDock" TargetType="ItemsControl">
+                <Setter Property="ItemsPanel" Value="{StaticResource DockPanel}" />
+            </Style>            
+            <Style x:Key="LayoutItemsControl" TargetType="ItemsControl" BasedOn="{StaticResource LayoutItemsControlRaw}">
+                <!--
+                <Setter Property="ItemContainerStyle" Value="{StaticResource LayoutItemArrayStyle}" />
+                -->
+            </Style>
+            <Style x:Key="LayoutItemsDockControl" TargetType="ItemsControl">
+                <Setter Property="ItemContainerStyle" Value="{StaticResource LayoutItemDockStyle}" />
+                <Setter Property="ItemsPanel" Value="{StaticResource DockPanel}" />
+            </Style>
+            <Style x:Key="LayoutItemsGridControl" TargetType="ItemsControl">
+                <Setter Property="ItemsPanel" Value="{StaticResource GridPanel}" />
+            </Style>            
+            <Style x:Key="LayoutItemsCanvasControl" TargetType="ItemsControl">
+                <Setter Property="ItemContainerStyle" Value="{StaticResource LayoutItemCanvasStyle}" />
+                <Setter Property="ItemsPanel" Value="{StaticResource CanvasPanel}" />
+                <Setter Property="ClipToBounds" Value="True" />
+            </Style>
+            <Style x:Key="LayoutGroupBox" TargetType="GroupBox" BasedOn="{StaticResource LayoutItemStyle}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="GroupBox">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Background="{Binding HeaderBackground, FallbackValue=#212121}" TextBlock.Foreground="WhiteSmoke" TextBlock.FontSize="12" TextBlock.FontWeight="Bold">
+                                    <Grid Margin="10,5">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="auto" />
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ContentPresenter Grid.Column="0" ContentSource="Header" VerticalAlignment="Center"/>
+                                        <ContentControl Grid.Column="2" Content="{Binding HeaderContent}" Margin="10,0,0,0">
+                                            <ContentControl.Style>
+                                                <Style TargetType="ContentControl">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HeaderContent}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ContentControl.Style>
+                                        </ContentControl>
+                                    </Grid>
+                                </Grid>
+                                <Grid Grid.Row="1" Background="{Binding Background, FallbackValue=#66212121}" />
+                                <ItemsControl Grid.Row="1" Margin="5" ItemsSource="{Binding Items}" Style="{StaticResource LayoutItemsGridControl}" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <DataTemplate DataType="{x:Type layout:LayoutReference}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <ContentControl Content="{Binding Layout.Root}" />
+                </Grid>
+            </DataTemplate>            
+            <DataTemplate DataType="{x:Type layout:ArrayPanel}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <ItemsControl ItemsSource="{Binding Children}" Style="{StaticResource LayoutItemsControl}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:DockPanel}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <ItemsControl ItemsSource="{Binding Children}" Style="{StaticResource LayoutItemsDockControl}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:CanvasPanel}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <ItemsControl ItemsSource="{Binding Children}" Style="{StaticResource LayoutItemsCanvasControl}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:ViewBox}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <Viewbox>
+                        <ItemsControl ItemsSource="{Binding Items}" Style="{StaticResource LayoutItemsGridControl}" />
+                    </Viewbox>
+                </Grid>
+            </DataTemplate>            
+            <ControlTemplate x:Key="SettingsToggleButton" TargetType="controls:MouseOnlyToggleButton">
+                <TextBlock Name="Icon" FontFamily="{StaticResource FontAwesome5Free}" Text="&#xf013;" Foreground="WhiteSmoke" ToolTip="Settings" VerticalAlignment="Center" />
+            </ControlTemplate>
+            <ControlTemplate x:Key="ImageToggleButton" TargetType="controls:MouseOnlyToggleButton">
+                <Image Source="{Binding Image, Converter={x:Static converters:ImageReferenceConverter.Instance}}" />
+            </ControlTemplate>
+            <ControlTemplate x:Key="InputMaskingImageToggleButton" TargetType="controls:MouseOnlyToggleButton">
+                <controls:InputMaskingImage Source="{Binding Image, Converter={x:Static converters:ImageReferenceConverter.Instance}}" />
+            </ControlTemplate>           
+            <ControlTemplate x:Key="SolidToggleButton" TargetType="controls:MouseOnlyToggleButton">
+                <Grid Background="Transparent"/>
+            </ControlTemplate>
+            <DataTemplate DataType="{x:Type layout:ButtonPopup}">
+                <Grid>
+                    <Grid Style="{StaticResource LayoutItemStyle}">                    
+                        <controls:MouseOnlyToggleButton Name="OpenSettingsButton">
+                            <controls:MouseOnlyToggleButton.Style>
+                                <Style TargetType="controls:MouseOnlyToggleButton">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Style}" Value="Settings">
+                                            <Setter Property="Template" Value="{StaticResource SettingsToggleButton}" />
+                                        </DataTrigger>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding Style}" Value="Image"/>
+                                                <Condition Binding="{Binding MaskInput}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Template" Value="{StaticResource InputMaskingImageToggleButton}" />
+                                        </MultiDataTrigger>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding Style}" Value="Image"/>
+                                                <Condition Binding="{Binding MaskInput}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Template" Value="{StaticResource ImageToggleButton}" />
+                                        </MultiDataTrigger>
+                                        <DataTrigger Binding="{Binding Style}" Value="Solid">
+                                            <Setter Property="Template" Value="{StaticResource SolidToggleButton}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </controls:MouseOnlyToggleButton.Style>
+                        </controls:MouseOnlyToggleButton>
+                    </Grid>
+                    <Popup Name="SettingsPopup" IsOpen="{Binding ElementName=OpenSettingsButton, Path=IsChecked, Mode=TwoWay}" StaysOpen="{Binding ElementName=OpenSettingsButton, Path=IsMouseOver}" Placement="Top"  HorizontalOffset="4" VerticalOffset="4" PlacementTarget="{Binding ElementName=OpenSettingsButton}" PopupAnimation="Fade" AllowsTransparency="True" ClipToBounds="False">
+                        <Border Name="PopupRegion" BorderBrush="DarkGray" BorderThickness="3" Background="{Binding PopupBackground, FallbackValue=#ff212121}" CornerRadius="5" Margin="20">
+                            <Border.Effect>
+                                <DropShadowEffect Opacity="0.8" BlurRadius="20" ShadowDepth="3"/>
+                            </Border.Effect>
+                            <Grid Margin="0">
+                                <ContentControl Content="{Binding Layout.Root}" />
+                            </Grid>
+                        </Border>
+                    </Popup>
+                </Grid>
+            </DataTemplate>            
+            <DataTemplate DataType="{x:Type layout:TabPanel}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <TabControl ItemsSource="{Binding Tabs}" Background="{x:Null}" SelectedItem="{Binding CurrentTab, Mode=TwoWay}">
+                        <TabControl.Template>
+                            <ControlTemplate TargetType="{x:Type TabControl}">
+                                <Grid KeyboardNavigation.TabNavigation="Local">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <TabPanel Name="HeaderPanel" Grid.Row="0" Panel.ZIndex="1" Margin="0,3" IsItemsHost="True" KeyboardNavigation.TabIndex="1" Background="Transparent" HorizontalAlignment="Center" />
+                                    <Border Name="Border" Grid.Row="1" BorderThickness="1" CornerRadius="2" KeyboardNavigation.TabNavigation="Local" KeyboardNavigation.DirectionalNavigation="Contained" KeyboardNavigation.TabIndex="2">
+                                        <Border.Background>
+                                            <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                                                <GradientStop Color="{DynamicResource ContentAreaColorLight}" Offset="0" />
+                                                <GradientStop Color="{DynamicResource ContentAreaColorDark}" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                        <Border.BorderBrush>
+                                            <SolidColorBrush Color="{DynamicResource BorderMediumColor}"/>
+                                        </Border.BorderBrush>
+                                        <ContentPresenter Name="PART_SelectedContentHost" Margin="0" ContentSource="SelectedContent" />
+                                    </Border>
+                                </Grid>
+                            </ControlTemplate>
+                        </TabControl.Template>
+                        <TabControl.ItemContainerStyle>
+                            <Style TargetType="TabItem">
+                                <Setter Property="Header" Value="{Binding }"/>
+                                <Setter Property="Content" Value="{Binding Content}"/>
+                                <Setter Property="HeaderTemplate">
+                                    <Setter.Value>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="auto"/>
+                                                    <ColumnDefinition Width="auto"/>
+                                                    <ColumnDefinition Width="auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid Grid.Column="0">
+                                                    <Image Source="{Binding Icon, Converter={x:Static converters:ImageReferenceConverter.Instance}}" VerticalAlignment="Center" MaxHeight="16" Grid.Column="0">
+                                                        <Image.Style>
+                                                            <Style TargetType="Image">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Image.Style>
+                                                    </Image>
+                                                </Grid>
+                                                <Grid Grid.Column="1" Width="8">
+                                                    <Grid.Style>
+                                                        <Style TargetType="Grid">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Title}" Value="{x:Null}">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Title}" Value="">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>                                                                
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Grid.Style>
+                                                </Grid>
+                                                <TextBlock Text="{Binding Title}" Grid.Column="2" VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Title}" Value="{x:Null}">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Title}" Value="">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>                                                    
+                                                </TextBlock>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="TabItem">
+                                            <Border Name="Panel" Margin="2,0" CornerRadius="7" MinHeight="20">
+                                                <ContentPresenter Name="ContentSite" VerticalAlignment="Center" HorizontalAlignment="Center" ContentSource="Header" Margin="8,3" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="Panel" Property="TextBlock.Foreground" Value="WhiteSmoke" />
+                                                    <Setter TargetName="Panel" Property="Background" Value="#212121" />
+                                                    <Setter TargetName="Panel" Property="BorderBrush" Value="#aaaaaa" />
+                                                    <Setter TargetName="Panel" Property="BorderThickness" Value="1.5" />
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="False">
+                                                    <Setter TargetName="Panel" Property="Background" Value="#77212121" />
+                                                    <Setter TargetName="Panel" Property="TextBlock.Foreground" Value="WhiteSmoke" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>                                
+                            </Style>
+                        </TabControl.ItemContainerStyle>
+                    </TabControl>
+                </Grid>
+            </DataTemplate>            
+            <DataTemplate DataType="{x:Type layout:Container}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <ItemsControl ItemsSource="{Binding Items}" Style="{StaticResource LayoutItemsGridControl}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:ScrollPanel}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <ScrollViewer>
+                        <ScrollViewer.Style>
+                            <Style TargetType="ScrollViewer">
+                                <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+                                <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+                                <Style.Triggers>                                    
+                                    <DataTrigger Binding="{Binding HorizontalScrollBarVisibility}" Value="Disabled">
+                                        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding HorizontalScrollBarVisibility}" Value="Visible">
+                                        <Setter Property="HorizontalScrollBarVisibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding HorizontalScrollBarVisibility}" Value="Hidden">
+                                        <Setter Property="HorizontalScrollBarVisibility" Value="Hidden" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding VerticalScrollBarVisibility}" Value="Disabled">
+                                        <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding VerticalScrollBarVisibility}" Value="Visible">
+                                        <Setter Property="VerticalScrollBarVisibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding VerticalScrollBarVisibility}" Value="Hidden">
+                                        <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ScrollViewer.Style>
+                        <ItemsControl ItemsSource="{Binding Items}" Style="{StaticResource LayoutItemsGridControl}" />
+                    </ScrollViewer>                    
+                </Grid>
+            </DataTemplate>            
+            <DataTemplate DataType="{x:Type layout:GroupBox}">
+                <GroupBox Header="{Binding Header}" Style="{StaticResource LayoutGroupBox}" VerticalAlignment="Stretch" VerticalContentAlignment="Stretch">
+                    <Grid Style="{StaticResource LayoutItemStyle}">
+                        <ItemsControl ItemsSource="{Binding Items}" Style="{StaticResource LayoutItemsGridControl}" />
+                    </Grid>
+                </GroupBox>
+            </DataTemplate>            
+            <DataTemplate DataType="{x:Type layout:ItemGrid}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <local:ItemGridControl DataContext="{Binding Data}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:Item}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <local:TrackableItemControl DataContext="{Binding Data}"
+                                                IconWidth="{Binding DataContext.Width, RelativeSource={RelativeSource AncestorType=Grid, Mode=FindAncestor}}"
+                                                IconHeight="{Binding DataContext.Height, RelativeSource={RelativeSource AncestorType=Grid, Mode=FindAncestor}}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:Image}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <Image Source="{Binding Content, Converter={x:Static converters:ImageReferenceConverter.Instance}}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:TextBlock}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <TextBlock Text="{Binding Text}" />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:MapPanel}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <local:LocationMapControl />
+                </Grid>
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:LastClearedLocation}">
+                <ContentControl Content="{Binding Location}">
+                    <ContentControl.Style>
+                        <Style TargetType="ContentControl">
+                            <Style.Setters>
+                                <Setter Property="ContentTemplate">
+                                    <Setter.Value>
+                                        <DataTemplate>
+                                            <local:LocationControl DataContext="{Binding LastClearedLocation, Source={x:Static data:LocationDatabase.Instance}}" Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource Self}}" />
+                                        </DataTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style.Setters>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Content, RelativeSource={RelativeSource Self}}" Value="{x:Null}">
+                                    <Setter Property="ContentTemplate">
+                                        <Setter.Value>
+                                            <DataTemplate>
+                                                <Grid />
+                                            </DataTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContentControl.Style>
+                </ContentControl>                
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type layout:RecentPinnedLocations}">
+                <Grid Style="{StaticResource LayoutItemStyle}">
+                    <ItemsControl ItemsSource="{Binding Locations}" Style="{StaticResource LayoutItemsControlRaw}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <local:LocationControl Name="Location" Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                                    <local:LocationControl.Style>
+                                        <Style TargetType="local:LocationControl">
+                                            <Setter Property="Margin" Value="2" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DataContext.Orientation, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="Horizontal">
+                                                    <Setter Property="PreserveDimension" Value="Height" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding DataContext.Orientation, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="Vertical">
+                                                    <Setter Property="PreserveDimension" Value="Width" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </local:LocationControl.Style>
+                                </local:LocationControl>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </DataTemplate>
+        </Grid.Resources>
+        <Grid DataContext="{Binding Root}">
+            <ContentControl Content="{Binding}" />
+        </Grid>
+    </Grid>
+</UserControl>

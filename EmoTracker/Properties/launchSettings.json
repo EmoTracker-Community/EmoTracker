@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "EmoTracker": {
+      "commandName": "Project",
+      "commandLineArgs": "-dev -localservice"
+    }
+  }
+}

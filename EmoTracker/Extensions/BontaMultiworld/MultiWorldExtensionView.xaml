@@ -1,0 +1,323 @@
+﻿<UserControl x:Class="EmoTracker.Extensions.BontaMultiworld.MultiWorldExtensionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:EmoTracker.Extensions.BontaMultiworld"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
+             xmlns:gif="http://wpfanimatedgif.codeplex.com"
+             xmlns:settings="clr-namespace:EmoTracker.Data.Settings;assembly=EmoTracker.Data"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+    <UserControl.Resources>
+        <converters:FlagsEnumToBoolConverter x:Key="FlagsConverter" />
+        <Style x:Key="LegacyAuthOption" TargetType="Grid">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SessionLoginType}" Value="RomBased">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+    <Grid>
+        <Grid.Style>
+            <Style TargetType="Grid">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding EnableBontaMultiWorld, Source={x:Static data:ApplicationSettings.Instance}}" Value="false">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Style>        
+        <Popup IsOpen="{Binding IsChecked, ElementName=PopupToggle, Mode=TwoWay}" AllowsTransparency="True" Placement="Top" StaysOpen="False">
+            <Border Name="PopupRegion" BorderBrush="DarkGray" BorderThickness="3" Background="#FF212121" CornerRadius="5" Margin="20">
+                <Border.Effect>
+                    <DropShadowEffect Opacity="0.8" BlurRadius="20" ShadowDepth="3"/>
+                </Border.Effect>
+                <StackPanel Margin="10">
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SessionStatus}" Value="Disconnected">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="auto"/>
+                                <ColumnDefinition Width="auto"/>
+                                <ColumnDefinition Width="auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Foreground="WhiteSmoke" FontWeight="Bold" Text="LTTPR Multiworld Client (Bonta)" />
+                            <Button Grid.Column="2" Content="Disconnect" Command="{Binding DisconnectCmd}" Margin="10,0,0,0" Padding="5,0"/>
+                            <Button Grid.Column="3" Content="Forfeit" Command="{Binding ForfeitCmd}" Margin="10,0,0,0" Padding="5,0">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SessionStatus}" Value="Authenticated">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Grid.Column="4" Content="Pop Out" Command="{Binding PopOutCmd}" Margin="10,0,0,0" Padding="5,0">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SessionStatus}" Value="Authenticated">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>                            
+                        </Grid>
+                        <Separator Margin="0,5" Foreground="WhiteSmoke" />
+                    </StackPanel>
+                    <ContentControl>
+                        <ContentControl.Style>
+                            <Style TargetType="ContentControl">
+                                <Style.Triggers>
+                                    <!-- Server Address Page -->
+                                    <DataTrigger Binding="{Binding SessionStatus}" Value="Disconnected">
+                                        <Setter Property="Content">
+                                            <Setter.Value>
+                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition />
+                                                        <RowDefinition Height="auto" />
+                                                    </Grid.RowDefinitions>
+                                                    <StackPanel Grid.IsSharedSizeScope="True">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition SharedSizeGroup="Label" />
+                                                                <ColumnDefinition Width="10" />
+                                                                <ColumnDefinition SharedSizeGroup="Content" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0" Text="Server Address" Foreground="WhiteSmoke" FontWeight="Bold" />
+                                                            <TextBox Grid.Column="2" Text="{Binding HostUri, UpdateSourceTrigger=PropertyChanged}" MinWidth="150"/>
+                                                        </Grid>
+                                                    </StackPanel>
+                                                    <Button Grid.Row="1" Content="Connect" Command="{Binding ConnectCmd}" Margin="0,10,0,0"/>
+                                                </Grid>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>
+                                    <!-- Connecting Page -->
+                                    <DataTrigger Binding="{Binding SessionStatus}" Value="Connecting">
+                                        <Setter Property="Content">
+                                            <Setter.Value>
+                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition />
+                                                        <RowDefinition Height="auto" />
+                                                        <RowDefinition Height="auto" />
+                                                    </Grid.RowDefinitions>
+                                                    <StackPanel Grid.IsSharedSizeScope="True" MinWidth="100">
+                                                        <TextBlock Grid.Column="0" Text="Connecting..." Foreground="WhiteSmoke" FontWeight="Bold" />
+                                                    </StackPanel>
+
+                                                    <ProgressBar Grid.Row="1" IsIndeterminate="True" Margin="0,10,0,0" MinWidth="150" />
+                                                    <Button Grid.Row="2" Content="Cancel" Margin="0,10,0,0" />
+                                                </Grid>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>
+                                    <!-- Authentication Page -->
+                                    <DataTrigger Binding="{Binding SessionStatus}" Value="Connected">
+                                        <Setter Property="Content">
+                                            <Setter.Value>
+                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,5,0,0">
+                                                   <Grid.RowDefinitions>
+                                                        <RowDefinition />
+                                                        <RowDefinition Height="auto" />
+                                                    </Grid.RowDefinitions>
+                                                    <StackPanel Grid.IsSharedSizeScope="True">
+                                                        <Grid Style="{StaticResource LegacyAuthOption}">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition SharedSizeGroup="Label" />
+                                                                <ColumnDefinition Width="10" />
+                                                                <ColumnDefinition SharedSizeGroup="Content" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0" Text="User Name" FontWeight="Bold">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="WhiteSmoke" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding AuthenticationFailure, Converter={StaticResource FlagsConverter}, ConverterParameter=InvalidName}" Value="true">
+                                                                                <Setter Property="Foreground" Value="Red" />
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding AuthenticationFailure, Converter={StaticResource FlagsConverter}, ConverterParameter=NameAlreadyTaken}" Value="true">
+                                                                                <Setter Property="Foreground" Value="Red" />
+                                                                            </DataTrigger>                                                                            
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBox Grid.Column="2" Text="{Binding UserName, UpdateSourceTrigger=PropertyChanged}" MinWidth="150"/>
+                                                        </Grid>
+                                                        <Grid Margin="0,7,0,0">
+                                                            <Grid.Style>
+                                                                <Style TargetType="Grid">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Description.PasswordRequired}" Value="false">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Grid.Style>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition SharedSizeGroup="Label" />
+                                                                <ColumnDefinition Width="10" />
+                                                                <ColumnDefinition SharedSizeGroup="Content" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0" Text="Password" FontWeight="Bold">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="WhiteSmoke" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding AuthenticationFailure, Converter={StaticResource FlagsConverter}, ConverterParameter=InvalidPassword}" Value="true">
+                                                                                <Setter Property="Foreground" Value="Red" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBox Grid.Column="2" Text="{Binding Password, UpdateSourceTrigger=PropertyChanged}" MinWidth="150" />
+                                                        </Grid>
+                                                        <Grid Margin="0,7,0,0" Style="{StaticResource LegacyAuthOption}">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition SharedSizeGroup="Label" />
+                                                                <ColumnDefinition Width="10" />
+                                                                <ColumnDefinition SharedSizeGroup="Content" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0" Text="Team Name" FontWeight="Bold">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="WhiteSmoke" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding AuthenticationFailure, Converter={StaticResource FlagsConverter}, ConverterParameter=InvalidTeam}" Value="true">
+                                                                                <Setter Property="Foreground" Value="Red" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBox Grid.Column="2" Text="{Binding UserTeam, UpdateSourceTrigger=PropertyChanged}" MinWidth="150"/>
+                                                        </Grid>
+                                                        <Grid Margin="0,7,0,0" Style="{StaticResource LegacyAuthOption}">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition SharedSizeGroup="Label" />
+                                                                <ColumnDefinition Width="10" />
+                                                                <ColumnDefinition SharedSizeGroup="Content" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0" Text="Slot" FontWeight="Bold">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="WhiteSmoke" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding AuthenticationFailure, Converter={StaticResource FlagsConverter}, ConverterParameter=InvalidSlot}" Value="true">
+                                                                                <Setter Property="Foreground" Value="Red" />
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding AuthenticationFailure, Converter={StaticResource FlagsConverter}, ConverterParameter=SlotAlreadyTaken}" Value="true">
+                                                                                <Setter Property="Foreground" Value="Red" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <ComboBox Grid.Column="2" ItemsSource="{Binding Description.Slots}" SelectedItem="{Binding UserSlot}" Grid.IsSharedSizeScope="True">
+                                                                <ComboBox.ItemTemplate>
+                                                                    <DataTemplate DataType="local:MultiWorldClientSession.SessionDescription.Slot">
+                                                                        <Grid>
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition SharedSizeGroup="SlotIndex" />
+                                                                                <ColumnDefinition MinWidth="10" Width="*"/>
+                                                                                <ColumnDefinition SharedSizeGroup="SlotPlayerName" />
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <TextBlock Text="{Binding DisplayIndex, StringFormat=Player {0}}" Grid.Column="0"/>
+                                                                            <TextBlock Text="{Binding PlayerName}" FontStyle="Italic" FontWeight="Light" Grid.Column="2"/>
+                                                                        </Grid>
+                                                                    </DataTemplate>
+                                                                </ComboBox.ItemTemplate>
+                                                            </ComboBox>
+                                                        </Grid>
+                                                    </StackPanel>
+                                                    <Button Grid.Row="1" Content="Join Game" Command="{Binding JoinGameCmd}" Margin="0,10,0,0"/>
+                                                </Grid>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>
+                                    <!-- In-Game Page -->
+                                    <DataTrigger Binding="{Binding SessionStatus}" Value="Authenticated">
+                                        <Setter Property="Content">
+                                            <Setter.Value>
+                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition />
+                                                        <RowDefinition Height="auto" />
+                                                        <RowDefinition Height="auto" />
+                                                    </Grid.RowDefinitions>
+                                                    <StackPanel Grid.IsSharedSizeScope="True" MinWidth="100">
+                                                        <Border>
+                                                            <ScrollViewer Name="LogScrollView" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" MaxHeight="450" MinWidth="350" MaxWidth="800">
+                                                                <ItemsControl Name="LogHost" FontFamily="Consolas" FontSize="12" Foreground="LightGray" ItemsSource="{Binding MessageLog}" Margin="0,0,5,0">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                            <TextBlock Text="{Binding}" TextWrapping="Wrap" TextTrimming="None" />
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </ScrollViewer>
+                                                        </Border>
+                                                        <Button Content="Clear Message Log" Command="{Binding ClearMessageLogCmd}" Margin="0,10,0,0"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>                                
+                                </Style.Triggers>
+                            </Style>
+                        </ContentControl.Style>
+                    </ContentControl>
+                </StackPanel>
+            </Border>
+        </Popup>
+        <controls:MouseOnlyToggleButton Name="PopupToggle" ToolTip="Multi-World (Bonta)">
+            <controls:MouseOnlyToggleButton.Template>
+                <ControlTemplate TargetType="controls:MouseOnlyToggleButton">
+                    <Grid>
+                        <TextBlock FontFamily="{StaticResource FontAwesome5Free}" Text="&#xf0ac;" VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="WhiteSmoke" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SessionStatus}" Value="Connecting">
+                                            <Setter Property="Foreground" Value="{Binding Status_Generic_Warning, Source={x:Static settings:ApplicationColors.Instance}}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding SessionStatus}" Value="Connected">
+                                            <Setter Property="Foreground" Value="{Binding Status_Generic_Warning, Source={x:Static settings:ApplicationColors.Instance}}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding SessionStatus}" Value="Authenticated">
+                                            <Setter Property="Foreground" Value="{Binding Status_Generic_Active, Source={x:Static settings:ApplicationColors.Instance}}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </ControlTemplate>
+            </controls:MouseOnlyToggleButton.Template>
+        </controls:MouseOnlyToggleButton>
+    </Grid>
+</UserControl>
