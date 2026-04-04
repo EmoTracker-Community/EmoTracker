@@ -2,15 +2,21 @@
 
   <PropertyGroup>
     <ProjectGuid>{37EF8519-4426-455F-9D23-292839365EE0}</ProjectGuid>
-    <OutputType>WinExe</OutputType>
+    <OutputType Condition="'$(TargetFramework)' == 'net8.0-windows'">WinExe</OutputType>
+    <OutputType Condition="'$(TargetFramework)' == 'net8.0'">Library</OutputType>
     <RootNamespace>EmoTracker</RootNamespace>
     <AssemblyName>EmoTracker</AssemblyName>
-    <TargetFramework>net472</TargetFramework>
-    <UseWpf>true</UseWpf>
+    <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
+    <UseWpf Condition="'$(TargetFramework)' == 'net8.0-windows'">true</UseWpf>
     <ApplicationIcon>emohead_icon_transparent_7h3_icon.ico</ApplicationIcon>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationManifest Condition="'$(TargetFramework)' == 'net8.0-windows'">app.manifest</ApplicationManifest>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <AutoGenerateBindingRedirects Condition="'$(TargetFramework)' == 'net8.0-windows'">true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+
+  <!-- Define WINDOWS for the Windows target -->
+  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
   <!-- PluginManager.cs is intentionally excluded from compilation -->
@@ -26,7 +32,8 @@
     <Resource Include="Resources\**\*" />
   </ItemGroup>
 
-  <ItemGroup>
+  <!-- Windows-only native assembly references -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
     <Reference Include="ConnectorLib">
       <HintPath>..\External\ConnectorLib\ConnectorLib.dll</HintPath>
       <SpecificVersion>False</SpecificVersion>
@@ -36,29 +43,86 @@
       <SpecificVersion>False</SpecificVersion>
     </Reference>
     <Reference Include="PresentationFramework.Aero" />
-    <Reference Include="System.ComponentModel.Composition" />
-    <Reference Include="System.Speech" />
+    <PackageReference Include="System.ComponentModel.Composition" Version="4.7.0" />
+    <PackageReference Include="System.Speech" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\EmoTracker.Core\EmoTracker.Core.csproj" />
     <ProjectReference Include="..\EmoTracker.Data\EmoTracker.Data.csproj" />
     <ProjectReference Include="..\EmoTracker.UI\EmoTracker.UI.csproj" />
+  </ItemGroup>
+
+  <!-- NDI is Windows-only -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
     <ProjectReference Include="..\External\NDI\NDILibDotNet2\NDILibDotNet2.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <!-- WPF-only packages -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
     <PackageReference Include="Markdig.Wpf" Version="0.5.0.1" />
+    <PackageReference Include="WpfScreenHelper" Version="2.1.1" />
+  </ItemGroup>
+
+  <!-- Shared packages (both targets) -->
+  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="TwitchLib" Version="3.5.3" />
     <PackageReference Include="WebSocketSharp" Version="1.0.3-rc11" />
-    <PackageReference Include="WpfScreenHelper" Version="2.1.1" />
   </ItemGroup>
 
-  <Target Name="CopyNativeDependencies" AfterTargets="Build">
+  <!--
+    Exclude WPF-dependent and Windows-only source from the cross-platform net8.0 target.
+    These files will be replaced by Avalonia equivalents in Phases 5–7.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <!-- App entry point and main window (WPF) -->
+    <Compile Remove="App.xaml.cs" />
+    <Page Remove="App.xaml" />
+    <Compile Remove="MainWindow.xaml.cs" />
+    <Page Remove="MainWindow.xaml" />
+    <!-- Application model (WPF-dependent until Phase 6) -->
+    <Compile Remove="ApplicationModel.cs" />
+    <!-- All UI controls and dialog windows (WPF) -->
+    <Compile Remove="UI\**\*.cs" />
+    <Page Remove="UI\**\*.xaml" />
+    <!-- WPF service implementations (Avalonia replacements added in Phase 7) -->
+    <Compile Remove="Services\DispatchService.cs" />
+    <Compile Remove="Services\DialogService.cs" />
+    <Compile Remove="Services\WindowService.cs" />
+    <!-- Update helper (WPF-dependent) -->
+    <Compile Remove="Update\**\*.cs" />
+    <!-- AutoTracker — requires Windows-only ConnectorLib -->
+    <Compile Remove="Extensions\AutoTracker\**\*.cs" />
+    <Page Remove="Extensions\AutoTracker\**\*.xaml" />
+    <!-- BontaMultiworld — requires Windows-only ConnectorLib -->
+    <Compile Remove="Extensions\BontaMultiworld\**\*.cs" />
+    <Page Remove="Extensions\BontaMultiworld\**\*.xaml" />
+    <!-- NDI — Windows-only -->
+    <Compile Remove="Extensions\NDI\**\*.cs" />
+    <Page Remove="Extensions\NDI\**\*.xaml" />
+    <!-- NoteTaking creates WPF NoteTakingIconPopup -->
+    <Compile Remove="Extensions\NoteTaking\**\*.cs" />
+    <!-- Twitch creates WPF TwitchStatusIndicator -->
+    <Compile Remove="Extensions\Twitch\**\*.cs" />
+    <Page Remove="Extensions\Twitch\**\*.xaml" />
+    <!-- VariantSwitcher creates WPF VariantSwitcherControl -->
+    <Compile Remove="Extensions\VariantSwitcher\**\*.cs" />
+    <Page Remove="Extensions\VariantSwitcher\**\*.xaml" />
+    <!-- VoiceRecognition — requires Windows-only System.Speech -->
+    <Compile Remove="Extensions\VoiceRecognition\**\*.cs" />
+    <Page Remove="Extensions\VoiceRecognition\**\*.xaml" />
+    <!-- Discord P/Invoke wrapper (Windows-only native SDK) -->
+    <Compile Remove="Utility\DiscordRPC.cs" />
+    <!-- WPF/Framework-dependent generated files -->
+    <Compile Remove="Properties\Settings.Designer.cs" />
+  </ItemGroup>
+
+  <!-- Copy Windows-only native dependencies on net8.0-windows builds -->
+  <Target Name="CopyNativeDependencies" AfterTargets="Build" Condition="$(TargetFramework.Contains('-windows'))">
     <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyHook32*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
     <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyHook64*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
     <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyLoad32*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
@@ -72,7 +136,7 @@
     <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\NDI\distrib\x64\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
   </Target>
 
-  <Target Name="GenerateInstaller" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+  <Target Name="GenerateInstaller" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and $(TargetFramework.Contains('-windows'))">
     <Exec Command="&quot;C:\Program Files (x86)\Inno Setup 5\ISCC.exe&quot; &quot;$(SolutionDir)Installer\emotracker_setup.iss&quot;" ContinueOnError="true" />
   </Target>
 

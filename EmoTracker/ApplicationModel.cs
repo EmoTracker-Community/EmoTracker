@@ -1163,7 +1163,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
                     mPreviousNotifications.Insert(0, notification);
                     mNotifications.Insert(0, notification);
-                }));
+                });
             }
         }
 

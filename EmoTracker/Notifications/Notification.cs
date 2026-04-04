@@ -1,8 +1,6 @@
 ﻿using EmoTracker.Core;
 using EmoTracker.Data.Scripting;
 using System;
-using System.Windows;
-using System.Windows.Threading;
 
 namespace EmoTracker.Notifications
 {
