@@ -1,10 +1,10 @@
-﻿using EmoTracker.Data.Media;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using EmoTracker.Data.Media;
+
+#if WINDOWS
 using System.Windows.Media;
+#else
+using Avalonia.Media;
+#endif
 
 namespace EmoTracker.UI.Media.Resolvers
 {
@@ -15,7 +15,11 @@ namespace EmoTracker.UI.Media.Resolvers
             return imageRef as LayeredImageReference != null;
         }
 
+#if WINDOWS
         public override ImageSource ResolveReference(ImageReference imageRef)
+#else
+        public override IImage ResolveReference(ImageReference imageRef)
+#endif
         {
             LayeredImageReference concreteRef = imageRef as LayeredImageReference;
             if (concreteRef == null)
@@ -24,15 +28,21 @@ namespace EmoTracker.UI.Media.Resolvers
             if (concreteRef.Layers.Count == 0)
                 return null;
 
+#if WINDOWS
             ImageSource img = null;
+#else
+            IImage img = null;
+#endif
             foreach (ImageReference layerRef in concreteRef.Layers)
             {
-                ImageSource layerImg = ImageReferenceService.Instance.ResolveImageReference(layerRef);
+                var layerImg = ImageReferenceService.Instance.ResolveImageReference(layerRef);
                 img = Utility.IconUtility.ApplyOverlayImage(img, layerImg);
             }
 
+#if WINDOWS
             if (img != null)
                 img.Freeze();
+#endif
 
             return img;
         }

@@ -1,8 +1,13 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using System;
 using System.Globalization;
 using System.Text.RegularExpressions;
+
+#if WINDOWS
 using System.Windows.Data;
+#else
+using Avalonia.Data.Converters;
+#endif
 
 namespace EmoTracker.UI.Converters
 {
@@ -14,9 +19,7 @@ namespace EmoTracker.UI.Converters
             {
                 return Regex.Replace(value.ToString(), "([a-z](?=[A-Z0-9])|[A-Z](?=[A-Z][a-z]))", "$1 ");
             }
-            catch
-            {
-            }
+            catch { }
 
             return null;
         }

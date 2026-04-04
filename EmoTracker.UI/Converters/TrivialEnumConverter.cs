@@ -1,7 +1,12 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using System;
 using System.Globalization;
+
+#if WINDOWS
 using System.Windows.Data;
+#else
+using Avalonia.Data.Converters;
+#endif
 
 namespace EmoTracker.UI.Converters
 {
@@ -13,9 +18,7 @@ namespace EmoTracker.UI.Converters
             {
                 return Enum.Parse(targetType, value.ToString());
             }
-            catch
-            {
-            }
+            catch { }
 
             return null;
         }
