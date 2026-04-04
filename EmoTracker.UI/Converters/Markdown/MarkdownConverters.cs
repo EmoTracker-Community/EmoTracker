@@ -1,14 +1,16 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+
+#if WINDOWS
 using System.Windows.Data;
+#else
+using Avalonia.Data.Converters;
+#endif
 
 namespace EmoTracker.UI.Converters.Markdown
 {
+#if WINDOWS
     public class MarkdownToFlowDocumentConverter : Singleton<MarkdownToFlowDocumentConverter>, IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -24,4 +26,5 @@ namespace EmoTracker.UI.Converters.Markdown
             throw new NotImplementedException();
         }
     }
+#endif
 }

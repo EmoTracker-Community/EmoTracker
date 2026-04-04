@@ -10,6 +10,11 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
+  <!-- Define WINDOWS for the Windows target -->
+  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\EmoTracker.Core\EmoTracker.Core.csproj" />
     <ProjectReference Include="..\EmoTracker.Data\EmoTracker.Data.csproj" />
@@ -20,19 +25,28 @@
     <PackageReference Include="Markdig.Wpf" Version="0.5.0.1" />
   </ItemGroup>
 
-  <!-- Avalonia packages — source populated by Phase 5 -->
+  <!-- Avalonia packages — Phase 5 implementation -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <PackageReference Include="Avalonia" Version="11.2.7" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.7" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.7" />
     <PackageReference Include="Avalonia.Xaml.Behaviors" Version="11.2.7" />
+    <PackageReference Include="Markdig" Version="0.37.0" />
     <PackageReference Include="Markdown.Avalonia" Version="11.0.2" />
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
   </ItemGroup>
 
-  <!-- Exclude all existing WPF source from the net8.0 target until Phase 5 adds Avalonia replacements -->
+  <!-- Exclude WPF-only files from the net8.0 (Avalonia) target.
+       All other files compile for both targets using #if WINDOWS guards. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <Compile Remove="**\*.cs" />
+    <Compile Remove="Controls\MarkdownViewer.xaml.cs" />
+    <Compile Remove="Properties\Settings.Designer.cs" />
     <Page Remove="**\*.xaml" />
+  </ItemGroup>
+
+  <!-- Exclude Avalonia code-only implementation from the net8.0-windows (WPF) target -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <Compile Remove="Controls\MarkdownViewer.cs" />
   </ItemGroup>
 
 </Project>

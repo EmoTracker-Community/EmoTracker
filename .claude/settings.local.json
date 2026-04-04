@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"D:\\\\Code\\\\EmoTracker-Community\\\\EmoTracker\\\\.claude\\\\worktrees\\\\nervous-ardinghelli\" checkout -b avalonia)",
+      "Bash(dotnet build:*)",
+      "Bash(powershell -Command \":*)",
+      "Bash(/dev/null grep:*)",
+      "Bash(dotnet package:*)",
+      "Bash(dotnet restore:*)"
+    ]
+  }
+}

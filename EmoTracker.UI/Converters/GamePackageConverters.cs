@@ -1,8 +1,13 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.Packages;
 using System;
 using System.Globalization;
+
+#if WINDOWS
 using System.Windows.Data;
+#else
+using Avalonia.Data.Converters;
+#endif
 
 namespace EmoTracker.UI.Converters
 {
