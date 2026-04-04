@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch EmoTracker (Debug)",
+            "type": "clr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/EmoTracker/bin/Debug/net472/EmoTracker.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net472",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
+            "name": "Attach to EmoTracker",
+            "type": "clr",
+            "request": "attach"
+        }
+    ]
+}

@@ -18,7 +18,6 @@ namespace EmoTracker
     {
         protected override void OnStartup(StartupEventArgs e)
         {
-            ForceLoadLuaDLL();
             ConfigurePlatformDllPaths();
 
             Data.Core.Transactions.TransactionProcessor.SetTransactionProcessor(new Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo());
@@ -83,29 +82,6 @@ namespace EmoTracker
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool SetDllDirectory(string lpPathName);
-
-        private void ForceLoadLuaDLL()
-        {
-            string processorAssemblyPath = "x64";
-            if (!Environment.Is64BitProcess)
-                processorAssemblyPath = "x86";
-
-            string privateBinPath = Path.Combine(AppDomain.CurrentDomain.SetupInformation.ApplicationBase, string.Format("{0}\\lua53.dll", processorAssemblyPath));
-            try
-            {
-                IntPtr handle = LoadLibrary(privateBinPath);
-                if (handle == IntPtr.Zero)
-                {
-                    MessageBox.Show("EmoTracker was unable to load the Lua interpreter DLL, and will now close.\n\nSee the EmoTracker Discord for more help.", "Critical Error");
-                    Shutdown(-20);
-                }
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show("EmoTracker was unable to load the Lua interpreter DLL, and will now close.\n\nSee the EmoTracker Discord for more help.", "Critical Error");
-                throw new InvalidOperationException(string.Format("Failed to force-load Lua interpreter DLL at path: {0}", privateBinPath), e);
-            }
-        }
 
         private void ConfigurePlatformDllPaths()
         {

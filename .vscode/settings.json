@@ -1,0 +1,5 @@
+{
+    "dotnet.preferCSharpExtension": true,
+    "omnisharp.enableRoslynAnalyzers": true,
+    "omnisharp.enableEditorConfigSupport": true
+}
