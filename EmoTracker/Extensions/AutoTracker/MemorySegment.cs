@@ -1,10 +1,10 @@
-﻿using ConnectorLib;
+using ConnectorLib;
+using EmoTracker.Core.Services;
 using EmoTracker.Data;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
 using NLua;
 using System;
-using System.Windows;
 
 namespace EmoTracker.Extensions.AutoTracker
 {
@@ -262,7 +262,7 @@ namespace EmoTracker.Extensions.AutoTracker
                             //  Invoke the segment modified handler
                             OnMemorySegmentModified?.Invoke(this, connector, game);
 
-                            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                            Dispatch.BeginInvoke(() =>
                             {
                                 lock (this)
                                 {
@@ -278,7 +278,7 @@ namespace EmoTracker.Extensions.AutoTracker
                                     DateTime now = DateTime.Now;
                                     mLastUpdate = now;
                                 }
-                            }));
+                            });
                         }
                     }
 

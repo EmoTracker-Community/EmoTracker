@@ -9,6 +9,7 @@ using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
 using EmoTracker.Extensions;
 using EmoTracker.Notifications;
+using EmoTracker.Services;
 using EmoTracker.UI;
 using EmoTracker.UI.Media;
 using Newtonsoft.Json.Linq;
@@ -23,8 +24,6 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
-using System.Windows.Input;
-using System.Windows.Threading;
 
 namespace EmoTracker
 {
@@ -211,17 +210,17 @@ namespace EmoTracker
                 {
                     string msg = $"You have user overrides in place for {package.Name} which may cause issues after updating. Do you want to backup and disable your overrides prior to updating?";
                     string caption = "Uninstall Package";
-                    MessageBoxResult res = MessageBox.Show(msg, caption, MessageBoxButton.YesNoCancel, MessageBoxImage.Exclamation);
+                    bool? res = DialogService.Instance.ShowYesNoCancel(caption, msg);
 
                     switch (res)
                     {
-                        case MessageBoxResult.Cancel:
+                        case null:
                             return;
 
-                        case MessageBoxResult.No:
+                        case false:
                             break;
 
-                        case MessageBoxResult.Yes:
+                        case true:
                             BackupOverrideResult bores = package.BackupOverride();
 
                             switch (bores)
@@ -229,7 +228,7 @@ namespace EmoTracker
                                 case BackupOverrideResult.Failed:
                                     msg = $"Unable to backup {package.Name} overrides. Check to make sure that no other application is using the folder or you do not have a backup instance already. Canceling update";
                                     caption = "Backup Failed";
-                                    MessageBox.Show(msg, caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                                    DialogService.Instance.ShowOK(caption, msg);
                                     return;
 
                                 case BackupOverrideResult.Success:
@@ -250,9 +249,9 @@ namespace EmoTracker
 
             string msg = $"You are about to uninstall \"{package.Name}\". This will remove all the files associated with the package as well as the overrides. Do you wish to continue?";
             string caption = "Uninstall Package";
-            MessageBoxResult res = MessageBox.Show(msg, caption, MessageBoxButton.YesNo, MessageBoxImage.Exclamation);
+            bool res = DialogService.Instance.ShowYesNo(caption, msg);
 
-            if(res == MessageBoxResult.No) { return; }
+            if(!res) { return; }
 
             UninstallResult ures = package.Uninstall();
             switch(ures)
@@ -262,12 +261,12 @@ namespace EmoTracker
                 case UninstallResult.FailedUninstall:
                     msg = $"Failed to uninstall \"{package.Name}\"! Please ensure no other applications are using the file and try again.";
                     caption = "Failed to Uninstall";
-                    MessageBox.Show(msg, caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    DialogService.Instance.ShowOK(caption, msg);
                     break;
                 case UninstallResult.FailedOverrides:
                     msg = $"Failed to remove \"{package.Name}\" overrides folder. You will need to remove it manually";
                     caption = "Failed to Remove Overrides";
-                    MessageBox.Show(msg, caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    DialogService.Instance.ShowOK(caption, msg);
                     break;
             }
         }
@@ -292,7 +291,7 @@ namespace EmoTracker
                 catch { };
 
                 if (Directory.Exists(Tracker.Instance.ActiveGamePackage.OverridePath))
-                    System.Diagnostics.Process.Start("explorer.exe", Tracker.Instance.ActiveGamePackage.OverridePath);
+                    WindowService.Instance.OpenFolder(Tracker.Instance.ActiveGamePackage.OverridePath);
                 else
                     PushMarkdownNotification(NotificationType.Error, string.Format(
 @"### Cannot open override folder
@@ -333,7 +332,7 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
             UI.PackageManagerWindow window = new UI.PackageManagerWindow() { Owner = Application.Current.MainWindow };
             window.ShowDialog();
 
-            Keyboard.Focus(Application.Current.MainWindow);
+            WindowService.Instance.FocusMainWindow();
         }
 
         private void CheckForUpdateHandler(object obj)
@@ -341,20 +340,20 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
             UI.AppUpdateWindow window = new UI.AppUpdateWindow(false) { Owner = Application.Current.MainWindow };
             window.ShowDialog();
 
-            Keyboard.Focus(Application.Current.MainWindow);
+            WindowService.Instance.FocusMainWindow();
         }
 
         private void RefreshHandler(object param)
         {
             if (ApplicationSettings.Instance.PromptOnRefreshClose)
             {
-                MessageBoxResult result = MessageBox.Show(Application.Current.MainWindow, "Refreshing will cause you to lose all unsaved progress. Are you sure you want to refresh?", "Warning!", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-                if (result != MessageBoxResult.Yes)
+                bool result = DialogService.Instance.ShowYesNo("Warning!", "Refreshing will cause you to lose all unsaved progress. Are you sure you want to refresh?", defaultYes: false);
+                if (!result)
                     return;
             }
 
             Reload();
-            Keyboard.Focus(Application.Current.MainWindow);
+            WindowService.Instance.FocusMainWindow();
         }
 
         private void ResetUserDataHandler(object param)
@@ -363,8 +362,8 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
             {
                 if (ApplicationSettings.Instance.PromptOnRefreshClose)
                 {
-                    MessageBoxResult result = MessageBox.Show("Clearing overrides will cause you to lose all unsaved progress. Are you sure you want to continue?", "Warning!", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-                    if (result != MessageBoxResult.Yes)
+                    bool result = DialogService.Instance.ShowYesNo("Warning!", "Clearing overrides will cause you to lose all unsaved progress. Are you sure you want to continue?", defaultYes: false);
+                    if (!result)
                         return;
                 }
 
@@ -372,12 +371,12 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
                 Reload();
             }
 
-            Keyboard.Focus(Application.Current.MainWindow);
+            WindowService.Instance.FocusMainWindow();
         }
 
         private void ActivatePackHandler(object obj)
         {
-            Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            Core.Services.Dispatch.BeginInvoke(() =>
             {
                 IGamePackage package = obj as IGamePackage;
                 IGamePackageVariant variant = obj as IGamePackageVariant;
@@ -386,12 +385,12 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
                 {
                     Tracker.Instance.ActiveGamePackageVariant = null;
                     Tracker.Instance.ActiveGamePackage = package;
-                }            
+                }
                 else if (variant != null)
                 {
                     Tracker.Instance.ActiveGamePackageVariant = variant;
                 }
-            }));
+            });
         }
 
         #region -- Visual Adjustments --
@@ -433,28 +432,24 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
         {
             string defaultSaveDataPath = Path.Combine(UserDirectory.Path, "saves");
 
-            Microsoft.Win32.OpenFileDialog dialog = new Microsoft.Win32.OpenFileDialog();
-            dialog.Filter = "EmoTracker Save File (*.json)|*.json";
-            dialog.InitialDirectory = defaultSaveDataPath;
-
-            if (dialog.ShowDialog() == true)
+            string filename = DialogService.Instance.OpenFile("EmoTracker Save File (*.json)|*.json", defaultSaveDataPath);
+            if (filename != null)
             {
-                if (!LoadProgress(dialog.FileName))
+                if (!LoadProgress(filename))
                 {
                     Reload();
 
-                    MessageBox.Show(Application.Current.MainWindow,
+                    DialogService.Instance.ShowOK("Failed to load save data...",
                         "Failed to load the requested save file. Possible reasons include:\n\n" +
                         "• The original pack or variant no longer exists\n" +
                         "• The save data has been corruped\n" +
                         "• The pack version is different from the version used to save\n" +
                         "• The pack contents do not match the save data.\n\n" +
-                        "Note that certain types of user overrides can affect this, if added/changed since saving.",
-                        "Failed to load save data...", MessageBoxButton.OK, MessageBoxImage.Error );
+                        "Note that certain types of user overrides can affect this, if added/changed since saving.");
                 }
                 else
                 {
-                    mCurrentSavePath = dialog.FileName;
+                    mCurrentSavePath = filename;
                 }
             }
         }
@@ -495,16 +490,11 @@ defaultSaveDataPath)
 );
             }
 
-            Microsoft.Win32.SaveFileDialog dialog = new Microsoft.Win32.SaveFileDialog();
-            dialog.AddExtension = true;
-            dialog.CheckPathExists = true;
-            dialog.Filter = "EmoTracker Save File (*.json)|*.json";
-            dialog.InitialDirectory = defaultSaveDataPath;
-
-            if (dialog.ShowDialog() == true)
+            string filename = DialogService.Instance.SaveFile("EmoTracker Save File (*.json)|*.json", defaultSaveDataPath);
+            if (filename != null)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(dialog.FileName));
-                SaveProgress(dialog.FileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(filename));
+                SaveProgress(filename);
             }
         }
 
@@ -517,8 +507,8 @@ defaultSaveDataPath)
             {
                 bool bResult = Tracker.Instance.SaveProgress(path, (JObject root) =>
                 {
-                    root["main_window_width"] = Application.Current.MainWindow.Width;
-                    root["main_window_height"] = Application.Current.MainWindow.Height;
+                    root["main_window_width"] = WindowService.Instance.MainWindowWidth;
+                    root["main_window_height"] = WindowService.Instance.MainWindowHeight;
 
                     JObject extensionData = new JObject();
                     bool bAddedAny = false;
@@ -567,8 +557,8 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         {
             if (Tracker.Instance.LoadProgress(path, (JObject root) =>
             {
-                Application.Current.MainWindow.Width = root.GetValue<double>("main_window_width", Application.Current.MainWindow.Width);
-                Application.Current.MainWindow.Height = root.GetValue<double>("main_window_height", Application.Current.MainWindow.Height);
+                WindowService.Instance.MainWindowWidth = root.GetValue<double>("main_window_width", WindowService.Instance.MainWindowWidth);
+                WindowService.Instance.MainWindowHeight = root.GetValue<double>("main_window_height", WindowService.Instance.MainWindowHeight);
 
                 JObject extensionData = root.GetValue<JObject>("extensions");
                 if (extensionData != null)
@@ -612,7 +602,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             {
                 PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(Tracker.Instance.ActiveGamePackage.UniqueID);
                 if (entry != null && !string.IsNullOrWhiteSpace(entry.DocumentationURL))
-                    System.Diagnostics.Process.Start(entry.DocumentationURL);
+                    WindowService.Instance.OpenUrl(entry.DocumentationURL);
             }
         }
 
@@ -693,7 +683,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
 
-            Keyboard.Focus(Application.Current.MainWindow);
+            WindowService.Instance.FocusMainWindow();
         }
         public void AcquireLayouts()
         {
@@ -818,9 +808,9 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             InstalledPackagesView.Refresh();
 
             //  Configure auto-refresh for the package manager
-            DispatcherTimer timer = new DispatcherTimer();
-            timer.Interval = TimeSpan.FromMinutes(30);
-            timer.Tick += OnRefreshPackageRepositoriesTimer;
+            System.Timers.Timer timer = new System.Timers.Timer(TimeSpan.FromMinutes(30).TotalMilliseconds);
+            timer.Elapsed += (s, e) => OnRefreshPackageRepositoriesTimer(s, e);
+            timer.AutoReset = true;
             timer.Start();
 
             PackageManager.Instance.OnRepositoryUpdated += PackageManager_OnRepositoryUpdated;
@@ -1079,12 +1069,15 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             get { return mNotifications.Count > 0; }
         }
 
-        DispatcherTimer mNotificationUpdateTimer;
+        System.Timers.Timer mNotificationUpdateTimer;
 
 
         void InitializeNotifications()
         {
-            mNotificationUpdateTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Normal, NotificationExpirationTimer_Tick, Application.Current.Dispatcher);
+            mNotificationUpdateTimer = new System.Timers.Timer(500);
+            mNotificationUpdateTimer.Elapsed += (s, e) => Core.Services.Dispatch.BeginInvoke(() => NotificationExpirationTimer_Tick(s, e));
+            mNotificationUpdateTimer.AutoReset = true;
+            mNotificationUpdateTimer.Start();
             mNotifications.CollectionChanged += Notifications_CollectionChanged;
 
             ScriptManager.Instance.SetNotificationService(this);
@@ -1155,7 +1148,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             {
                 //  Use the dispatcher here to make sure we're not eating up expiry time during long blocking operations
                 //  this call may be nested within.
-                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                Core.Services.Dispatch.BeginInvoke(() =>
                 {
                     MarkdownNotification notification = new MarkdownNotification(timeout)
                     {

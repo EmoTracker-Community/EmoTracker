@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows;
 
 namespace EmoTracker.Extensions.NDI
 {
@@ -30,7 +29,7 @@ namespace EmoTracker.Extensions.NDI
             set { SetProperty(ref mbActive, value); }
         }
 
-        public FrameworkElement StatusBarControl
+        public object StatusBarControl
         {
             get; set;
         }

@@ -1,5 +1,6 @@
-﻿using ConnectorLib;
+using ConnectorLib;
 using EmoTracker.Core;
+using EmoTracker.Core.Services;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Packages;
@@ -12,7 +13,6 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Windows;
 using WebSocketSharp;
 
 namespace EmoTracker.Extensions.BontaMultiworld
@@ -84,19 +84,19 @@ namespace EmoTracker.Extensions.BontaMultiworld
 
         public void ClearMessageLog(object arg = null)
         {
-            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+            Dispatch.BeginInvoke(() =>
             {
                 mMessageLog.Clear();
-            }));
+            });
         }
 
         public void Log(string format, params object[] tokens)
         {
             string formattedMsg = string.Format(format, tokens);
-            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+            Dispatch.BeginInvoke(() =>
             {
                 mMessageLog.Add(formattedMsg);
-            }));
+            });
         }
 
         #endregion
@@ -740,42 +740,42 @@ namespace EmoTracker.Extensions.BontaMultiworld
                     {
                         if (bHadSocket)
                         {
-                            Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                            Dispatch.BeginInvoke(() =>
                             {
                                 ApplicationModel.Instance.PushMarkdownNotification(Data.Scripting.NotificationType.Error, string.Format("You have been disconnected from the multi-world server."));
 
-                            }));
+                            });
                         }
                     }
                     break;
 
                 case SessionError.RomValidationError:
                     {
-                        Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                        Dispatch.BeginInvoke(() =>
                         {
                             ApplicationModel.Instance.PushMarkdownNotification(Data.Scripting.NotificationType.Error, string.Format("You were disconnected from the multi-world server because your ROM does not match the server's expectations."));
 
-                        }));
+                        });
                     }
                     break;
 
                 case SessionError.ProtocolError:
                     {
-                        Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                        Dispatch.BeginInvoke(() =>
                         {
                             ApplicationModel.Instance.PushMarkdownNotification(Data.Scripting.NotificationType.Error, string.Format("You were disconnected from the multi-world server because the server responded to a request in an unexpected way."));
 
-                        }));
+                        });
                     }
                     break;
 
                 default:
                     {
-                        Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                        Dispatch.BeginInvoke(() =>
                         {
                             ApplicationModel.Instance.PushMarkdownNotification(Data.Scripting.NotificationType.Error, string.Format("You have been disconnected from the multi-world server."));
 
-                        }));
+                        });
                     }
                     break;
             }
@@ -992,11 +992,11 @@ namespace EmoTracker.Extensions.BontaMultiworld
                     if ((notificationLevel >= MultiworldNotificationLevel.Verbose && string.Equals(userFrom, mUserName)) ||
                         (notificationLevel >= MultiworldNotificationLevel.Verbose && string.Equals(userTo, mUserName)))
                     {
-                        Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                        Dispatch.BeginInvoke(() =>
                         {
                             ApplicationModel.Instance.PushMarkdownNotification(Data.Scripting.NotificationType.Message, string.Format("**{0}** sent **{1}** {2} *({3})*", userFrom, userTo, GetItemNameForID(itemCode), GetLocationNameForID(locationCode)));
 
-                        }));
+                        });
                     }
                 }
                 catch
@@ -1107,12 +1107,12 @@ namespace EmoTracker.Extensions.BontaMultiworld
 
                             if (ApplicationSettings.Instance.MultiworldNotificationLevel >= MultiworldNotificationLevel.Normal)
                             {
-                                Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() =>
+                                Dispatch.BeginInvoke(() =>
                                 {
                                     Log("Received {0} from {1} ({2})", GetItemNameForID(item.Item), item.PlayerName, item.Location);
                                     ApplicationModel.Instance.PushMarkdownNotification(Data.Scripting.NotificationType.Celebration, string.Format("Received **{0}** from **{1}** *({2})*", GetItemNameForID(item.Item), item.PlayerName, item.Location));
 
-                                }));
+                                });
                             }
 
                             using (connector16.GetBatchContext16())
