@@ -208,7 +208,7 @@ namespace EmoTracker
 #endif
         }
 
-        private void InstallPackage(object obj)
+        private async void InstallPackage(object obj)
         {
             var package = (PackageRepositoryEntry)obj;
 
@@ -220,7 +220,7 @@ namespace EmoTracker
                 {
                     string msg = $"You have user overrides in place for {package.Name} which may cause issues after updating. Do you want to backup and disable your overrides prior to updating?";
                     string caption = "Uninstall Package";
-                    bool? res = DialogService.Instance.ShowYesNoCancel(caption, msg);
+                    bool? res = await DialogService.Instance.ShowYesNoCancelAsync(caption, msg);
 
                     switch (res)
                     {
@@ -238,7 +238,7 @@ namespace EmoTracker
                                 case BackupOverrideResult.Failed:
                                     msg = $"Unable to backup {package.Name} overrides. Check to make sure that no other application is using the folder or you do not have a backup instance already. Canceling update";
                                     caption = "Backup Failed";
-                                    DialogService.Instance.ShowOK(caption, msg);
+                                    await DialogService.Instance.ShowOKAsync(caption, msg);
                                     return;
 
                                 case BackupOverrideResult.Success:
@@ -253,13 +253,13 @@ namespace EmoTracker
             package.Install();
         }
 
-        private void UninstallPackage(object obj)
+        private async void UninstallPackage(object obj)
         {
             var package = (PackageRepositoryEntry)obj;
 
             string msg = $"You are about to uninstall \"{package.Name}\". This will remove all the files associated with the package as well as the overrides. Do you wish to continue?";
             string caption = "Uninstall Package";
-            bool res = DialogService.Instance.ShowYesNo(caption, msg);
+            bool res = await DialogService.Instance.ShowYesNoAsync(caption, msg);
 
             if(!res) { return; }
 
@@ -271,12 +271,12 @@ namespace EmoTracker
                 case UninstallResult.FailedUninstall:
                     msg = $"Failed to uninstall \"{package.Name}\"! Please ensure no other applications are using the file and try again.";
                     caption = "Failed to Uninstall";
-                    DialogService.Instance.ShowOK(caption, msg);
+                    await DialogService.Instance.ShowOKAsync(caption, msg);
                     break;
                 case UninstallResult.FailedOverrides:
                     msg = $"Failed to remove \"{package.Name}\" overrides folder. You will need to remove it manually";
                     caption = "Failed to Remove Overrides";
-                    DialogService.Instance.ShowOK(caption, msg);
+                    await DialogService.Instance.ShowOKAsync(caption, msg);
                     break;
             }
         }
@@ -371,11 +371,11 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
             WindowService.Instance.FocusMainWindow();
         }
 
-        private void RefreshHandler(object param)
+        private async void RefreshHandler(object param)
         {
             if (ApplicationSettings.Instance.PromptOnRefreshClose)
             {
-                bool result = DialogService.Instance.ShowYesNo("Warning!", "Refreshing will cause you to lose all unsaved progress. Are you sure you want to refresh?", defaultYes: false);
+                bool result = await DialogService.Instance.ShowYesNoAsync("Warning!", "Refreshing will cause you to lose all unsaved progress. Are you sure you want to refresh?", defaultYes: false);
                 if (!result)
                     return;
             }
@@ -384,13 +384,13 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
             WindowService.Instance.FocusMainWindow();
         }
 
-        private void ResetUserDataHandler(object param)
+        private async void ResetUserDataHandler(object param)
         {
             if (Tracker.Instance.ActiveGamePackage != null)
             {
                 if (ApplicationSettings.Instance.PromptOnRefreshClose)
                 {
-                    bool result = DialogService.Instance.ShowYesNo("Warning!", "Clearing overrides will cause you to lose all unsaved progress. Are you sure you want to continue?", defaultYes: false);
+                    bool result = await DialogService.Instance.ShowYesNoAsync("Warning!", "Clearing overrides will cause you to lose all unsaved progress. Are you sure you want to continue?", defaultYes: false);
                     if (!result)
                         return;
                 }
@@ -456,18 +456,18 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
         string mCurrentSavePath;
 
-        private void OpenHandler(object obj)
+        private async void OpenHandler(object obj)
         {
             string defaultSaveDataPath = Path.Combine(UserDirectory.Path, "saves");
 
-            string filename = DialogService.Instance.OpenFile("EmoTracker Save File (*.json)|*.json", defaultSaveDataPath);
+            string filename = await DialogService.Instance.OpenFileAsync("EmoTracker Save File (*.json)|*.json", defaultSaveDataPath);
             if (filename != null)
             {
                 if (!LoadProgress(filename))
                 {
                     Reload();
 
-                    DialogService.Instance.ShowOK("Failed to load save data...",
+                    await DialogService.Instance.ShowOKAsync("Failed to load save data...",
                         "Failed to load the requested save file. Possible reasons include:\n\n" +
                         "• The original pack or variant no longer exists\n" +
                         "• The save data has been corruped\n" +
@@ -499,7 +499,7 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
             }
         }
 
-        private void SaveAsHandler(object obj)
+        private async void SaveAsHandler(object obj)
         {
             string defaultSaveDataPath = Path.Combine(UserDirectory.Path, "saves");
 
@@ -518,7 +518,7 @@ defaultSaveDataPath)
 );
             }
 
-            string filename = DialogService.Instance.SaveFile("EmoTracker Save File (*.json)|*.json", defaultSaveDataPath);
+            string filename = await DialogService.Instance.SaveFileAsync("EmoTracker Save File (*.json)|*.json", defaultSaveDataPath);
             if (filename != null)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(filename));
