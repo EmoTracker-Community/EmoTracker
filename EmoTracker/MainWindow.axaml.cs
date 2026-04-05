@@ -8,18 +8,11 @@ using EmoTracker.Data.Core.Transactions.Processors;
 using EmoTracker.Data.Layout;
 using System;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
 
 namespace EmoTracker
 {
-    public partial class MainWindow : Window, INotifyPropertyChanged
+    public partial class MainWindow : Window
     {
-        public new event PropertyChangedEventHandler PropertyChanged;
-        protected void NotifyPropertyChanged([CallerMemberName] string propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-
         public MainWindow()
         {
             InitializeComponent();
@@ -36,6 +29,18 @@ namespace EmoTracker
             this.Loaded += MainWindow_Loaded;
             this.KeyDown += MainWindow_KeyDown;
             this.PointerWheelChanged += MainWindow_PointerWheelChanged;
+
+            // Set initial layout
+            RefreshTrackerLayout();
+        }
+
+        private void TitleBar_PointerPressed(object sender, PointerPressedEventArgs e)
+        {
+            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+                && e.Source is not Button)
+            {
+                BeginMoveDrag(e);
+            }
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -184,10 +189,17 @@ namespace EmoTracker
 
         private void Instance_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            NotifyPropertyChanged("ActiveLayout");
-            NotifyPropertyChanged("FixedContentWidth");
-            NotifyPropertyChanged("UseFixedContentWidth");
-            InvalidateVisual();
+            RefreshTrackerLayout();
+        }
+
+        private void RefreshTrackerLayout()
+        {
+            bool vertical = Bounds.Height > Bounds.Width;
+            var layout = vertical
+                ? ApplicationModel.Instance.TrackerVerticalLayout
+                : ApplicationModel.Instance.TrackerHorizontalLayout;
+            if (TrackerLayout != null)
+                TrackerLayout.DataContext = layout;
         }
 
         protected override void OnSizeChanged(SizeChangedEventArgs e)
@@ -196,20 +208,10 @@ namespace EmoTracker
             bool bNewAspect = e.NewSize.Height > e.NewSize.Width;
 
             if (bOldAspect != bNewAspect)
-            {
-                NotifyPropertyChanged("UseVerticalOrientation");
-                NotifyPropertyChanged("ActiveLayout");
-            }
+                RefreshTrackerLayout();
 
             base.OnSizeChanged(e);
         }
-
-        public bool UseVerticalOrientation => Bounds.Height > Bounds.Width;
-
-        public Data.Layout.Layout ActiveLayout =>
-            UseVerticalOrientation
-                ? ApplicationModel.Instance.TrackerVerticalLayout
-                : ApplicationModel.Instance.TrackerHorizontalLayout;
 
         public UI.DeveloperConsole DeveloperConsole { get; private set; }
 

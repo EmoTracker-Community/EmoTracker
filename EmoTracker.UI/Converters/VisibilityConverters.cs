@@ -11,6 +11,19 @@ using Avalonia.Data.Converters;
 namespace EmoTracker.UI.Converters
 {
     /// <summary>
+    /// Returns <c>true</c> when the value is null, <c>false</c> when non-null.
+    /// Use for IsVisible bindings where the element should appear when no data is present.
+    /// </summary>
+    public class NullToTrueConverter : Singleton<NullToTrueConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => value == null;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
     /// Returns <c>true</c> when the value is non-null, <c>false</c> when null.
     /// </summary>
     public class NullToFalseConverter : Singleton<NullToFalseConverter>, IValueConverter
