@@ -54,7 +54,7 @@
                                     <DataTemplate DataType="locations:MapLocation">
                                         <Grid Name="MinifiedLocation"
                                               IsVisible="{Binding Location.HasVisibleSections}">
-                                            <Border BorderThickness="{Binding BorderThickness}"
+                                            <Border BorderThickness="{Binding BorderThickness, Converter={x:Static converters:DoubleToThicknessConverter.Instance}}"
                                                     Width="{Binding Size}"
                                                     Height="{Binding Size}"
                                                     Canvas.Left="{Binding X}"

@@ -126,6 +126,26 @@ namespace EmoTracker.UI.Converters
     }
 
     /// <summary>
+    /// Converts a <see cref="double"/> to a uniform <c>Thickness</c>.
+    /// Use for BorderThickness bindings where the data model stores a single double.
+    /// </summary>
+    public class DoubleToThicknessConverter : Singleton<DoubleToThicknessConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            double d = value is double dv ? dv : 0.0;
+#if WINDOWS
+            return new System.Windows.Thickness(d);
+#else
+            return new Avalonia.Thickness(d);
+#endif
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
     /// Converts a colour name or hex string (e.g. "#ff3030", "DarkOrange") to an <see cref="IBrush"/>.
     /// Returns <c>null</c> on failure so that FallbackValue can kick in.
     /// </summary>

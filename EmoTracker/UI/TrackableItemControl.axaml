@@ -4,7 +4,7 @@
              xmlns:local="clr-namespace:EmoTracker.UI"
              xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI">
-    <Grid ToolTip.Tip="{Binding Name}">
+    <Grid ToolTip.Tip="{Binding Name}" PointerReleased="Grid_PointerReleased">
         <Button Command="{Binding OnLeftClickCommand, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
                 CommandParameter="{Binding}"
                 Focusable="False"
@@ -36,12 +36,6 @@
                     </Grid>
                 </ControlTemplate>
             </Button.Template>
-            <Button.ContextMenu>
-                <ContextMenu>
-                    <MenuItem Command="{Binding OnRightClickCommand, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
-                              CommandParameter="{Binding}" />
-                </ContextMenu>
-            </Button.ContextMenu>
         </Button>
     </Grid>
 </UserControl>

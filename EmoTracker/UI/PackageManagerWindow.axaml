@@ -142,7 +142,7 @@
                            IsVisible="False"/>
 
                 <!-- Package groups list -->
-                <ItemsControl ItemsSource="{Binding AvailablePackagesView.Groups,
+                <ItemsControl ItemsSource="{Binding AvailablePackagesGroupedView,
                                   Source={x:Static app:ApplicationModel.Instance}}"
                               Margin="0,10,10,5">
                     <ItemsControl.ItemTemplate>
