@@ -7,4 +7,9 @@
         <FluentTheme />
     </Application.Styles>
 
+    <Application.Resources>
+        <FontFamily x:Key="FontAwesome5Free">avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid</FontFamily>
+        <FontFamily x:Key="FontAwesome5Brands">avares://EmoTracker/Resources/Fonts#Font Awesome 5 Brands Regular</FontFamily>
+    </Application.Resources>
+
 </Application>

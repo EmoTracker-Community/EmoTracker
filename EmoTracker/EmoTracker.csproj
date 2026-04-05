@@ -24,12 +24,20 @@
     <Compile Remove="PluginManager.cs" />
   </ItemGroup>
 
-  <!-- Binary resources embedded in the assembly -->
-  <ItemGroup>
+  <!-- WPF resource items (net8.0-windows only) -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
     <Resource Include="emohead_icon_transparent_7h3_icon.ico" />
     <Resource Include="emotracker_icon.ico" />
     <Resource Include="release_notes.txt" />
     <Resource Include="Resources\**\*" />
+  </ItemGroup>
+
+  <!-- Avalonia resource items (net8.0 cross-platform) — accessible via avares://EmoTracker/... -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <AvaloniaResource Include="emohead_icon_transparent_7h3_icon.ico" />
+    <AvaloniaResource Include="emotracker_icon.ico" />
+    <AvaloniaResource Include="release_notes.txt" />
+    <AvaloniaResource Include="Resources\**\*" />
   </ItemGroup>
 
   <!-- Windows-only native assembly references -->
@@ -80,7 +88,7 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="TwitchLib" Version="3.5.3" />
-    <PackageReference Include="WebSocketSharp" Version="1.0.3-rc11" />
+    <PackageReference Include="WebSocketSharp" Version="1.0.3-rc11" NoWarn="NU1701" />
   </ItemGroup>
 
   <!--

@@ -41,7 +41,7 @@
             <!-- System menu / icon -->
             <Button Grid.Column="0" Name="SystemButton" Background="Transparent"
                     BorderThickness="0" Padding="3,0">
-                <Image VerticalAlignment="Center" Height="22" Source="emotracker_icon.ico" />
+                <Image VerticalAlignment="Center" Height="22" Source="avares://EmoTracker/emotracker_icon.ico" />
             </Button>
 
             <!-- Title (drag handle) -->
