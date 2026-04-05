@@ -94,6 +94,38 @@ namespace EmoTracker.UI.Converters
     }
 
     /// <summary>
+    /// Returns <c>0.0</c> when the value is negative; otherwise returns the value as-is.
+    /// Use for MinWidth/MinHeight bindings where -1 means "no minimum" (platform default is 0).
+    /// </summary>
+    public class NegativeToZeroDoubleConverter : Singleton<NegativeToZeroDoubleConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is double d) return d < 0 ? 0.0 : d;
+            return 0.0;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Returns <see cref="double.PositiveInfinity"/> when the value is negative; otherwise returns the value as-is.
+    /// Use for MaxWidth/MaxHeight bindings where -1 means "no maximum" (platform default is ∞).
+    /// </summary>
+    public class NegativeToInfinityDoubleConverter : Singleton<NegativeToInfinityDoubleConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is double d) return d < 0 ? double.PositiveInfinity : d;
+            return double.PositiveInfinity;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
     /// Returns <c>0.0</c> when the value is negative or zero; otherwise returns the value as-is.
     /// Use for Canvas.Left / Canvas.Top bindings where -1 means "default / unset".
     /// </summary>
