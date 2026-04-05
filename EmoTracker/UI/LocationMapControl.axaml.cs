@@ -5,13 +5,16 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Data.Layout;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Media;
 using EmoTracker.UI.Controls;
+using Avalonia.VisualTree;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using Location = EmoTracker.Data.Locations.Location;
 
 namespace EmoTracker.UI
@@ -44,6 +47,11 @@ namespace EmoTracker.UI
                 w.OnGlobalPreviewKeyDown += MainWindow_OnGlobalPreviewKeyEvent;
                 w.OnGlobalPreviewKeyUp += MainWindow_OnGlobalPreviewKeyEvent;
             }
+
+            // The ItemsPanelTemplate may not have materialized yet at this point.
+            // Dispatch so the visual tree is fully built before we walk it.
+            Avalonia.Threading.Dispatcher.UIThread.Post(UpdateMapOrientation,
+                Avalonia.Threading.DispatcherPriority.Loaded);
         }
 
         private void LocationMapControl_Unloaded(object? sender, VisualTreeAttachmentEventArgs e)
@@ -69,9 +77,37 @@ namespace EmoTracker.UI
             bool bNewAspect = e.NewSize.Height > e.NewSize.Width;
 
             if (bOldAspect != bNewAspect)
+            {
                 NotifyPropertyChanged(nameof(UseVerticalOrientation));
+                NotifyPropertyChanged(nameof(EffectiveMapOrientation));
+                UpdateMapOrientation();
+            }
 
             base.OnSizeChanged(e);
+        }
+
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+            if (change.Property == DataContextProperty)
+            {
+                NotifyPropertyChanged(nameof(EffectiveMapOrientation));
+                UpdateMapOrientation();
+            }
+        }
+
+        /// <summary>
+        /// Imperatively sets the Orientation of the MapsPanel StackPanel inside the
+        /// ItemsPanelTemplate. Bindings from inside ItemsPanelTemplate to ancestor
+        /// controls don't reliably resolve in Avalonia, so we walk the visual tree instead.
+        /// </summary>
+        private void UpdateMapOrientation()
+        {
+            var panel = MapsItemsControl.GetVisualDescendants()
+                .OfType<StackPanel>()
+                .FirstOrDefault(p => p.Name == "MapsPanel");
+            if (panel != null)
+                panel.Orientation = EffectiveMapOrientation;
         }
 
         #region -- Details View --
@@ -190,6 +226,31 @@ namespace EmoTracker.UI
         #endregion
 
         public bool UseVerticalOrientation => Bounds.Height > Bounds.Width;
+
+        /// <summary>
+        /// Resolves the effective map orientation for the inner StackPanel.
+        /// WPF used DataTriggers to switch ItemsPanel; in Avalonia we compute
+        /// the orientation and bind the StackPanel's Orientation directly.
+        /// </summary>
+        public Avalonia.Layout.Orientation EffectiveMapOrientation
+        {
+            get
+            {
+                if (DataContext is MapPanel mapPanel)
+                {
+                    return mapPanel.Orientation switch
+                    {
+                        MapPanel.MapOrientation.Vertical => Avalonia.Layout.Orientation.Vertical,
+                        MapPanel.MapOrientation.Horizontal => Avalonia.Layout.Orientation.Horizontal,
+                        MapPanel.MapOrientation.Auto => UseVerticalOrientation
+                            ? Avalonia.Layout.Orientation.Vertical
+                            : Avalonia.Layout.Orientation.Horizontal,
+                        _ => Avalonia.Layout.Orientation.Horizontal
+                    };
+                }
+                return Avalonia.Layout.Orientation.Horizontal;
+            }
+        }
 
         public bool IsShiftPressed
         {
