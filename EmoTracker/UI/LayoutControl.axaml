@@ -7,6 +7,16 @@
              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
              xmlns:layout="clr-namespace:EmoTracker.Data.Layout;assembly=EmoTracker.Data"
              xmlns:local="clr-namespace:EmoTracker.UI">
+    <UserControl.Resources>
+        <!-- In WPF, ContentPresenter.HorizontalContentAlignment defaults to Stretch.
+             In Avalonia it defaults to Left, so item container ContentPresenters size
+             DataTemplate content to its desired size rather than filling available space.
+             This theme restores the WPF default for all layout-hosting ItemsControls. -->
+        <ControlTheme x:Key="StretchItemContainer" TargetType="ContentPresenter">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </ControlTheme>
+    </UserControl.Resources>
     <UserControl.DataTemplates>
 
         <!-- Each DataTemplate wraps its content in a LayoutTransformControl so that the
@@ -81,7 +91,8 @@
                       MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
-                    <ItemsControl ItemsSource="{Binding Children}">
+                    <ItemsControl ItemsSource="{Binding Children}"
+                                  ItemContainerTheme="{StaticResource StretchItemContainer}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <!-- Orientation is bound via RelativeSource to the owning ItemsControl's DataContext (the ArrayPanel).
@@ -120,6 +131,8 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemContainerTheme>
                             <ControlTheme TargetType="ContentPresenter">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="VerticalContentAlignment" Value="Stretch" />
                                 <Setter Property="(DockPanel.Dock)"
                                         Value="{Binding DockLocation, Converter={x:Static converters:StringToDockConverter.Instance}}" />
                             </ControlTheme>
@@ -153,6 +166,8 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemContainerTheme>
                             <ControlTheme TargetType="ContentPresenter">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="VerticalContentAlignment" Value="Stretch" />
                                 <Setter Property="(Canvas.Left)"
                                         Value="{Binding CanvasX, Converter={x:Static converters:CanvasPositionConverter.Instance}}" />
                                 <Setter Property="(Canvas.Top)"
@@ -182,7 +197,8 @@
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                     <Viewbox>
-                        <ItemsControl ItemsSource="{Binding Items}" />
+                        <ItemsControl ItemsSource="{Binding Items}"
+                                      ItemContainerTheme="{StaticResource StretchItemContainer}" />
                     </Viewbox>
                 </Grid>
             </LayoutTransformControl>
@@ -262,7 +278,8 @@
                     <!-- Content area -->
                     <Grid Grid.Row="1"
                           Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#66212121}">
-                        <ItemsControl ItemsSource="{Binding Items}" Margin="5" />
+                        <ItemsControl ItemsSource="{Binding Items}" Margin="5"
+                                      ItemContainerTheme="{StaticResource StretchItemContainer}" />
                     </Grid>
                 </Grid>
             </LayoutTransformControl>
@@ -284,7 +301,8 @@
                       MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
-                    <ItemsControl ItemsSource="{Binding Items}" />
+                    <ItemsControl ItemsSource="{Binding Items}"
+                                  ItemContainerTheme="{StaticResource StretchItemContainer}" />
                 </Grid>
             </LayoutTransformControl>
         </DataTemplate>
@@ -307,7 +325,8 @@
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                   VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding Items}" />
+                        <ItemsControl ItemsSource="{Binding Items}"
+                                      ItemContainerTheme="{StaticResource StretchItemContainer}" />
                     </ScrollViewer>
                 </Grid>
             </LayoutTransformControl>
