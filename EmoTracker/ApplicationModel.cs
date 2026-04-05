@@ -784,7 +784,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 #if WINDOWS
                     AvailablePackagesView.Refresh();
 #else
-                    NotifyPropertyChanged(nameof(AvailablePackagesView));
+                    NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
 #endif
                 }
             }
@@ -824,13 +824,30 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             get { return mInstalledPackagesView; }
         }
 #else
-        public IEnumerable<PackageRepositoryEntry> AvailablePackagesView =>
+        /// <summary>
+        /// Groups available packages by game name for display in the Avalonia package manager.
+        /// Each entry has a <c>Name</c> (game name) and <c>Items</c> (packages in that group).
+        /// </summary>
+        public IEnumerable<PackageGroup> AvailablePackagesGroupedView =>
             (PackageManager.Instance.AvailablePackages ?? Enumerable.Empty<PackageRepositoryEntry>())
-            .Where(PackageFilter)
-            .OrderBy(e => e.Game).ThenBy(e => e.Name);
+            .Where(e => PackageFilter(e))
+            .OrderBy(e => e.Game).ThenBy(e => e.Name)
+            .GroupBy(e => e.Game)
+            .Select(g => new PackageGroup(g.Key, g));
 
         public IEnumerable<IGamePackage> InstalledPackagesView =>
             PackageManager.Instance.InstalledPackages ?? Enumerable.Empty<IGamePackage>();
+
+        public class PackageGroup
+        {
+            public string Name { get; }
+            public IEnumerable<PackageRepositoryEntry> Items { get; }
+            public PackageGroup(string name, IEnumerable<PackageRepositoryEntry> items)
+            {
+                Name = name;
+                Items = items;
+            }
+        }
 #endif
 
         void InitializePackageManagerViews()
@@ -878,7 +895,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             AvailablePackagesView.Refresh();
             InstalledPackagesView.Refresh();
 #else
-            NotifyPropertyChanged(nameof(AvailablePackagesView));
+            NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
             NotifyPropertyChanged(nameof(InstalledPackagesView));
 #endif
         }
@@ -901,7 +918,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 #if WINDOWS
             mAvailablePackagesView.Refresh();
 #else
-            NotifyPropertyChanged(nameof(AvailablePackagesView));
+            NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
 #endif
         }
 

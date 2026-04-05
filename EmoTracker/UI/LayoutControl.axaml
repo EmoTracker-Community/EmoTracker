@@ -24,10 +24,21 @@
             <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Margin="{Binding Margin}"
+                  Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   IsHitTestVisible="{Binding HitTestVisible}">
-                <ItemsControl ItemsSource="{Binding Children}" />
+                <ItemsControl ItemsSource="{Binding Children}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <!-- Orientation is bound via RelativeSource to the owning ItemsControl's DataContext (the ArrayPanel).
+                                 TrivialEnumConverter maps EmoTracker.Data.Layout.Orientation → Avalonia.Layout.Orientation. -->
+                            <StackPanel Orientation="{Binding DataContext.Orientation,
+                                RelativeSource={RelativeSource AncestorType=ItemsControl},
+                                Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
             </Grid>
         </DataTemplate>
 
@@ -35,6 +46,7 @@
             <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Margin="{Binding Margin}"
+                  Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   IsHitTestVisible="{Binding HitTestVisible}">
@@ -58,6 +70,7 @@
             <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Margin="{Binding Margin}"
+                  Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   IsHitTestVisible="{Binding HitTestVisible}">
@@ -151,6 +164,7 @@
             <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Margin="{Binding Margin}"
+                  Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   IsHitTestVisible="{Binding HitTestVisible}">
@@ -162,6 +176,7 @@
             <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Margin="{Binding Margin}"
+                  Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   IsHitTestVisible="{Binding HitTestVisible}">

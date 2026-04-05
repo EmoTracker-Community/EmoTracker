@@ -58,7 +58,7 @@
 
                 <!-- Settings -->
                 <Button Name="SettingsButton" Width="24" Background="Transparent"
-                        BorderThickness="0" VerticalContentAlignment="Center"
+                        BorderThickness="0" Padding="0" VerticalContentAlignment="Center"
                         ToolTip.Tip="Settings">
                     <TextBlock Text="&#xf013;" Foreground="#717171"
                                FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
@@ -67,7 +67,7 @@
 
                 <!-- Package Manager -->
                 <Button Name="PackageManagerButton" Width="24" Background="Transparent"
-                        BorderThickness="0" VerticalContentAlignment="Center"
+                        BorderThickness="0" Padding="0" VerticalContentAlignment="Center"
                         Command="{Binding ShowPackageManagerCommand, Source={x:Static local:ApplicationModel.Instance}}"
                         ToolTip.Tip="Package Manager">
                     <TextBlock Text="&#xf381;" Foreground="#717171"
@@ -77,7 +77,7 @@
 
                 <!-- Refresh -->
                 <Button Width="24" Background="Transparent" BorderThickness="0"
-                        VerticalContentAlignment="Center"
+                        Padding="0" VerticalContentAlignment="Center"
                         Command="{Binding RefreshCommand, Source={x:Static local:ApplicationModel.Instance}}"
                         ToolTip.Tip="Reset the tracker to its default state"
                         Margin="0,0,5,0">
@@ -88,21 +88,21 @@
 
                 <!-- Minimize -->
                 <Button Name="MinimizeButton" Width="30" Background="Transparent"
-                        BorderThickness="0" VerticalContentAlignment="Center">
+                        BorderThickness="0" Padding="0" VerticalContentAlignment="Center">
                     <TextBlock Text="&#x268A;" Foreground="#717171"
                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                 </Button>
 
                 <!-- Maximize/Restore -->
                 <Button Name="MaximizeButton" Width="30" Background="Transparent"
-                        BorderThickness="0" VerticalContentAlignment="Center">
+                        BorderThickness="0" Padding="0" VerticalContentAlignment="Center">
                     <TextBlock Name="MaximizeButtonText" Text="&#x2610;" Foreground="#717171"
                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                 </Button>
 
                 <!-- Close -->
                 <Button Name="CloseButton" Width="30" Background="Red"
-                        BorderThickness="0" VerticalContentAlignment="Center">
+                        BorderThickness="0" Padding="0" VerticalContentAlignment="Center">
                     <TextBlock Text="&#x2715;" Foreground="WhiteSmoke"
                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                 </Button>

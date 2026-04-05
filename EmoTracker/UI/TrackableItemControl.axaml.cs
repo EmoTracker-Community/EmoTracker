@@ -193,5 +193,14 @@ namespace EmoTracker.UI
         private readonly RightClickCommand mRegressCmd;
 
         #endregion
+
+        private void Grid_PointerReleased(object sender, Avalonia.Input.PointerReleasedEventArgs e)
+        {
+            if (e.InitialPressMouseButton == Avalonia.Input.MouseButton.Right)
+            {
+                mRegressCmd.Execute(DataContext);
+                e.Handled = true;
+            }
+        }
     }
 }
