@@ -75,7 +75,6 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <local:LocationControl Margin="2"
-                                                       HorizontalAlignment="Left"
                                                        Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                        PreserveDimension="{Binding DataContext.Orientation, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={x:Static converters:OrientationToPreserveDimensionConverter.Instance}}" />
                             </DataTemplate>
