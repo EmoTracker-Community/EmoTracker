@@ -182,6 +182,9 @@ namespace EmoTracker.Update
 
         public void CheckForUpdates()
         {
+            //  TEMPORARILY DISABLE UPDATES
+            return;
+
             try
             {
                 Status = UpdateStatus.CheckingForUpdate;
