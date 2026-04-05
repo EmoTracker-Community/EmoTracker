@@ -9,7 +9,7 @@
              The popup is managed in code-behind via PopupInstance (a Popup control
              whose IsOpen is toggled by the toggle button click handler). -->
         <Popup Name="NotesPopup"
-               PlacementMode="Top"
+               Placement="Top"
                HorizontalOffset="4"
                VerticalOffset="4"
                PlacementTarget="{Binding ElementName=OpenNotesButton}">

@@ -467,12 +467,37 @@ namespace EmoTracker.UI.Media.Utility
             return avBitmap;
         }
 
+        /// <summary>
+        /// Translates a WPF pack://application:,,,/AssemblyName;component/path URI
+        /// to the Avalonia equivalent avares://AssemblyName/path.
+        /// Returns the original URI unchanged for all other schemes.
+        /// </summary>
+        private static Uri TranslatePackUri(Uri uri)
+        {
+            const string packPrefix = "pack://application:,,,/";
+            string orig = uri.OriginalString;
+            if (!orig.StartsWith(packPrefix, StringComparison.OrdinalIgnoreCase))
+                return uri;
+            string rest = orig.Substring(packPrefix.Length);
+            int compIdx = rest.IndexOf(";component/", StringComparison.OrdinalIgnoreCase);
+            if (compIdx < 0) return uri;
+            string assembly = rest.Substring(0, compIdx);
+            string path = rest.Substring(compIdx + ";component".Length); // includes leading /
+            return new Uri($"avares://{assembly}{path}");
+        }
+
         public static IImage GetImageRaw(Uri uri)
         {
             try
             {
-                if (uri.IsFile)
-                    return new Avalonia.Media.Imaging.Bitmap(uri.LocalPath);
+                Uri resolved = TranslatePackUri(uri);
+                if (resolved.Scheme == "avares")
+                {
+                    using var stream = Avalonia.Platform.AssetLoader.Open(resolved);
+                    return new Avalonia.Media.Imaging.Bitmap(stream);
+                }
+                if (resolved.IsFile)
+                    return new Avalonia.Media.Imaging.Bitmap(resolved.LocalPath);
                 return null;
             }
             catch { return null; }
@@ -482,9 +507,18 @@ namespace EmoTracker.UI.Media.Utility
         {
             try
             {
-                if (!uri.IsFile) return null;
-                using var stream = File.OpenRead(uri.LocalPath);
-                return GetImage(stream);
+                Uri resolved = TranslatePackUri(uri);
+                if (resolved.Scheme == "avares")
+                {
+                    using var stream = Avalonia.Platform.AssetLoader.Open(resolved);
+                    return GetImage(stream);
+                }
+                if (resolved.IsFile)
+                {
+                    using var stream = File.OpenRead(resolved.LocalPath);
+                    return GetImage(stream);
+                }
+                return null;
             }
             catch { return null; }
         }

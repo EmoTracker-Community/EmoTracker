@@ -7,6 +7,8 @@ namespace EmoTracker.UI
     {
         private readonly bool _autoClose;
 
+        public AppUpdateWindow() : this(false) { }
+
         public AppUpdateWindow(bool autoClose)
         {
             _autoClose = autoClose;

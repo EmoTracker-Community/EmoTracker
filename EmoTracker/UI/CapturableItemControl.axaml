@@ -72,7 +72,7 @@
         -->
         <Popup Name="PopupInstance"
                IsOpen="{Binding IsChecked, ElementName=SettingsToggle, Mode=TwoWay}"
-               PlacementMode="Pointer"
+               Placement="Pointer"
                HorizontalOffset="16"
                VerticalOffset="16"
                PlacementTarget="{Binding ElementName=SettingsToggle}">
