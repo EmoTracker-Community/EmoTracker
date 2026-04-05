@@ -9,22 +9,22 @@
         xmlns:ui="clr-namespace:EmoTracker.UI"
         xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
         xmlns:media_utility="clr-namespace:EmoTracker.UI.Media.Utility;assembly=EmoTracker.UI"
+        xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
         x:Class="EmoTracker.MainWindow"
         mc:Ignorable="d"
         Name="HostWindow"
-        Background="#ff00ff"
+        Background="#111111"
         MinWidth="220" MinHeight="61"
         Width="1280" Height="960"
         Title="{Binding MainWindowTitle, Source={x:Static local:ApplicationModel.Instance}}"
         Topmost="{Binding AlwaysOnTop, Source={x:Static data:ApplicationSettings.Instance}}"
-        ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaChromeHints="NoChrome"
         SystemDecorations="BorderOnly">
 
     <Grid RowDefinitions="25,*,Auto">
 
-        <!-- Title bar -->
-        <Grid Grid.Row="0" Height="25" ZIndex="1" IsHitTestVisible="True">
+        <!-- Title bar — PointerPressed on non-button areas triggers window drag -->
+        <Grid Grid.Row="0" Height="25" ZIndex="1" IsHitTestVisible="True"
+              PointerPressed="TitleBar_PointerPressed">
             <Grid.Background>
                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
                     <GradientStop Color="#111111" Offset="0"/>
@@ -117,12 +117,12 @@
                         ScaleX="{Binding MainLayoutScaleFactor, Source={x:Static local:ApplicationModel.Instance}}"
                         ScaleY="{Binding MainLayoutScaleFactor, Source={x:Static local:ApplicationModel.Instance}}"/>
                 </Grid.RenderTransform>
-                <ui:LayoutControl x:Name="TrackerLayout"
-                    DataContext="{Binding ActiveLayout, RelativeSource={RelativeSource AncestorType=local:MainWindow}}"/>
+                <ui:LayoutControl x:Name="TrackerLayout" />
             </Grid>
 
-            <!-- No-package placeholder -->
-            <Grid Background="#080808" IsEnabled="False" Name="NoPackagePlaceholder">
+            <!-- No-package placeholder: visible only when no package is active -->
+            <Grid Background="#080808" IsHitTestVisible="False" Name="NoPackagePlaceholder"
+                  IsVisible="{Binding ActiveGamePackage, Source={x:Static data:Tracker.Instance}, Converter={x:Static converters:NullToTrueConverter.Instance}}">
                 <TextBlock Foreground="WhiteSmoke"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextWrapping="Wrap" Margin="15"
