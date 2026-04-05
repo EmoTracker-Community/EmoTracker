@@ -57,8 +57,15 @@
         </Popup>
 
         <Viewbox Name="ViewScaler" VerticalAlignment="Top" Grid.Row="0">
-            <ItemsControl ItemsSource="{Binding Maps}"
-                          ItemsPanel="{StaticResource HorizontalStackPanel}">
+            <ItemsControl Name="MapsItemsControl" ItemsSource="{Binding Maps}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <!-- Orientation is set imperatively by code-behind (UpdateMapOrientation)
+                             because bindings from inside ItemsPanelTemplate to ancestor controls
+                             don't reliably resolve in Avalonia. -->
+                        <StackPanel Name="MapsPanel" Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="locations:Map">
                         <Grid Name="MapHost" Margin="25,25">
