@@ -433,6 +433,8 @@ namespace EmoTracker.UI.Media.Utility
         }
 
         /// <summary>Convert an Avalonia IImage back to an SKBitmap for pixel processing.</summary>
+        /// <remarks>Always returns a Bgra8888 bitmap so downstream pixel loops can read and write
+        /// alpha correctly, regardless of the source image's original colour type.</remarks>
         private static SKBitmap ToSkBitmap(IImage image)
         {
             if (image is not Avalonia.Media.Imaging.Bitmap avBitmap)
@@ -442,7 +444,19 @@ namespace EmoTracker.UI.Media.Utility
                 using var ms = new MemoryStream();
                 avBitmap.Save(ms);
                 ms.Position = 0;
-                return SKBitmap.Decode(ms);
+                SKBitmap decoded = SKBitmap.Decode(ms);
+                if (decoded == null) return null;
+
+                // Promote to BGRA8888 so overlay compositing always has a real alpha channel.
+                // Rgb888x alpha is forced to 255 — Max(base.Alpha, overlay.Alpha) would then be
+                // 255 for every pixel and transparent regions couldn't be preserved.
+                if (decoded.ColorType != SKColorType.Bgra8888)
+                {
+                    SKBitmap promoted = decoded.Copy(SKColorType.Bgra8888);
+                    decoded.Dispose();
+                    return promoted;
+                }
+                return decoded;
             }
             catch { return null; }
         }
@@ -529,8 +543,24 @@ namespace EmoTracker.UI.Media.Utility
                 return null;
             try
             {
-                SKBitmap bmp = SKBitmap.Decode(stream);
-                if (bmp == null) return null;
+                SKBitmap decoded = SKBitmap.Decode(stream);
+                if (decoded == null) return null;
+
+                // Promote to BGRA8888 before the color-key pass.
+                // SKBitmap.Decode may return Rgb888x (no alpha channel, e.g. RGB PNG or 24-bit BMP).
+                // For Rgb888x, SetPixel(Transparent) is a silent no-op for the alpha byte — it stays
+                // forced to 255 — so magenta pixels would render as opaque black instead of transparent.
+                SKBitmap bmp;
+                if (decoded.ColorType != SKColorType.Bgra8888)
+                {
+                    bmp = decoded.Copy(SKColorType.Bgra8888);
+                    decoded.Dispose();
+                    if (bmp == null) return null;
+                }
+                else
+                {
+                    bmp = decoded;
+                }
 
                 // Apply color key: magenta (R=255, G=0, B=255) → transparent
                 for (int y = 0; y < bmp.Height; y++)
