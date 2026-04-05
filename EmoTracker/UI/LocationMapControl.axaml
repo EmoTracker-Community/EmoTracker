@@ -26,8 +26,31 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Location details flyout: implemented as a Popup in code-behind -->
-        <!-- Badge details flyout: implemented as a Popup in code-behind -->
+        <!-- Location details popup (light-dismiss managed in code-behind to allow double-click) -->
+        <Popup x:Name="LocationDetails" PlacementMode="Bottom">
+            <local:LocationControl x:Name="LocationDetailsContent" Margin="15" />
+        </Popup>
+
+        <!-- Badge details popup (hover, no hit-testing) -->
+        <Popup x:Name="BadgeDetails" PlacementMode="Bottom" IsHitTestVisible="False"
+               PlacementTarget="{Binding #userControl.BadgesTarget}">
+            <Border BorderBrush="DarkGray" BorderThickness="3" Background="#c0212121" CornerRadius="5">
+                <ItemsControl x:Name="BadgeItemsControl" Margin="5">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel MaxWidth="350" Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Image Source="{Binding Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                                   Margin="2" Width="32"
+                                   RenderOptions.BitmapInterpolationMode="None" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </Popup>
 
         <Viewbox Name="ViewScaler" VerticalAlignment="Top" Grid.Row="0">
             <ItemsControl ItemsSource="{Binding Maps}"

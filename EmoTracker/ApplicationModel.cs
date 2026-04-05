@@ -168,7 +168,31 @@ namespace EmoTracker
             InstallPackageCommand = new DelegateCommand(InstallPackage);
             UninstallPackageCommand = new DelegateCommand(UninstallPackage, CanUninstallPackage);
 
+#if !WINDOWS
+            // When HTTP game images finish downloading, refresh the package list once.
+            // Multiple images often load near-simultaneously, so we coalesce the refreshes:
+            // the first completion schedules a single Background-priority update; subsequent
+            // completions that arrive before it runs are folded into that one refresh.
+            EmoTracker.UI.Media.Utility.IconUtility.HttpImageLoaded += OnHttpImageLoaded;
+#endif
         }
+
+#if !WINDOWS
+        private bool _httpRefreshScheduled = false;
+
+        private void OnHttpImageLoaded(object? sender, EventArgs e)
+        {
+            // Coalesce multiple near-simultaneous completions into one Background-priority refresh.
+            if (_httpRefreshScheduled) return;
+            _httpRefreshScheduled = true;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                _httpRefreshScheduled = false;
+                EmoTracker.UI.Media.ImageReferenceService.Instance.ClearImageCache();
+                NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
+            }, Avalonia.Threading.DispatcherPriority.Background);
+        }
+#endif
 
         public void Initialize()
         {

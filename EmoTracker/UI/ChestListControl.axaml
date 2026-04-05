@@ -13,8 +13,9 @@
         -->
         <DataTemplate x:Key="CompactTemplate">
             <Grid>
+                <!-- CurrentCompactImage is pre-computed in code-behind based on Available×Accessible -->
                 <Image Width="32" Height="32"
-                       Source="{Binding ClosedChest, RelativeSource={RelativeSource AncestorType=local:ChestListControl}}" />
+                       Source="{Binding CurrentCompactImage, RelativeSource={RelativeSource AncestorType=local:ChestListControl}}" />
                 <Grid VerticalAlignment="Bottom" HorizontalAlignment="Right"
                       Background="Black" MaxHeight="16">
                     <TextBlock Text="{Binding Available, RelativeSource={RelativeSource AncestorType=local:ChestListControl}}"
@@ -25,6 +26,7 @@
             </Grid>
         </DataTemplate>
         <DataTemplate x:Key="FullTemplate">
+            <!-- Chests is IEnumerable<IImage?> — each item IS the pre-resolved image for that slot -->
             <ItemsControl ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ChestListControl}, Path=Chests}"
                           Height="32" Padding="4,0,4,0">
                 <ItemsControl.ItemsPanel>
@@ -33,9 +35,9 @@
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="x:Boolean">
+                    <DataTemplate>
                         <Image Width="32" Height="32" Margin="0,0,-4,0"
-                               Source="{Binding ClosedChest, RelativeSource={RelativeSource AncestorType=local:ChestListControl}}" />
+                               Source="{Binding}" />
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

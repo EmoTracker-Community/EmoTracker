@@ -101,9 +101,20 @@ namespace EmoTracker.UI
 
         #endregion
 
-        private readonly ObservableCollection<bool> mChestStates = new ObservableCollection<bool>();
+        // Each entry is the pre-resolved IImage for that chest slot (computed in UpdateChests).
+        private readonly ObservableCollection<IImage?> mChestImages = new ObservableCollection<IImage?>();
 
-        public IEnumerable<bool> Chests => mChestStates;
+        public IEnumerable<IImage?> Chests => mChestImages;
+
+        // The single image shown in compact mode.
+        public static readonly StyledProperty<IImage?> CurrentCompactImageProperty =
+            AvaloniaProperty.Register<ChestListControl, IImage?>(nameof(CurrentCompactImage));
+
+        public IImage? CurrentCompactImage
+        {
+            get => GetValue(CurrentCompactImageProperty);
+            private set => SetValue(CurrentCompactImageProperty, value);
+        }
 
         /// <summary>
         /// Returns the DataTemplate to use for the ContentPresenter.
@@ -114,6 +125,18 @@ namespace EmoTracker.UI
                 ? Resources.TryGetValue("CompactTemplate", out var ct) ? ct as IDataTemplate : null
                 : Resources.TryGetValue("FullTemplate", out var ft) ? ft as IDataTemplate : null;
 
+        // Cached copies of StyledProperty values used in UpdateChests.
+        // Accessing GetValue() during popup teardown can throw because bindings transiently
+        // set values to UnsetValue, causing style-resolution traversal on a broken visual tree.
+        // We cache the values here so UpdateChests() never calls GetValue() at all.
+        private IImage? _closedChest;
+        private IImage? _openChest;
+        private IImage? _unavailableClosedChest;
+        private IImage? _unavailableOpenChest;
+        private bool    _accessible = true;  // mirrors AccessibleProperty default
+        private uint    _count      = 5u;    // mirrors CountProperty default
+        private uint    _available  = 3u;    // mirrors AvailableProperty default
+
         public ChestListControl()
         {
             InitializeComponent();
@@ -122,19 +145,43 @@ namespace EmoTracker.UI
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
+
+            // Keep cached values in sync and only call UpdateChests for the properties
+            // that actually affect display. Calling it for every property change (including
+            // inherited layout/visual properties) causes crashes during popup teardown when
+            // Avalonia fires property-changed notifications while the overlay's visual root
+            // is already detached from the window.
+            if      (change.Property == ClosedChestProperty)            _closedChest            = change.GetNewValue<IImage?>();
+            else if (change.Property == OpenChestProperty)              _openChest              = change.GetNewValue<IImage?>();
+            else if (change.Property == UnavailableClosedChestProperty) _unavailableClosedChest = change.GetNewValue<IImage?>();
+            else if (change.Property == UnavailableOpenChestProperty)   _unavailableOpenChest   = change.GetNewValue<IImage?>();
+            else if (change.Property == AccessibleProperty)             _accessible             = change.GetNewValue<bool>();
+            else if (change.Property == CountProperty)                  _count                  = change.GetNewValue<uint>();
+            else if (change.Property == AvailableProperty)              _available              = change.GetNewValue<uint>();
+            else return;
+
             UpdateChests();
         }
 
         private void UpdateChests()
         {
-            while (mChestStates.Count > Count)
-                mChestStates.RemoveAt(0);
+            while (mChestImages.Count > _count)
+                mChestImages.RemoveAt(0);
+            while (mChestImages.Count < _count)
+                mChestImages.Add(null);
 
-            while (mChestStates.Count < Count)
-                mChestStates.Add(true);
+            for (int i = 0; i < (int)_count; ++i)
+            {
+                bool available = i < (int)_available;
+                mChestImages[i] = available
+                    ? (_accessible ? _closedChest            : _unavailableClosedChest)
+                    : (_accessible ? _openChest              : _unavailableOpenChest);
+            }
 
-            for (int i = 0; i < Count; ++i)
-                mChestStates[i] = i < Available;
+            // Compact mode: single image — open chest when all cleared, closed otherwise
+            CurrentCompactImage = _available == 0
+                ? (_accessible ? _openChest : _unavailableOpenChest)
+                : (_accessible ? _closedChest : _unavailableClosedChest);
         }
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)

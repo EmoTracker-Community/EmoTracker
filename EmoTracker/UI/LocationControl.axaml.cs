@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.VisualTree;
 using EmoTracker.Data;
 using EmoTracker.UI.Controls;
@@ -19,6 +21,12 @@ namespace EmoTracker.UI
     /// </summary>
     public partial class LocationControl : ObservableUserControl
     {
+        // Static panel templates reused across all LocationControl instances.
+        private static readonly ITemplate<Panel?> sCompactSectionsPanel =
+            new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Horizontal });
+        private static readonly ITemplate<Panel?> sFullSectionsPanel =
+            new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Right });
+
         public LocationControl()
         {
             InitializeComponent();
@@ -43,6 +51,28 @@ namespace EmoTracker.UI
         {
             get => GetValue(PreserveDimensionProperty);
             set => SetValue(PreserveDimensionProperty, value);
+        }
+
+        // ---- Compact-dependent layout helpers (used by AXAML bindings) ----
+
+        public ITemplate<Panel?> SectionsItemsPanel =>
+            Compact ? sCompactSectionsPanel : sFullSectionsPanel;
+
+        public HorizontalAlignment SectionHorizontalAlignment =>
+            Compact ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+
+        public Thickness SectionItemMargin =>
+            Compact ? new Thickness(5, 0, 5, 0) : new Thickness(0);
+
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+            if (change.Property == CompactProperty)
+            {
+                NotifyPropertyChanged(nameof(SectionsItemsPanel));
+                NotifyPropertyChanged(nameof(SectionHorizontalAlignment));
+                NotifyPropertyChanged(nameof(SectionItemMargin));
+            }
         }
 
         private void DeleteNoteButton_Click(object? sender, RoutedEventArgs e)

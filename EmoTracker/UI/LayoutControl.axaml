@@ -20,6 +20,27 @@
             </Grid>
         </DataTemplate>
 
+        <!-- RecentPinnedLocations MUST be declared before ArrayPanel because it extends
+             ArrayPanel — Avalonia picks the first DataType match, so the derived type wins. -->
+        <DataTemplate DataType="layout:RecentPinnedLocations">
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
+                <ItemsControl ItemsSource="{Binding Locations}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <local:LocationControl Margin="2"
+                                                   HorizontalAlignment="Left"
+                                                   Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </DataTemplate>
+
         <DataTemplate DataType="layout:ArrayPanel">
             <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                   Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
@@ -242,24 +263,6 @@
                     </DataTemplate>
                 </ContentControl.ContentTemplate>
             </ContentControl>
-        </DataTemplate>
-
-        <DataTemplate DataType="layout:RecentPinnedLocations">
-            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
-                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
-                  Margin="{Binding Margin}"
-                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
-                <ItemsControl ItemsSource="{Binding Locations}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <local:LocationControl Margin="2"
-                                                   Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Grid>
         </DataTemplate>
 
         <DataTemplate DataType="layout:ButtonPopup">

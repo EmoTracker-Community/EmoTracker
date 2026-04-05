@@ -67,15 +67,12 @@
 
                 <!-- Row 4: sections -->
                 <Grid Grid.Row="4">
-                    <ItemsControl ItemsSource="{Binding Sections}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Vertical" HorizontalAlignment="Right"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
+                    <ItemsControl ItemsSource="{Binding Sections}"
+                                  ItemsPanel="{Binding SectionsItemsPanel, RelativeSource={RelativeSource AncestorType=local:LocationControl}}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Grid HorizontalAlignment="Right">
+                                <Grid HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
+                                      Margin="{Binding SectionItemMargin, RelativeSource={RelativeSource AncestorType=local:LocationControl}}">
                                     <Grid.IsVisible>
                                         <Binding Path="Visible" />
                                     </Grid.IsVisible>
@@ -97,10 +94,10 @@
                                         <TextBlock Grid.Row="0"
                                                    FontSize="10"
                                                    TextTrimming="CharacterEllipsis"
-                                                   HorizontalAlignment="Right"
+                                                   HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
                                                    Text="{Binding Name}"
-                                                   Foreground="WhiteSmoke" />
-                                        <Grid Grid.Row="1" HorizontalAlignment="Right">
+                                                   Foreground="{Binding AccessibilityLevel, Converter={x:Static converters:AccessibilityLevelToBrushConverter.Instance}}" />
+                                        <Grid Grid.Row="1" HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
@@ -120,7 +117,8 @@
                                                                     Count="{Binding ChestCount}"
                                                                     Available="{Binding AvailableChestCount}"
                                                                     ClearAsGroup="{Binding ClearAsGroup}"
-                                                                    HorizontalAlignment="Right"
+                                                                    Compact="{Binding Compact, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
+                                                                    HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
                                                                     OpenChest="{Binding OpenChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
                                                                     ClosedChest="{Binding ClosedChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
                                                                     UnavailableOpenChest="{Binding UnavailableOpenChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
