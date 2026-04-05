@@ -274,6 +274,47 @@ namespace EmoTracker.UI.Converters
 
 #if !WINDOWS
     /// <summary>
+    /// Returns <c>true</c> when the value's <c>ToString()</c> matches the <c>ConverterParameter</c>
+    /// string (case-insensitive).  Useful for controlling IsVisible based on an enum property.
+    /// <example><c>IsVisible="{Binding Style, Converter={x:Static converters:ObjectEqualsConverter.Instance}, ConverterParameter=Settings}"</c></example>
+    /// </summary>
+    public class ObjectEqualsConverter : Singleton<ObjectEqualsConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value == null || parameter == null)
+                return false;
+            return string.Equals(value.ToString(), parameter.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Maps <c>EmoTracker.Data.Layout.Orientation.Horizontal</c> → <see cref="EmoTracker.UI.PreserveDimension.Height"/>
+    /// and <c>Vertical</c> → <see cref="EmoTracker.UI.PreserveDimension.Width"/>.
+    /// When locations wrap horizontally their height should stay uniform; when they wrap
+    /// vertically their width should stay uniform.
+    /// </summary>
+    public class OrientationToPreserveDimensionConverter : Singleton<OrientationToPreserveDimensionConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is EmoTracker.Data.Layout.Orientation orientation)
+            {
+                return orientation == EmoTracker.Data.Layout.Orientation.Horizontal
+                    ? PreserveDimension.Height
+                    : PreserveDimension.Width;
+            }
+            return PreserveDimension.None;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
     /// Converts a <c>bool</c> to an Avalonia <see cref="Avalonia.Media.DropShadowDirectionEffect"/>
     /// when <c>true</c>, or <c>null</c> when <c>false</c>.
     /// Mirrors the WPF DropShadowEffect (BlurRadius=15, ShadowDepth=0, Opacity=0.8) which produces
