@@ -38,7 +38,9 @@
     </UserControl.Resources>
 
     <Grid VerticalAlignment="Top"
-          MinWidth="100">
+          MinWidth="100"
+          MaxWidth="{Binding ComputedMaxWidth, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
+          MaxHeight="{Binding ComputedMaxHeight, RelativeSource={RelativeSource AncestorType=local:LocationControl}}">
         <Border Name="RectArea"
                 CornerRadius="0"
                 ZIndex="-1">

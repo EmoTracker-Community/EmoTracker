@@ -76,7 +76,8 @@
                             <DataTemplate>
                                 <local:LocationControl Margin="2"
                                                        HorizontalAlignment="Left"
-                                                       Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+                                                       Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                       PreserveDimension="{Binding DataContext.Orientation, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={x:Static converters:OrientationToPreserveDimensionConverter.Instance}}" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -280,9 +281,17 @@
                     <!-- Header bar -->
                     <Grid Grid.Row="0"
                           Background="{Binding HeaderBackground, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#212121}">
-                        <TextBlock Text="{Binding Header}" FontWeight="Bold" FontSize="12"
-                                   Foreground="WhiteSmoke"
-                                   Margin="10,5" />
+                        <Grid Margin="10,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding Header}" FontWeight="Bold" FontSize="12"
+                                       Foreground="WhiteSmoke" VerticalAlignment="Center" />
+                            <ContentControl Grid.Column="2" Content="{Binding HeaderContent}" Margin="10,0,0,0"
+                                            IsVisible="{Binding HeaderContent, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                        </Grid>
                     </Grid>
                     <!-- Content area -->
                     <Grid Grid.Row="1"
@@ -393,8 +402,8 @@
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                     <local:TrackableItemControl DataContext="{Binding Data}"
-                                                IconWidth="{Binding DataContext.Width, RelativeSource={RelativeSource AncestorType=Grid}}"
-                                                IconHeight="{Binding DataContext.Height, RelativeSource={RelativeSource AncestorType=Grid}}" />
+                                                IconWidth="{Binding DataContext.Width, RelativeSource={RelativeSource AncestorType=Grid}, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                                                IconHeight="{Binding DataContext.Height, RelativeSource={RelativeSource AncestorType=Grid}, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}" />
                 </Grid>
             </LayoutTransformControl>
         </DataTemplate>
@@ -465,8 +474,51 @@
                       MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
-                    <!-- ButtonPopup: rendered as a simple toggle button; full popup behaviour requires code-behind in Avalonia -->
-                    <controls:MouseOnlyToggleButton />
+                    <Panel>
+                        <!-- Toggle button: visual appearance changes based on ButtonPopup.Style -->
+                        <controls:MouseOnlyToggleButton Name="OpenSettingsButton"
+                                                         Background="Transparent"
+                                                         BorderThickness="0"
+                                                         Padding="0">
+                            <Panel>
+                                <!-- Settings gear icon -->
+                                <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
+                                           Text="&#xf013;" Foreground="WhiteSmoke"
+                                           VerticalAlignment="Center"
+                                           ToolTip.Tip="Settings"
+                                           IsVisible="{Binding Style, Converter={x:Static converters:ObjectEqualsConverter.Instance}, ConverterParameter=Settings}" />
+                                <!-- Image mode -->
+                                <Panel IsVisible="{Binding Style, Converter={x:Static converters:ObjectEqualsConverter.Instance}, ConverterParameter=Image}">
+                                    <Image Source="{Binding Image, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                                           IsVisible="{Binding MaskInput, Converter={x:Static converters:BoolInverseConverter.Instance}}" />
+                                    <controls:InputMaskingImage Source="{Binding Image, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                                                                IsVisible="{Binding MaskInput}" />
+                                </Panel>
+                                <!-- Solid mode: transparent background, no visible content -->
+                            </Panel>
+                        </controls:MouseOnlyToggleButton>
+
+                        <!-- Popup shown when toggle button is checked -->
+                        <Popup Name="SettingsPopup"
+                               IsOpen="{Binding #OpenSettingsButton.IsChecked, Mode=TwoWay}"
+                               IsLightDismissEnabled="True"
+                               Placement="Top"
+                               HorizontalOffset="4" VerticalOffset="4"
+                               PlacementTarget="{Binding #OpenSettingsButton}">
+                            <Border BorderBrush="DarkGray" BorderThickness="3"
+                                    Background="{Binding PopupBackground, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#ff212121}"
+                                    CornerRadius="5" Margin="20">
+                                <Border.Effect>
+                                    <DropShadowDirectionEffect Opacity="0.8" BlurRadius="20" ShadowDepth="3" />
+                                </Border.Effect>
+                                <Grid Margin="0">
+                                    <ContentControl Content="{Binding Layout.Root}"
+                                                    HorizontalContentAlignment="Stretch"
+                                                    VerticalContentAlignment="Stretch" />
+                                </Grid>
+                            </Border>
+                        </Popup>
+                    </Panel>
                 </Grid>
             </LayoutTransformControl>
         </DataTemplate>

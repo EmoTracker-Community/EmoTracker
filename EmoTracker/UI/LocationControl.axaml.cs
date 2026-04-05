@@ -10,13 +10,6 @@ using DataLocation = EmoTracker.Data.Locations.Location;
 
 namespace EmoTracker.UI
 {
-    public enum PreserveDimension
-    {
-        None,
-        Width,
-        Height
-    }
-
     /// <summary>
     /// Interaction logic for LocationControl.axaml
     /// </summary>
@@ -70,6 +63,17 @@ namespace EmoTracker.UI
                 ? (DataContext as DataLocation)?.ShortName
                 : (DataContext as DataLocation)?.Name;
 
+        // ---- PreserveDimension-dependent constraints ----
+        // WPF used MultiDataTriggers to set MaxWidth=120 when PreserveDimension=Width (not compact)
+        // and MaxHeight=90 when PreserveDimension=Height (not compact).
+        // In Avalonia we expose these as computed properties bound from AXAML.
+
+        public double ComputedMaxWidth =>
+            !Compact && PreserveDimension == PreserveDimension.Width ? 120 : double.PositiveInfinity;
+
+        public double ComputedMaxHeight =>
+            !Compact && PreserveDimension == PreserveDimension.Height ? 90 : double.PositiveInfinity;
+
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
@@ -79,6 +83,13 @@ namespace EmoTracker.UI
                 NotifyPropertyChanged(nameof(SectionHorizontalAlignment));
                 NotifyPropertyChanged(nameof(SectionItemMargin));
                 NotifyPropertyChanged(nameof(TitleText));
+                NotifyPropertyChanged(nameof(ComputedMaxWidth));
+                NotifyPropertyChanged(nameof(ComputedMaxHeight));
+            }
+            else if (change.Property == PreserveDimensionProperty)
+            {
+                NotifyPropertyChanged(nameof(ComputedMaxWidth));
+                NotifyPropertyChanged(nameof(ComputedMaxHeight));
             }
             else if (change.Property == DataContextProperty)
             {
