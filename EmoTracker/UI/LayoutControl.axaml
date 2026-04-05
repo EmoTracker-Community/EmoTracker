@@ -361,7 +361,9 @@
 
     <Grid>
         <Grid DataContext="{Binding Root}">
-            <ContentControl Content="{Binding}" />
+            <ContentControl Content="{Binding}"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch" />
         </Grid>
     </Grid>
 </UserControl>

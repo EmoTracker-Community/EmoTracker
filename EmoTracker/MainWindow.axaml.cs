@@ -20,6 +20,7 @@ namespace EmoTracker
             ApplicationModel.Instance.Initialize();
             DataContext = ApplicationModel.Instance;
             ApplicationModel.Instance.PropertyChanged += Instance_PropertyChanged;
+            Tracker.Instance.PropertyChanged += Tracker_PropertyChanged;
 
             if (ApplicationSettings.Instance.InitialWidth >= 0.0)
                 Width = ApplicationSettings.Instance.InitialWidth;
@@ -30,8 +31,9 @@ namespace EmoTracker
             this.KeyDown += MainWindow_KeyDown;
             this.PointerWheelChanged += MainWindow_PointerWheelChanged;
 
-            // Set initial layout
+            // Set initial layout and resize mode
             RefreshTrackerLayout();
+            UpdateResizeMode();
         }
 
         private void TitleBar_PointerPressed(object sender, PointerPressedEventArgs e)
@@ -187,6 +189,26 @@ namespace EmoTracker
             base.OnClosing(e);
         }
 
+        private void Tracker_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Tracker.AllowResize))
+                UpdateResizeMode();
+        }
+
+        private void UpdateResizeMode()
+        {
+            if (!Tracker.Instance.AllowResize)
+            {
+                CanResize = false;
+                SizeToContent = SizeToContent.WidthAndHeight;
+            }
+            else
+            {
+                CanResize = true;
+                SizeToContent = SizeToContent.Manual;
+            }
+        }
+
         private void Instance_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             RefreshTrackerLayout();
@@ -194,7 +216,11 @@ namespace EmoTracker
 
         private void RefreshTrackerLayout()
         {
-            bool vertical = Bounds.Height > Bounds.Width;
+            // At construction time Bounds may be 0×0 (not yet laid out), so fall back
+            // to the logical Width/Height which are always set from settings or XAML defaults.
+            double h = Bounds.Height > 0 ? Bounds.Height : Height;
+            double w = Bounds.Width > 0 ? Bounds.Width : Width;
+            bool vertical = h > w;
             var layout = vertical
                 ? ApplicationModel.Instance.TrackerVerticalLayout
                 : ApplicationModel.Instance.TrackerHorizontalLayout;

@@ -111,14 +111,16 @@
 
         <!-- Main content -->
         <Grid Grid.Row="1">
-            <Grid Name="TrackerScaleGrid">
-                <Grid.RenderTransform>
+            <!-- LayoutTransformControl participates in the layout pass (unlike RenderTransform),
+                 so Ctrl+scroll zoom correctly resizes the allocated layout space. -->
+            <LayoutTransformControl Name="TrackerScaleGrid">
+                <LayoutTransformControl.LayoutTransform>
                     <ScaleTransform
                         ScaleX="{Binding MainLayoutScaleFactor, Source={x:Static local:ApplicationModel.Instance}}"
                         ScaleY="{Binding MainLayoutScaleFactor, Source={x:Static local:ApplicationModel.Instance}}"/>
-                </Grid.RenderTransform>
+                </LayoutTransformControl.LayoutTransform>
                 <ui:LayoutControl x:Name="TrackerLayout" />
-            </Grid>
+            </LayoutTransformControl>
 
             <!-- No-package placeholder: visible only when no package is active -->
             <Grid Background="#080808" IsHitTestVisible="False" Name="NoPackagePlaceholder"
