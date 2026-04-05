@@ -239,4 +239,30 @@ namespace EmoTracker.UI.Converters
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => value is bool b ? !b : value;
     }
+
+#if !WINDOWS
+    /// <summary>
+    /// Converts a <c>bool</c> to an Avalonia <see cref="Avalonia.Media.DropShadowDirectionEffect"/>
+    /// when <c>true</c>, or <c>null</c> when <c>false</c>.
+    /// Mirrors the WPF DropShadowEffect (BlurRadius=15, ShadowDepth=0, Opacity=0.8) which produces
+    /// a centred glow with no directional offset.
+    /// </summary>
+    public class BoolToDropShadowEffectConverter : Singleton<BoolToDropShadowEffectConverter>, IValueConverter
+    {
+        private static readonly Avalonia.Media.DropShadowDirectionEffect s_effect =
+            new Avalonia.Media.DropShadowDirectionEffect
+            {
+                BlurRadius  = 15,
+                ShadowDepth = 0,
+                Opacity     = 0.8,
+                Color       = Colors.Black,
+            };
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => value is true ? (object)s_effect : null;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+#endif
 }

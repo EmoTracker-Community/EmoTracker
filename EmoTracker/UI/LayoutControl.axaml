@@ -15,7 +15,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <ContentControl Content="{Binding Layout.Root}" />
             </Grid>
         </DataTemplate>
@@ -28,7 +29,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <ItemsControl ItemsSource="{Binding Locations}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -48,7 +50,8 @@
                   Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <ItemsControl ItemsSource="{Binding Children}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -70,7 +73,8 @@
                   Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <ItemsControl ItemsSource="{Binding Children}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -94,7 +98,8 @@
                   Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <ItemsControl ItemsSource="{Binding Children}" ClipToBounds="True">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -121,7 +126,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <Viewbox>
                     <ItemsControl ItemsSource="{Binding Items}" />
                 </Viewbox>
@@ -134,7 +140,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <TabControl ItemsSource="{Binding Tabs}"
                             Background="{x:Null}"
                             SelectedItem="{Binding CurrentTab, Mode=TwoWay}" />
@@ -147,7 +154,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <local:LocationMapControl />
             </Grid>
         </DataTemplate>
@@ -161,7 +169,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -188,7 +197,8 @@
                   Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <ItemsControl ItemsSource="{Binding Items}" />
             </Grid>
         </DataTemplate>
@@ -200,7 +210,8 @@
                   Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto">
                     <ItemsControl ItemsSource="{Binding Items}" />
@@ -214,7 +225,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <local:ItemGridControl DataContext="{Binding Data}" />
             </Grid>
         </DataTemplate>
@@ -225,7 +237,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <local:TrackableItemControl DataContext="{Binding Data}"
                                             IconWidth="{Binding DataContext.Width, RelativeSource={RelativeSource AncestorType=Grid}}"
                                             IconHeight="{Binding DataContext.Height, RelativeSource={RelativeSource AncestorType=Grid}}" />
@@ -238,7 +251,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <Image Source="{Binding Content, Converter={x:Static converters:ImageReferenceConverter.Instance}}" />
             </Grid>
         </DataTemplate>
@@ -249,7 +263,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <TextBlock Text="{Binding Text}" />
             </Grid>
         </DataTemplate>
@@ -271,7 +286,8 @@
                   Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                   VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  IsHitTestVisible="{Binding HitTestVisible}">
+                  IsHitTestVisible="{Binding HitTestVisible}"
+                  Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                 <!-- ButtonPopup: rendered as a simple toggle button; full popup behaviour requires code-behind in Avalonia -->
                 <controls:MouseOnlyToggleButton />
             </Grid>
