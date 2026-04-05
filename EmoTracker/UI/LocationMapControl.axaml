@@ -28,7 +28,11 @@
 
         <!-- Location details popup (light-dismiss managed in code-behind to allow double-click) -->
         <Popup x:Name="LocationDetails" PlacementMode="Bottom">
-            <local:LocationControl x:Name="LocationDetailsContent" Margin="15" />
+            <local:LocationControl x:Name="LocationDetailsContent" Margin="15">
+                <local:LocationControl.Effect>
+                    <DropShadowDirectionEffect BlurRadius="15" ShadowDepth="0" Opacity="0.8" />
+                </local:LocationControl.Effect>
+            </local:LocationControl>
         </Popup>
 
         <!-- Badge details popup (hover, no hit-testing) -->
