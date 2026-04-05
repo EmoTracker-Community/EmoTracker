@@ -279,7 +279,13 @@
                     <Grid Grid.Row="1"
                           Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#66212121}">
                         <ItemsControl ItemsSource="{Binding Items}" Margin="5"
-                                      ItemContainerTheme="{StaticResource StretchItemContainer}" />
+                                      ItemContainerTheme="{StaticResource StretchItemContainer}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Grid />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
                     </Grid>
                 </Grid>
             </LayoutTransformControl>
@@ -301,8 +307,18 @@
                       MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <!-- Container/"grid" maps to a single-cell Grid in WPF.
+                         The default StackPanel panel gives children infinite height,
+                         breaking DockPanel LastChildFill downstream. Grid passes finite
+                         constraints so layout fills available space correctly. -->
                     <ItemsControl ItemsSource="{Binding Items}"
-                                  ItemContainerTheme="{StaticResource StretchItemContainer}" />
+                                  ItemContainerTheme="{StaticResource StretchItemContainer}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Grid />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
                 </Grid>
             </LayoutTransformControl>
         </DataTemplate>
