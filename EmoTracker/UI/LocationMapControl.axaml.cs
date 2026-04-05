@@ -30,6 +30,9 @@ namespace EmoTracker.UI
             this.AttachedToVisualTree += LocationMapControl_Loaded;
             this.DetachedFromVisualTree += LocationMapControl_Unloaded;
             this.DoubleTapped += LocationMapControl_DoubleTapped;
+            LocationDetails.Closed += (s, e) => LocationDetails.IsOpen = false;
+            BadgeDetails.Closed   += (s, e) => BadgeDetails.IsOpen = false;
+            BadgeItemsControl.ItemsSource = mBadgeImages;
         }
 
         private void LocationMapControl_Loaded(object? sender, VisualTreeAttachmentEventArgs e)
@@ -81,11 +84,15 @@ namespace EmoTracker.UI
             get => mDetailsTarget;
             set
             {
-                if (SetProperty(ref mDetailsTarget, value))
+                SetProperty(ref mDetailsTarget, value);
+                if (mDetailsTarget != null)
                 {
-                    // In Avalonia, popup management is done in code-behind
-                    // Trigger property notification so bindings update
-                    NotifyPropertyChanged(nameof(DetailsTarget));
+                    BadgeDetails.IsOpen = false;
+                    // Set DataContext imperatively — ElementName bindings don't work inside
+                    // Popup's OverlayLayer because it renders outside the normal visual tree.
+                    LocationDetailsContent.DataContext = mDetailsLocation;
+                    LocationDetails.PlacementTarget = mDetailsTarget;
+                    LocationDetails.IsOpen = true;
                 }
             }
         }
@@ -110,7 +117,16 @@ namespace EmoTracker.UI
             {
                 if (SetProperty(ref mBadgesTarget, value))
                 {
-                    NotifyPropertyChanged(nameof(BadgesTarget));
+                    if (mBadgesTarget != null)
+                    {
+                        BadgeDetails.PlacementTarget = mBadgesTarget;
+                        BadgeDetails.IsOpen = false;
+                        BadgeDetails.IsOpen = true;
+                    }
+                    else
+                    {
+                        BadgeDetails.IsOpen = false;
+                    }
                 }
             }
         }
@@ -216,6 +232,11 @@ namespace EmoTracker.UI
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
+            // Always close the popup on any press; it will reopen below if a location was clicked.
+            // This avoids using IsLightDismissEnabled (which creates an overlay layer that swallows
+            // the second click of a double-click before OnPointerPressed sees ClickCount=2).
+            LocationDetails.IsOpen = false;
+
             var props = e.GetCurrentPoint(this).Properties;
 
             if (props.IsLeftButtonPressed)
@@ -226,6 +247,9 @@ namespace EmoTracker.UI
                     MapLocation? data = element.DataContext as MapLocation;
                     if (data != null)
                     {
+                        // Open the details popup on every press.
+                        // Double-click is handled separately by LocationMapControl_DoubleTapped,
+                        // which fires on PointerReleased and doesn't rely on ClickCount.
                         DetailsLocation = data.Location;
                         DetailsTarget = element;
                         e.Handled = true;
@@ -256,20 +280,18 @@ namespace EmoTracker.UI
             base.OnPointerPressed(e);
         }
 
-        private void LocationMapControl_DoubleTapped(object sender, TappedEventArgs e)
+        private void LocationMapControl_DoubleTapped(object? sender, TappedEventArgs e)
         {
+            // DoubleTapped fires on PointerReleased and is not affected by PointerPressed.Handled,
+            // making it more reliable than ClickCount for detecting double-clicks.
             var element = e.Source as Control;
-            if (element != null)
+            MapLocation? data = element?.DataContext as MapLocation;
+            if (data?.Location != null)
             {
-                MapLocation? data = element.DataContext as MapLocation;
-                if (data?.Location != null)
-                {
-                    data.Location.Pinned = true;
-                    e.Handled = true;
-                    return;
-                }
+                data.Location.Pinned = true;
+                LocationDetails.IsOpen = false;
+                e.Handled = true;
             }
-
         }
     }
 }

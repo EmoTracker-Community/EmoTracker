@@ -430,6 +430,16 @@ namespace EmoTracker.UI.Media.Utility
         // as fully opaque and completely hide the base layer.
         private static readonly Dictionary<IImage, byte[]> sPngCache = new();
 
+        // HTTP/HTTPS image download cache. null value means "download in progress".
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IImage?> sHttpCache = new();
+        private static readonly System.Net.Http.HttpClient sHttpClient = new();
+
+        /// <summary>
+        /// Raised on the UI thread after an HTTP image finishes downloading.
+        /// Subscribers (e.g. ApplicationModel) can use this to refresh bindings.
+        /// </summary>
+        public static event EventHandler? HttpImageLoaded;
+
         /// <summary>Returns the precomputed alpha mask for an image, or null if not available.</summary>
         public static (bool[] mask, int w, int h)? GetAlphaMask(IImage image)
         {
@@ -472,12 +482,19 @@ namespace EmoTracker.UI.Media.Utility
                     SKBitmap decoded = SKBitmap.Decode(pngStream);
                     if (decoded == null) return null;
 
-                    // Promote to Bgra8888 so SetPixel/GetPixel operate on a real alpha channel.
-                    // Rgb888x forces alpha to 255 — Max(base.Alpha, overlay.Alpha) would then be
-                    // 255 for every pixel and transparent regions couldn't be preserved.
-                    if (decoded.ColorType != SKColorType.Bgra8888)
+                    // Promote to Bgra8888/Premul so pixel operations can read and write alpha correctly.
+                    // Rgb888x forces alpha to 255; AlphaType.Opaque causes SKImage.FromBitmap to encode
+                    // as RGB PNG (no alpha channel), so transparent pixels from the color-key pass are
+                    // lost when the image is round-tripped through sPngCache.
+                    if (decoded.ColorType != SKColorType.Bgra8888 || decoded.AlphaType == SKAlphaType.Opaque)
                     {
-                        SKBitmap promoted = decoded.Copy(SKColorType.Bgra8888);
+                        var targetInfo = new SKImageInfo(decoded.Width, decoded.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                        SKBitmap promoted = new SKBitmap(targetInfo);
+                        using (var cvs = new SKCanvas(promoted))
+                        {
+                            cvs.Clear(SKColors.Transparent);
+                            cvs.DrawBitmap(decoded, 0, 0);
+                        }
                         decoded.Dispose();
                         return promoted;
                     }
@@ -542,9 +559,40 @@ namespace EmoTracker.UI.Media.Utility
                 }
                 if (resolved.IsFile)
                     return new Avalonia.Media.Imaging.Bitmap(resolved.LocalPath);
+                if (resolved.Scheme == "http" || resolved.Scheme == "https")
+                    return GetImageFromHttp(resolved);
                 return null;
             }
             catch { return null; }
+        }
+
+        private static IImage? GetImageFromHttp(Uri uri)
+        {
+            string key = uri.AbsoluteUri;
+            if (sHttpCache.TryGetValue(key, out IImage? cached))
+                return cached; // null if still loading, non-null if loaded
+
+            // Mark as loading to avoid duplicate downloads
+            sHttpCache[key] = null;
+
+            // Download in background; raise HttpImageLoaded when done so callers can refresh
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    byte[] bytes = await sHttpClient.GetByteArrayAsync(uri).ConfigureAwait(false);
+                    using var ms = new System.IO.MemoryStream(bytes);
+                    sHttpCache[key] = new Avalonia.Media.Imaging.Bitmap(ms);
+                }
+                catch
+                {
+                    sHttpCache.TryRemove(key, out _); // allow retry on next call
+                }
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    HttpImageLoaded?.Invoke(null, EventArgs.Empty));
+            });
+
+            return null;
         }
 
         public static IImage GetImage(Uri uri)
@@ -576,16 +624,22 @@ namespace EmoTracker.UI.Media.Utility
                 SKBitmap decoded = SKBitmap.Decode(stream);
                 if (decoded == null) return null;
 
-                // Promote to BGRA8888 before the color-key pass.
+                // Promote to Bgra8888/Premul before the color-key pass.
                 // SKBitmap.Decode may return Rgb888x (no alpha channel, e.g. RGB PNG or 24-bit BMP).
-                // For Rgb888x, SetPixel(Transparent) is a silent no-op for the alpha byte — it stays
-                // forced to 255 — so magenta pixels would render as opaque black instead of transparent.
+                // Even if the color type is already Bgra8888, AlphaType.Opaque causes SKImage.FromBitmap
+                // to encode as RGB PNG — dropping all alpha — so transparent pixels set by the color-key
+                // pass are lost when the image is round-tripped through sPngCache for filter operations.
                 SKBitmap bmp;
-                if (decoded.ColorType != SKColorType.Bgra8888)
+                if (decoded.ColorType != SKColorType.Bgra8888 || decoded.AlphaType == SKAlphaType.Opaque)
                 {
-                    bmp = decoded.Copy(SKColorType.Bgra8888);
+                    var targetInfo = new SKImageInfo(decoded.Width, decoded.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+                    bmp = new SKBitmap(targetInfo);
+                    using (var cvs = new SKCanvas(bmp))
+                    {
+                        cvs.Clear(SKColors.Transparent);
+                        cvs.DrawBitmap(decoded, 0, 0);
+                    }
                     decoded.Dispose();
-                    if (bmp == null) return null;
                 }
                 else
                 {
