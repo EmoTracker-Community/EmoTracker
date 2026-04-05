@@ -52,7 +52,8 @@
                                 </ItemsControl.ItemContainerTheme>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="locations:MapLocation">
-                                        <Grid Name="MinifiedLocation">
+                                        <Grid Name="MinifiedLocation"
+                                              IsVisible="{Binding Location.HasVisibleSections}">
                                             <Border BorderThickness="{Binding BorderThickness}"
                                                     Width="{Binding Size}"
                                                     Height="{Binding Size}"
@@ -61,7 +62,8 @@
                                                     Margin="{Binding Margin, Converter={x:Static converters:ThicknessConverter.Instance}}"
                                                     VerticalAlignment="Top"
                                                     HorizontalAlignment="Left"
-                                                    BorderBrush="#212121">
+                                                    BorderBrush="#212121"
+                                                    Background="{Binding Location.AccessibilityLevel, Converter={x:Static converters:AccessibilityLevelToBrushConverter.Instance}}">
                                                 <!-- Note indicator -->
                                                 <Viewbox Width="{Binding NoteIndicatorSize}"
                                                          Height="{Binding NoteIndicatorSize}"

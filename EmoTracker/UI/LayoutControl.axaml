@@ -8,55 +8,86 @@
              xmlns:layout="clr-namespace:EmoTracker.Data.Layout;assembly=EmoTracker.Data"
              xmlns:local="clr-namespace:EmoTracker.UI">
     <UserControl.DataTemplates>
-        <!-- DataTemplates for layout panel types -->
+
         <DataTemplate DataType="layout:LayoutReference">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <ContentControl Content="{Binding Layout.Root}" />
             </Grid>
         </DataTemplate>
 
         <DataTemplate DataType="layout:ArrayPanel">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <ItemsControl ItemsSource="{Binding Children}" />
             </Grid>
         </DataTemplate>
 
         <DataTemplate DataType="layout:DockPanel">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <ItemsControl ItemsSource="{Binding Children}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <DockPanel LastChildFill="True" />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerTheme>
+                        <ControlTheme TargetType="ContentPresenter">
+                            <Setter Property="(DockPanel.Dock)"
+                                    Value="{Binding DockLocation, Converter={x:Static converters:StringToDockConverter.Instance}}" />
+                        </ControlTheme>
+                    </ItemsControl.ItemContainerTheme>
                 </ItemsControl>
             </Grid>
         </DataTemplate>
 
         <DataTemplate DataType="layout:CanvasPanel">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <ItemsControl ItemsSource="{Binding Children}" ClipToBounds="True">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <Canvas />
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerTheme>
+                        <ControlTheme TargetType="ContentPresenter">
+                            <Setter Property="(Canvas.Left)"
+                                    Value="{Binding CanvasX, Converter={x:Static converters:CanvasPositionConverter.Instance}}" />
+                            <Setter Property="(Canvas.Top)"
+                                    Value="{Binding CanvasY, Converter={x:Static converters:CanvasPositionConverter.Instance}}" />
+                            <Setter Property="(Canvas.ZIndex)"
+                                    Value="{Binding CanvasDepth, Converter={x:Static converters:CanvasZIndexConverter.Instance}}" />
+                        </ControlTheme>
+                    </ItemsControl.ItemContainerTheme>
                 </ItemsControl>
             </Grid>
         </DataTemplate>
 
         <DataTemplate DataType="layout:ViewBox">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <Viewbox>
                     <ItemsControl ItemsSource="{Binding Items}" />
                 </Viewbox>
@@ -64,9 +95,12 @@
         </DataTemplate>
 
         <DataTemplate DataType="layout:TabPanel">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <TabControl ItemsSource="{Binding Tabs}"
                             Background="{x:Null}"
                             SelectedItem="{Binding CurrentTab, Mode=TwoWay}" />
@@ -74,25 +108,63 @@
         </DataTemplate>
 
         <DataTemplate DataType="layout:MapPanel">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <local:LocationMapControl />
             </Grid>
         </DataTemplate>
 
-        <DataTemplate DataType="layout:Container">
-            <Grid Margin="{Binding Margin}"
+        <!-- GroupBox MUST be declared before Container because GroupBox inherits Container —
+             Avalonia picks the first DataType match (inheritance-based), so the more-derived
+             type's template must come first. -->
+        <DataTemplate DataType="layout:GroupBox">
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <!-- Header bar -->
+                <Grid Grid.Row="0"
+                      Background="{Binding HeaderBackground, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#212121}">
+                    <TextBlock Text="{Binding Header}" FontWeight="Bold" FontSize="12"
+                               Foreground="WhiteSmoke"
+                               Margin="10,5" />
+                </Grid>
+                <!-- Content area -->
+                <Grid Grid.Row="1"
+                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#66212121}">
+                    <ItemsControl ItemsSource="{Binding Items}" Margin="5" />
+                </Grid>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:Container">
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <ItemsControl ItemsSource="{Binding Items}" />
             </Grid>
         </DataTemplate>
 
         <DataTemplate DataType="layout:ScrollPanel">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
                               VerticalScrollBarVisibility="Auto">
                     <ItemsControl ItemsSource="{Binding Items}" />
@@ -100,32 +172,24 @@
             </Grid>
         </DataTemplate>
 
-        <DataTemplate DataType="layout:GroupBox">
-            <!-- GroupBox is not a standard Avalonia control; use Border + header TextBlock -->
-            <Border BorderBrush="Gray" BorderThickness="1"
-                    Margin="{Binding Margin}"
-                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                    Padding="5">
-                <StackPanel>
-                    <TextBlock Text="{Binding Header}" FontWeight="Bold" Margin="0,0,0,4" Foreground="WhiteSmoke" />
-                    <ItemsControl ItemsSource="{Binding Items}" />
-                </StackPanel>
-            </Border>
-        </DataTemplate>
-
         <DataTemplate DataType="layout:ItemGrid">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <local:ItemGridControl DataContext="{Binding Data}" />
             </Grid>
         </DataTemplate>
 
         <DataTemplate DataType="layout:Item">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <local:TrackableItemControl DataContext="{Binding Data}"
                                             IconWidth="{Binding DataContext.Width, RelativeSource={RelativeSource AncestorType=Grid}}"
                                             IconHeight="{Binding DataContext.Height, RelativeSource={RelativeSource AncestorType=Grid}}" />
@@ -133,17 +197,23 @@
         </DataTemplate>
 
         <DataTemplate DataType="layout:Image">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <Image Source="{Binding Content, Converter={x:Static converters:ImageReferenceConverter.Instance}}" />
             </Grid>
         </DataTemplate>
 
         <DataTemplate DataType="layout:TextBlock">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <TextBlock Text="{Binding Text}" />
             </Grid>
         </DataTemplate>
@@ -160,9 +230,12 @@
         </DataTemplate>
 
         <DataTemplate DataType="layout:RecentPinnedLocations">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <ItemsControl ItemsSource="{Binding Locations}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -175,13 +248,17 @@
         </DataTemplate>
 
         <DataTemplate DataType="layout:ButtonPopup">
-            <Grid Margin="{Binding Margin}"
+            <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                  Margin="{Binding Margin}"
                   HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  IsHitTestVisible="{Binding HitTestVisible}">
                 <!-- ButtonPopup: rendered as a simple toggle button; full popup behaviour requires code-behind in Avalonia -->
                 <controls:MouseOnlyToggleButton />
             </Grid>
         </DataTemplate>
+
     </UserControl.DataTemplates>
 
     <Grid>
