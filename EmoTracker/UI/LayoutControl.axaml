@@ -63,6 +63,15 @@
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                     <ItemsControl ItemsSource="{Binding Locations}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <!-- RecentPinnedLocations inherits Orientation/Style from
+                                     ArrayPanel; packs typically set style=wrap + orientation=horizontal. -->
+                                <WrapPanel Orientation="{Binding DataContext.Orientation,
+                                    RelativeSource={RelativeSource AncestorType=ItemsControl},
+                                    Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <local:LocationControl Margin="2"
