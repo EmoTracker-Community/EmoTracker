@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.VisualTree;
 using EmoTracker.Data;
 using EmoTracker.UI.Controls;
+using DataLocation = EmoTracker.Data.Locations.Location;
 
 namespace EmoTracker.UI
 {
@@ -64,6 +65,11 @@ namespace EmoTracker.UI
         public Thickness SectionItemMargin =>
             Compact ? new Thickness(5, 0, 5, 0) : new Thickness(0);
 
+        public string? TitleText =>
+            Compact
+                ? (DataContext as DataLocation)?.ShortName
+                : (DataContext as DataLocation)?.Name;
+
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
@@ -72,6 +78,11 @@ namespace EmoTracker.UI
                 NotifyPropertyChanged(nameof(SectionsItemsPanel));
                 NotifyPropertyChanged(nameof(SectionHorizontalAlignment));
                 NotifyPropertyChanged(nameof(SectionItemMargin));
+                NotifyPropertyChanged(nameof(TitleText));
+            }
+            else if (change.Property == DataContextProperty)
+            {
+                NotifyPropertyChanged(nameof(TitleText));
             }
         }
 

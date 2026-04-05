@@ -8,7 +8,33 @@
                              xmlns:local="clr-namespace:EmoTracker.UI"
                              xmlns:settings="clr-namespace:EmoTracker.Data.Settings;assembly=EmoTracker.Data">
     <UserControl.Resources>
-        <!-- Accessibility text color styles are applied in code or via converters in Avalonia -->
+        <!-- PushPin ControlTheme: replaces WPF ControlTemplate "PushPinCheckBox".
+             Unchecked (not pinned) → icon rotated 90°.  Disabled → hidden. -->
+        <ControlTheme x:Key="PushPinCheckBox" TargetType="CheckBox">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid x:Name="pin" Width="16" Height="16" Background="Transparent">
+                        <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
+                                   Text="&#xf08d;"
+                                   Foreground="WhiteSmoke"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Center"
+                                   FontSize="9"
+                                   RenderTransformOrigin="0.5, 0.5" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+            <!-- Hidden when the control is disabled -->
+            <Style Selector="^:disabled /template/ Grid#pin">
+                <Setter Property="IsVisible" Value="False" />
+            </Style>
+            <!-- Rotated 90° when unchecked (not pinned) -->
+            <Style Selector="^:not(:checked) /template/ TextBlock">
+                <Setter Property="RenderTransform">
+                    <RotateTransform Angle="90" />
+                </Setter>
+            </Style>
+        </ControlTheme>
     </UserControl.Resources>
 
     <Grid VerticalAlignment="Top"
@@ -51,7 +77,7 @@
                                FontSize="11"
                                Foreground="WhiteSmoke"
                                FontWeight="DemiBold"
-                               Text="{Binding Name}" />
+                               Text="{Binding TitleText, RelativeSource={RelativeSource AncestorType=local:LocationControl}}" />
                     <local:NoteTakingIconPopup Grid.Column="1"
                                               Margin="10,0,0,0"
                                               DataContext="{Binding NoteTakingSite}"
@@ -59,7 +85,8 @@
                                               FontSize="9"/>
                     <CheckBox Grid.Column="2"
                               IsChecked="{Binding Pinned}"
-                              Margin="0"/>
+                              Margin="0"
+                              Theme="{StaticResource PushPinCheckBox}"/>
                 </Grid>
 
                 <!-- Row 2: separator -->
@@ -107,7 +134,7 @@
                                             <local:TrackableItemControl Grid.Column="0"
                                                                         DataContext="{Binding GateItem}"
                                                                         Margin="0,2,4,2"
-                                                                        IsVisible="{Binding GateItem, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                                                        IsVisible="{Binding Converter={x:Static converters:NullToFalseConverter.Instance}}" />
                                             <local:CapturableItemControl Grid.Column="1"
                                                                          Width="32" Height="32"
                                                                          Margin="0,0,5,0"
@@ -127,7 +154,7 @@
                                             <local:TrackableItemControl Grid.Column="3"
                                                                         DataContext="{Binding HostedItem}"
                                                                         Margin="4,2,0,2"
-                                                                        IsVisible="{Binding HostedItem, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                                                        IsVisible="{Binding Converter={x:Static converters:NullToFalseConverter.Instance}}" />
                                         </Grid>
                                     </Grid>
                                 </Grid>
