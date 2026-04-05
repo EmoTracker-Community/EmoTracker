@@ -1,0 +1,39 @@
+<UserControl x:Class="EmoTracker.UI.ItemGridControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI">
+    <!--
+        WPF had RenderOptions.BitmapScalingMode="NearestNeighbor" and a BitmapCache on the Grid.
+        In Avalonia, nearest-neighbour rendering is controlled per Image via
+        RenderOptions.BitmapInterpolationMode="None" on each Image element, or globally via
+        a style. BitmapCache has no direct equivalent; Avalonia handles caching internally.
+    -->
+    <Grid Margin="{Binding LegacyMargin}">
+        <Grid.Resources>
+            <ItemsPanelTemplate x:Key="HorizontalItemsPanel">
+                <StackPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+        </Grid.Resources>
+        <ItemsControl ItemsSource="{Binding Path=Rows}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Grid MinHeight="10">
+                        <ItemsControl ItemsSource="{Binding}"
+                                      HorizontalAlignment="Center"
+                                      ItemsPanel="{StaticResource HorizontalItemsPanel}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <local:TrackableItemControl DataContext="{Binding}"
+                                        Margin="{Binding DataContext.ItemMargin, RelativeSource={RelativeSource AncestorType=local:ItemGridControl}}"
+                                        IconWidth="{Binding DataContext.ItemWidth, RelativeSource={RelativeSource AncestorType=local:ItemGridControl}}"
+                                        IconHeight="{Binding DataContext.ItemHeight, RelativeSource={RelativeSource AncestorType=local:ItemGridControl}}"
+                                        BadgeFontSize="{Binding DataContext.BadgeFontSize, RelativeSource={RelativeSource AncestorType=local:ItemGridControl}}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Grid>
+</UserControl>

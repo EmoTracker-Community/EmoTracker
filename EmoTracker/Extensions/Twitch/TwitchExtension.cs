@@ -10,8 +10,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Windows;
-using System.Windows.Media;
 using TwitchLib.Client;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Models;
@@ -257,8 +255,8 @@ namespace EmoTracker.Extensions.Twitch
             Dispatch.BeginInvoke(() =>
             {
                 if (e.Error != null)
-                    MessageBox.Show(e.Error.Message, "Twitch Connection Error");
-                MessageBox.Show(e.ToString(), "Twitch Connection Error");
+                    Services.DialogService.Instance.ShowOK("Twitch Connection Error", e.Error.Message);
+                Services.DialogService.Instance.ShowOK("Twitch Connection Error", e.ToString());
 
                 Disconnect(DisconnectReason.Error);
             });
@@ -414,11 +412,13 @@ namespace EmoTracker.Extensions.Twitch
 
                                     mLastVFXCommandTime = System.DateTime.Now;
 
-                                    MainWindow main = Application.Current.MainWindow as MainWindow;
+#if WINDOWS
+                                    MainWindow main = System.Windows.Application.Current.MainWindow as MainWindow;
                                     if (main != null && main.BroadcastView != null)
                                     {
                                         main.BroadcastView.Flush();
                                     }
+#endif
                                 });
                                 return;
                             }
@@ -435,12 +435,13 @@ namespace EmoTracker.Extensions.Twitch
 
                                     mLastVFXCommandTime = System.DateTime.Now;
 
-                                    MainWindow main = Application.Current.MainWindow as MainWindow;
+#if WINDOWS
+                                    MainWindow main = System.Windows.Application.Current.MainWindow as MainWindow;
                                     if (main != null && main.BroadcastView != null)
                                     {
                                         if (args.Length > 1 && !string.IsNullOrWhiteSpace(args[1]))
                                         {
-                                            ImageSource img = IconUtility.GetImage(new Uri(Path.Combine(ExtensionManager.GetExtensionPath(this), string.Format("images/{0}.png", args[1]))));
+                                            System.Windows.Media.ImageSource img = IconUtility.GetImage(new Uri(Path.Combine(ExtensionManager.GetExtensionPath(this), string.Format("images/{0}.png", args[1]))));
                                             if (img == null)
                                             {
                                                 Uri imageUri = new Uri(string.Format("pack://application:,,,/EmoTracker;component/Resources/{0}.png", args[1]));
@@ -451,6 +452,7 @@ namespace EmoTracker.Extensions.Twitch
                                                 main.BroadcastView.Rain(img);
                                         }
                                     }
+#endif
                                 });
                                 return;
                             }
@@ -581,7 +583,7 @@ namespace EmoTracker.Extensions.Twitch
                 }
                 catch
                 {
-                    MessageBox.Show("Your Documents\\EmoTracker\\extensions\\twitch_chat_hud\\user_permissions.json file has invalid JSON. Please correct it and restart the tracker.\n\n", "JSON Load Error", MessageBoxButton.OK);
+                    Services.DialogService.Instance.ShowOK("JSON Load Error", "Your Documents\\EmoTracker\\extensions\\twitch_chat_hud\\user_permissions.json file has invalid JSON. Please correct it and restart the tracker.");
                 }
                 finally
                 {

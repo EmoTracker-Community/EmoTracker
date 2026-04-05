@@ -1,0 +1,99 @@
+<Window x:Class="EmoTracker.UI.OverrideExportDialog"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:EmoTracker.UI"
+        Title="Export Overrides"
+        Height="450"
+        Width="800"
+        WindowStartupLocation="CenterOwner">
+    <Grid Background="#212121">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Search bar header -->
+        <Grid Grid.Row="0" Background="#252030">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Foreground="WhiteSmoke"
+                       Text="Search Files"
+                       VerticalAlignment="Center"
+                       Margin="15,0,10,0" />
+
+            <Border Grid.Column="1"
+                    CornerRadius="10"
+                    Background="#e8e8e8"
+                    Margin="5,5,10,5"
+                    BorderBrush="#d0d0d0"
+                    BorderThickness="2">
+                <TextBox BorderBrush="{x:Null}"
+                         Background="Transparent"
+                         Margin="8,2"
+                         FontSize="10"
+                         VerticalAlignment="Center"
+                         Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            </Border>
+        </Grid>
+
+        <!-- Records list -->
+        <ScrollViewer Grid.Row="1"
+                      HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Records}"
+                          Margin="0,10,0,10">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="10,2"
+                              MinHeight="25"
+                              Background="{Binding ExportOverride,
+                                           Converter={x:Static local:OverrideExportDialog.ExportOverrideToBackgroundConverter}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox Grid.Column="0"
+                                      IsChecked="{Binding ExportOverride}"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,5,0" />
+
+                            <Grid Grid.Column="1"
+                                  Margin="5,5"
+                                  MaxHeight="32">
+                                <Viewbox StretchDirection="DownOnly">
+                                    <ContentPresenter Content="{Binding Preview}"
+                                                      VerticalAlignment="Center"
+                                                      HorizontalAlignment="Center" />
+                                </Viewbox>
+                            </Grid>
+
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding Path}"
+                                       FontFamily="Consolas"
+                                       Margin="5,0"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       Background="Transparent"
+                                       ToolTip.Tip="{Binding ToolTip}"
+                                       Foreground="{Binding ExportOverride,
+                                                    Converter={x:Static local:OverrideExportDialog.ExportOverrideToForegroundConverter}}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Export button -->
+        <Button Grid.Row="2"
+                Click="ExportOverridesButton_Click"
+                HorizontalAlignment="Stretch">
+            <TextBlock Text="Export Overrides" Margin="0,5" />
+        </Button>
+    </Grid>
+</Window>

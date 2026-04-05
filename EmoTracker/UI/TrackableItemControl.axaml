@@ -1,0 +1,47 @@
+<UserControl x:Class="EmoTracker.UI.TrackableItemControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI">
+    <Grid ToolTip.Tip="{Binding Name}">
+        <Button Command="{Binding OnLeftClickCommand, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
+                CommandParameter="{Binding}"
+                Focusable="False"
+                Background="{x:Null}"
+                Padding="0"
+                BorderThickness="0">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Grid Background="Transparent">
+                        <controls:InputMaskingImage
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Source="{Binding Icon, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                            Width="{Binding IconWidth, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
+                            Height="{Binding IconHeight, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}" />
+                        <Grid VerticalAlignment="Bottom"
+                              HorizontalAlignment="Right"
+                              MaxWidth="{Binding IconWidth, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
+                              IsVisible="{Binding BadgeText, Converter={x:Static converters:NullToFalseConverter.Instance}}">
+                            <TextBlock Text="{Binding BadgeText}"
+                                       Background="Black"
+                                       FontWeight="Bold"
+                                       FontSize="{Binding (local:TrackableItemControl.BadgeFontSize), RelativeSource={RelativeSource Self}}"
+                                       Foreground="{Binding BadgeTextColor}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Padding="4,1" />
+                        </Grid>
+                    </Grid>
+                </ControlTemplate>
+            </Button.Template>
+            <Button.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Command="{Binding OnRightClickCommand, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
+                              CommandParameter="{Binding}" />
+                </ContextMenu>
+            </Button.ContextMenu>
+        </Button>
+    </Grid>
+</UserControl>
