@@ -21,9 +21,11 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+#if WINDOWS
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+#endif
 
 namespace EmoTracker
 {
@@ -129,14 +131,18 @@ namespace EmoTracker
         {
             InitializeNotifications();
 
+#if WINDOWS
             if (Application.Current is App)
             {
+#endif
                 //  Force initialize core managers
                 PackageManager.CreateInstance();
                 PackageManager.Instance.Initialize();
 
                 InitializePackageManagerViews();
+#if WINDOWS
             }
+#endif
 
             Tracker.Instance.OnPackageLoadStarting += Tracker_OnPackageLoadStarting;
             Tracker.Instance.OnPackageLoadComplete += Tracker_OnPackageLoadComplete;
@@ -186,16 +192,20 @@ namespace EmoTracker
 
         private void ShowBroadcastView(object obj)
         {
+#if WINDOWS
             MainWindow appWindow = Application.Current.MainWindow as MainWindow;
             if (appWindow != null)
                 appWindow.ShowBroadcastView();
+#endif
         }
 
         private void ShowDevleoperConsole(object obj)
         {
+#if WINDOWS
             MainWindow appWindow = Application.Current.MainWindow as MainWindow;
             if (appWindow != null)
                 appWindow.ShowDeveloperConsole();
+#endif
         }
 
         private void InstallPackage(object obj)
@@ -318,27 +328,45 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
                 }
                 else
                 {
-                    OverrideExportDialog dialog = new OverrideExportDialog()
-                    {
-                        Owner = Application.Current.MainWindow
-                    };
+                    OverrideExportDialog dialog = new OverrideExportDialog();
+#if WINDOWS
+                    dialog.Owner = Application.Current.MainWindow;
                     dialog.ShowDialog();
+#else
+                    _ = dialog.ShowDialog(
+                        (Avalonia.Application.Current?.ApplicationLifetime as
+                            Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow);
+#endif
                 }
             }
         }
 
         private void ShowPackManagerHandler(object obj)
         {
-            UI.PackageManagerWindow window = new UI.PackageManagerWindow() { Owner = Application.Current.MainWindow };
+            UI.PackageManagerWindow window = new UI.PackageManagerWindow();
+#if WINDOWS
+            window.Owner = Application.Current.MainWindow;
             window.ShowDialog();
+#else
+            _ = window.ShowDialog(
+                (Avalonia.Application.Current?.ApplicationLifetime as
+                    Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow);
+#endif
 
             WindowService.Instance.FocusMainWindow();
         }
 
         private void CheckForUpdateHandler(object obj)
         {
-            UI.AppUpdateWindow window = new UI.AppUpdateWindow(false) { Owner = Application.Current.MainWindow };
+            UI.AppUpdateWindow window = new UI.AppUpdateWindow(false);
+#if WINDOWS
+            window.Owner = Application.Current.MainWindow;
             window.ShowDialog();
+#else
+            _ = window.ShowDialog(
+                (Avalonia.Application.Current?.ApplicationLifetime as
+                    Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow);
+#endif
 
             WindowService.Instance.FocusMainWindow();
         }
@@ -752,7 +780,13 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             set
             {
                 if (SetProperty(ref mAvailablePackagesViewFilter, value))
+                {
+#if WINDOWS
                     AvailablePackagesView.Refresh();
+#else
+                    NotifyPropertyChanged(nameof(AvailablePackagesView));
+#endif
+                }
             }
         }
 
@@ -777,6 +811,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             }
         }
 
+#if WINDOWS
         ListCollectionView mAvailablePackagesView;
         ListCollectionView mInstalledPackagesView;
 
@@ -788,6 +823,15 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         {
             get { return mInstalledPackagesView; }
         }
+#else
+        public IEnumerable<PackageRepositoryEntry> AvailablePackagesView =>
+            (PackageManager.Instance.AvailablePackages ?? Enumerable.Empty<PackageRepositoryEntry>())
+            .Where(PackageFilter)
+            .OrderBy(e => e.Game).ThenBy(e => e.Name);
+
+        public IEnumerable<IGamePackage> InstalledPackagesView =>
+            PackageManager.Instance.InstalledPackages ?? Enumerable.Empty<IGamePackage>();
+#endif
 
         void InitializePackageManagerViews()
         {
@@ -795,9 +839,10 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             PackageManager.Instance.OnGameListDownloaded += PackageManager_OnGameListDownloaded;
 
+#if WINDOWS
             mAvailablePackagesView = new ListCollectionView(PackageManager.Instance.AvailablePackages as IList);
             mAvailablePackagesView.CustomSort = new RepoEntryGameNameSort();
-            mAvailablePackagesView.Filter = new Predicate<object>(PackageFilter);            
+            mAvailablePackagesView.Filter = new Predicate<object>(PackageFilter);
             mAvailablePackagesView.GroupDescriptions.Add(new PropertyGroupDescription("Game", UI.Converters.GameNameToActualGameNameConverter.Instance));
 
             mInstalledPackagesView = new ListCollectionView(PackageManager.Instance.InstalledPackages as IList);
@@ -806,6 +851,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             AvailablePackagesView.Refresh();
             InstalledPackagesView.Refresh();
+#endif
 
             //  Configure auto-refresh for the package manager
             System.Timers.Timer timer = new System.Timers.Timer(TimeSpan.FromMinutes(30).TotalMilliseconds);
@@ -828,8 +874,13 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void PackageManager_OnGameListDownloaded(object sender, EventArgs e)
         {
+#if WINDOWS
             AvailablePackagesView.Refresh();
             InstalledPackagesView.Refresh();
+#else
+            NotifyPropertyChanged(nameof(AvailablePackagesView));
+            NotifyPropertyChanged(nameof(InstalledPackagesView));
+#endif
         }
 
         private string mPackFilterText;
@@ -847,7 +898,11 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void RefreshPackageCollectionView()
         {
+#if WINDOWS
             mAvailablePackagesView.Refresh();
+#else
+            NotifyPropertyChanged(nameof(AvailablePackagesView));
+#endif
         }
 
         private bool PackageFilter(object obj)
@@ -1098,14 +1153,15 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             foreach (Notification n in mNotifications)
             {
-                FrameworkElement container = null;
+#if WINDOWS
+                System.Windows.FrameworkElement container = null;
                 {
                     MainWindow appWindow = Application.Current.MainWindow as MainWindow;
                     if (appWindow != null)
                     {
                         //  This is bit lame, but WPF has some unfortunate limitations with respect to
                         //  handling completed events for animations triggered from DataTriggers
-                        container = appWindow.NotificationsHost.ItemContainerGenerator.ContainerFromItem(n) as FrameworkElement;
+                        container = appWindow.NotificationsHost.ItemContainerGenerator.ContainerFromItem(n) as System.Windows.FrameworkElement;
                     }
                 }
 
@@ -1114,6 +1170,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                     n.ExpirationTime = now;
                     continue;
                 }
+#endif
 
                 if (n.ExpirationTime <= now || n.Expired)
                 {
@@ -1123,11 +1180,13 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                     {
                         toRemove.Add(n);
                     }
+#if WINDOWS
                     else if (container != null)
                     {
                         if (container.RenderSize.Height == 0)
                             toRemove.Add(n);
                     }
+#endif
                 }
             }
 

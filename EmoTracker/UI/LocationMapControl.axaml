@@ -1,0 +1,115 @@
+<controls:ObservableUserControl Name="userControl"
+             x:Class="EmoTracker.UI.LocationMapControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             xmlns:locations="clr-namespace:EmoTracker.Data.Locations;assembly=EmoTracker.Data"
+             xmlns:settings="clr-namespace:EmoTracker.Data.Settings;assembly=EmoTracker.Data">
+    <UserControl.Resources>
+        <ItemsPanelTemplate x:Key="HorizontalWrapPanel">
+            <WrapPanel Orientation="Horizontal" />
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="HorizontalStackPanel">
+            <StackPanel Orientation="Horizontal" />
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="VerticalStackPanel">
+            <StackPanel Orientation="Vertical" />
+        </ItemsPanelTemplate>
+    </UserControl.Resources>
+
+    <Grid IsHitTestVisible="True">
+        <Grid.RowDefinitions>
+            <RowDefinition />
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Location details flyout: implemented as a Popup in code-behind -->
+        <!-- Badge details flyout: implemented as a Popup in code-behind -->
+
+        <Viewbox Name="ViewScaler" VerticalAlignment="Top" Grid.Row="0">
+            <ItemsControl ItemsSource="{Binding Maps}"
+                          ItemsPanel="{StaticResource HorizontalStackPanel}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="locations:Map">
+                        <Grid Name="MapHost" Margin="25,25">
+                            <controls:InputMaskingImage Name="MapImage"
+                                                        Source="{Binding Image, Converter={x:Static converters:ImageReferenceConverter.Instance}}"/>
+                            <ItemsControl ItemsSource="{Binding Locations}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas Width="{Binding #MapImage.Source.Size.Width}"
+                                                Height="{Binding #MapImage.Source.Size.Height}"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerTheme>
+                                    <ControlTheme TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                    </ControlTheme>
+                                </ItemsControl.ItemContainerTheme>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="locations:MapLocation">
+                                        <Grid Name="MinifiedLocation">
+                                            <Border BorderThickness="{Binding BorderThickness}"
+                                                    Width="{Binding Size}"
+                                                    Height="{Binding Size}"
+                                                    Canvas.Left="{Binding X}"
+                                                    Canvas.Top="{Binding Y}"
+                                                    Margin="{Binding Margin, Converter={x:Static converters:ThicknessConverter.Instance}}"
+                                                    VerticalAlignment="Top"
+                                                    HorizontalAlignment="Left"
+                                                    BorderBrush="#212121">
+                                                <!-- Note indicator -->
+                                                <Viewbox Width="{Binding NoteIndicatorSize}"
+                                                         Height="{Binding NoteIndicatorSize}"
+                                                         StretchDirection="Both"
+                                                         VerticalAlignment="Top"
+                                                         HorizontalAlignment="Right"
+                                                         Margin="{Binding NoteIndicatorMargin, Converter={x:Static converters:ThicknessConverter.Instance}}"
+                                                         IsVisible="{Binding Location.NoteTakingSite.Empty, Converter={x:Static converters:BoolInverseConverter.Instance}}">
+                                                    <Border Background="#000000" CornerRadius="2">
+                                                        <TextBlock Name="Icon"
+                                                                   FontFamily="{StaticResource FontAwesome5Free}"
+                                                                   Text="&#xf044;"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="{Binding Status_Generic_Active, Source={x:Static settings:ApplicationColors.Instance}}"
+                                                                   Margin="1" />
+                                                    </Border>
+                                                </Viewbox>
+                                            </Border>
+
+                                            <!-- Badges host -->
+                                            <ItemsControl ItemsSource="{Binding Location.Badges}"
+                                                          VerticalAlignment="Bottom"
+                                                          HorizontalAlignment="Right">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <Grid Margin="{Binding DataContext.BadgeMargin, ElementName=MinifiedLocation, Converter={x:Static converters:ThicknessConverter.Instance}}"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Viewbox Width="{Binding DataContext.BadgeSize, ElementName=MinifiedLocation}"
+                                                                 Height="{Binding DataContext.BadgeSize, ElementName=MinifiedLocation}"
+                                                                 StretchDirection="Both">
+                                                            <controls:InputMaskingImage
+                                                                IsHitTestVisible="{Binding DataContext.EnableBadgeHitTest, ElementName=MinifiedLocation}"
+                                                                Source="{Binding Converter={x:Static converters:ImageReferenceConverter.Instance}}" />
+                                                        </Viewbox>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Viewbox>
+    </Grid>
+</controls:ObservableUserControl>

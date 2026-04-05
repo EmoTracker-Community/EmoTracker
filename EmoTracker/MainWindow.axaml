@@ -1,0 +1,180 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:EmoTracker"
+        xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+        xmlns:packages="clr-namespace:EmoTracker.Data.Packages;assembly=EmoTracker.Data"
+        xmlns:extensions="clr-namespace:EmoTracker.Extensions"
+        xmlns:ui="clr-namespace:EmoTracker.UI"
+        xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+        xmlns:media_utility="clr-namespace:EmoTracker.UI.Media.Utility;assembly=EmoTracker.UI"
+        x:Class="EmoTracker.MainWindow"
+        mc:Ignorable="d"
+        Name="HostWindow"
+        Background="#ff00ff"
+        MinWidth="220" MinHeight="61"
+        Width="1280" Height="960"
+        Title="{Binding MainWindowTitle, Source={x:Static local:ApplicationModel.Instance}}"
+        Topmost="{Binding AlwaysOnTop, Source={x:Static data:ApplicationSettings.Instance}}"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        SystemDecorations="BorderOnly">
+
+    <Grid RowDefinitions="25,*,Auto">
+
+        <!-- Title bar -->
+        <Grid Grid.Row="0" Height="25" ZIndex="1" IsHitTestVisible="True">
+            <Grid.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Color="#111111" Offset="0"/>
+                    <GradientStop Color="#242424" Offset="0.2"/>
+                    <GradientStop Color="#111111" Offset="0.75"/>
+                </LinearGradientBrush>
+            </Grid.Background>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- System menu / icon -->
+            <Button Grid.Column="0" Name="SystemButton" Background="Transparent"
+                    BorderThickness="0" Padding="3,0">
+                <Image VerticalAlignment="Center" Height="22" Source="emotracker_icon.ico" />
+            </Button>
+
+            <!-- Title (drag handle) -->
+            <TextBlock Grid.Column="1"
+                       Text="{Binding Title, ElementName=HostWindow, Mode=OneWay}"
+                       Foreground="WhiteSmoke"
+                       HorizontalAlignment="Left" VerticalAlignment="Center"
+                       Margin="3,0" TextTrimming="CharacterEllipsis"
+                       IsHitTestVisible="False"/>
+
+            <!-- Right-side chrome buttons -->
+            <StackPanel Grid.Column="2" Name="RightSideIcons"
+                        Orientation="Horizontal" VerticalAlignment="Stretch" Margin="3,0,0,0">
+
+                <!-- Settings -->
+                <Button Name="SettingsButton" Width="24" Background="Transparent"
+                        BorderThickness="0" VerticalContentAlignment="Center"
+                        ToolTip.Tip="Settings">
+                    <TextBlock Text="&#xf013;" Foreground="#717171"
+                               FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
+
+                <!-- Package Manager -->
+                <Button Name="PackageManagerButton" Width="24" Background="Transparent"
+                        BorderThickness="0" VerticalContentAlignment="Center"
+                        Command="{Binding ShowPackageManagerCommand, Source={x:Static local:ApplicationModel.Instance}}"
+                        ToolTip.Tip="Package Manager">
+                    <TextBlock Text="&#xf381;" Foreground="#717171"
+                               FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
+
+                <!-- Refresh -->
+                <Button Width="24" Background="Transparent" BorderThickness="0"
+                        VerticalContentAlignment="Center"
+                        Command="{Binding RefreshCommand, Source={x:Static local:ApplicationModel.Instance}}"
+                        ToolTip.Tip="Reset the tracker to its default state"
+                        Margin="0,0,5,0">
+                    <TextBlock Text="&#xf021;" Foreground="#717171"
+                               FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
+
+                <!-- Minimize -->
+                <Button Name="MinimizeButton" Width="30" Background="Transparent"
+                        BorderThickness="0" VerticalContentAlignment="Center">
+                    <TextBlock Text="&#x268A;" Foreground="#717171"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
+
+                <!-- Maximize/Restore -->
+                <Button Name="MaximizeButton" Width="30" Background="Transparent"
+                        BorderThickness="0" VerticalContentAlignment="Center">
+                    <TextBlock Name="MaximizeButtonText" Text="&#x2610;" Foreground="#717171"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
+
+                <!-- Close -->
+                <Button Name="CloseButton" Width="30" Background="Red"
+                        BorderThickness="0" VerticalContentAlignment="Center">
+                    <TextBlock Text="&#x2715;" Foreground="WhiteSmoke"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Main content -->
+        <Grid Grid.Row="1">
+            <Grid Name="TrackerScaleGrid">
+                <Grid.RenderTransform>
+                    <ScaleTransform
+                        ScaleX="{Binding MainLayoutScaleFactor, Source={x:Static local:ApplicationModel.Instance}}"
+                        ScaleY="{Binding MainLayoutScaleFactor, Source={x:Static local:ApplicationModel.Instance}}"/>
+                </Grid.RenderTransform>
+                <ui:LayoutControl x:Name="TrackerLayout"
+                    DataContext="{Binding ActiveLayout, RelativeSource={RelativeSource AncestorType=local:MainWindow}}"/>
+            </Grid>
+
+            <!-- No-package placeholder -->
+            <Grid Background="#080808" IsEnabled="False" Name="NoPackagePlaceholder">
+                <TextBlock Foreground="WhiteSmoke"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextWrapping="Wrap" Margin="15"
+                           Text="No package loaded. Install packages using the Package Manager (arrow icon in the title bar)."/>
+            </Grid>
+
+            <!-- Notifications overlay -->
+            <ItemsControl Name="NotificationsHost"
+                          ItemsSource="{Binding Notifications, Source={x:Static local:ApplicationModel.Instance}}"
+                          MaxWidth="350" HorizontalAlignment="Left"
+                          Margin="20" VerticalAlignment="Top">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="#d8212121" BorderThickness="8,0,0,0"
+                                BorderBrush="#41a054" Margin="0,0,0,10">
+                            <Grid Background="Transparent">
+                                <controls:MarkdownViewer Markdown="{Binding Markdown}" Margin="10,7"/>
+                                <Button Background="Transparent" BorderThickness="0"
+                                        Command="{Binding ForceExpireCommand}"
+                                        Opacity="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+
+        <!-- Status bar (extension indicators) -->
+        <Grid Grid.Row="2">
+            <Grid.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Color="#111111" Offset="0"/>
+                    <GradientStop Color="#242424" Offset="0.2"/>
+                    <GradientStop Color="#111111" Offset="0.75"/>
+                </LinearGradientBrush>
+            </Grid.Background>
+            <ItemsControl HorizontalAlignment="Right"
+                          ItemsSource="{Binding Extensions, Source={x:Static extensions:ExtensionManager.Instance}}"
+                          VerticalAlignment="Center" Margin="0,2,20,2">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <ContentControl Content="{Binding StatusBarControl}"
+                                        VerticalAlignment="Center" Margin="3,2" MaxHeight="18"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+
+    </Grid>
+</Window>

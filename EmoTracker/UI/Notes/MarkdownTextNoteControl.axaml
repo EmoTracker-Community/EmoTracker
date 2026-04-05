@@ -1,0 +1,52 @@
+<UserControl x:Class="EmoTracker.UI.Notes.MarkdownTextNoteControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI.Notes"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI">
+    <Grid MinWidth="100">
+        <!-- Markdown viewer: visible when NOT in edit mode -->
+        <controls:MarkdownViewer
+            Markdown="{Binding MarkdownSource}"
+            IsVisible="{Binding IsEditModeEnabled,
+                        RelativeSource={RelativeSource AncestorType=local:MarkdownTextNoteControl},
+                        Converter={x:Static converters:InverseBoolConverter.Instance}}" />
+
+        <Grid Name="EditorContainer" Background="Transparent">
+            <!-- Text editor: visible when in edit mode -->
+            <TextBox Name="MarkdownSourceEditor"
+                     Text="{Binding MarkdownSource, UpdateSourceTrigger=LostFocus}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     Background="{x:Null}"
+                     Foreground="WhiteSmoke"
+                     CaretBrush="WhiteSmoke"
+                     IsVisible="{Binding IsEditModeEnabled,
+                                 RelativeSource={RelativeSource AncestorType=local:MarkdownTextNoteControl}}" />
+
+            <!-- Edit button: visible when not in edit mode and (mouse over OR markdown is empty) -->
+            <Button Name="EditButton"
+                    Click="EditButton_Click"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border CornerRadius="3"
+                                Background="DarkGray"
+                                Name="EditBorder">
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="&#xf303;"
+                                           FontFamily="{StaticResource FontAwesome5Free}" />
+                                <TextBlock Text="Edit Markdown"
+                                           Margin="5,0" />
+                            </StackPanel>
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </Grid>
+    </Grid>
+</UserControl>

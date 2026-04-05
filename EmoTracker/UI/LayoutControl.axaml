@@ -1,0 +1,192 @@
+<UserControl x:Class="EmoTracker.UI.LayoutControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="clr-namespace:EmoTracker"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             xmlns:layout="clr-namespace:EmoTracker.Data.Layout;assembly=EmoTracker.Data"
+             xmlns:local="clr-namespace:EmoTracker.UI">
+    <UserControl.DataTemplates>
+        <!-- DataTemplates for layout panel types -->
+        <DataTemplate DataType="layout:LayoutReference">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <ContentControl Content="{Binding Layout.Root}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:ArrayPanel">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <ItemsControl ItemsSource="{Binding Children}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:DockPanel">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <ItemsControl ItemsSource="{Binding Children}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <DockPanel LastChildFill="True" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:CanvasPanel">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <ItemsControl ItemsSource="{Binding Children}" ClipToBounds="True">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:ViewBox">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <Viewbox>
+                    <ItemsControl ItemsSource="{Binding Items}" />
+                </Viewbox>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:TabPanel">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <TabControl ItemsSource="{Binding Tabs}"
+                            Background="{x:Null}"
+                            SelectedItem="{Binding CurrentTab, Mode=TwoWay}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:MapPanel">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <local:LocationMapControl />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:Container">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <ItemsControl ItemsSource="{Binding Items}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:ScrollPanel">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Items}" />
+                </ScrollViewer>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:GroupBox">
+            <!-- GroupBox is not a standard Avalonia control; use Border + header TextBlock -->
+            <Border BorderBrush="Gray" BorderThickness="1"
+                    Margin="{Binding Margin}"
+                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                    Padding="5">
+                <StackPanel>
+                    <TextBlock Text="{Binding Header}" FontWeight="Bold" Margin="0,0,0,4" Foreground="WhiteSmoke" />
+                    <ItemsControl ItemsSource="{Binding Items}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:ItemGrid">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <local:ItemGridControl DataContext="{Binding Data}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:Item">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <local:TrackableItemControl DataContext="{Binding Data}"
+                                            IconWidth="{Binding DataContext.Width, RelativeSource={RelativeSource AncestorType=Grid}}"
+                                            IconHeight="{Binding DataContext.Height, RelativeSource={RelativeSource AncestorType=Grid}}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:Image">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <Image Source="{Binding Content, Converter={x:Static converters:ImageReferenceConverter.Instance}}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:TextBlock">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <TextBlock Text="{Binding Text}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:LastClearedLocation">
+            <ContentControl Content="{Binding Location}">
+                <ContentControl.ContentTemplate>
+                    <DataTemplate>
+                        <local:LocationControl DataContext="{Binding LastClearedLocation, Source={x:Static data:LocationDatabase.Instance}}"
+                                               Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource Self}}" />
+                    </DataTemplate>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:RecentPinnedLocations">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <ItemsControl ItemsSource="{Binding Locations}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <local:LocationControl Margin="2"
+                                                   Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:ButtonPopup">
+            <Grid Margin="{Binding Margin}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                  VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <!-- ButtonPopup: rendered as a simple toggle button; full popup behaviour requires code-behind in Avalonia -->
+                <controls:MouseOnlyToggleButton />
+            </Grid>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Grid>
+        <Grid DataContext="{Binding Root}">
+            <ContentControl Content="{Binding}" />
+        </Grid>
+    </Grid>
+</UserControl>

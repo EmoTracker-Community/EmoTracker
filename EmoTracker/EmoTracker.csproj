@@ -3,7 +3,7 @@
   <PropertyGroup>
     <ProjectGuid>{37EF8519-4426-455F-9D23-292839365EE0}</ProjectGuid>
     <OutputType Condition="'$(TargetFramework)' == 'net8.0-windows'">WinExe</OutputType>
-    <OutputType Condition="'$(TargetFramework)' == 'net8.0'">Library</OutputType>
+    <OutputType Condition="'$(TargetFramework)' == 'net8.0'">Exe</OutputType>
     <RootNamespace>EmoTracker</RootNamespace>
     <AssemblyName>EmoTracker</AssemblyName>
     <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
@@ -64,6 +64,14 @@
     <PackageReference Include="WpfScreenHelper" Version="2.1.1" />
   </ItemGroup>
 
+  <!-- Avalonia packages (cross-platform target) -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="Avalonia" Version="11.2.7" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.7" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.7" />
+    <PackageReference Include="Avalonia.Xaml.Behaviors" Version="11.2.7" />
+  </ItemGroup>
+
   <!-- Shared packages (both targets) -->
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
@@ -76,23 +84,17 @@
 
   <!--
     Exclude WPF-dependent and Windows-only source from the cross-platform net8.0 target.
-    These files will be replaced by Avalonia equivalents in Phases 5–7.
+    Avalonia equivalents (*.axaml / *.axaml.cs) are included via the AvaloniaXaml glob below.
   -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <!-- App entry point and main window (WPF) -->
+    <!-- App entry point and main window (WPF) — replaced by App.axaml.cs / MainWindow.axaml.cs -->
     <Compile Remove="App.xaml.cs" />
     <Page Remove="App.xaml" />
     <Compile Remove="MainWindow.xaml.cs" />
     <Page Remove="MainWindow.xaml" />
-    <!-- Application model (WPF-dependent until Phase 6) -->
-    <Compile Remove="ApplicationModel.cs" />
-    <!-- All UI controls and dialog windows (WPF) -->
-    <Compile Remove="UI\**\*.cs" />
+    <!-- WPF code-behind files for UI controls — replaced by *.axaml.cs counterparts -->
+    <Compile Remove="UI\**\*.xaml.cs" />
     <Page Remove="UI\**\*.xaml" />
-    <!-- WPF service implementations (Avalonia replacements added in Phase 7) -->
-    <Compile Remove="Services\DispatchService.cs" />
-    <Compile Remove="Services\DialogService.cs" />
-    <Compile Remove="Services\WindowService.cs" />
     <!-- Update helper (WPF-dependent) -->
     <Compile Remove="Update\**\*.cs" />
     <!-- AutoTracker — requires Windows-only ConnectorLib -->
@@ -104,13 +106,14 @@
     <!-- NDI — Windows-only -->
     <Compile Remove="Extensions\NDI\**\*.cs" />
     <Page Remove="Extensions\NDI\**\*.xaml" />
-    <!-- NoteTaking creates WPF NoteTakingIconPopup -->
-    <Compile Remove="Extensions\NoteTaking\**\*.cs" />
-    <!-- Twitch creates WPF TwitchStatusIndicator -->
-    <Compile Remove="Extensions\Twitch\**\*.cs" />
+    <!-- NoteTaking WPF code-behind replaced by axaml.cs -->
+    <Compile Remove="Extensions\NoteTaking\**\*.xaml.cs" />
+    <Page Remove="Extensions\NoteTaking\**\*.xaml" />
+    <!-- Twitch WPF code-behind replaced by axaml.cs -->
+    <Compile Remove="Extensions\Twitch\**\*.xaml.cs" />
     <Page Remove="Extensions\Twitch\**\*.xaml" />
-    <!-- VariantSwitcher creates WPF VariantSwitcherControl -->
-    <Compile Remove="Extensions\VariantSwitcher\**\*.cs" />
+    <!-- VariantSwitcher WPF code-behind replaced by axaml.cs -->
+    <Compile Remove="Extensions\VariantSwitcher\**\*.xaml.cs" />
     <Page Remove="Extensions\VariantSwitcher\**\*.xaml" />
     <!-- VoiceRecognition — requires Windows-only System.Speech -->
     <Compile Remove="Extensions\VoiceRecognition\**\*.cs" />
@@ -119,6 +122,17 @@
     <Compile Remove="Utility\DiscordRPC.cs" />
     <!-- WPF/Framework-dependent generated files -->
     <Compile Remove="Properties\Settings.Designer.cs" />
+  </ItemGroup>
+
+  <!-- Exclude Avalonia-only source from the net8.0-windows (WPF) target -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <Compile Remove="Program.cs" />
+    <Compile Remove="App.axaml.cs" />
+    <Compile Remove="MainWindow.axaml.cs" />
+    <Compile Remove="UI\**\*.axaml.cs" />
+    <Compile Remove="Extensions\Twitch\**\*.axaml.cs" />
+    <Compile Remove="Extensions\VariantSwitcher\**\*.axaml.cs" />
+    <Compile Remove="Extensions\NoteTaking\**\*.axaml.cs" />
   </ItemGroup>
 
   <!-- Copy Windows-only native dependencies on net8.0-windows builds -->

@@ -1,0 +1,45 @@
+<UserControl x:Class="EmoTracker.UI.NoteTakingIconPopup"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:settings="clr-namespace:EmoTracker.Data.Settings;assembly=EmoTracker.Data">
+    <Grid>
+        <!-- Avalonia does not have a WPF-style Popup that binds to IsChecked.
+             The popup is managed in code-behind via PopupInstance (a Popup control
+             whose IsOpen is toggled by the toggle button click handler). -->
+        <Popup Name="NotesPopup"
+               PlacementMode="Top"
+               HorizontalOffset="4"
+               VerticalOffset="4"
+               PlacementTarget="{Binding ElementName=OpenNotesButton}">
+            <Border Name="PopupRegion"
+                    BorderBrush="DarkGray"
+                    BorderThickness="3"
+                    Background="#FF212121"
+                    CornerRadius="5"
+                    Margin="20">
+                <local:NoteTakingSiteView Margin="5" />
+            </Border>
+        </Popup>
+
+        <ToggleButton Name="OpenNotesButton"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Padding="0"
+                      Focusable="False"
+                      Checked="OpenNotesButton_Checked"
+                      Unchecked="OpenNotesButton_Unchecked">
+            <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                    <TextBlock Name="Icon"
+                               FontFamily="{StaticResource FontAwesome5Free}"
+                               Text="&#xf044;"
+                               ToolTip.Tip="View and edit notes"
+                               VerticalAlignment="Center"
+                               Foreground="{Binding Empty, Converter={x:Static local:NoteTakingIconPopup.EmptyToForegroundConverter}}" />
+                </ControlTemplate>
+            </ToggleButton.Template>
+        </ToggleButton>
+    </Grid>
+</UserControl>

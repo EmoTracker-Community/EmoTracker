@@ -1,0 +1,15 @@
+<Window x:Class="EmoTracker.UI.AppUpdateWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="EmoTracker Update"
+        Width="300"
+        SizeToContent="Height"
+        Background="#212121"
+        Topmost="True"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="10">
+        <TextBlock Foreground="WhiteSmoke"
+                   TextWrapping="Wrap"
+                   Text="Update checking is not available in this build." />
+    </Grid>
+</Window>
