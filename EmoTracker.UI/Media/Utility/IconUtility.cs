@@ -424,6 +424,12 @@ namespace EmoTracker.UI.Media.Utility
         // Alpha masks keyed by IImage: bool[] of length (width * height), true = opaque
         private static readonly Dictionary<IImage, (bool[] mask, int w, int h)> sAlphaMasks = new();
 
+        // Cached Skia-encoded PNG bytes for each IImage produced by SkToAvalonia.
+        // Used by ToSkBitmap to bypass Avalonia's Bitmap.Save(Stream), which may strip the
+        // alpha channel on some platforms — causing overlay compositing to treat every pixel
+        // as fully opaque and completely hide the base layer.
+        private static readonly Dictionary<IImage, byte[]> sPngCache = new();
+
         /// <summary>Returns the precomputed alpha mask for an image, or null if not available.</summary>
         public static (bool[] mask, int w, int h)? GetAlphaMask(IImage image)
         {
@@ -433,30 +439,50 @@ namespace EmoTracker.UI.Media.Utility
         }
 
         /// <summary>Convert an Avalonia IImage back to an SKBitmap for pixel processing.</summary>
-        /// <remarks>Always returns a Bgra8888 bitmap so downstream pixel loops can read and write
-        /// alpha correctly, regardless of the source image's original colour type.</remarks>
+        /// <remarks>
+        /// Uses the Skia-encoded PNG bytes cached by <see cref="SkToAvalonia"/> when available,
+        /// avoiding <c>Bitmap.Save(Stream)</c> which may drop the alpha channel on some platforms
+        /// (causing all pixels to appear fully opaque and breaking overlay compositing).
+        /// Always returns a <c>Bgra8888</c> bitmap so downstream pixel loops can read and write
+        /// alpha correctly regardless of the source image's original colour type.
+        /// </remarks>
         private static SKBitmap ToSkBitmap(IImage image)
         {
             if (image is not Avalonia.Media.Imaging.Bitmap avBitmap)
                 return null;
             try
             {
-                using var ms = new MemoryStream();
-                avBitmap.Save(ms);
-                ms.Position = 0;
-                SKBitmap decoded = SKBitmap.Decode(ms);
-                if (decoded == null) return null;
-
-                // Promote to BGRA8888 so overlay compositing always has a real alpha channel.
-                // Rgb888x alpha is forced to 255 — Max(base.Alpha, overlay.Alpha) would then be
-                // 255 for every pixel and transparent regions couldn't be preserved.
-                if (decoded.ColorType != SKColorType.Bgra8888)
+                Stream pngStream;
+                if (sPngCache.TryGetValue(avBitmap, out byte[] cachedBytes))
                 {
-                    SKBitmap promoted = decoded.Copy(SKColorType.Bgra8888);
-                    decoded.Dispose();
-                    return promoted;
+                    // Use the exact bytes that Skia encoded — guaranteed to have correct alpha.
+                    pngStream = new MemoryStream(cachedBytes, writable: false);
                 }
-                return decoded;
+                else
+                {
+                    // Fallback for images not created by SkToAvalonia (e.g. from GetImageRaw).
+                    var ms = new MemoryStream();
+                    avBitmap.Save(ms);
+                    ms.Position = 0;
+                    pngStream = ms;
+                }
+
+                using (pngStream)
+                {
+                    SKBitmap decoded = SKBitmap.Decode(pngStream);
+                    if (decoded == null) return null;
+
+                    // Promote to Bgra8888 so SetPixel/GetPixel operate on a real alpha channel.
+                    // Rgb888x forces alpha to 255 — Max(base.Alpha, overlay.Alpha) would then be
+                    // 255 for every pixel and transparent regions couldn't be preserved.
+                    if (decoded.ColorType != SKColorType.Bgra8888)
+                    {
+                        SKBitmap promoted = decoded.Copy(SKColorType.Bgra8888);
+                        decoded.Dispose();
+                        return promoted;
+                    }
+                    return decoded;
+                }
             }
             catch { return null; }
         }
@@ -466,8 +492,12 @@ namespace EmoTracker.UI.Media.Utility
         {
             using var skImg = SKImage.FromBitmap(bmp);
             using var encoded = skImg.Encode(SKEncodedImageFormat.Png, 100);
-            using var ms = new MemoryStream(encoded.ToArray());
-            var avBitmap = new Avalonia.Media.Imaging.Bitmap(ms);
+            byte[] pngBytes = encoded.ToArray();
+            var avBitmap = new Avalonia.Media.Imaging.Bitmap(new MemoryStream(pngBytes));
+
+            // Always cache the raw PNG bytes so ToSkBitmap can round-trip back to SKBitmap
+            // without going through Bitmap.Save(Stream), which may strip the alpha channel.
+            sPngCache[avBitmap] = pngBytes;
 
             if (storeMask)
             {
