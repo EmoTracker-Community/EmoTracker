@@ -50,7 +50,6 @@
       <HintPath>..\External\ConnectorLib\ConnectorLib.sd2snes.dll</HintPath>
       <SpecificVersion>False</SpecificVersion>
     </Reference>
-    <Reference Include="PresentationFramework.Aero" />
     <PackageReference Include="System.ComponentModel.Composition" Version="4.7.0" />
     <PackageReference Include="System.Speech" Version="8.0.0" />
   </ItemGroup>
@@ -89,6 +88,14 @@
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="TwitchLib" Version="3.5.3" />
     <PackageReference Include="WebSocketSharp" Version="1.0.3-rc11" NoWarn="NU1701" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.67.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+    <PackageReference Include="Grpc.Tools" Version="2.69.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- gRPC proto compilation for SNI provider -->
+  <ItemGroup>
+    <Protobuf Include="Providers\SNI\Protos\sni.proto" GrpcServices="Client" ProtoRoot="Providers\SNI\Protos" />
   </ItemGroup>
 
   <!--
@@ -106,8 +113,8 @@
     <Page Remove="UI\**\*.xaml" />
     <!-- Update helper (WPF-dependent) -->
     <Compile Remove="Update\**\*.cs" />
-    <!-- AutoTracker — requires Windows-only ConnectorLib -->
-    <Compile Remove="Extensions\AutoTracker\**\*.cs" />
+    <!-- AutoTracker WPF views — replaced by *.axaml.cs counterparts -->
+    <Compile Remove="Extensions\AutoTracker\**\*.xaml.cs" />
     <Page Remove="Extensions\AutoTracker\**\*.xaml" />
     <!-- BontaMultiworld — requires Windows-only ConnectorLib -->
     <Compile Remove="Extensions\BontaMultiworld\**\*.cs" />
@@ -127,6 +134,8 @@
     <!-- VoiceRecognition — requires Windows-only System.Speech -->
     <Compile Remove="Extensions\VoiceRecognition\**\*.cs" />
     <Page Remove="Extensions\VoiceRecognition\**\*.xaml" />
+    <!-- ConnectorLib provider — requires Windows-only ConnectorLib -->
+    <Compile Remove="Providers\ConnectorLib\**\*.cs" />
     <!-- Discord P/Invoke wrapper (Windows-only native SDK) -->
     <Compile Remove="Utility\DiscordRPC.cs" />
     <!-- WPF/Framework-dependent generated files -->
@@ -139,6 +148,7 @@
     <Compile Remove="App.axaml.cs" />
     <Compile Remove="MainWindow.axaml.cs" />
     <Compile Remove="UI\**\*.axaml.cs" />
+    <Compile Remove="Extensions\AutoTracker\**\*.axaml.cs" />
     <Compile Remove="Extensions\Twitch\**\*.axaml.cs" />
     <Compile Remove="Extensions\VariantSwitcher\**\*.axaml.cs" />
     <Compile Remove="Extensions\NoteTaking\**\*.axaml.cs" />

@@ -1,7 +1,7 @@
-using ConnectorLib;
 using EmoTracker.Core;
 using EmoTracker.Core.Services;
 using EmoTracker.Data;
+using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
 using Newtonsoft.Json.Linq;
@@ -27,7 +27,11 @@ namespace EmoTracker.Extensions.AutoTracker
         {
             get
             {
+#if WINDOWS
                 return new AutoTrackerExtensionView() { DataContext = this };
+#else
+                return new AutoTrackerExtensionView { DataContext = this };
+#endif
             }
         }
 
@@ -48,7 +52,7 @@ namespace EmoTracker.Extensions.AutoTracker
 
         public bool Active
         {
-            get { return mApplicableConnectorTypes.Count > 0 && mActiveMemoryUpdates.Count > 0; }
+            get { return mApplicableProviders.Count > 0 && mActiveMemoryUpdates.Count > 0; }
         }
 
         bool mbError = false;
@@ -60,7 +64,7 @@ namespace EmoTracker.Extensions.AutoTracker
 
         #endregion
 
-        #region -- Connector Management --
+        #region -- Provider Management --
 
         bool mbConnected = false;
         public bool Connected
@@ -77,122 +81,61 @@ namespace EmoTracker.Extensions.AutoTracker
             {
                 if (SetProperty(ref mActivePlatform, value))
                 {
-                    mApplicableConnectorTypes.Clear();
+                    mApplicableProviders.Clear();
 
-                    ConnectorType connectorType;
-                    if (ConnectorTypeForGamePlatform(mActivePlatform, out connectorType))
+                    if (Tracker.Instance.ActiveGamePackage != null)
                     {
-                        var availableConnectorInstanceTypes = ConnectorFactory.Available[(int)connectorType];
-                        if (availableConnectorInstanceTypes != null && availableConnectorInstanceTypes.Length > 0)
+                        var providers = AutoTrackingProviderRegistry.Instance.GetProvidersForPack(Tracker.Instance.ActiveGamePackage);
+                        foreach (var provider in providers)
                         {
-                            foreach (var availableType in availableConnectorInstanceTypes)
-                            {
-                                if (availableType.Visibility != ConnectorFactory.Visibility.Production)
-                                    continue;
-
-                                mApplicableConnectorTypes.Add(new ConnectorTypeDesc()
-                                {
-                                    Name = availableType.Name,
-                                    InstanceType = availableType.Type
-                                });
-                            }
+                            mApplicableProviders.Add(provider);
                         }
                     }
                 }
             }
         }
 
-        public class ConnectorTypeDesc : ObservableObject
+        ObservableCollection<IAutoTrackingProvider> mApplicableProviders = new ObservableCollection<IAutoTrackingProvider>();
+        public IEnumerable<IAutoTrackingProvider> ApplicableProviders
         {
-            public string Name { get; set; }
-            public Type InstanceType { get; set; }
-
-            bool mbActive = false;
-            public bool Active
-            {
-                get { return mbActive; }
-                set { SetProperty(ref mbActive, value); }
-            }
+            get { return mApplicableProviders; }
         }
 
-        ObservableCollection<ConnectorTypeDesc> mApplicableConnectorTypes = new ObservableCollection<ConnectorTypeDesc>();
-        public IEnumerable<ConnectorTypeDesc> ApplicableConnectorTypes
+        IAutoTrackingProvider mSelectedProvider;
+        public IAutoTrackingProvider SelectedProvider
         {
-            get { return mApplicableConnectorTypes; }
-        }
-
-        private bool ConnectorTypeForGamePlatform(GamePlatform platform, out ConnectorType connectorType)
-        {
-            switch (platform)
-            {
-                case GamePlatform.NES:
-                    connectorType = ConnectorType.NESConnector;
-                    return true;
-
-                case GamePlatform.SNES:
-                    connectorType = ConnectorType.SNESConnector;
-                    return true;
-
-                case GamePlatform.N64:
-                    connectorType = ConnectorType.N64Connector;
-                    return true;
-
-                case GamePlatform.Gameboy:
-                    connectorType = ConnectorType.GBConnector;
-                    return true;
-
-                case GamePlatform.GBA:
-                    connectorType = ConnectorType.GBAConnector;
-                    return true;
-
-                case GamePlatform.Genesis:
-                    connectorType = ConnectorType.GenesisConnector;
-                    return true;
-            }
-
-            connectorType = ConnectorType.ExternalConnector;
-            return false;
-        }
-
-        ConnectorTypeDesc mSelectedConnectorType;
-        public ConnectorTypeDesc SelectedConnectorType
-        {
-            get { return mSelectedConnectorType; }
+            get { return mSelectedProvider; }
             private set
             {
-                if (SetProperty(ref mSelectedConnectorType, value))
+                if (SetProperty(ref mSelectedProvider, value))
                 {
-                    ActiveConnector = null;
-                    UpdateConnectorTypeDescActiveState(mSelectedConnectorType);
                     InvalidateCommandAvailability();
-
-                    if (CanStartAutoTracking())
-                        StartAutoTracking();
                 }
             }
         }
 
-        IAddressableConnector mActiveConnector;
-        public IAddressableConnector ActiveConnector
+        IAutoTrackingProvider mActiveProvider;
+        public IAutoTrackingProvider ActiveProvider
         {
-            get { return mActiveConnector; }
+            get { return mActiveProvider; }
             private set
             {
                 Connected = false;
                 WaitForPendingMemoryUpdate();
 
-                IAddressableConnector prev = mActiveConnector;
-                if (SetProperty(ref mActiveConnector, value))
+                IAutoTrackingProvider prev = mActiveProvider;
+                if (SetProperty(ref mActiveProvider, value))
                 {
-                    IGameConnector prevGC = prev as IGameConnector;
-                    if (prevGC != null)
-                        prevGC.Dispose();
-
-                    IGameConnector gc = mActiveConnector as IGameConnector;
-                    if (gc != null)
+                    if (prev != null)
                     {
-                        Connected = gc.Connected;
-                        gc.ConnectionStatusChanged += ActiveConnector_ConnectionStatusChanged; ;
+                        prev.ConnectionStatusChanged -= ActiveProvider_ConnectionStatusChanged;
+                        prev.DisconnectAsync().GetAwaiter().GetResult();
+                    }
+
+                    if (mActiveProvider != null)
+                    {
+                        Connected = mActiveProvider.IsConnected;
+                        mActiveProvider.ConnectionStatusChanged += ActiveProvider_ConnectionStatusChanged;
                     }
 
                     InvalidateCommandAvailability();
@@ -200,23 +143,11 @@ namespace EmoTracker.Extensions.AutoTracker
             }
         }
 
-        private void ActiveConnector_ConnectionStatusChanged(object sender, (ConnectionStatus status, string) e)
+        private void ActiveProvider_ConnectionStatusChanged(object sender, bool connected)
         {
-            IGameConnector gc = mActiveConnector as IGameConnector;
-            if (gc != null)
+            if (mActiveProvider != null)
             {
-                Connected = gc.Connected || e.status == ConnectionStatus.Open;
-            }
-        }
-
-        void UpdateConnectorTypeDescActiveState(ConnectorTypeDesc desc)
-        {
-            foreach (ConnectorTypeDesc entry in ApplicableConnectorTypes)
-            {
-                if (object.ReferenceEquals(entry, desc))
-                    entry.Active = true;
-                else
-                    entry.Active = false;
+                Connected = connected;
             }
         }
 
@@ -228,28 +159,11 @@ namespace EmoTracker.Extensions.AutoTracker
         {
             try
             {
-#if false
-                PackageManager.Game game = null;
-                if (Tracker.Instance.ActiveGamePackage != null)
+                if (ActiveProvider != null && Connected)
                 {
-                    PackageManager.Game gameInstance = PackageManager.Instance.FindGame(Tracker.Instance.ActiveGamePackage.Game);
-                    if (gameInstance != PackageManager.Instance.DefaultGame)
-                        game = gameInstance;
-                }
-
-                if (game == null || !game.IsMemoryRangeAccessAllowed(address, address))
-                    throw new InvalidOperationException("The requested memory address(es) are not allowed to be read");
-#endif
-
-                if (ActiveConnector != null && Connected)
-                {
-                    I8BitConnector as8Bit = ActiveConnector as I8BitConnector;
-                    if (as8Bit != null)
-                    {
-                        byte val = defaultVal;
-                        if (as8Bit.Read8(address, out val))
-                            return val;
-                    }
+                    byte val = defaultVal;
+                    if (ActiveProvider.Read8(address, out val))
+                        return val;
                 }
             }
             catch (Exception e)
@@ -270,28 +184,11 @@ namespace EmoTracker.Extensions.AutoTracker
         {
             try
             {
-#if false
-                PackageManager.Game game = null;
-                if (Tracker.Instance.ActiveGamePackage != null)
+                if (ActiveProvider != null && Connected)
                 {
-                    PackageManager.Game gameInstance = PackageManager.Instance.FindGame(Tracker.Instance.ActiveGamePackage.Game);
-                    if (gameInstance != PackageManager.Instance.DefaultGame)
-                        game = gameInstance;
-                }
-
-                if (game == null || !game.IsMemoryRangeAccessAllowed(address, address + 1))
-                    throw new InvalidOperationException("The requested memory address(es) are not allowed to be read");
-#endif
-
-                if (ActiveConnector != null && Connected)
-                {
-                    I16BitConnector as16Bit = ActiveConnector as I16BitConnector;
-                    if (as16Bit != null)
-                    {
-                        ushort val = defaultVal;
-                        if (as16Bit.Read16(address, out val))
-                            return val;
-                    }
+                    ushort val = defaultVal;
+                    if (ActiveProvider.Read16(address, out val))
+                        return val;
                 }
             }
             catch (Exception e)
@@ -308,13 +205,14 @@ namespace EmoTracker.Extensions.AutoTracker
             return unchecked((short)ReadU16(address, unchecked((ushort)defaultVal)));
         }
 
-#endregion
+        #endregion
 
-#region -- Commands --
+        #region -- Commands --
 
         DelegateCommand mStartCommand;
         DelegateCommand mStopCommand;
-        DelegateCommand mSetConnectorTypeCommand;
+        DelegateCommand mSetProviderCommand;
+        DelegateCommand mSetDeviceCommand;
 
         public DelegateCommand StartCommand
         {
@@ -328,10 +226,16 @@ namespace EmoTracker.Extensions.AutoTracker
             set { SetProperty(ref mStopCommand, value); }
         }
 
-        public DelegateCommand SetConnectorTypeCommand
+        public DelegateCommand SetProviderCommand
         {
-            get { return mSetConnectorTypeCommand; }
-            set { SetProperty(ref mSetConnectorTypeCommand, value); }
+            get { return mSetProviderCommand; }
+            set { SetProperty(ref mSetProviderCommand, value); }
+        }
+
+        public DelegateCommand SetDeviceCommand
+        {
+            get { return mSetDeviceCommand; }
+            set { SetProperty(ref mSetDeviceCommand, value); }
         }
 
         void InvalidateCommandAvailability()
@@ -340,22 +244,48 @@ namespace EmoTracker.Extensions.AutoTracker
             StopCommand.RaiseCanExecuteChanged();
         }
 
-        private void SetConnectorType(object obj)
+        private async void SetProvider(object obj)
         {
-            SelectedConnectorType = obj as ConnectorTypeDesc;
+            IAutoTrackingProvider provider = obj as IAutoTrackingProvider;
+            if (provider != null)
+            {
+                SelectedProvider = provider;
+                await provider.RefreshDevicesAsync();
+
+                // Auto-select first device if none selected
+                if (provider.DefaultDevice == null && provider.AvailableDevices.Count > 0)
+                {
+                    provider.DefaultDevice = provider.AvailableDevices[0];
+                }
+
+                InvalidateCommandAvailability();
+                NotifyPropertyChanged(nameof(SelectedProvider));
+            }
+        }
+
+        private void SetDevice(object obj)
+        {
+            IAutoTrackingDevice device = obj as IAutoTrackingDevice;
+            if (device != null && SelectedProvider != null)
+            {
+                SelectedProvider.DefaultDevice = device;
+
+                if (CanStartAutoTracking())
+                    StartAutoTracking();
+            }
         }
 
         private bool CanStopAutoTracking(object obj = null)
         {
-            return ActiveConnector != null;
+            return ActiveProvider != null;
         }
 
         private void StopAutoTracking(object obj = null)
         {
             WaitForPendingMemoryUpdate();
 
-            bool bWasActive = ActiveConnector != null;
-            ActiveConnector = null;
+            bool bWasActive = ActiveProvider != null;
+            ActiveProvider = null;
 
             if (bWasActive)
                 ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStopped);
@@ -363,14 +293,14 @@ namespace EmoTracker.Extensions.AutoTracker
 
         private bool CanStartAutoTracking(object obj = null)
         {
-            return ActiveConnector == null && SelectedConnectorType != null;
+            return ActiveProvider == null && SelectedProvider != null && SelectedProvider.DefaultDevice != null;
         }
 
-        private void StartAutoTracking(object obj = null)
+        private async void StartAutoTracking(object obj = null)
         {
             if (CanStartAutoTracking(obj))
             {
-                if (SelectedConnectorType != null)
+                if (SelectedProvider != null)
                 {
                     //  Force mark all memory updates as dirty to ensure they update
                     foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
@@ -380,8 +310,8 @@ namespace EmoTracker.Extensions.AutoTracker
 
                     try
                     {
-                        IAddressableConnector instance = Activator.CreateInstance(SelectedConnectorType.InstanceType) as IAddressableConnector;
-                        ActiveConnector = instance;
+                        await SelectedProvider.ConnectAsync();
+                        ActiveProvider = SelectedProvider;
 
                         ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStarted);
                     }
@@ -392,53 +322,16 @@ namespace EmoTracker.Extensions.AutoTracker
             }
         }
 
-#endregion
-
-        class ConnectorLibLogger // : ConnectorLib.Common.ILogger
-        {
-            public void Debug(string msg)
-            {
-                System.Diagnostics.Debug.Print(msg);
-            }
-
-            public void Error(string msg)
-            {
-                System.Diagnostics.Debug.Print(msg);
-            }
-
-            public void Exception(Exception e, string msg)
-            {
-                System.Diagnostics.Debug.Print(msg);
-            }
-
-            public void Info(string msg)
-            {
-                System.Diagnostics.Debug.Print(msg);
-            }
-
-            public void Message(string msg)
-            {
-                System.Diagnostics.Debug.Print(msg);
-            }
-
-            public void Warning(string msg)
-            {
-                System.Diagnostics.Debug.Print(msg);
-            }
-        }
+        #endregion
 
         public AutoTrackerExtension()
         {
-            //  Call this here to force an exception during load if we can't load the connectorlib DLL
-            StopAutoTracking();
-
-            // ConnectorLib.Common.Log.Logger = new ConnectorLibLogger();
-
-            sd2snesConnector.Usb2SnesApplicationName = string.Format("EmoTracker {0}", ApplicationVersion.Current);
+            AutoTrackingProviderRegistry.Instance.DiscoverProviders();
 
             StartCommand = new DelegateCommand(StartAutoTracking, CanStartAutoTracking);
             StopCommand = new DelegateCommand(StopAutoTracking, CanStopAutoTracking);
-            SetConnectorTypeCommand = new DelegateCommand(SetConnectorType);
+            SetProviderCommand = new DelegateCommand(SetProvider);
+            SetDeviceCommand = new DelegateCommand(SetDevice);
         }
 
         System.Timers.Timer mUpdateTimer;
@@ -478,7 +371,7 @@ namespace EmoTracker.Extensions.AutoTracker
             if (HasPendingMemoryUpdate())
                 return;
 
-            if (ActiveConnector != null && Connected)
+            if (ActiveProvider != null && Connected)
             {
                 foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
                 {
@@ -496,14 +389,10 @@ namespace EmoTracker.Extensions.AutoTracker
                         game = gameInstance;
                 }
 
-                var connectorInstance = ActiveConnector;
+                var providerInstance = ActiveProvider;
 
-                IGameConnector gameConnector = connectorInstance as IGameConnector;
-
-                //  ConnectorLib occasionally disconnects a Lua connector without properly updating
-                //  the connection status via our callback. particularly when the script is shut down
-                //  via the emulator without disconnecting. Detect that here.
-                if (gameConnector != null && !gameConnector.Connected)
+                //  Detect disconnection
+                if (providerInstance != null && !providerInstance.IsConnected)
                 {
                     //  Mark all segments dirty to force a re-read when/if we come back from the error
                     foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
@@ -532,7 +421,7 @@ namespace EmoTracker.Extensions.AutoTracker
                             IUpdateWithConnector update = PopPendingMemoryUpdate();
                             if (update != null)
                             {
-                                if (update.UpdateWithConnector(connectorInstance, game) != MemoryUpdateResult.Success)
+                                if (update.UpdateWithConnector(providerInstance, game) != MemoryUpdateResult.Success)
                                     bError = true;
 
                                 ++count;
@@ -597,7 +486,7 @@ namespace EmoTracker.Extensions.AutoTracker
             }
         }
 
-        public MemoryTimer AddMemoryTimer(string name, Func<IAddressableConnector, PackageManager.Game, bool> callback, int period)
+        public MemoryTimer AddMemoryTimer(string name, Func<IAutoTrackingProvider, PackageManager.Game, bool> callback, int period)
         {
             lock (this)
             {

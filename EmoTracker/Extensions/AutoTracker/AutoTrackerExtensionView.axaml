@@ -1,0 +1,24 @@
+<UserControl x:Class="EmoTracker.Extensions.AutoTracker.AutoTrackerExtensionView"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:local="clr-namespace:EmoTracker.Extensions.AutoTracker"
+             mc:Ignorable="d">
+    <Grid Background="Transparent" ToolTip.Tip="Auto-Tracking">
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem Header="Start" Command="{Binding StartCommand}"/>
+                <MenuItem Header="Stop" Command="{Binding StopCommand}"/>
+                <Separator />
+                <MenuItem Name="ProviderMenu" Header="Provider" />
+                <MenuItem Name="DeviceMenu" Header="Device" />
+            </ContextMenu>
+        </Grid.ContextMenu>
+        <TextBlock Name="StatusIcon"
+                   FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                   Text="&#xf544;"
+                   Foreground="WhiteSmoke"
+                   VerticalAlignment="Center"/>
+    </Grid>
+</UserControl>

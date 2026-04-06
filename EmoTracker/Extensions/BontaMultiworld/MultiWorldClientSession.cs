@@ -1,4 +1,4 @@
-using ConnectorLib;
+using EmoTracker.Data.AutoTracking;
 using EmoTracker.Core;
 using EmoTracker.Core.Services;
 using EmoTracker.Data;
@@ -679,7 +679,7 @@ namespace EmoTracker.Extensions.BontaMultiworld
                 return false;
 
             AutoTrackerExtension autotracker = ExtensionManager.Instance.FindExtension<AutoTrackerExtension>();
-            if (autotracker == null || autotracker.ActiveConnector == null || !autotracker.ActiveConnector.Connected)
+            if (autotracker == null || autotracker.ActiveProvider == null || !autotracker.ActiveProvider.IsConnected)
                 return false;
 
             return true;
@@ -879,35 +879,35 @@ namespace EmoTracker.Extensions.BontaMultiworld
 
         List<ReceivedItem> mReceivedItems = new List<ReceivedItem>();
 
-        private IAddressableConnector ActiveConnector
+        private IAutoTrackingProvider ActiveProvider
         {
             get
             {
                 AutoTrackerExtension autotracker = ExtensionManager.Instance.FindExtension<AutoTrackerExtension>();
-                if (autotracker == null || autotracker.ActiveConnector == null || !autotracker.ActiveConnector.Connected)
+                if (autotracker == null || autotracker.ActiveProvider == null || !autotracker.ActiveProvider.IsConnected)
                     return null;
 
-                return autotracker.ActiveConnector;
+                return autotracker.ActiveProvider;
             }
         }
 
-        private byte[] GetRomHash(IAddressableConnector connector = null)
+        private byte[] GetRomHash(IAutoTrackingProvider provider = null)
         {
-            connector = connector ?? ActiveConnector;
+            provider = provider ?? ActiveProvider;
 
-            if (connector == null)
+            if (provider == null)
                 return null;
 
             byte[] romHash = new byte[0x15];
-            if (!connector.Read(0x702000, romHash))
+            if (!provider.Read(0x702000, romHash))
                 return null;
 
             return romHash;
         }
 
-        private bool IsRomValid(IAddressableConnector connector = null)
+        private bool IsRomValid(IAutoTrackingProvider provider = null)
         {
-            connector = connector ?? ActiveConnector;
+            provider = provider ?? ActiveProvider;
 
             if (mExpectedRom == null || mExpectedRom.Length > 0x15)
                 return false;
@@ -928,19 +928,15 @@ namespace EmoTracker.Extensions.BontaMultiworld
             return true;
         }
 
-        private bool IsInGame(IAddressableConnector connector = null)
+        private bool IsInGame(IAutoTrackingProvider provider = null)
         {
-            connector = connector ?? ActiveConnector;
+            provider = provider ?? ActiveProvider;
 
-            if (!IsRomValid(connector))
-                return false;
-
-            I8BitConnector connector8 = connector as I8BitConnector;
-            if (connector8 == null)
+            if (!IsRomValid(provider))
                 return false;
 
             byte gameState;
-            if (!connector8.Read8(0x7e0010, out gameState))
+            if (!provider.Read8(0x7e0010, out gameState))
                 return false;
 
             switch (gameState)
@@ -1083,25 +1079,23 @@ namespace EmoTracker.Extensions.BontaMultiworld
             }
         }
 
-        private bool WriteReceivedItems(IAddressableConnector connector, PackageManager.Game game)
+        private bool WriteReceivedItems(IAutoTrackingProvider provider, PackageManager.Game game)
         {
             const ulong RECV_PROGRESS_ADDR = 0x7ef4d0;
             const ulong RECV_ITEM_ADDR = 0x7ef4d2;
 
-            if (!IsInGame(connector))
+            if (!IsInGame(provider))
                 return true;
 
             try
             {
                 lock (mReceivedItems)
                 {
-                    I16BitConnector connector16 = (I16BitConnector)connector;
-
                     ushort recv_idx = 0;
-                    if (connector16.Read16(RECV_PROGRESS_ADDR, out recv_idx) && recv_idx < mReceivedItems.Count)
+                    if (provider.Read16(RECV_PROGRESS_ADDR, out recv_idx) && recv_idx < mReceivedItems.Count)
                     {
                         byte pendingItemCode = 0;
-                        if (connector16.Read8(RECV_ITEM_ADDR, out pendingItemCode) && pendingItemCode == 0)
+                        if (provider.Read8(RECV_ITEM_ADDR, out pendingItemCode) && pendingItemCode == 0)
                         {
                             ReceivedItem item = mReceivedItems[(int)recv_idx];
 
@@ -1115,11 +1109,8 @@ namespace EmoTracker.Extensions.BontaMultiworld
                                 });
                             }
 
-                            using (connector16.GetBatchContext16())
-                            {
-                                connector16.Write16(RECV_PROGRESS_ADDR, ++recv_idx);
-                                connector16.Write8(RECV_ITEM_ADDR, (byte)item.Item);
-                            }
+                            provider.Write16(RECV_PROGRESS_ADDR, ++recv_idx);
+                            provider.Write8(RECV_ITEM_ADDR, (byte)item.Item);
                         }
                     }
                 }
@@ -1135,12 +1126,8 @@ namespace EmoTracker.Extensions.BontaMultiworld
 
         HashSet<LocationData> mCheckedLocations = new HashSet<LocationData>();
 
-        private void MemorySegment_OnMemorySegmentUpdated(MemorySegment segment, IAddressableConnector connector, PackageManager.Game game)
+        private void MemorySegment_OnMemorySegmentUpdated(MemorySegment segment, IAutoTrackingProvider provider, PackageManager.Game game)
         {
-            I8BitConnector connector8 = connector as I8BitConnector;
-            if (connector8 == null)
-                return;
-
             List<LocationData> newChecks = new List<LocationData>();
 
             bool bHasCheckedInGameState = false;
@@ -1156,7 +1143,7 @@ namespace EmoTracker.Extensions.BontaMultiworld
 #region -- Verify In-Game --
                     if (!bHasCheckedInGameState)
                     {
-                        if (!IsInGame(connector))
+                        if (!IsInGame(provider))
                             return;
 
                         bHasCheckedInGameState = true;
