@@ -48,9 +48,52 @@ jobs:
           APP="publish/${{ matrix.artifact }}/EmoTracker.app"
           mkdir -p "$APP/Contents/MacOS"
           mkdir -p "$APP/Contents/Resources"
+
+          # Copy published output into the bundle
           cp -R publish/raw/* "$APP/Contents/MacOS/"
           cp EmoTracker/macOS/Info.plist "$APP/Contents/"
           chmod +x "$APP/Contents/MacOS/EmoTracker"
+
+          # Convert .ico to .icns for the app icon
+          pip3 install --quiet Pillow
+          python3 -c "
+          from PIL import Image
+          import os, subprocess, sys
+
+          img = Image.open('EmoTracker/emohead_icon_transparent_7h3_icon.ico')
+          iconset = 'EmoTracker.iconset'
+          os.makedirs(iconset, exist_ok=True)
+
+          sizes = [16, 32, 64, 128, 256, 512]
+          for s in sizes:
+              resized = img.resize((s, s), Image.LANCZOS)
+              resized.save(os.path.join(iconset, f'icon_{s}x{s}.png'))
+              # @2x variants (half the name, double the pixels)
+              if s >= 32:
+                  half = s // 2
+                  resized.save(os.path.join(iconset, f'icon_{half}x{half}@2x.png'))
+
+          # 512@2x = 1024
+          resized = img.resize((1024, 1024), Image.LANCZOS)
+          resized.save(os.path.join(iconset, 'icon_512x512@2x.png'))
+          "
+          iconutil -c icns EmoTracker.iconset -o "$APP/Contents/Resources/EmoTracker.icns"
+
+          # Ad-hoc code sign so macOS doesn't report the bundle as damaged
+          codesign --force --deep -s - "$APP"
+
+      - name: Create macOS tar.gz
+        if: startsWith(matrix.rid, 'osx')
+        run: |
+          cd publish/${{ matrix.artifact }}
+          tar czf ../EmoTracker-${{ matrix.rid }}.tar.gz EmoTracker.app
+
+      - name: Upload macOS artifact
+        if: startsWith(matrix.rid, 'osx')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: publish/EmoTracker-${{ matrix.rid }}.tar.gz
 
       - name: Stage non-macOS output
         if: "!startsWith(matrix.rid, 'osx')"
@@ -58,7 +101,8 @@ jobs:
           mkdir -p publish/${{ matrix.artifact }}
           cp -R publish/raw/* publish/${{ matrix.artifact }}/
 
-      - name: Upload artifact
+      - name: Upload non-macOS artifact
+        if: "!startsWith(matrix.rid, 'osx')"
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
