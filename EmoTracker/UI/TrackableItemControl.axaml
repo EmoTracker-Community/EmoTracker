@@ -7,6 +7,7 @@
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI">
     <Grid ToolTip.Tip="{Binding Name}"
           ToolTip.ShowDelay="{Binding FastToolTips, Source={x:Static data:ApplicationSettings.Instance}, Converter={x:Static local:TrackableItemControl.FastToolTipsToDelayConverter}}"
+          Opacity="{Binding Converter={x:Static local:TrackableItemControl.NullToZeroOpacityConverter}}"
           PointerReleased="Grid_PointerReleased">
         <Button Command="{Binding OnLeftClickCommand, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
                 CommandParameter="{Binding}"
@@ -37,7 +38,7 @@
                         <Grid VerticalAlignment="Bottom"
                               HorizontalAlignment="Right"
                               MaxWidth="{Binding IconWidth, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
-                              IsVisible="{Binding BadgeText, Converter={x:Static converters:NullToFalseConverter.Instance}}">
+                              IsVisible="{Binding BadgeText, Converter={x:Static converters:NonEmptyStringToBoolConverter.Instance}}">
                             <TextBlock Text="{Binding BadgeText}"
                                        Background="Black"
                                        FontWeight="Bold"

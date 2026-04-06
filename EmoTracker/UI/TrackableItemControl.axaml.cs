@@ -15,6 +15,13 @@ namespace EmoTracker.UI
     public partial class TrackableItemControl : UserControl
     {
         /// <summary>
+        /// Returns opacity 0 when DataContext is null, 1 otherwise.
+        /// Hides the control visually while preserving layout space.
+        /// </summary>
+        public static readonly IValueConverter NullToZeroOpacityConverter =
+            new FuncValueConverter<object?, double>(value => value == null ? 0.0 : 1.0);
+
+        /// <summary>
         /// Converts FastToolTips bool to tooltip show delay in milliseconds.
         /// false (slow) → 5000ms, true (fast) → 400ms (Avalonia default).
         /// </summary>
