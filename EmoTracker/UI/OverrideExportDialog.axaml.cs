@@ -1,3 +1,4 @@
+#nullable enable annotations
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Interactivity;
