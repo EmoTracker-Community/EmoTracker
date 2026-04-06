@@ -391,5 +391,51 @@ namespace EmoTracker.UI.Converters
             return 32.0;
         }
     }
+
+    /// <summary>
+    /// Multi-value converter that replicates WPF's MultiDataTrigger-based map location
+    /// visibility logic. Evaluates (in priority order): ForceInvisible, ForceVisible,
+    /// HasVisibleSections, Cleared+DisplayAll+Shift, Empty+DisplayAll+Shift.
+    /// <para>Binding order:
+    /// [0] ForceVisible (bool), [1] ForceInvisible (bool),
+    /// [2] Location.HasVisibleSections (bool), [3] Location.AccessibilityLevel (enum),
+    /// [4] Location.HasAvailableItems (bool), [5] Location.Badges.Count (int),
+    /// [6] Location.NoteTakingSite.Empty (bool),
+    /// [7] DisplayAllLocations (bool), [8] IsShiftPressed (bool).</para>
+    /// </summary>
+    public class MapLocationVisibilityConverter : Singleton<MapLocationVisibilityConverter>, IMultiValueConverter
+    {
+        public object Convert(IList<object> values, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (values.Count < 9) return true;
+
+            bool forceVisible       = values[0] is true;
+            bool forceInvisible     = values[1] is true;
+            bool hasVisibleSections = values[2] is true;
+            bool isCleared          = values[3] is AccessibilityLevel level
+                                      && level == AccessibilityLevel.Cleared;
+            bool hasAvailableItems  = values[4] is true;
+            int  badgeCount         = values[5] is int bc ? bc : 0;
+            bool notesEmpty         = values[6] is not false; // default true when null/unset
+            bool displayAll         = values[7] is true;
+            bool shiftPressed       = values[8] is true;
+
+            // Highest priority: script-driven force rules (last WPF triggers win)
+            if (forceInvisible) return false;
+            if (forceVisible)   return true;
+
+            // No visible sections at all → hide
+            if (!hasVisibleSections) return false;
+
+            // Cleared location hidden unless DisplayAll or Shift
+            if (isCleared && !displayAll && !shiftPressed) return false;
+
+            // Empty location (no items, badges, or notes) hidden unless DisplayAll or Shift
+            if (!hasAvailableItems && badgeCount == 0 && notesEmpty && !displayAll && !shiftPressed)
+                return false;
+
+            return true;
+        }
+    }
 #endif
 }
