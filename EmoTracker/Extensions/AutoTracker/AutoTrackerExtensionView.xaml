@@ -1,12 +1,12 @@
-﻿<UserControl x:Class="EmoTracker.Extensions.AutoTracker.AutoTrackerExtensionView"
+<UserControl x:Class="EmoTracker.Extensions.AutoTracker.AutoTrackerExtensionView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:EmoTracker.Extensions.AutoTracker"
              xmlns:settings="clr-namespace:EmoTracker.Data.Settings;assembly=EmoTracker.Data"
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
-             mc:Ignorable="d" 
+             mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
     <Grid>
         <Grid.Style>
@@ -18,14 +18,21 @@
                             <MenuItem Header="Start" Command="{Binding StartCommand}"/>
                             <MenuItem Header="Stop" Command="{Binding StopCommand}"/>
                             <Separator />
-                            <MenuItem Header="{Binding ActivePlatform, Converter={x:Static converters:EnspacenCamelCaseConverter.Instance}, StringFormat={}{0} Connector}" ItemsSource="{Binding ApplicableConnectorTypes}">
+                            <MenuItem Header="Provider" ItemsSource="{Binding ApplicableProviders}">
                                 <MenuItem.ItemContainerStyle>
                                     <Style TargetType="MenuItem">
-                                        <Setter Property="Command" Value="{Binding DataContext.SetConnectorTypeCommand, RelativeSource={RelativeSource AncestorType=local:AutoTrackerExtensionView, Mode=FindAncestor}}" />
+                                        <Setter Property="Command" Value="{Binding DataContext.SetProviderCommand, RelativeSource={RelativeSource AncestorType=local:AutoTrackerExtensionView, Mode=FindAncestor}}" />
                                         <Setter Property="CommandParameter" Value="{Binding}" />
-                                        <Setter Property="Header" Value="{Binding Name}" />
-                                        <Setter Property="IsCheckable" Value="True" />
-                                        <Setter Property="IsChecked" Value="{Binding Active}" />
+                                        <Setter Property="Header" Value="{Binding DisplayName}" />
+                                    </Style>
+                                </MenuItem.ItemContainerStyle>
+                            </MenuItem>
+                            <MenuItem Header="Device" ItemsSource="{Binding SelectedProvider.AvailableDevices}">
+                                <MenuItem.ItemContainerStyle>
+                                    <Style TargetType="MenuItem">
+                                        <Setter Property="Command" Value="{Binding DataContext.SetDeviceCommand, RelativeSource={RelativeSource AncestorType=local:AutoTrackerExtensionView, Mode=FindAncestor}}" />
+                                        <Setter Property="CommandParameter" Value="{Binding}" />
+                                        <Setter Property="Header" Value="{Binding DisplayName}" />
                                     </Style>
                                 </MenuItem.ItemContainerStyle>
                             </MenuItem>
@@ -40,7 +47,7 @@
                         <Setter Property="ContextMenu" Value="{x:Null}" />
                         <Setter Property="ToolTip" Value="Auto-Tracking is having issues. Connection issues, missing game data, or a pack attempting to access restricted memory can cause this." />
                     </DataTrigger>
-                </Style.Triggers>                
+                </Style.Triggers>
             </Style>
         </Grid.Style>
         <TextBlock FontFamily="{StaticResource FontAwesome5Free}" Text="&#xf544;" VerticalAlignment="Center">
@@ -60,7 +67,7 @@
                         </MultiDataTrigger>
                         <MultiDataTrigger>
                             <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding ActiveConnector}" Value="{x:Null}" />
+                                <Condition Binding="{Binding ActiveProvider}" Value="{x:Null}" />
                                 <Condition Binding="{Binding Error}" Value="false" />
                             </MultiDataTrigger.Conditions>
                             <Setter Property="Foreground" Value="WhiteSmoke" />

@@ -1,12 +1,6 @@
-﻿using ConnectorLib;
+using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Packages;
 using NLua;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static EmoTracker.Extensions.AutoTracker.MemorySegment;
 
 namespace EmoTracker.Extensions.AutoTracker
 {
@@ -16,9 +10,9 @@ namespace EmoTracker.Extensions.AutoTracker
         void MarkDirty();
 
         [LuaHide]
-        bool ShouldUpdate(DateTime now);
+        bool ShouldUpdate(System.DateTime now);
 
         [LuaHide]
-        MemoryUpdateResult UpdateWithConnector(IAddressableConnector connector, PackageManager.Game game);
+        MemoryUpdateResult UpdateWithConnector(IAutoTrackingProvider provider, PackageManager.Game game);
     }
 }

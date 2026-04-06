@@ -1,6 +1,6 @@
-using ConnectorLib;
 using EmoTracker.Core.Services;
 using EmoTracker.Data;
+using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
 using NLua;
@@ -12,7 +12,7 @@ namespace EmoTracker.Extensions.AutoTracker
     {
         #region -- Global Event Hooks --
 
-        public delegate void MemorySegmentUpdatedHandler(MemorySegment segment, IAddressableConnector connector, PackageManager.Game game);
+        public delegate void MemorySegmentUpdatedHandler(MemorySegment segment, IAutoTrackingProvider provider, PackageManager.Game game);
 
         /// <summary>
         /// Invoked when a memory segment's contents (in watched memory) have changed
@@ -209,20 +209,10 @@ namespace EmoTracker.Extensions.AutoTracker
         }
 
         [LuaHide]
-        public MemoryUpdateResult UpdateWithConnector(IAddressableConnector connector, PackageManager.Game game)
+        public MemoryUpdateResult UpdateWithConnector(IAutoTrackingProvider provider, PackageManager.Game game)
         {
             if (Frozen)
                 return MemoryUpdateResult.Success;
-
-            // System.Diagnostics.Debug.Print("Updating segment {0} :: {1:H:mm:ss:fff}", Name, DateTime.Now);
-
-#if false
-            if (game == null)
-                return UpdateResult.MissingGameData;
-
-            if (!game.IsMemoryRangeAccessAllowed(StartAddress, EndAddress))
-                return UpdateResult.InvalidAccess;
-#endif
 
             try
             {
@@ -233,7 +223,7 @@ namespace EmoTracker.Extensions.AutoTracker
                     {
                         try
                         {
-                            bReadResult = connector.Read(StartAddress, WriteBuffer);
+                            bReadResult = provider.Read(StartAddress, WriteBuffer);
                         }
                         catch { }
 
@@ -260,7 +250,7 @@ namespace EmoTracker.Extensions.AutoTracker
                             Buffer.BlockCopy(WriteBuffer, 0, ReadBuffer, 0, (int)Length);
 
                             //  Invoke the segment modified handler
-                            OnMemorySegmentModified?.Invoke(this, connector, game);
+                            OnMemorySegmentModified?.Invoke(this, provider, game);
 
                             Dispatch.BeginInvoke(() =>
                             {
@@ -283,7 +273,7 @@ namespace EmoTracker.Extensions.AutoTracker
                     }
 
                     //  Invoke the segment updated handler
-                    OnMemorySegmentUpdated?.Invoke(this, connector, game);
+                    OnMemorySegmentUpdated?.Invoke(this, provider, game);
 
                     return MemoryUpdateResult.Success;
                 }

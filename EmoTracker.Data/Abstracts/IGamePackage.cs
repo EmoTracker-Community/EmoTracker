@@ -24,6 +24,8 @@ namespace EmoTracker.Data
 
         bool FlaggedAsUnsafe { get; }
 
+        IReadOnlyList<string> AutoTrackerProviders { get; }
+
         IGamePackageSource Source { get; }
 
         IEnumerable<IGamePackageVariant> AvailableVariants { get; }

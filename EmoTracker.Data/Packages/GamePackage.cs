@@ -68,6 +68,7 @@ namespace EmoTracker.Data.Packages
         Version mLayoutEngineVersion;
         GamePlatform mPlatform;
         bool mUnsafe = true;
+        List<string> mAutoTrackerProviders = new List<string>();
 
         ObservableCollection<IGamePackageVariant> mAvailableVariants = new ObservableCollection<IGamePackageVariant>();
         Variant mActiveVariant;
@@ -137,6 +138,8 @@ namespace EmoTracker.Data.Packages
         public Version LayoutEngineVersion { get { return mLayoutEngineVersion; } }
 
         public bool FlaggedAsUnsafe { get { return mUnsafe; } }
+
+        public IReadOnlyList<string> AutoTrackerProviders { get { return mAutoTrackerProviders; } }
 
         string IGamePackage.OverridePath { get { return OverridePath; } }
 
@@ -297,6 +300,17 @@ namespace EmoTracker.Data.Packages
                                     Version.TryParse(manifest.GetValue<string>("package_version"), out mVersion);
 
                                 Version.TryParse(manifest.GetValue<string>("layout_engine_version"), out mLayoutEngineVersion);
+
+                                JArray autoTrackerProviders = manifest.GetValue<JArray>("auto_tracker_providers");
+                                if (autoTrackerProviders != null)
+                                {
+                                    foreach (var item in autoTrackerProviders)
+                                    {
+                                        string providerUid = item.Value<string>();
+                                        if (!string.IsNullOrWhiteSpace(providerUid))
+                                            mAutoTrackerProviders.Add(providerUid);
+                                    }
+                                }
 
                                 JObject variantDefs = manifest.GetValue<JObject>("variants");
                                 if (variantDefs != null)
