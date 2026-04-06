@@ -10,6 +10,12 @@ namespace EmoTracker.Extensions.AutoTracker
         public AutoTrackerExtensionView()
         {
             InitializeComponent();
+
+            var grid = FindName("RootGrid") as Grid;
+            if (grid?.ContextMenu != null)
+            {
+                grid.ContextMenu.Opened += ContextMenu_Opened;
+            }
         }
 
         private void ContextMenu_Opened(object sender, RoutedEventArgs e)
