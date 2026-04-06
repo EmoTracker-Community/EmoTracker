@@ -55,7 +55,9 @@ jobs:
           chmod +x "$APP/Contents/MacOS/EmoTracker"
 
           # Convert .ico to .icns for the app icon
-          pip3 install --quiet Pillow
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install --quiet Pillow
           python3 -c "
           from PIL import Image
           import os, subprocess, sys
