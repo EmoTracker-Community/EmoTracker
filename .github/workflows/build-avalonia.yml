@@ -59,33 +59,46 @@ jobs:
           source .venv/bin/activate
           pip install --quiet Pillow
           python3 -c "
-          from PIL import Image
+          from PIL import Image, ImageDraw
           import os
 
           ico = Image.open('EmoTracker/emohead_icon_transparent_7h3_icon.ico')
 
-          # Extract the largest frame from the ICO and ensure RGBA for alpha
+          # Extract the largest frame from the ICO
           best = None
           for size in sorted(ico.info.get('sizes', [(ico.width, ico.height)]), reverse=True):
               ico.size = size
               candidate = ico.copy().convert('RGBA')
               if best is None or candidate.width > best.width:
                   best = candidate
-          img = best
+          src = best
 
           iconset = 'EmoTracker.iconset'
           os.makedirs(iconset, exist_ok=True)
 
+          def make_icon(src, s):
+              # Create black rounded-rect background, composite icon on top
+              bg = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+              draw = ImageDraw.Draw(bg)
+              r = max(s // 5, 4)
+              draw.rounded_rectangle([0, 0, s - 1, s - 1], radius=r, fill=(0, 0, 0, 255))
+              # Inset the icon slightly so it doesn't touch the edges
+              margin = max(s // 8, 2)
+              icon_size = s - margin * 2
+              resized = src.resize((icon_size, icon_size), Image.LANCZOS)
+              bg.paste(resized, (margin, margin), resized)
+              return bg
+
           sizes = [16, 32, 64, 128, 256, 512]
           for s in sizes:
-              resized = img.resize((s, s), Image.LANCZOS)
-              resized.save(os.path.join(iconset, f'icon_{s}x{s}.png'))
+              icon = make_icon(src, s)
+              icon.save(os.path.join(iconset, f'icon_{s}x{s}.png'))
               if s >= 32:
                   half = s // 2
-                  resized.save(os.path.join(iconset, f'icon_{half}x{half}@2x.png'))
+                  icon.save(os.path.join(iconset, f'icon_{half}x{half}@2x.png'))
 
-          resized = img.resize((1024, 1024), Image.LANCZOS)
-          resized.save(os.path.join(iconset, 'icon_512x512@2x.png'))
+          icon = make_icon(src, 1024)
+          icon.save(os.path.join(iconset, 'icon_512x512@2x.png'))
           "
           iconutil -c icns EmoTracker.iconset -o "$APP/Contents/Resources/EmoTracker.icns"
 
