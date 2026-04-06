@@ -40,7 +40,23 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Publish
-        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime ${{ matrix.rid }} --self-contained --output publish/${{ matrix.artifact }}
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime ${{ matrix.rid }} --self-contained --output publish/raw
+
+      - name: Create macOS app bundle
+        if: startsWith(matrix.rid, 'osx')
+        run: |
+          APP="publish/${{ matrix.artifact }}/EmoTracker.app"
+          mkdir -p "$APP/Contents/MacOS"
+          mkdir -p "$APP/Contents/Resources"
+          cp -R publish/raw/* "$APP/Contents/MacOS/"
+          cp EmoTracker/macOS/Info.plist "$APP/Contents/"
+          chmod +x "$APP/Contents/MacOS/EmoTracker"
+
+      - name: Stage non-macOS output
+        if: "!startsWith(matrix.rid, 'osx')"
+        run: |
+          mkdir -p publish/${{ matrix.artifact }}
+          cp -R publish/raw/* publish/${{ matrix.artifact }}/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
