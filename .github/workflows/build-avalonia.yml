@@ -42,6 +42,22 @@ jobs:
       - name: Publish
         run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime ${{ matrix.rid }} --self-contained --output publish/raw
 
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ matrix.rid }}" == win-* ]]; then
+            VER=$(powershell -Command "(Get-Item publish/raw/EmoTracker.dll).VersionInfo.FileVersion")
+          else
+            VER=$(dotnet --roll-forward LatestMajor publish/raw/EmoTracker.dll --version 2>/dev/null || true)
+            if [ -z "$VER" ]; then
+              # Fallback: parse version from AssemblyInfo.cs
+              VER=$(grep -oP 'AssemblyFileVersion\("\K[^"]+' EmoTracker/Properties/AssemblyInfo.cs)
+            fi
+          fi
+          echo "app_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VER"
+
       - name: Create macOS app bundle
         if: startsWith(matrix.rid, 'osx')
         run: |
@@ -106,38 +122,38 @@ jobs:
         if: startsWith(matrix.rid, 'osx')
         run: |
           cd publish/${{ matrix.artifact }}
-          tar czf ../EmoTracker-${{ matrix.rid }}.tar.gz EmoTracker.app
+          tar czf ../EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.gz EmoTracker.app
 
       - name: Upload macOS artifact
         if: startsWith(matrix.rid, 'osx')
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: publish/EmoTracker-${{ matrix.rid }}.tar.gz
+          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.gz
 
       - name: Create Linux tar.xz
         if: startsWith(matrix.rid, 'linux')
         run: |
           chmod +x publish/raw/EmoTracker
           cd publish/raw
-          tar cJf ../EmoTracker-${{ matrix.rid }}.tar.xz .
+          tar cJf ../EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.xz .
 
       - name: Upload Linux artifact
         if: startsWith(matrix.rid, 'linux')
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: publish/EmoTracker-${{ matrix.rid }}.tar.xz
+          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.xz
 
       - name: Stage Windows output
         if: startsWith(matrix.rid, 'win')
         run: |
-          mkdir -p publish/${{ matrix.artifact }}
-          cp -R publish/raw/* publish/${{ matrix.artifact }}/
+          mkdir -p "publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}"
+          cp -R publish/raw/* "publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}/"
 
       - name: Upload Windows artifact
         if: startsWith(matrix.rid, 'win')
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: publish/${{ matrix.artifact }}
+          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
