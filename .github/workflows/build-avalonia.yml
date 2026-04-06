@@ -60,9 +60,19 @@ jobs:
           pip install --quiet Pillow
           python3 -c "
           from PIL import Image
-          import os, subprocess, sys
+          import os
 
-          img = Image.open('EmoTracker/emohead_icon_transparent_7h3_icon.ico')
+          ico = Image.open('EmoTracker/emohead_icon_transparent_7h3_icon.ico')
+
+          # Extract the largest frame from the ICO and ensure RGBA for alpha
+          best = None
+          for size in sorted(ico.info.get('sizes', [(ico.width, ico.height)]), reverse=True):
+              ico.size = size
+              candidate = ico.copy().convert('RGBA')
+              if best is None or candidate.width > best.width:
+                  best = candidate
+          img = best
+
           iconset = 'EmoTracker.iconset'
           os.makedirs(iconset, exist_ok=True)
 
@@ -70,12 +80,10 @@ jobs:
           for s in sizes:
               resized = img.resize((s, s), Image.LANCZOS)
               resized.save(os.path.join(iconset, f'icon_{s}x{s}.png'))
-              # @2x variants (half the name, double the pixels)
               if s >= 32:
                   half = s // 2
                   resized.save(os.path.join(iconset, f'icon_{half}x{half}@2x.png'))
 
-          # 512@2x = 1024
           resized = img.resize((1024, 1024), Image.LANCZOS)
           resized.save(os.path.join(iconset, 'icon_512x512@2x.png'))
           "
