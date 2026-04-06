@@ -118,8 +118,16 @@ jobs:
 
             # Check if the file is a Mach-O binary
             if file "$arm64_file" | grep -q "Mach-O"; then
-              echo "Creating universal binary: $rel"
-              lipo -create "$arm64_file" "$x64_file" -output "$universal_file"
+              # Get architectures of each file
+              arm64_archs=$(lipo -archs "$arm64_file" 2>/dev/null || true)
+              x64_archs=$(lipo -archs "$x64_file" 2>/dev/null || true)
+
+              if [ "$arm64_archs" = "$x64_archs" ]; then
+                echo "Skipping $rel (both are $arm64_archs, already identical)"
+              else
+                echo "Creating universal binary: $rel ($arm64_archs + $x64_archs)"
+                lipo -create "$arm64_file" "$x64_file" -output "$universal_file"
+              fi
             fi
           done
 
