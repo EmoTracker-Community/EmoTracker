@@ -15,12 +15,6 @@ jobs:
           - os: windows-latest
             rid: win-x64
             artifact: EmoTracker-win-x64
-          - os: macos-latest
-            rid: osx-x64
-            artifact: EmoTracker-osx-x64
-          - os: macos-latest
-            rid: osx-arm64
-            artifact: EmoTracker-osx-arm64
           - os: ubuntu-latest
             rid: linux-x64
             artifact: EmoTracker-linux-x64
@@ -50,15 +44,93 @@ jobs:
           echo "app_version=$VER" >> "$GITHUB_OUTPUT"
           echo "Detected version: $VER"
 
-      - name: Create macOS app bundle
-        if: startsWith(matrix.rid, 'osx')
+      - name: Create Linux tar.xz
+        if: startsWith(matrix.rid, 'linux')
         run: |
-          APP="publish/${{ matrix.artifact }}/EmoTracker.app"
+          chmod +x publish/raw/EmoTracker
+          cd publish/raw
+          tar cJf ../EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.xz .
+
+      - name: Upload Linux artifact
+        if: startsWith(matrix.rid, 'linux')
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.xz
+
+      - name: Stage Windows output
+        if: startsWith(matrix.rid, 'win')
+        run: |
+          mkdir -p "publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}"
+          cp -R publish/raw/* "publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}/"
+
+      - name: Upload Windows artifact
+        if: startsWith(matrix.rid, 'win')
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+
+  build-macos:
+    runs-on: macos-latest
+
+    env:
+      EnableWindowsTargeting: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish x64
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime osx-x64 --self-contained --output publish/x64
+
+      - name: Publish arm64
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime osx-arm64 --self-contained --output publish/arm64
+
+      - name: Extract version
+        id: version
+        run: |
+          VER=$(sed -n 's/.*AssemblyFileVersion("\([^"]*\)").*/\1/p' EmoTracker/Properties/AssemblyInfo.cs)
+          echo "app_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VER"
+
+      - name: Create universal binary
+        run: |
+          mkdir -p publish/universal
+
+          # Copy arm64 as the base (all managed DLLs are identical between architectures)
+          cp -R publish/arm64/* publish/universal/
+
+          # Find all Mach-O binaries and create universal versions with lipo
+          cd publish
+          find arm64 -type f | while read arm64_file; do
+            rel="${arm64_file#arm64/}"
+            x64_file="x64/$rel"
+            universal_file="universal/$rel"
+
+            if [ ! -f "$x64_file" ]; then
+              continue
+            fi
+
+            # Check if the file is a Mach-O binary
+            if file "$arm64_file" | grep -q "Mach-O"; then
+              echo "Creating universal binary: $rel"
+              lipo -create "$arm64_file" "$x64_file" -output "$universal_file"
+            fi
+          done
+
+      - name: Create macOS app bundle
+        run: |
+          APP="publish/EmoTracker-osx-universal/EmoTracker.app"
           mkdir -p "$APP/Contents/MacOS"
           mkdir -p "$APP/Contents/Resources"
 
-          # Copy published output into the bundle
-          cp -R publish/raw/* "$APP/Contents/MacOS/"
+          # Copy universal output into the bundle
+          cp -R publish/universal/* "$APP/Contents/MacOS/"
           cp EmoTracker/macOS/Info.plist "$APP/Contents/"
           chmod +x "$APP/Contents/MacOS/EmoTracker"
 
@@ -111,41 +183,12 @@ jobs:
           codesign --force --deep -s - "$APP"
 
       - name: Create macOS tar.gz
-        if: startsWith(matrix.rid, 'osx')
         run: |
-          cd publish/${{ matrix.artifact }}
-          tar czf ../EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.gz EmoTracker.app
+          cd publish/EmoTracker-osx-universal
+          tar czf ../EmoTracker-${{ steps.version.outputs.app_version }}-osx-universal.tar.gz EmoTracker.app
 
       - name: Upload macOS artifact
-        if: startsWith(matrix.rid, 'osx')
         uses: actions/upload-artifact@v4
         with:
-          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
-          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.gz
-
-      - name: Create Linux tar.xz
-        if: startsWith(matrix.rid, 'linux')
-        run: |
-          chmod +x publish/raw/EmoTracker
-          cd publish/raw
-          tar cJf ../EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.xz .
-
-      - name: Upload Linux artifact
-        if: startsWith(matrix.rid, 'linux')
-        uses: actions/upload-artifact@v4
-        with:
-          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
-          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.xz
-
-      - name: Stage Windows output
-        if: startsWith(matrix.rid, 'win')
-        run: |
-          mkdir -p "publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}"
-          cp -R publish/raw/* "publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}/"
-
-      - name: Upload Windows artifact
-        if: startsWith(matrix.rid, 'win')
-        uses: actions/upload-artifact@v4
-        with:
-          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
-          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+          name: EmoTracker-${{ steps.version.outputs.app_version }}-osx-universal
+          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-osx-universal.tar.gz
