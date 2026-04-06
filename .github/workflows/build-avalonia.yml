@@ -46,15 +46,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [[ "${{ matrix.rid }}" == win-* ]]; then
-            VER=$(powershell -Command "(Get-Item publish/raw/EmoTracker.dll).VersionInfo.FileVersion")
-          else
-            VER=$(dotnet --roll-forward LatestMajor publish/raw/EmoTracker.dll --version 2>/dev/null || true)
-            if [ -z "$VER" ]; then
-              # Fallback: parse version from AssemblyInfo.cs
-              VER=$(grep -oP 'AssemblyFileVersion\("\K[^"]+' EmoTracker/Properties/AssemblyInfo.cs)
-            fi
-          fi
+          VER=$(sed -n 's/.*AssemblyFileVersion("\([^"]*\)").*/\1/p' EmoTracker/Properties/AssemblyInfo.cs)
           echo "app_version=$VER" >> "$GITHUB_OUTPUT"
           echo "Detected version: $VER"
 
