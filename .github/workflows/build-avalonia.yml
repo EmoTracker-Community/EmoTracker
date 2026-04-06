@@ -1,0 +1,50 @@
+name: Build Avalonia (Cross-Platform)
+
+on:
+  push:
+    branches: [avalonia]
+  pull_request:
+    branches: [avalonia]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            artifact: EmoTracker-win-x64
+          - os: macos-latest
+            rid: osx-x64
+            artifact: EmoTracker-osx-x64
+          - os: macos-latest
+            rid: osx-arm64
+            artifact: EmoTracker-osx-arm64
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact: EmoTracker-linux-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore EmoTracker/EmoTracker.csproj -f net8.0 -r ${{ matrix.rid }}
+
+      - name: Build
+        run: dotnet build EmoTracker/EmoTracker.csproj -f net8.0 -c Release --no-restore -r ${{ matrix.rid }} --self-contained
+
+      - name: Publish
+        run: dotnet publish EmoTracker/EmoTracker.csproj -f net8.0 -c Release -r ${{ matrix.rid }} --self-contained -o publish/${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: publish/${{ matrix.artifact }}
