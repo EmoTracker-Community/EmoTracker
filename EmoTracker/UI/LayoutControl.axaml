@@ -229,7 +229,27 @@
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                     <TabControl ItemsSource="{Binding Tabs}"
                                 Background="{x:Null}"
-                                SelectedItem="{Binding CurrentTab, Mode=TwoWay}" />
+                                SelectedItem="{Binding CurrentTab, Mode=TwoWay}">
+                        <TabControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="0">
+                                    <Image Source="{Binding Icon, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                                           MaxHeight="16" VerticalAlignment="Center"
+                                           IsVisible="{Binding Icon, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                    <Grid Width="8"
+                                          IsVisible="{Binding Icon, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </TabControl.ItemTemplate>
+                        <TabControl.ContentTemplate>
+                            <DataTemplate>
+                                <ContentControl Content="{Binding Content}"
+                                                HorizontalContentAlignment="Stretch"
+                                                VerticalContentAlignment="Stretch" />
+                            </DataTemplate>
+                        </TabControl.ContentTemplate>
+                    </TabControl>
                 </Grid>
             </LayoutTransformControl>
         </DataTemplate>
