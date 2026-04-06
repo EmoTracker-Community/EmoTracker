@@ -3,7 +3,7 @@
   <PropertyGroup>
     <ProjectGuid>{37EF8519-4426-455F-9D23-292839365EE0}</ProjectGuid>
     <OutputType Condition="'$(TargetFramework)' == 'net8.0-windows'">WinExe</OutputType>
-    <OutputType Condition="'$(TargetFramework)' == 'net8.0'">Exe</OutputType>
+    <OutputType Condition="'$(TargetFramework)' == 'net8.0'">WinExe</OutputType>
     <RootNamespace>EmoTracker</RootNamespace>
     <AssemblyName>EmoTracker</AssemblyName>
     <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>

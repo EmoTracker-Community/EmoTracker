@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
 using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.UI.Media.Utility;
@@ -10,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace EmoTracker.UI
 {
@@ -26,6 +28,8 @@ namespace EmoTracker.UI
         {
             string mPath;
             bool mbExportOverride = false;
+            IImage? mPreviewSource;
+            string? mToolTip;
 
             public bool ExportOverride
             {
@@ -41,14 +45,22 @@ namespace EmoTracker.UI
             }
 
             /// <summary>
-            /// Visual preview control for the file (e.g. an <see cref="Avalonia.Controls.Image"/>).
+            /// Image source for the file preview icon.
             /// </summary>
-            public Control? Preview { get; set; }
+            public IImage? PreviewSource
+            {
+                get => mPreviewSource;
+                set => SetProperty(ref mPreviewSource, value);
+            }
 
             /// <summary>
             /// Tooltip string shown next to the path.
             /// </summary>
-            public string? ToolTip { get; set; }
+            public string? ToolTip
+            {
+                get => mToolTip;
+                set => SetProperty(ref mToolTip, value);
+            }
         }
 
         // ------------------------------------------------------------------
@@ -103,37 +115,7 @@ namespace EmoTracker.UI
             {
                 foreach (string file in Tracker.Instance.ActiveGamePackage.Source.Files)
                 {
-                    Control? preview = null;
-                    string? tooltipText = null;
-
-                    IImage? img = IconUtility.GetImage(
-                        Tracker.Instance.ActiveGamePackage.Open(file, true, true));
-
-                    bool bIsImagePreview = img != null;
-
-                    if (img == null)
-                    {
-                        // Not a pack image — try getting a filetype icon from resources.
-                        string ext = System.IO.Path.GetExtension(file)
-                            .TrimStart('.')
-                            .ToLowerInvariant();
-                        img = IconUtility.GetImage(
-                            new Uri($"avares://EmoTracker/Resources/filetype_{ext}.png"));
-                    }
-
-                    if (img != null)
-                    {
-                        preview = new Image { Source = img };
-
-                        if (bIsImagePreview)
-                            tooltipText = file;
-                    }
-
-                    mFileRecords.Add(new FileRecord(file)
-                    {
-                        Preview = preview,
-                        ToolTip = tooltipText
-                    });
+                    mFileRecords.Add(new FileRecord(file));
                 }
             }
 
@@ -141,6 +123,45 @@ namespace EmoTracker.UI
 
             InitializeComponent();
             DataContext = this;
+
+            // Load file icons asynchronously so the window opens quickly
+            _ = LoadFileIconsAsync();
+        }
+
+        private async Task LoadFileIconsAsync()
+        {
+            var package = Tracker.Instance.ActiveGamePackage;
+            if (package == null) return;
+
+            foreach (var record in mFileRecords)
+            {
+                var file = record.Path;
+                IImage? img = null;
+                bool isImagePreview = false;
+
+                await Task.Run(() =>
+                {
+                    img = IconUtility.GetImage(
+                        package.Open(file, true, true));
+                    isImagePreview = img != null;
+
+                    if (img == null)
+                    {
+                        string ext = System.IO.Path.GetExtension(file)
+                            .TrimStart('.')
+                            .ToLowerInvariant();
+                        img = IconUtility.GetImage(
+                            new Uri($"avares://EmoTracker/Resources/filetype_{ext}.png"));
+                    }
+                });
+
+                if (img != null)
+                {
+                    record.PreviewSource = img;
+                    if (isImagePreview)
+                        record.ToolTip = file;
+                }
+            }
         }
 
         // ------------------------------------------------------------------

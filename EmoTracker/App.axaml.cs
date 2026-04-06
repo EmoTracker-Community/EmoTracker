@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using EmoTracker.Core;
@@ -76,66 +75,6 @@ namespace EmoTracker
             }
 
             base.OnFrameworkInitializationCompleted();
-        }
-
-        // --- NativeMenu Click handlers ---
-        private void NativeMenu_Open(object sender, EventArgs e) => ApplicationModel.Instance.OpenCommand.Execute(null);
-        private void NativeMenu_Save(object sender, EventArgs e) => ApplicationModel.Instance.SaveCommand.Execute(null);
-        private void NativeMenu_SaveAs(object sender, EventArgs e) => ApplicationModel.Instance.SaveAsCommand.Execute(null);
-        private void NativeMenu_BroadcastView(object sender, EventArgs e) => ApplicationModel.Instance.ShowBroadcastViewCommand.Execute(null);
-        private void NativeMenu_ResetLayoutScale(object sender, EventArgs e) => ApplicationModel.Instance.ResetLayoutScale();
-        private void NativeMenu_Reload(object sender, EventArgs e) => ApplicationModel.Instance.RefreshCommand.Execute(null);
-        private void NativeMenu_ManagePackages(object sender, EventArgs e) => ApplicationModel.Instance.ShowPackageManagerCommand.Execute(null);
-        private void NativeMenu_CheckForUpdates(object sender, EventArgs e) => ApplicationModel.Instance.CheckForUpdateCommand.Execute(null);
-        private void NativeMenu_ExportOverrides(object sender, EventArgs e) => ApplicationModel.Instance.ExportPackageOverrideCommand.Execute(null);
-        private void NativeMenu_OpenOverrideFolder(object sender, EventArgs e) => ApplicationModel.Instance.OpenPackOverrideFolderCommand.Execute(null);
-        private void NativeMenu_ClearOverrides(object sender, EventArgs e) => ApplicationModel.Instance.ResetUserDataCommand.Execute(null);
-        private void NativeMenu_DevConsole(object sender, EventArgs e) => ApplicationModel.Instance.ShowDeveloperConsoleCommand.Execute(null);
-        private void NativeMenu_PackageDocs(object sender, EventArgs e) => ApplicationModel.Instance.OpenPackageDocumentationCommand.Execute(null);
-
-        private void NativeMenu_AlwaysOnTop(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.AlwaysOnTop = item.IsChecked;
-        }
-        private void NativeMenu_EnableMap(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.Tracker.Instance.MapEnabled = item.IsChecked;
-        }
-        private void NativeMenu_SwapLR(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.Tracker.Instance.SwapLeftRight = item.IsChecked;
-        }
-        private void NativeMenu_MapDpi(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) UI.Media.Utility.IconUtility.Instance.EnableDpiConversion = item.IsChecked;
-        }
-        private void NativeMenu_AlwaysAllowChest(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.AlwaysAllowClearing = item.IsChecked;
-        }
-        private void NativeMenu_IgnoreLogic(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.IgnoreAllLogic = item.IsChecked;
-        }
-        private void NativeMenu_PromptRefresh(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.PromptOnRefreshClose = item.IsChecked;
-        }
-        private void NativeMenu_ShowAllLocations(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.DisplayAllLocations = item.IsChecked;
-        }
-        private void NativeMenu_PinLocations(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.PinLocationsOnItemCapture = item.IsChecked;
-        }
-        private void NativeMenu_UnpinLocations(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.AutoUnpinLocationsOnClear = item.IsChecked;
-        }
-        private void NativeMenu_FastToolTips(object sender, EventArgs e)
-        {
-            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.FastToolTips = item.IsChecked;
         }
 
 #if WINDOWS
