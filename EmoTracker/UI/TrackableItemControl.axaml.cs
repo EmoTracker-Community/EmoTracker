@@ -1,6 +1,7 @@
 #nullable enable annotations
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data.Converters;
 using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
 using System;
@@ -13,6 +14,13 @@ namespace EmoTracker.UI
     /// </summary>
     public partial class TrackableItemControl : UserControl
     {
+        /// <summary>
+        /// Converts FastToolTips bool to tooltip show delay in milliseconds.
+        /// false (slow) → 5000ms, true (fast) → 400ms (Avalonia default).
+        /// </summary>
+        public static readonly IValueConverter FastToolTipsToDelayConverter =
+            new FuncValueConverter<bool, int>(fast => fast ? 400 : 5000);
+
         public interface IClickHandler
         {
             bool OnLeftClick(ITrackableItem item);
