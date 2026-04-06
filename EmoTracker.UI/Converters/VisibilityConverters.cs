@@ -12,8 +12,10 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 #else
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -22,25 +24,46 @@ using Avalonia.Media.Imaging;
 namespace EmoTracker.UI.Converters
 {
     /// <summary>
-    /// Returns <c>true</c> when the value is null, <c>false</c> when non-null.
+    /// Returns <c>true</c> when the value is null or unset, <c>false</c> when non-null.
     /// Use for IsVisible bindings where the element should appear when no data is present.
     /// </summary>
     public class NullToTrueConverter : Singleton<NullToTrueConverter>, IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+#if WINDOWS
             => value == null;
+#else
+            => value == null || value == AvaloniaProperty.UnsetValue || value == BindingOperations.DoNothing;
+#endif
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();
     }
 
     /// <summary>
-    /// Returns <c>true</c> when the value is non-null, <c>false</c> when null.
+    /// Returns <c>true</c> when the value is non-null and non-unset, <c>false</c> otherwise.
     /// </summary>
     public class NullToFalseConverter : Singleton<NullToFalseConverter>, IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+#if WINDOWS
             => value != null;
+#else
+            => value != null && value != AvaloniaProperty.UnsetValue && value != BindingOperations.DoNothing;
+#endif
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when the value is a non-null, non-empty string.
+    /// Treats UnsetValue and DoNothing as empty on Avalonia.
+    /// </summary>
+    public class NonEmptyStringToBoolConverter : Singleton<NonEmptyStringToBoolConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => value is string s && s.Length > 0;
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();
