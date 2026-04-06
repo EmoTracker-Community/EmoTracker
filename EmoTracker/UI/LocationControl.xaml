@@ -142,7 +142,8 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
-                    <local:NoteTakingIconPopup Grid.Column="1" Margin="10,0,0,0" DataContext="{Binding NoteTakingSite}" VerticalAlignment="Center" TextBlock.FontSize="9"/>
+                    <!-- Note-taking on locations is currently disabled -->
+                    <!--<local:NoteTakingIconPopup Grid.Column="1" Margin="10,0,0,0" DataContext="{Binding NoteTakingSite}" VerticalAlignment="Center" TextBlock.FontSize="9"/>-->
                     <CheckBox Grid.Column="2" Template="{StaticResource PushPinCheckBox}" IsChecked="{Binding Pinned}" Margin="0,0,0,0"/>
                     
                 </Grid>                
