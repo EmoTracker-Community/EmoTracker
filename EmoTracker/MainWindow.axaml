@@ -95,8 +95,6 @@
                                 <Separator />
                                 <MenuItem Header="Broadcast View" Command="{Binding ShowBroadcastViewCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F2" />
                                 <MenuItem Header="Manage Packages" Command="{Binding ShowPackageManagerCommand, Source={x:Static local:ApplicationModel.Instance}}" />
-                                <Separator />
-                                <MenuItem Header="Check For Updates" Command="{Binding CheckForUpdateCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                             </MenuItem>
                             <MenuItem Header="Layout">
                                 <MenuItem Header="Always On Top"

@@ -133,18 +133,10 @@ namespace EmoTracker
             Marshal.StructureToPtr(mmi, lParam, true);
         }
 
-        private void CheckForUpdates(object obj = null)
-        {
-            AppUpdateWindow updateWindow = new AppUpdateWindow(true);
-            updateWindow.Owner = this;
-            updateWindow.ShowDialog();
-        }
-
         private void MainWindow_ContentRendered(object sender, EventArgs e)
         {
             Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
-                CheckForUpdates();
                 TrackerLayout.Focus();
             }));
         }
