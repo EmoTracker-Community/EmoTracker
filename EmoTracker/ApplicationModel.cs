@@ -870,13 +870,80 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         /// <summary>
         /// Groups available packages by game name for display in the Avalonia package manager.
         /// Each entry has a <c>Name</c> (game name) and <c>Items</c> (packages in that group).
+        /// Uses the same sorting logic as WPF's RepoEntryGameNameSort and resolves
+        /// game display names via PackageManager.FindGame.
         /// </summary>
-        public IEnumerable<PackageGroup> AvailablePackagesGroupedView =>
-            (PackageManager.Instance.AvailablePackages ?? Enumerable.Empty<PackageRepositoryEntry>())
-            .Where(e => PackageFilter(e))
-            .OrderBy(e => e.Game).ThenBy(e => e.Name)
-            .GroupBy(e => e.Game)
-            .Select(g => new PackageGroup(g.Key, g));
+        public IEnumerable<PackageGroup> AvailablePackagesGroupedView
+        {
+            get
+            {
+                var entries = (PackageManager.Instance.AvailablePackages ?? Enumerable.Empty<PackageRepositoryEntry>())
+                    .Where(e => PackageFilter(e))
+                    .ToList();
+
+                // Sort using the same logic as WPF's RepoEntryGameNameSort
+                entries.Sort((a, b) =>
+                {
+                    var x = PackageManager.Instance.FindGame(a.Game);
+                    var y = PackageManager.Instance.FindGame(b.Game);
+
+                    if (x != null && x.Key.Equals("Other", StringComparison.OrdinalIgnoreCase))
+                        return 1;
+                    if (y != null && y.Key.Equals("Other", StringComparison.OrdinalIgnoreCase))
+                        return -1;
+
+                    int result;
+
+                    result = (x?.SeriesPriority ?? 0).CompareTo(y?.SeriesPriority ?? 0);
+                    if (result != 0) return result;
+
+                    result = CompareStringOrdinal(x?.Series, y?.Series);
+                    if (result != 0) return result;
+
+                    result = (x?.Priority ?? 0).CompareTo(y?.Priority ?? 0);
+                    if (result != 0) return result;
+
+                    result = CompareStringOrdinal(x?.Name, y?.Name);
+                    if (result != 0) return result;
+
+                    result = ComparePreferBool(
+                        a.Flags.HasFlag(PackageFlags.Official),
+                        b.Flags.HasFlag(PackageFlags.Official));
+                    if (result != 0) return result;
+
+                    result = ComparePreferBool(
+                        a.Flags.HasFlag(PackageFlags.Featured),
+                        b.Flags.HasFlag(PackageFlags.Featured));
+                    if (result != 0) return result;
+
+                    return CompareStringOrdinal(a.Author, b.Author);
+                });
+
+                // Group by resolved game display name (matches WPF's GroupDescription
+                // which uses GameNameToActualGameNameConverter)
+                return entries
+                    .GroupBy(e =>
+                    {
+                        var game = PackageManager.Instance.FindGame(e.Game);
+                        return game?.Name ?? e.Game;
+                    })
+                    .Select(g => new PackageGroup(g.Key, g));
+            }
+        }
+
+        private static int CompareStringOrdinal(string x, string y)
+        {
+            if (!string.IsNullOrWhiteSpace(x) && string.IsNullOrWhiteSpace(y)) return -1;
+            if (string.IsNullOrWhiteSpace(x) && !string.IsNullOrWhiteSpace(y)) return 1;
+            return string.CompareOrdinal(x, y);
+        }
+
+        private static int ComparePreferBool(bool x, bool y)
+        {
+            if (x && !y) return -1;
+            if (!x && y) return 1;
+            return 0;
+        }
 
         public IEnumerable<IGamePackage> InstalledPackagesView =>
             PackageManager.Instance.InstalledPackages ?? Enumerable.Empty<IGamePackage>();

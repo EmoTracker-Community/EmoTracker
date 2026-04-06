@@ -15,6 +15,7 @@
         Background="#212121"
         MinWidth="800"
         Height="600"
+        FontSize="12"
         WindowStartupLocation="CenterOwner">
 
     <Window.Resources>
@@ -25,21 +26,11 @@
         <!-- Sidebar filter button base style -->
         <Style Selector="Button.SideBarButton">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="{x:Null}"/>
-            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="#717171"/>
             <Setter Property="FontSize" Value="18"/>
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Grid Background="{TemplateBinding Background}">
-                        <ContentPresenter VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
-                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"/>
-                    </Grid>
-                </ControlTemplate>
-            </Setter>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
         </Style>
         <Style Selector="Button.SideBarButton:pointerover">
             <Setter Property="Foreground" Value="WhiteSmoke"/>
@@ -69,26 +60,36 @@
                        Foreground="WhiteSmoke"
                        Text="Search Packages"
                        VerticalAlignment="Center"
-                       Margin="15,0,10,0"/>
-            <Border Grid.Column="1"
-                    CornerRadius="10"
-                    Background="#e8e8e8"
-                    Margin="5,5,10,5"
-                    BorderBrush="#d0d0d0"
-                    BorderThickness="2">
-                <TextBox BorderBrush="{x:Null}"
-                         Background="Transparent"
-                         Margin="8,2"
+                       Margin="15,5,10,5"/>
+            <Grid Grid.Column="1" Margin="5,5,10,5">
+                <TextBox Name="SearchTextBox"
+                         Padding="8,4,24,4"
+                         CornerRadius="10"
                          FontSize="10"
                          VerticalAlignment="Center"
-                         Text="{Binding PackFilterText, Mode=TwoWay,
-                             Source={x:Static app:ApplicationModel.Instance}}"/>
-            </Border>
+                         VerticalContentAlignment="Center"/>
+                <Button Name="SearchClearButton"
+                        FontSize="12"
+                        Foreground="#888888"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,0"
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Right"
+                        Cursor="Hand"
+                        IsVisible="False">
+                    <PathIcon Data="M12,2C17.53,2 22,6.47 22,12C22,17.53 17.53,22 12,22C6.47,22 2,17.53 2,12C2,6.47 6.47,2 12,2M15.59,7L12,10.59L8.41,7L7,8.41L10.59,12L7,15.59L8.41,17L12,13.41L15.59,17L17,15.59L13.41,12L17,8.41L15.59,7Z"
+                              Width="12" Height="12"
+                              Foreground="#888888"/>
+                </Button>
+            </Grid>
         </Grid>
 
         <!-- Sidebar filter buttons -->
         <Grid Grid.Column="0" Grid.Row="1" Width="48">
-            <StackPanel Orientation="Vertical" Margin="5">
+            <StackPanel Orientation="Vertical" Margin="5"
+                        HorizontalAlignment="Center">
                 <!-- All Packages -->
                 <Button Name="FilterAllButton"
                         Classes="SideBarButton"
@@ -309,6 +310,8 @@
                                                                 Margin="5,0"
                                                                 MinWidth="60"
                                                                 Foreground="Black"
+                                                                Padding="3,2"
+                                                                HorizontalContentAlignment="Center"
                                                                 Content="{Binding Status,
                                                                     Converter={x:Static local:PackageManagerWindow.PackageStatusToButtonTextConverter}}"
                                                                 Command="{Binding Status,

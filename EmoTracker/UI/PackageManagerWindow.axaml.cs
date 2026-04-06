@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Threading;
 using EmoTracker.Data.Packages;
 using System;
 using System.ComponentModel;
@@ -89,12 +90,51 @@ namespace EmoTracker.UI
         }
 
         // ---------------------------------------------------------------
+        // Search delay timer (replaces WPF Binding Delay=500)
+        // ---------------------------------------------------------------
+
+        private readonly DispatcherTimer _searchDelayTimer;
+
+        // ---------------------------------------------------------------
         // Constructor / lifecycle
         // ---------------------------------------------------------------
 
         public PackageManagerWindow()
         {
             InitializeComponent();
+
+            // Set up debounced search (500ms delay like WPF's Binding Delay=500)
+            _searchDelayTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _searchDelayTimer.Tick += (_, _) =>
+            {
+                _searchDelayTimer.Stop();
+                if (this.FindControl<TextBox>("SearchTextBox") is TextBox tb)
+                    ApplicationModel.Instance.PackFilterText = tb.Text;
+            };
+
+            var clearButton = this.FindControl<Button>("SearchClearButton");
+
+            if (this.FindControl<TextBox>("SearchTextBox") is TextBox searchBox)
+            {
+                searchBox.Text = ApplicationModel.Instance.PackFilterText;
+                searchBox.TextChanged += (_, _) =>
+                {
+                    _searchDelayTimer.Stop();
+                    _searchDelayTimer.Start();
+                    if (clearButton != null)
+                        clearButton.IsVisible = !string.IsNullOrEmpty(searchBox.Text);
+                };
+
+                if (clearButton != null)
+                {
+                    clearButton.IsVisible = !string.IsNullOrEmpty(searchBox.Text);
+                    clearButton.Click += (_, _) =>
+                    {
+                        searchBox.Text = string.Empty;
+                        searchBox.Focus();
+                    };
+                }
+            }
 
             // Watch ApplicationModel filter changes to highlight sidebar buttons
             ApplicationModel.Instance.PropertyChanged += ApplicationModel_PropertyChanged;
