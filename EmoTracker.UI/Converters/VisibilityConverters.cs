@@ -2,6 +2,7 @@ using EmoTracker.Core;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Settings;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 #if WINDOWS
@@ -12,6 +13,7 @@ using System.Windows.Media;
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 #endif
 
 namespace EmoTracker.UI.Converters
@@ -274,6 +276,29 @@ namespace EmoTracker.UI.Converters
 
 #if !WINDOWS
     /// <summary>
+    /// Returns <see cref="Avalonia.AvaloniaProperty.UnsetValue"/> when the value is negative,
+    /// causing the binding to fall back to the target property's default value.
+    /// If a <c>ConverterParameter</c> is supplied, returns that as a <c>double</c> instead
+    /// of <c>UnsetValue</c>, allowing callers to specify a fallback size explicitly.
+    /// Use for IconWidth/IconHeight bindings where -1 means "use a sensible default"
+    /// rather than NaN (auto-size to source dimensions — can be huge for banner images).
+    /// </summary>
+    public class NegativeToUnsetConverter : Singleton<NegativeToUnsetConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is double d && d >= 0) return d;
+            if (parameter != null
+                && double.TryParse(parameter.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double fallback))
+                return fallback;
+            return Avalonia.AvaloniaProperty.UnsetValue;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
     /// Returns <c>true</c> when the value's <c>ToString()</c> matches the <c>ConverterParameter</c>
     /// string (case-insensitive).  Useful for controlling IsVisible based on an enum property.
     /// <example><c>IsVisible="{Binding Style, Converter={x:Static converters:ObjectEqualsConverter.Instance}, ConverterParameter=Settings}"</c></example>
@@ -336,6 +361,35 @@ namespace EmoTracker.UI.Converters
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Multi-value converter for icon dimensions. Returns the explicit dimension when it is
+    /// a valid positive number; otherwise falls back to the pixel dimensions of the bound
+    /// <see cref="Bitmap"/> source image. Use <c>ConverterParameter="Width"</c> or
+    /// <c>"Height"</c> to select which pixel dimension to read.
+    /// <para>values[0] = dimension (double, e.g. IconWidth), values[1] = Image.Source (IImage).</para>
+    /// </summary>
+    public class IconDimensionMultiConverter : Singleton<IconDimensionMultiConverter>, IMultiValueConverter
+    {
+        public object Convert(IList<object> values, Type targetType, object parameter, CultureInfo culture)
+        {
+            double dimension = values.Count > 0 && values[0] is double d ? d : double.NaN;
+
+            // If the layout specifies a valid positive size, use it directly.
+            if (dimension > 0 && !double.IsNaN(dimension))
+                return dimension;
+
+            // Fall back to the source image's pixel dimensions.
+            if (values.Count > 1 && values[1] is Bitmap bitmap)
+            {
+                bool useWidth = string.Equals(parameter?.ToString(), "Width", StringComparison.OrdinalIgnoreCase);
+                return (double)(useWidth ? bitmap.PixelSize.Width : bitmap.PixelSize.Height);
+            }
+
+            // Last resort default.
+            return 32.0;
+        }
     }
 #endif
 }

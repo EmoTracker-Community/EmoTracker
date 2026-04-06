@@ -17,9 +17,20 @@
                         <controls:InputMaskingImage
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
-                            Source="{Binding Icon, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
-                            Width="{Binding IconWidth, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
-                            Height="{Binding IconHeight, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}" />
+                            Source="{Binding Icon, Converter={x:Static converters:ImageReferenceConverter.Instance}}">
+                            <controls:InputMaskingImage.Width>
+                                <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Width">
+                                    <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
+                                </MultiBinding>
+                            </controls:InputMaskingImage.Width>
+                            <controls:InputMaskingImage.Height>
+                                <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Height">
+                                    <Binding Path="IconHeight" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
+                                </MultiBinding>
+                            </controls:InputMaskingImage.Height>
+                        </controls:InputMaskingImage>
                         <Grid VerticalAlignment="Bottom"
                               HorizontalAlignment="Right"
                               MaxWidth="{Binding IconWidth, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
