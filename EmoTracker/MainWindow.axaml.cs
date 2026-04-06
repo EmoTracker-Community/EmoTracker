@@ -8,6 +8,7 @@ using EmoTracker.Data.Core.Transactions.Processors;
 using EmoTracker.Data.Layout;
 using System;
 using System.ComponentModel;
+using System.Linq;
 
 namespace EmoTracker
 {
@@ -60,8 +61,132 @@ namespace EmoTracker
         {
             if (sender is Button btn && btn.ContextMenu != null)
             {
+                PopulateInstalledPackagesMenu();
                 btn.ContextMenu.Open(btn);
             }
+        }
+
+        private void PopulateInstalledPackagesMenu()
+        {
+            if (this.FindControl<Button>("SettingsButton")?.ContextMenu is not ContextMenu menu)
+                return;
+
+            var installedMenu = menu.Items.OfType<MenuItem>()
+                .FirstOrDefault(m => m.Name == "InstalledPackagesMenu");
+            if (installedMenu == null)
+                return;
+
+            installedMenu.Items.Clear();
+
+            var groups = ApplicationModel.Instance.InstalledPackagesGroupedView;
+            foreach (var group in groups)
+            {
+                var gameMenuItem = new MenuItem { Header = group.Name };
+
+                foreach (var package in group.Items)
+                {
+                    var packageMenuItem = new MenuItem
+                    {
+                        Header = FormatPackageHeader(package),
+                        Command = ApplicationModel.Instance.ActivatePackCommand,
+                        CommandParameter = package,
+                    };
+
+                    // Add variant sub-items
+                    var variants = package.AvailableVariants?.ToList();
+                    if (variants != null && variants.Count > 0)
+                    {
+                        foreach (var variant in variants)
+                        {
+                            var variantMenuItem = new MenuItem
+                            {
+                                Header = FormatVariantHeader(variant),
+                                Command = ApplicationModel.Instance.ActivatePackCommand,
+                                CommandParameter = variant,
+                            };
+                            packageMenuItem.Items.Add(variantMenuItem);
+                        }
+                    }
+
+                    gameMenuItem.Items.Add(packageMenuItem);
+                }
+
+                installedMenu.Items.Add(gameMenuItem);
+            }
+        }
+
+        private static object FormatPackageHeader(IGamePackage package)
+        {
+            var panel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, MaxWidth = 350 };
+            panel.Children.Add(new Avalonia.Controls.TextBlock
+            {
+                Text = package.DisplayName,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
+                MaxWidth = 250,
+            });
+
+            if (!string.IsNullOrWhiteSpace(package.Author))
+            {
+                panel.Children.Add(new Avalonia.Controls.TextBlock
+                {
+                    Text = package.Author,
+                    FontStyle = Avalonia.Media.FontStyle.Italic,
+                    Margin = new Thickness(15, 0, 0, 0),
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    Foreground = Avalonia.Media.Brushes.Gray,
+                    TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
+                    MaxWidth = 80,
+                });
+            }
+
+            if (Tracker.Instance.ActiveGamePackage == package)
+            {
+                panel.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(3),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = Avalonia.Media.Brushes.Gray,
+                    Margin = new Thickness(10, 0, 0, 0),
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    Child = new Avalonia.Controls.TextBlock
+                    {
+                        Text = "Active",
+                        FontSize = 9,
+                        Foreground = Avalonia.Media.Brushes.Gray,
+                        Margin = new Thickness(3, 1),
+                    },
+                });
+            }
+
+            return panel;
+        }
+
+        private static object FormatVariantHeader(IGamePackageVariant variant)
+        {
+            var panel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
+            panel.Children.Add(new Avalonia.Controls.TextBlock { Text = variant.DisplayName, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
+
+            if (Tracker.Instance.ActiveGamePackageVariant == variant)
+            {
+                panel.Children.Add(new Border
+                {
+                    CornerRadius = new CornerRadius(3),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = Avalonia.Media.Brushes.Gray,
+                    Margin = new Thickness(10, 0, 0, 0),
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    Child = new Avalonia.Controls.TextBlock
+                    {
+                        Text = "Active",
+                        FontSize = 9,
+                        Foreground = Avalonia.Media.Brushes.Gray,
+                        Margin = new Thickness(3, 1),
+                    },
+                });
+            }
+
+            return panel;
         }
 
         private void MainWindow_PointerWheelChanged(object sender, PointerWheelEventArgs e)
