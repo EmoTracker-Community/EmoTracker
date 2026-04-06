@@ -47,7 +47,7 @@ namespace EmoTracker.UI
         {
             base.OnPointerWheelChanged(e);
 
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta))
             {
                 // Avalonia Delta.Y is in lines (positive = scroll up / zoom in).
                 // WPF used e.Delta (120 per notch) / 60 ≈ 2 per notch.

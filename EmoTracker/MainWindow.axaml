@@ -87,10 +87,10 @@
                             <Separator />
                             <MenuItem Header="Application">
                                 <MenuItem Header="File">
-                                    <MenuItem Header="Open" Command="{Binding OpenCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+O" />
+                                    <MenuItem Header="Open" Command="{Binding OpenCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+O" />
                                     <Separator />
-                                    <MenuItem Header="Save" Command="{Binding SaveCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+S" />
-                                    <MenuItem Header="Save As..." Command="{Binding SaveAsCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+Shift+S" />
+                                    <MenuItem Header="Save" Command="{Binding SaveCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+S" />
+                                    <MenuItem Header="Save As..." Command="{Binding SaveAsCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+Shift+S" />
                                 </MenuItem>
                                 <Separator />
                                 <MenuItem Header="Broadcast View" Command="{Binding ShowBroadcastViewCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F2" />
@@ -114,7 +114,7 @@
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding EnableDpiConversion, Mode=TwoWay, Source={x:Static media_utility:IconUtility.Instance}}" />
                                 <Separator />
-                                <MenuItem Header="Reset Layout Scale" Command="{Binding ResetLayoutScaleCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+D0" />
+                                <MenuItem Header="Reset Layout Scale" Command="{Binding ResetLayoutScaleCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+D0" />
                             </MenuItem>
                             <MenuItem Header="Tracking">
                                 <MenuItem Header="Always Allow Chest Manipulation"

@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using EmoTracker.Core;
 using EmoTracker.Services;
@@ -57,9 +56,6 @@ namespace EmoTracker
             {
                 desktop.MainWindow = new MainWindow();
 
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                    SetupNativeMenu();
-
                 desktop.Exit += (s, e) =>
                 {
                     try
@@ -82,108 +78,64 @@ namespace EmoTracker
             base.OnFrameworkInitializationCompleted();
         }
 
-        private void SetupNativeMenu()
+        // --- NativeMenu Click handlers ---
+        private void NativeMenu_Open(object sender, EventArgs e) => ApplicationModel.Instance.OpenCommand.Execute(null);
+        private void NativeMenu_Save(object sender, EventArgs e) => ApplicationModel.Instance.SaveCommand.Execute(null);
+        private void NativeMenu_SaveAs(object sender, EventArgs e) => ApplicationModel.Instance.SaveAsCommand.Execute(null);
+        private void NativeMenu_BroadcastView(object sender, EventArgs e) => ApplicationModel.Instance.ShowBroadcastViewCommand.Execute(null);
+        private void NativeMenu_ResetLayoutScale(object sender, EventArgs e) => ApplicationModel.Instance.ResetLayoutScale();
+        private void NativeMenu_Reload(object sender, EventArgs e) => ApplicationModel.Instance.RefreshCommand.Execute(null);
+        private void NativeMenu_ManagePackages(object sender, EventArgs e) => ApplicationModel.Instance.ShowPackageManagerCommand.Execute(null);
+        private void NativeMenu_CheckForUpdates(object sender, EventArgs e) => ApplicationModel.Instance.CheckForUpdateCommand.Execute(null);
+        private void NativeMenu_ExportOverrides(object sender, EventArgs e) => ApplicationModel.Instance.ExportPackageOverrideCommand.Execute(null);
+        private void NativeMenu_OpenOverrideFolder(object sender, EventArgs e) => ApplicationModel.Instance.OpenPackOverrideFolderCommand.Execute(null);
+        private void NativeMenu_ClearOverrides(object sender, EventArgs e) => ApplicationModel.Instance.ResetUserDataCommand.Execute(null);
+        private void NativeMenu_DevConsole(object sender, EventArgs e) => ApplicationModel.Instance.ShowDeveloperConsoleCommand.Execute(null);
+        private void NativeMenu_PackageDocs(object sender, EventArgs e) => ApplicationModel.Instance.OpenPackageDocumentationCommand.Execute(null);
+
+        private void NativeMenu_AlwaysOnTop(object sender, EventArgs e)
         {
-            var appModel = ApplicationModel.Instance;
-            var appSettings = Data.ApplicationSettings.Instance;
-            var tracker = Data.Tracker.Instance;
-            var iconUtility = UI.Media.Utility.IconUtility.Instance;
-
-            var menu = new NativeMenu();
-
-            // --- File menu ---
-            var fileMenu = new NativeMenuItem("File") { Menu = new NativeMenu() };
-            fileMenu.Menu.Add(new NativeMenuItem("Open") { Command = appModel.OpenCommand, Gesture = new KeyGesture(Key.O, KeyModifiers.Meta) });
-            fileMenu.Menu.Add(new NativeMenuItemSeparator());
-            fileMenu.Menu.Add(new NativeMenuItem("Save") { Command = appModel.SaveCommand, Gesture = new KeyGesture(Key.S, KeyModifiers.Meta) });
-            fileMenu.Menu.Add(new NativeMenuItem("Save As...") { Command = appModel.SaveAsCommand, Gesture = new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Shift) });
-            menu.Add(fileMenu);
-
-            // --- View menu ---
-            var viewMenu = new NativeMenuItem("View") { Menu = new NativeMenu() };
-            var alwaysOnTop = new NativeMenuItem("Always On Top") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = appSettings.AlwaysOnTop };
-            alwaysOnTop.Click += (s, e) => { appSettings.AlwaysOnTop = alwaysOnTop.IsChecked; };
-            viewMenu.Menu.Add(alwaysOnTop);
-            viewMenu.Menu.Add(new NativeMenuItemSeparator());
-
-            var enableMap = new NativeMenuItem("Enable Map") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = tracker.MapEnabled };
-            enableMap.Click += (s, e) => { tracker.MapEnabled = enableMap.IsChecked; };
-            viewMenu.Menu.Add(enableMap);
-
-            var swapLR = new NativeMenuItem("Swap Left/Right") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = tracker.SwapLeftRight };
-            swapLR.Click += (s, e) => { tracker.SwapLeftRight = swapLR.IsChecked; };
-            viewMenu.Menu.Add(swapLR);
-            viewMenu.Menu.Add(new NativeMenuItemSeparator());
-
-            var mapDpi = new NativeMenuItem("Map DPI Awareness") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = iconUtility.EnableDpiConversion };
-            mapDpi.Click += (s, e) => { iconUtility.EnableDpiConversion = mapDpi.IsChecked; };
-            viewMenu.Menu.Add(mapDpi);
-            viewMenu.Menu.Add(new NativeMenuItemSeparator());
-
-            viewMenu.Menu.Add(new NativeMenuItem("Reset Layout Scale") { Command = appModel.ResetLayoutScaleCommand, Gesture = new KeyGesture(Key.D0, KeyModifiers.Meta) });
-            viewMenu.Menu.Add(new NativeMenuItemSeparator());
-            viewMenu.Menu.Add(new NativeMenuItem("Broadcast View") { Command = appModel.ShowBroadcastViewCommand, Gesture = new KeyGesture(Key.F2) });
-            menu.Add(viewMenu);
-
-            // --- Tracking menu ---
-            var trackingMenu = new NativeMenuItem("Tracking") { Menu = new NativeMenu() };
-
-            var alwaysAllowChest = new NativeMenuItem("Always Allow Chest Manipulation") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = appSettings.AlwaysAllowClearing };
-            alwaysAllowChest.Click += (s, e) => { appSettings.AlwaysAllowClearing = alwaysAllowChest.IsChecked; };
-            trackingMenu.Menu.Add(alwaysAllowChest);
-
-            var ignoreLogic = new NativeMenuItem("Ignore All Logic") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = appSettings.IgnoreAllLogic };
-            ignoreLogic.Click += (s, e) => { appSettings.IgnoreAllLogic = ignoreLogic.IsChecked; };
-            trackingMenu.Menu.Add(ignoreLogic);
-
-            var promptRefresh = new NativeMenuItem("Prompt When Refreshing/Closing") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = appSettings.PromptOnRefreshClose };
-            promptRefresh.Click += (s, e) => { appSettings.PromptOnRefreshClose = promptRefresh.IsChecked; };
-            trackingMenu.Menu.Add(promptRefresh);
-
-            var showAllLocations = new NativeMenuItem("Show All Locations") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = appSettings.DisplayAllLocations, Gesture = new KeyGesture(Key.F11) };
-            showAllLocations.Click += (s, e) => { appSettings.DisplayAllLocations = showAllLocations.IsChecked; };
-            trackingMenu.Menu.Add(showAllLocations);
-            trackingMenu.Menu.Add(new NativeMenuItemSeparator());
-
-            var pinLocations = new NativeMenuItem("Pin Locations on Item Capture") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = appSettings.PinLocationsOnItemCapture };
-            pinLocations.Click += (s, e) => { appSettings.PinLocationsOnItemCapture = pinLocations.IsChecked; };
-            trackingMenu.Menu.Add(pinLocations);
-
-            var unpinLocations = new NativeMenuItem("Unpin Locations when Cleared") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = appSettings.AutoUnpinLocationsOnClear };
-            unpinLocations.Click += (s, e) => { appSettings.AutoUnpinLocationsOnClear = unpinLocations.IsChecked; };
-            trackingMenu.Menu.Add(unpinLocations);
-            trackingMenu.Menu.Add(new NativeMenuItemSeparator());
-
-            trackingMenu.Menu.Add(new NativeMenuItem("Reload") { Command = appModel.RefreshCommand, Gesture = new KeyGesture(Key.F5) });
-            menu.Add(trackingMenu);
-
-            // --- Packages menu ---
-            var packagesMenu = new NativeMenuItem("Packages") { Menu = new NativeMenu() };
-            packagesMenu.Menu.Add(new NativeMenuItem("Manage Packages") { Command = appModel.ShowPackageManagerCommand });
-            packagesMenu.Menu.Add(new NativeMenuItemSeparator());
-            packagesMenu.Menu.Add(new NativeMenuItem("Check For Updates") { Command = appModel.CheckForUpdateCommand });
-            menu.Add(packagesMenu);
-
-            // --- Advanced menu ---
-            var advancedMenu = new NativeMenuItem("Advanced") { Menu = new NativeMenu() };
-            advancedMenu.Menu.Add(new NativeMenuItem("Export Overrides") { Command = appModel.ExportPackageOverrideCommand });
-            advancedMenu.Menu.Add(new NativeMenuItemSeparator());
-            advancedMenu.Menu.Add(new NativeMenuItem("Open Override Folder") { Command = appModel.OpenPackOverrideFolderCommand });
-            advancedMenu.Menu.Add(new NativeMenuItem("Clear Overrides") { Command = appModel.ResetUserDataCommand });
-            advancedMenu.Menu.Add(new NativeMenuItemSeparator());
-            advancedMenu.Menu.Add(new NativeMenuItem("Developer Console") { Command = appModel.ShowDeveloperConsoleCommand });
-            menu.Add(advancedMenu);
-
-            // --- Help menu ---
-            var helpMenu = new NativeMenuItem("Help") { Menu = new NativeMenu() };
-            helpMenu.Menu.Add(new NativeMenuItem("Package Documentation") { Command = appModel.OpenPackageDocumentationCommand, Gesture = new KeyGesture(Key.F1) });
-            helpMenu.Menu.Add(new NativeMenuItemSeparator());
-            var fastToolTips = new NativeMenuItem("Fast Tool Tips") { ToggleType = NativeMenuItemToggleType.CheckBox, IsChecked = appSettings.FastToolTips };
-            fastToolTips.Click += (s, e) => { appSettings.FastToolTips = fastToolTips.IsChecked; };
-            helpMenu.Menu.Add(fastToolTips);
-            menu.Add(helpMenu);
-
-            NativeMenu.SetMenu(this, menu);
+            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.AlwaysOnTop = item.IsChecked;
+        }
+        private void NativeMenu_EnableMap(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) Data.Tracker.Instance.MapEnabled = item.IsChecked;
+        }
+        private void NativeMenu_SwapLR(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) Data.Tracker.Instance.SwapLeftRight = item.IsChecked;
+        }
+        private void NativeMenu_MapDpi(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) UI.Media.Utility.IconUtility.Instance.EnableDpiConversion = item.IsChecked;
+        }
+        private void NativeMenu_AlwaysAllowChest(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.AlwaysAllowClearing = item.IsChecked;
+        }
+        private void NativeMenu_IgnoreLogic(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.IgnoreAllLogic = item.IsChecked;
+        }
+        private void NativeMenu_PromptRefresh(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.PromptOnRefreshClose = item.IsChecked;
+        }
+        private void NativeMenu_ShowAllLocations(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.DisplayAllLocations = item.IsChecked;
+        }
+        private void NativeMenu_PinLocations(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.PinLocationsOnItemCapture = item.IsChecked;
+        }
+        private void NativeMenu_UnpinLocations(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.AutoUnpinLocationsOnClear = item.IsChecked;
+        }
+        private void NativeMenu_FastToolTips(object sender, EventArgs e)
+        {
+            if (sender is NativeMenuItem item) Data.ApplicationSettings.Instance.FastToolTips = item.IsChecked;
         }
 
 #if WINDOWS
