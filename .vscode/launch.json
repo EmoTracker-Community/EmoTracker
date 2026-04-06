@@ -2,19 +2,30 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch EmoTracker (Debug)",
-            "type": "clr",
+            "name": "Launch EmoTracker WPF (Debug)",
+            "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/EmoTracker/bin/Debug/net472/EmoTracker.exe",
+            "preLaunchTask": "build WPF (Debug)",
+            "program": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0-windows/EmoTracker.exe",
             "args": [],
-            "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net472",
+            "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0-windows",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
+            "name": "Launch EmoTracker Avalonia (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build Avalonia (Debug)",
+            "program": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0/EmoTracker.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0",
             "stopAtEntry": false,
             "console": "internalConsole"
         },
         {
             "name": "Attach to EmoTracker",
-            "type": "clr",
+            "type": "coreclr",
             "request": "attach"
         }
     ]
