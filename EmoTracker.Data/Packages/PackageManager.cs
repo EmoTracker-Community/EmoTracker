@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+﻿#pragma warning disable SYSLIB0014 // WebClient is obsolete
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json;
