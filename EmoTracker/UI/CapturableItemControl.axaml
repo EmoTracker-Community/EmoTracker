@@ -1,4 +1,5 @@
 <UserControl x:Class="EmoTracker.UI.CapturableItemControl"
+             x:Name="CapturableItemRoot"
              xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:EmoTracker.UI"
@@ -22,7 +23,7 @@
                 behaviour. For now the same Command pattern is preserved.
             -->
             <Button Content="{Binding}"
-                    Command="{Binding RelativeSource={RelativeSource AncestorType=local:CapturableItemControl}, Path=SelectItemCommand}"
+                    Command="{Binding #CapturableItemRoot.SelectItemCommand}"
                     CommandParameter="{Binding}">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
@@ -47,14 +48,8 @@
                     <Grid Width="32" Height="32">
                         <Image Source="{Binding CapturedItem.PotentialIcon, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
                                Width="32" Height="32"/>
-                        <!--
-                            WPF showed/hid UnknownControl via a DataTrigger on CapturedItem == null.
-                            In Avalonia, visibility is driven by a converter binding or
-                            a view-model property. Using IsVisible bound to a null-check converter
-                            is the recommended approach; a TODO comment is left for the conversion.
-                            For now the rectangle is always visible as a placeholder.
-                        -->
-                        <Grid Name="UnknownControl">
+                        <Grid Name="UnknownControl"
+                              IsVisible="{Binding CapturedItem, Converter={x:Static converters:NullToTrueConverter.Instance}}">
                             <Rectangle RadiusX="4" RadiusY="4"
                                        Stroke="WhiteSmoke" StrokeThickness="2"
                                        StrokeDashArray="2,3"
@@ -82,13 +77,13 @@
                     Margin="20"
                     BoxShadow="3 3 20 0 #CC000000">
                 <StackPanel>
-                    <local:LayoutControl DataContext="{Binding ItemCaptureLayout, Converter={x:Static converters:LayoutReferenceConverter.Instance}, ConverterParameter=tracker_capture_item}"
+                    <local:LayoutControl x:Name="CaptureLayoutControl"
+                                         DataContext="{Binding ItemCaptureLayout, Converter={x:Static converters:LayoutReferenceConverter.Instance}, ConverterParameter=tracker_capture_item}"
                                          local:TrackableItemControl.DisplayPotentialIcon="true"
-                                         local:TrackableItemControl.DisplayCapturableOnly="true"
-                                         local:TrackableItemControl.ClickHandler="{Binding RelativeSource={RelativeSource AncestorType=local:CapturableItemControl}}" />
+                                         local:TrackableItemControl.DisplayCapturableOnly="true" />
                     <Grid HorizontalAlignment="Stretch" Margin="5,5,5,0" Height="1" Background="White" />
                     <Button Content="Clear"
-                            Command="{Binding RelativeSource={RelativeSource AncestorType=local:CapturableItemControl}, Path=SelectItemCommand}"
+                            Command="{Binding #CapturableItemRoot.SelectItemCommand}"
                             CommandParameter="{x:Null}"
                             Margin="5" />
                 </StackPanel>

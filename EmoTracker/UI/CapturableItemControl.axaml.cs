@@ -16,6 +16,10 @@ namespace EmoTracker.UI
             mProgressCmd = new LeftClickCommand(this);
             mClearCmd = new ClearItemSlotCommand(this);
             InitializeComponent();
+
+            // Set ClickHandler in code-behind because Avalonia Popups create a separate
+            // visual tree, so RelativeSource AncestorType bindings can't cross the boundary.
+            TrackableItemControl.SetClickHandler(CaptureLayoutControl, this);
         }
 
         #region --- TrackableItemControl.IClickHandler ---
