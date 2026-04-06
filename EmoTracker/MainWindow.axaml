@@ -20,7 +20,7 @@
         Title="{Binding MainWindowTitle, Source={x:Static local:ApplicationModel.Instance}}"
         Topmost="{Binding AlwaysOnTop, Source={x:Static data:ApplicationSettings.Instance}}">
 
-    <Grid RowDefinitions="*,Auto">
+<Grid RowDefinitions="*,Auto">
 
         <!-- Main content -->
         <Grid Grid.Row="0">
@@ -83,6 +83,8 @@
                         ToolTip.Tip="Settings">
                     <Button.ContextMenu>
                         <ContextMenu Placement="Top">
+                            <MenuItem Name="InstalledPackagesMenu" Header="Installed Packages" />
+                            <Separator />
                             <MenuItem Header="Application">
                                 <MenuItem Header="File">
                                     <MenuItem Header="Open" Command="{Binding OpenCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+O" />
@@ -97,89 +99,63 @@
                                 <MenuItem Header="Check For Updates" Command="{Binding CheckForUpdateCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                             </MenuItem>
                             <MenuItem Header="Layout">
-                                <MenuItem Header="Always On Top" IsEnabled="True">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding AlwaysOnTop, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
+                                <MenuItem Header="Always On Top"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding AlwaysOnTop, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 <Separator />
-                                <MenuItem Header="Enable Map">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding MapEnabled, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
-                                <MenuItem Header="Swap Left/Right">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding SwapLeftRight, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
+                                <MenuItem Header="Enable Map"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding MapEnabled, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
+                                <MenuItem Header="Swap Left/Right"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding SwapLeftRight, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
                                 <Separator />
-                                <MenuItem Header="Map DPI Awareness">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding EnableDpiConversion, Mode=TwoWay, Source={x:Static media_utility:IconUtility.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
+                                <MenuItem Header="Map DPI Awareness"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding EnableDpiConversion, Mode=TwoWay, Source={x:Static media_utility:IconUtility.Instance}}" />
                                 <Separator />
                                 <MenuItem Header="Reset Layout Scale" Command="{Binding ResetLayoutScaleCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+D0" />
                             </MenuItem>
                             <MenuItem Header="Tracking">
-                                <MenuItem Header="Always Allow Chest Manipulation">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding AlwaysAllowClearing, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
-                                <MenuItem Header="Ignore All Logic">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding IgnoreAllLogic, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
-                                <MenuItem Header="Prompt When Refreshing/Closing">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding PromptOnRefreshClose, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
-                                <MenuItem Header="Show All Locations" InputGesture="F11">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding DisplayAllLocations, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
+                                <MenuItem Header="Always Allow Chest Manipulation"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding AlwaysAllowClearing, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Ignore All Logic"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding IgnoreAllLogic, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Prompt When Refreshing/Closing"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding PromptOnRefreshClose, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Show All Locations" InputGesture="F11"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding DisplayAllLocations, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 <Separator />
-                                <MenuItem Header="Pin Locations on Item Capture">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding PinLocationsOnItemCapture, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
-                                <MenuItem Header="Unpin Locations when Cleared">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding AutoUnpinLocationsOnClear, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
+                                <MenuItem Header="Pin Locations on Item Capture"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding PinLocationsOnItemCapture, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Unpin Locations when Cleared"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding AutoUnpinLocationsOnClear, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 <Separator />
                                 <MenuItem Header="Reload" Command="{Binding RefreshCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F5" />
                             </MenuItem>
                             <MenuItem Header="Extensions">
-                                <MenuItem Header="Voice Control">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding EnableVoiceControl, Source={x:Static data:ApplicationSettings.Instance}, Mode=TwoWay}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
+                                <MenuItem Header="Voice Control"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding EnableVoiceControl, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 <MenuItem Header="Multi-World">
-                                    <MenuItem Header="ALTPPR Bonta Multi-World">
-                                        <MenuItem.Icon>
-                                            <CheckBox IsChecked="{Binding EnableBontaMultiWorld, Source={x:Static data:ApplicationSettings.Instance}, Mode=TwoWay}" />
-                                        </MenuItem.Icon>
-                                    </MenuItem>
+                                    <MenuItem Header="ALTPPR Bonta Multi-World"
+                                              ToggleType="CheckBox"
+                                              IsChecked="{Binding EnableBontaMultiWorld, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 </MenuItem>
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Assistance">
                                 <MenuItem Header="Package Documentation" Command="{Binding OpenPackageDocumentationCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F1" />
                                 <Separator />
-                                <MenuItem Header="Fast Tool Tips">
-                                    <MenuItem.Icon>
-                                        <CheckBox IsChecked="{Binding FastToolTips, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                    </MenuItem.Icon>
-                                </MenuItem>
+                                <MenuItem Header="Fast Tool Tips"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding FastToolTips, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Advanced">
@@ -251,6 +227,18 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <!-- Resize grip (bottom-right) -->
+            <Canvas Name="ResizeGrip"
+                    Width="12" Height="12"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,2,1"
+                    IsVisible="{Binding AllowResize, Source={x:Static data:Tracker.Instance}}">
+                <!-- Three diagonal dot lines -->
+                <Line StartPoint="10,2" EndPoint="2,10" Stroke="#555555" StrokeThickness="1"/>
+                <Line StartPoint="10,5" EndPoint="5,10" Stroke="#555555" StrokeThickness="1"/>
+                <Line StartPoint="10,8" EndPoint="8,10" Stroke="#555555" StrokeThickness="1"/>
+            </Canvas>
         </Grid>
 
     </Grid>

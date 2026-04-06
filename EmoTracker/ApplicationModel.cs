@@ -948,6 +948,61 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         public IEnumerable<IGamePackage> InstalledPackagesView =>
             PackageManager.Instance.InstalledPackages ?? Enumerable.Empty<IGamePackage>();
 
+        /// <summary>
+        /// Groups installed packages by game name for display in the Avalonia settings menu.
+        /// </summary>
+        public IEnumerable<InstalledPackageGroup> InstalledPackagesGroupedView
+        {
+            get
+            {
+                var packages = (PackageManager.Instance.InstalledPackages ?? Enumerable.Empty<IGamePackage>()).ToList();
+
+                packages.Sort((a, b) =>
+                {
+                    var x = PackageManager.Instance.FindGame(a.Game);
+                    var y = PackageManager.Instance.FindGame(b.Game);
+
+                    if (x != null && x.Key.Equals("Other", StringComparison.OrdinalIgnoreCase))
+                        return 1;
+                    if (y != null && y.Key.Equals("Other", StringComparison.OrdinalIgnoreCase))
+                        return -1;
+
+                    int result = CompareStringOrdinal(x?.Series, y?.Series);
+                    if (result != 0) return result;
+
+                    result = (x?.SeriesPriority ?? 0).CompareTo(y?.SeriesPriority ?? 0);
+                    if (result != 0) return result;
+
+                    result = (x?.Priority ?? 0).CompareTo(y?.Priority ?? 0);
+                    if (result != 0) return result;
+
+                    result = CompareStringOrdinal(x?.Name, y?.Name);
+                    if (result != 0) return result;
+
+                    return CompareStringOrdinal(a.Author, b.Author);
+                });
+
+                return packages
+                    .GroupBy(p =>
+                    {
+                        var game = PackageManager.Instance.FindGame(p.Game);
+                        return game?.Name ?? p.Game;
+                    })
+                    .Select(g => new InstalledPackageGroup(g.Key, g));
+            }
+        }
+
+        public class InstalledPackageGroup
+        {
+            public string Name { get; }
+            public IEnumerable<IGamePackage> Items { get; }
+            public InstalledPackageGroup(string name, IEnumerable<IGamePackage> items)
+            {
+                Name = name;
+                Items = items;
+            }
+        }
+
         public class PackageGroup
         {
             public string Name { get; }
