@@ -65,7 +65,7 @@ namespace EmoTracker.Extensions.AutoTracker
 
             if (_extension == null)
             {
-                icon.Foreground = Brushes.WhiteSmoke;
+                icon.Foreground = SolidColorBrush.Parse("#717171");
                 return;
             }
 
@@ -79,7 +79,7 @@ namespace EmoTracker.Extensions.AutoTracker
             }
             else if (_extension.ActiveProvider == null)
             {
-                icon.Foreground = Brushes.WhiteSmoke;
+                icon.Foreground = SolidColorBrush.Parse("#717171");
             }
             else
             {

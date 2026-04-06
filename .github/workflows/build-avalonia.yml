@@ -82,11 +82,8 @@ jobs:
               draw = ImageDraw.Draw(bg)
               r = max(s // 5, 4)
               draw.rounded_rectangle([0, 0, s - 1, s - 1], radius=r, fill=(0, 0, 0, 255))
-              # Inset the icon slightly so it doesn't touch the edges
-              margin = max(s // 8, 2)
-              icon_size = s - margin * 2
-              resized = src.resize((icon_size, icon_size), Image.LANCZOS)
-              bg.paste(resized, (margin, margin), resized)
+              resized = src.resize((s, s), Image.LANCZOS)
+              bg.paste(resized, (0, 0), resized)
               return bg
 
           sizes = [16, 32, 64, 128, 256, 512]

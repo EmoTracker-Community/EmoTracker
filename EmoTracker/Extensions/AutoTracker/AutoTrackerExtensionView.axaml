@@ -18,7 +18,7 @@
         <TextBlock Name="StatusIcon"
                    FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
                    Text="&#xf544;"
-                   Foreground="WhiteSmoke"
+                   Foreground="#717171"
                    VerticalAlignment="Center"/>
     </Grid>
 </UserControl>

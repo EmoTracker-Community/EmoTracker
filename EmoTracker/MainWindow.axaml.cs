@@ -189,9 +189,17 @@ namespace EmoTracker
             return panel;
         }
 
+        /// <summary>
+        /// Check for the platform command modifier: Meta (Cmd) on macOS, Control on Windows/Linux.
+        /// </summary>
+        private static bool HasCmdModifier(KeyModifiers modifiers)
+        {
+            return modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);
+        }
+
         private void MainWindow_PointerWheelChanged(object sender, PointerWheelEventArgs e)
         {
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            if (HasCmdModifier(e.KeyModifiers))
             {
                 int steps = (int)(e.Delta.Y * 3);
                 ApplicationModel.Instance.IncrementMainLayoutScale(steps);
@@ -230,33 +238,33 @@ namespace EmoTracker
             }
             else if (e.Key == Key.S)
             {
-                if (e.KeyModifiers.HasFlag(KeyModifiers.Control | KeyModifiers.Shift))
+                if (HasCmdModifier(e.KeyModifiers) && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
                 {
                     ApplicationModel.Instance.SaveAsCommand.Execute(null);
                     e.Handled = true;
                     return;
                 }
-                else if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                else if (HasCmdModifier(e.KeyModifiers))
                 {
                     ApplicationModel.Instance.SaveCommand.Execute(null);
                     e.Handled = true;
                     return;
                 }
             }
-            else if (e.Key == Key.O && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            else if (e.Key == Key.O && HasCmdModifier(e.KeyModifiers))
             {
                 ApplicationModel.Instance.OpenCommand.Execute(null);
                 e.Handled = true;
                 return;
             }
-            else if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            else if (e.Key == Key.Z && HasCmdModifier(e.KeyModifiers))
             {
                 if (TransactionProcessor.Current is IUndoableTransactionProcessor undo)
                     undo.Undo();
                 e.Handled = true;
                 return;
             }
-            else if (e.Key == Key.D0 && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            else if (e.Key == Key.D0 && HasCmdModifier(e.KeyModifiers))
             {
                 ApplicationModel.Instance.ResetLayoutScale();
                 e.Handled = true;
