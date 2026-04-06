@@ -131,8 +131,9 @@
 
         <!-- Package list -->
         <ScrollViewer Grid.Row="1" Grid.Column="1"
-                      VerticalScrollBarVisibility="Auto">
-            <Grid TextElement.Foreground="WhiteSmoke" MinHeight="50">
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Grid TextElement.Foreground="WhiteSmoke" Grid.IsSharedSizeScope="True" MinHeight="50">
 
                 <!-- Empty state message -->
                 <TextBlock Name="NoRepositoriesText"
@@ -196,11 +197,11 @@
                                                             <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
                                                         <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition MinWidth="50" Width="*"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PackageName"/>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PackageAuthor"/>
+                                                            <ColumnDefinition MinWidth="20" Width="*"/>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PackageStatus"/>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PackageAction"/>
                                                         </Grid.ColumnDefinitions>
 
                                                         <!-- Column 0: Name + flag icons -->
@@ -289,6 +290,7 @@
                                                         <!-- Column 2: Download progress bar -->
                                                         <ProgressBar Grid.Column="2"
                                                                      Height="5"
+                                                                     MinWidth="0"
                                                                      IsEnabled="False"
                                                                      Margin="5,0"
                                                                      Value="{Binding DownloadProgress}"/>
