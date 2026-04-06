@@ -14,28 +14,12 @@
                 <Setter Property="ToolTip" Value="Auto-Tracking" />
                 <Setter Property="ContextMenu">
                     <Setter.Value>
-                        <ContextMenu>
+                        <ContextMenu Opened="ContextMenu_Opened">
                             <MenuItem Header="Start" Command="{Binding StartCommand}"/>
                             <MenuItem Header="Stop" Command="{Binding StopCommand}"/>
                             <Separator />
-                            <MenuItem Header="Provider" ItemsSource="{Binding ApplicableProviders}">
-                                <MenuItem.ItemContainerStyle>
-                                    <Style TargetType="MenuItem">
-                                        <Setter Property="Command" Value="{Binding DataContext.SetProviderCommand, RelativeSource={RelativeSource AncestorType=local:AutoTrackerExtensionView, Mode=FindAncestor}}" />
-                                        <Setter Property="CommandParameter" Value="{Binding}" />
-                                        <Setter Property="Header" Value="{Binding DisplayName}" />
-                                    </Style>
-                                </MenuItem.ItemContainerStyle>
-                            </MenuItem>
-                            <MenuItem Header="Device" ItemsSource="{Binding SelectedProvider.AvailableDevices}">
-                                <MenuItem.ItemContainerStyle>
-                                    <Style TargetType="MenuItem">
-                                        <Setter Property="Command" Value="{Binding DataContext.SetDeviceCommand, RelativeSource={RelativeSource AncestorType=local:AutoTrackerExtensionView, Mode=FindAncestor}}" />
-                                        <Setter Property="CommandParameter" Value="{Binding}" />
-                                        <Setter Property="Header" Value="{Binding DisplayName}" />
-                                    </Style>
-                                </MenuItem.ItemContainerStyle>
-                            </MenuItem>
+                            <MenuItem Header="Provider" Name="ProviderMenu" />
+                            <MenuItem Header="Device" Name="DeviceMenu" />
                         </ContextMenu>
                     </Setter.Value>
                 </Setter>
