@@ -1,3 +1,4 @@
+#nullable enable annotations
 using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -11,7 +12,7 @@ namespace EmoTracker.UI
     /// </summary>
     public partial class GroupedLocationListControl : UserControl, INotifyPropertyChanged
     {
-        public event PropertyChangedEventHandler? PropertyChanged;
+        public new event PropertyChangedEventHandler? PropertyChanged;
 
         protected void NotifyPropertyChanged([CallerMemberName] string? propertyName = null)
         {

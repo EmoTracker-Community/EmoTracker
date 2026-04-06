@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+﻿#nullable enable annotations
+using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Core.Transactions.Processors;

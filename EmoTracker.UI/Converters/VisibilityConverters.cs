@@ -1,3 +1,4 @@
+#nullable enable annotations
 using EmoTracker.Core;
 using EmoTracker.Data.Layout;
 using EmoTracker.Data.Locations;

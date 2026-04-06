@@ -1,3 +1,4 @@
+#nullable enable annotations
 using Avalonia;
 using Avalonia.Controls;
 using EmoTracker.Data;
