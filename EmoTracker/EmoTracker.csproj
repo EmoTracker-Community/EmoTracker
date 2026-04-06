@@ -120,9 +120,6 @@
     <!-- Twitch WPF code-behind replaced by axaml.cs -->
     <Compile Remove="Extensions\Twitch\**\*.xaml.cs" />
     <Page Remove="Extensions\Twitch\**\*.xaml" />
-    <!-- VariantSwitcher WPF code-behind replaced by axaml.cs -->
-    <Compile Remove="Extensions\VariantSwitcher\**\*.xaml.cs" />
-    <Page Remove="Extensions\VariantSwitcher\**\*.xaml" />
     <!-- VoiceRecognition — requires Windows-only System.Speech -->
     <Compile Remove="Extensions\VoiceRecognition\**\*.cs" />
     <Page Remove="Extensions\VoiceRecognition\**\*.xaml" />
@@ -140,7 +137,6 @@
     <Compile Remove="UI\**\*.axaml.cs" />
     <Compile Remove="Extensions\AutoTracker\**\*.axaml.cs" />
     <Compile Remove="Extensions\Twitch\**\*.axaml.cs" />
-    <Compile Remove="Extensions\VariantSwitcher\**\*.axaml.cs" />
     <Compile Remove="Extensions\NoteTaking\**\*.axaml.cs" />
   </ItemGroup>
 
