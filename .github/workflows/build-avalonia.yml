@@ -35,13 +35,10 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore dependencies
-        run: dotnet restore EmoTracker/EmoTracker.csproj -f net8.0 -r ${{ matrix.rid }}
-
-      - name: Build
-        run: dotnet build EmoTracker/EmoTracker.csproj -f net8.0 -c Release --no-restore -r ${{ matrix.rid }} --self-contained
+        run: dotnet restore EmoTracker/EmoTracker.csproj --runtime ${{ matrix.rid }}
 
       - name: Publish
-        run: dotnet publish EmoTracker/EmoTracker.csproj -f net8.0 -c Release -r ${{ matrix.rid }} --self-contained -o publish/${{ matrix.artifact }}
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime ${{ matrix.rid }} --self-contained --output publish/${{ matrix.artifact }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
