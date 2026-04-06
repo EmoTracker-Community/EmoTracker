@@ -3,8 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:EmoTracker.UI"
              xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI">
-    <Grid ToolTip.Tip="{Binding Name}" PointerReleased="Grid_PointerReleased">
+    <Grid ToolTip.Tip="{Binding Name}"
+          ToolTip.ShowDelay="{Binding FastToolTips, Source={x:Static data:ApplicationSettings.Instance}, Converter={x:Static local:TrackableItemControl.FastToolTipsToDelayConverter}}"
+          PointerReleased="Grid_PointerReleased">
         <Button Command="{Binding OnLeftClickCommand, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
                 CommandParameter="{Binding}"
                 Focusable="False"
