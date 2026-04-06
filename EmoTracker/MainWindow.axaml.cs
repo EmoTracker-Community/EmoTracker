@@ -38,27 +38,10 @@ namespace EmoTracker
             UpdateResizeMode();
         }
 
-        private void TitleBar_PointerPressed(object sender, PointerPressedEventArgs e)
-        {
-            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
-                && e.Source is not Button)
-            {
-                BeginMoveDrag(e);
-            }
-        }
-
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            if (this.FindControl<Button>("SystemButton") is Button sysBtn)
-                sysBtn.Click += SystemButton_Click;
             if (this.FindControl<Button>("SettingsButton") is Button settingsBtn)
                 settingsBtn.Click += SettingsButton_Click;
-            if (this.FindControl<Button>("MinimizeButton") is Button minBtn)
-                minBtn.Click += (_, _) => WindowState = WindowState.Minimized;
-            if (this.FindControl<Button>("MaximizeButton") is Button maxBtn)
-                maxBtn.Click += MaximizeButton_Click;
-            if (this.FindControl<Button>("CloseButton") is Button closeBtn)
-                closeBtn.Click += (_, _) => Close();
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
@@ -73,22 +56,9 @@ namespace EmoTracker
             updateWindow.ShowDialog(this);
         }
 
-        private void SystemButton_Click(object sender, RoutedEventArgs e)
-        {
-            // Show system context menu
-        }
-
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
             // TODO: show settings context menu (Phase 7)
-        }
-
-        private void MaximizeButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (Tracker.Instance.AllowResize)
-                WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
-            else
-                WindowState = WindowState.Normal;
         }
 
         private void MainWindow_PointerWheelChanged(object sender, PointerWheelEventArgs e)
