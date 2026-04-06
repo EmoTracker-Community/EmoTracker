@@ -105,14 +105,28 @@ jobs:
           name: ${{ matrix.artifact }}
           path: publish/EmoTracker-${{ matrix.rid }}.tar.gz
 
-      - name: Stage non-macOS output
-        if: "!startsWith(matrix.rid, 'osx')"
+      - name: Create Linux tar.xz
+        if: startsWith(matrix.rid, 'linux')
+        run: |
+          chmod +x publish/raw/EmoTracker
+          cd publish/raw
+          tar cJf ../EmoTracker-${{ matrix.rid }}.tar.xz .
+
+      - name: Upload Linux artifact
+        if: startsWith(matrix.rid, 'linux')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: publish/EmoTracker-${{ matrix.rid }}.tar.xz
+
+      - name: Stage Windows output
+        if: startsWith(matrix.rid, 'win')
         run: |
           mkdir -p publish/${{ matrix.artifact }}
           cp -R publish/raw/* publish/${{ matrix.artifact }}/
 
-      - name: Upload non-macOS artifact
-        if: "!startsWith(matrix.rid, 'osx')"
+      - name: Upload Windows artifact
+        if: startsWith(matrix.rid, 'win')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
