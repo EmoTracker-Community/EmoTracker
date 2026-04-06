@@ -86,8 +86,20 @@
                                 </ItemsControl.ItemContainerTheme>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="locations:MapLocation">
-                                        <Grid Name="MinifiedLocation"
-                                              IsVisible="{Binding Location.HasVisibleSections}">
+                                        <Grid Name="MinifiedLocation">
+                                            <Grid.IsVisible>
+                                                <MultiBinding Converter="{x:Static converters:MapLocationVisibilityConverter.Instance}">
+                                                    <Binding Path="ForceVisible" />
+                                                    <Binding Path="ForceInvisible" />
+                                                    <Binding Path="Location.HasVisibleSections" />
+                                                    <Binding Path="Location.AccessibilityLevel" />
+                                                    <Binding Path="Location.HasAvailableItems" />
+                                                    <Binding Path="Location.Badges.Count" />
+                                                    <Binding Path="Location.NoteTakingSite.Empty" />
+                                                    <Binding Path="DisplayAllLocations" Source="{x:Static data:ApplicationSettings.Instance}" />
+                                                    <Binding Path="IsShiftPressed" RelativeSource="{RelativeSource AncestorType=local:LocationMapControl}" />
+                                                </MultiBinding>
+                                            </Grid.IsVisible>
                                             <Border BorderThickness="{Binding BorderThickness, Converter={x:Static converters:DoubleToThicknessConverter.Instance}}"
                                                     Width="{Binding Size}"
                                                     Height="{Binding Size}"

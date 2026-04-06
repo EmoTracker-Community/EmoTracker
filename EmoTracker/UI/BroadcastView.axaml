@@ -1,0 +1,15 @@
+<Window x:Class="EmoTracker.UI.BroadcastView"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:EmoTracker.UI"
+        xmlns:app="clr-namespace:EmoTracker"
+        DataContext="{Binding Path=BroadcastLayout, Source={x:Static app:ApplicationModel.Instance}}"
+        Title="EmoTracker: Broadcast View"
+        MinWidth="200" MinHeight="100"
+        SizeToContent="WidthAndHeight"
+        CanResize="False"
+        Background="#FF212121">
+    <Grid>
+        <local:LayoutControl x:Name="HostedLayout" DataContext="{Binding}" IsEnabled="False" />
+    </Grid>
+</Window>

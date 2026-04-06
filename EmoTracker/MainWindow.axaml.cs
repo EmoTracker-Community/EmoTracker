@@ -28,7 +28,9 @@ namespace EmoTracker
                 Height = ApplicationSettings.Instance.InitialHeight;
 
             this.Loaded += MainWindow_Loaded;
-            this.KeyDown += MainWindow_KeyDown;
+            // Use Tunnel routing to match WPF's PreviewKeyDown — the window
+            // handles shortcuts before any child control can consume the key.
+            this.AddHandler(KeyDownEvent, MainWindow_KeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             this.PointerWheelChanged += MainWindow_PointerWheelChanged;
 
             // Set initial layout and resize mode

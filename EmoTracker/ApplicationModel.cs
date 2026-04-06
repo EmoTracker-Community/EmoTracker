@@ -220,8 +220,27 @@ namespace EmoTracker
             MainWindow appWindow = Application.Current.MainWindow as MainWindow;
             if (appWindow != null)
                 appWindow.ShowBroadcastView();
+#else
+            if (mBroadcastView == null)
+            {
+                mBroadcastView = new BroadcastView();
+                mBroadcastView.Closing += (_, _) => mBroadcastView = null;
+
+                var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime
+                    as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+
+                mBroadcastView.Show(mainWindow);
+            }
+            else
+            {
+                mBroadcastView.Activate();
+            }
 #endif
         }
+
+#if !WINDOWS
+        private BroadcastView mBroadcastView;
+#endif
 
         private void ShowDevleoperConsole(object obj)
         {
