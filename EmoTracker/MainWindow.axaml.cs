@@ -58,7 +58,10 @@ namespace EmoTracker
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            // TODO: show settings context menu (Phase 7)
+            if (sender is Button btn && btn.ContextMenu != null)
+            {
+                btn.ContextMenu.Open(btn);
+            }
         }
 
         private void MainWindow_PointerWheelChanged(object sender, PointerWheelEventArgs e)

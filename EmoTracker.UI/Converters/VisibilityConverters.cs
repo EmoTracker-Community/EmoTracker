@@ -464,5 +464,57 @@ namespace EmoTracker.UI.Converters
                 return new FuncTemplate<Panel?>(() => new StackPanel { Orientation = orientation });
         }
     }
+
+    /// <summary>
+    /// Multi-value converter for the Package Manager button foreground color.
+    /// Replicates WPF DataTrigger priority: !AnyPackagesInstalled → Active,
+    /// CurrentPackageHasUpdateAvailable → Warning, UpdatesAvailable → Active, else default gray.
+    /// <para>values[0] = UpdatesAvailable (bool), values[1] = CurrentPackageHasUpdateAvailable (bool),
+    /// values[2] = AnyPackagesInstalled (bool).</para>
+    /// </summary>
+    public class PackageManagerForegroundConverter : Singleton<PackageManagerForegroundConverter>, IMultiValueConverter
+    {
+        private static readonly IBrush DefaultBrush = new SolidColorBrush(Color.Parse("#717171"));
+
+        public object Convert(IList<object> values, Type targetType, object parameter, CultureInfo culture)
+        {
+            bool updatesAvailable = values.Count > 0 && values[0] is true;
+            bool currentHasUpdate = values.Count > 1 && values[1] is true;
+            bool anyInstalled     = values.Count > 2 && values[2] is true;
+
+            // WPF trigger priority: last matching trigger wins.
+            // Order: UpdatesAvailable, CurrentPackageHasUpdateAvailable, !AnyPackagesInstalled
+            if (!anyInstalled)
+                return new SolidColorBrush(Color.Parse(
+                    EmoTracker.Data.Settings.ApplicationColors.Instance.Status_Generic_Active));
+            if (currentHasUpdate)
+                return new SolidColorBrush(Color.Parse(
+                    EmoTracker.Data.Settings.ApplicationColors.Instance.Status_Generic_Warning));
+            if (updatesAvailable)
+                return new SolidColorBrush(Color.Parse(
+                    EmoTracker.Data.Settings.ApplicationColors.Instance.Status_Generic_Active));
+
+            return DefaultBrush;
+        }
+    }
+
+    /// <summary>
+    /// Multi-value converter for the Package Manager button tooltip.
+    /// <para>values[0] = UpdatesAvailable, values[1] = CurrentPackageHasUpdateAvailable,
+    /// values[2] = AnyPackagesInstalled.</para>
+    /// </summary>
+    public class PackageManagerTooltipConverter : Singleton<PackageManagerTooltipConverter>, IMultiValueConverter
+    {
+        public object Convert(IList<object> values, Type targetType, object parameter, CultureInfo culture)
+        {
+            bool updatesAvailable = values.Count > 0 && values[0] is true;
+            bool currentHasUpdate = values.Count > 1 && values[1] is true;
+            bool anyInstalled     = values.Count > 2 && values[2] is true;
+
+            if (!anyInstalled) return "Install your first package!";
+            if (currentHasUpdate || updatesAvailable) return "Package Updates Are Available";
+            return "Package Manager";
+        }
+    }
 #endif
 }
