@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.emotracker.emotracker</string>
     <key>CFBundleVersion</key>
-    <string>2.3.8.20</string>
+    <string>3.0.0.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.3.8</string>
+    <string>3.0.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
