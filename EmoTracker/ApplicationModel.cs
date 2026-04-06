@@ -38,7 +38,6 @@ namespace EmoTracker
         public DelegateCommand ActivatePackCommand { get; private set; }
         public DelegateCommand ShowPackageManagerCommand { get; private set; }
         public DelegateCommand ExportPackageOverrideCommand { get; private set; }
-        public DelegateCommand CheckForUpdateCommand { get; private set; }
         public DelegateCommand ShowBroadcastViewCommand { get; private set; }
         public DelegateCommand ShowDeveloperConsoleCommand { get; private set; }
 
@@ -64,11 +63,7 @@ namespace EmoTracker
         {
             get
             {
-#if BETA
-                string title = string.Format("EmoTracker BETA {0}", AppUpdate.Instance.CurrentVersion);
-#else
                 string title = string.Format("EmoTracker {0}", ApplicationVersion.Current);
-#endif
 
                 if (Tracker.Instance.ActiveGamePackage != null && Tracker.Instance.ActiveGamePackageVariant != null)
                 {
@@ -154,8 +149,6 @@ namespace EmoTracker
             ActivatePackCommand = new DelegateCommand(ActivatePackHandler);
             ShowPackageManagerCommand = new DelegateCommand(ShowPackManagerHandler);
             ExportPackageOverrideCommand = new DelegateCommand(ExportPackageOverrideHandler);
-            CheckForUpdateCommand = new DelegateCommand(CheckForUpdateHandler);
-
             SaveCommand = new DelegateCommand(SaveHandler, CanSave);
             SaveAsCommand = new DelegateCommand(SaveAsHandler, CanSave);
             OpenCommand = new DelegateCommand(OpenHandler);
@@ -392,21 +385,6 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
         private void ShowPackManagerHandler(object obj)
         {
             UI.PackageManagerWindow window = new UI.PackageManagerWindow();
-#if WINDOWS
-            window.Owner = Application.Current.MainWindow;
-            window.ShowDialog();
-#else
-            _ = window.ShowDialog(
-                (Avalonia.Application.Current?.ApplicationLifetime as
-                    Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow);
-#endif
-
-            WindowService.Instance.FocusMainWindow();
-        }
-
-        private void CheckForUpdateHandler(object obj)
-        {
-            UI.AppUpdateWindow window = new UI.AppUpdateWindow(false);
 #if WINDOWS
             window.Owner = Application.Current.MainWindow;
             window.ShowDialog();

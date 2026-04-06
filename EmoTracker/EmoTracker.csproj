@@ -103,8 +103,6 @@
     <!-- WPF code-behind files for UI controls — replaced by *.axaml.cs counterparts -->
     <Compile Remove="UI\**\*.xaml.cs" />
     <Page Remove="UI\**\*.xaml" />
-    <!-- Update helper (WPF-dependent) -->
-    <Compile Remove="Update\**\*.cs" />
     <!-- AutoTracker WPF views — replaced by *.axaml.cs counterparts -->
     <Compile Remove="Extensions\AutoTracker\**\*.xaml.cs" />
     <Page Remove="Extensions\AutoTracker\**\*.xaml" />

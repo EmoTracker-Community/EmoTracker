@@ -177,8 +177,6 @@
                                                                 <Separator />
                                                                 <MenuItem Header="Broadcast View" ToolTip="Open the broadcast view, or bring it forward if it's already open" InputGestureText="F2" Command="{Binding ShowBroadcastViewCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                                                                 <MenuItem Header="Manage Packages" Command="{Binding ShowPackageManagerCommand, Source={x:Static local:ApplicationModel.Instance}}" />
-                                                                <Separator />
-                                                                <MenuItem Header="Check For Updates" Command="{Binding CheckForUpdateCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                                                             </MenuItem>
                                                             <MenuItem Header="Layout">
                                                                 <MenuItem Header="Always On Top" ToolTip="Keep the main tracker window on top of other windows" IsCheckable="True" IsChecked="{Binding AlwaysOnTop, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />

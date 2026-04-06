@@ -46,15 +46,8 @@ namespace EmoTracker
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                CheckForUpdates();
                 TrackerLayout?.Focus();
             });
-        }
-
-        private void CheckForUpdates()
-        {
-            var updateWindow = new UI.AppUpdateWindow(true);
-            updateWindow.ShowDialog(this);
         }
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
