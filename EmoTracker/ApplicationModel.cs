@@ -249,6 +249,10 @@ namespace EmoTracker
             MainWindow appWindow = Application.Current.MainWindow as MainWindow;
             if (appWindow != null)
                 appWindow.ShowDeveloperConsole();
+#else
+            var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime
+                as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainWindow;
+            mainWindow?.ShowDeveloperConsole();
 #endif
         }
 
