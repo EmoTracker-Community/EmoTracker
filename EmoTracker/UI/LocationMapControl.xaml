@@ -163,7 +163,8 @@
                                                         </Style.Triggers>
                                                     </Style>
                                                 </Border.Style>
-                                                <Viewbox Width="{Binding NoteIndicatorSize}" Height="{Binding NoteIndicatorSize}" StretchDirection="Both"
+                                                <!-- Note indicator (note-taking on locations is currently disabled) -->
+                                                <!--<Viewbox Width="{Binding NoteIndicatorSize}" Height="{Binding NoteIndicatorSize}" StretchDirection="Both"
                                                          VerticalAlignment="Top" HorizontalAlignment="Right" Margin="{Binding NoteIndicatorMargin, Converter={x:Static converters:ThicknessConverter.Instance}}">
                                                     <Viewbox.Style>
                                                         <Style TargetType="Viewbox">
@@ -177,7 +178,7 @@
                                                     <Border Background="#000000" CornerRadius="2">
                                                         <TextBlock Name="Icon" FontFamily="{StaticResource FontAwesome5Free}" Text="&#xf044;" VerticalAlignment="Center" Foreground="{Binding Status_Generic_Active, Source={x:Static settings:ApplicationColors.Instance}}" Margin="1" />
                                                     </Border>
-                                                </Viewbox>
+                                                </Viewbox>-->
                                             </Border>
                                             <ContentPresenter Name="BadgesHost" Content="{Binding Location.Badges}" VerticalAlignment="Bottom" HorizontalAlignment="Right">
                                                 <ContentPresenter.Style>
