@@ -18,6 +18,7 @@ namespace EmoTracker.Providers.SNI
         readonly List<IProviderOperation> mOperations;
 
         bool mConnected;
+        MemoryMapping mDetectedMapping = MemoryMapping.Unknown;
         DeviceMemory.DeviceMemoryClient mMemoryClient;
         DeviceControl.DeviceControlClient mControlClient;
 
@@ -78,7 +79,8 @@ namespace EmoTracker.Providers.SNI
                     FallbackMemoryMapping = MemoryMapping.Unknown
                 }).ConfigureAwait(false);
 
-                Log.Debug("[SNI] Connected to {DisplayName}, detected mapping: {Mapping}", mDisplayName, detectResponse.MemoryMapping);
+                mDetectedMapping = detectResponse.MemoryMapping;
+                Log.Debug("[SNI] Connected to {DisplayName}, detected mapping: {Mapping}", mDisplayName, mDetectedMapping);
                 mConnected = true;
                 ConnectionStatusChanged?.Invoke(this, true);
             }
@@ -96,6 +98,7 @@ namespace EmoTracker.Providers.SNI
             mMemoryClient = null;
             mControlClient = null;
             mConnected = false;
+            mDetectedMapping = MemoryMapping.Unknown;
             ConnectionStatusChanged?.Invoke(this, false);
             return Task.CompletedTask;
         }
@@ -124,7 +127,30 @@ namespace EmoTracker.Providers.SNI
                     case "SA1": return MemoryMapping.Sa1;
                 }
             }
-            return MemoryMapping.Unknown;
+            // "Auto" — use the mapping detected during connect
+            return mDetectedMapping;
+        }
+
+        async Task DetectMappingAsync()
+        {
+            if (mMemoryClient == null)
+                return;
+
+            try
+            {
+                var response = await mMemoryClient.MappingDetectAsync(new DetectMemoryMappingRequest
+                {
+                    Uri = mUri,
+                    FallbackMemoryMapping = MemoryMapping.Unknown
+                }).ConfigureAwait(false);
+
+                mDetectedMapping = response.MemoryMapping;
+                Log.Debug("[SNI] Re-detected mapping: {Mapping}", mDetectedMapping);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("[SNI] MappingDetect failed: {Message}", ex.Message);
+            }
         }
 
         // Async read — native for gRPC
@@ -140,21 +166,46 @@ namespace EmoTracker.Providers.SNI
                 var addressSpace = GetAddressSpace();
                 var memoryMapping = GetMemoryMapping();
 
-                var response = await mMemoryClient.SingleReadAsync(new SingleReadMemoryRequest
+                try
                 {
-                    Uri = mUri,
-                    Request = new ReadMemoryRequest
+                    var response = await mMemoryClient.SingleReadAsync(new SingleReadMemoryRequest
                     {
-                        RequestAddress = (uint)startAddress,
-                        RequestAddressSpace = addressSpace,
-                        RequestMemoryMapping = memoryMapping,
-                        Size = (uint)length
-                    }
-                }).ConfigureAwait(false);
+                        Uri = mUri,
+                        Request = new ReadMemoryRequest
+                        {
+                            RequestAddress = (uint)startAddress,
+                            RequestAddressSpace = addressSpace,
+                            RequestMemoryMapping = memoryMapping,
+                            Size = (uint)length
+                        }
+                    }).ConfigureAwait(false);
 
-                byte[] data = response.Response.Data.ToByteArray();
-                Log.Debug("[SNI] Read {Length} bytes from 0x{Address:X6} (space={Space}, mapping={Mapping})", length, startAddress, addressSpace, memoryMapping);
-                return (true, data);
+                    byte[] data = response.Response.Data.ToByteArray();
+                    Log.Debug("[SNI] Read {Length} bytes from 0x{Address:X6} (space={Space}, mapping={Mapping})", length, startAddress, addressSpace, memoryMapping);
+                    return (true, data);
+                }
+                catch (Grpc.Core.RpcException ex) when (ex.Status.Detail != null && ex.Status.Detail.Contains("Unknown memory mapping"))
+                {
+                    Log.Debug("[SNI] Unknown mapping during read, running MappingDetect...");
+                    await DetectMappingAsync().ConfigureAwait(false);
+                    memoryMapping = GetMemoryMapping();
+
+                    var response = await mMemoryClient.SingleReadAsync(new SingleReadMemoryRequest
+                    {
+                        Uri = mUri,
+                        Request = new ReadMemoryRequest
+                        {
+                            RequestAddress = (uint)startAddress,
+                            RequestAddressSpace = addressSpace,
+                            RequestMemoryMapping = memoryMapping,
+                            Size = (uint)length
+                        }
+                    }).ConfigureAwait(false);
+
+                    byte[] data = response.Response.Data.ToByteArray();
+                    Log.Debug("[SNI] Read {Length} bytes from 0x{Address:X6} after re-detect (mapping={Mapping})", length, startAddress, memoryMapping);
+                    return (true, data);
+                }
             }
             catch (Exception ex)
             {
@@ -206,19 +257,42 @@ namespace EmoTracker.Providers.SNI
                 var addressSpace = GetAddressSpace();
                 var memoryMapping = GetMemoryMapping();
 
-                await mMemoryClient.SingleWriteAsync(new SingleWriteMemoryRequest
+                try
                 {
-                    Uri = mUri,
-                    Request = new WriteMemoryRequest
+                    await mMemoryClient.SingleWriteAsync(new SingleWriteMemoryRequest
                     {
-                        RequestAddress = (uint)startAddress,
-                        RequestAddressSpace = addressSpace,
-                        RequestMemoryMapping = memoryMapping,
-                        Data = ByteString.CopyFrom(buffer)
-                    }
-                }).ConfigureAwait(false);
-                Log.Debug("[SNI] Wrote {Length} bytes to 0x{Address:X6} (space={Space}, mapping={Mapping})", buffer.Length, startAddress, addressSpace, memoryMapping);
-                return true;
+                        Uri = mUri,
+                        Request = new WriteMemoryRequest
+                        {
+                            RequestAddress = (uint)startAddress,
+                            RequestAddressSpace = addressSpace,
+                            RequestMemoryMapping = memoryMapping,
+                            Data = ByteString.CopyFrom(buffer)
+                        }
+                    }).ConfigureAwait(false);
+                    Log.Debug("[SNI] Wrote {Length} bytes to 0x{Address:X6} (space={Space}, mapping={Mapping})", buffer.Length, startAddress, addressSpace, memoryMapping);
+                    return true;
+                }
+                catch (Grpc.Core.RpcException ex) when (ex.Status.Detail != null && ex.Status.Detail.Contains("Unknown memory mapping"))
+                {
+                    Log.Debug("[SNI] Unknown mapping during write, running MappingDetect...");
+                    await DetectMappingAsync().ConfigureAwait(false);
+                    memoryMapping = GetMemoryMapping();
+
+                    await mMemoryClient.SingleWriteAsync(new SingleWriteMemoryRequest
+                    {
+                        Uri = mUri,
+                        Request = new WriteMemoryRequest
+                        {
+                            RequestAddress = (uint)startAddress,
+                            RequestAddressSpace = addressSpace,
+                            RequestMemoryMapping = memoryMapping,
+                            Data = ByteString.CopyFrom(buffer)
+                        }
+                    }).ConfigureAwait(false);
+                    Log.Debug("[SNI] Wrote {Length} bytes to 0x{Address:X6} after re-detect (mapping={Mapping})", buffer.Length, startAddress, memoryMapping);
+                    return true;
+                }
             }
             catch (Exception ex)
             {

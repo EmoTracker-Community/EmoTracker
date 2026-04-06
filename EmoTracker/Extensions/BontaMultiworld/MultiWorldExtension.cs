@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using ConnectorLib;
 using EmoTracker.Core;
 using EmoTracker.Core.Services;
 using EmoTracker.Data.JSON;

@@ -40,16 +40,8 @@
     <AvaloniaResource Include="Resources\**\*" />
   </ItemGroup>
 
-  <!-- Windows-only native assembly references -->
+  <!-- Windows-only packages -->
   <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <Reference Include="ConnectorLib">
-      <HintPath>..\External\ConnectorLib\ConnectorLib.dll</HintPath>
-      <SpecificVersion>False</SpecificVersion>
-    </Reference>
-    <Reference Include="ConnectorLib.sd2snes">
-      <HintPath>..\External\ConnectorLib\ConnectorLib.sd2snes.dll</HintPath>
-      <SpecificVersion>False</SpecificVersion>
-    </Reference>
     <PackageReference Include="System.ComponentModel.Composition" Version="4.7.0" />
     <PackageReference Include="System.Speech" Version="8.0.0" />
   </ItemGroup>
@@ -116,7 +108,7 @@
     <!-- AutoTracker WPF views — replaced by *.axaml.cs counterparts -->
     <Compile Remove="Extensions\AutoTracker\**\*.xaml.cs" />
     <Page Remove="Extensions\AutoTracker\**\*.xaml" />
-    <!-- BontaMultiworld — requires Windows-only ConnectorLib -->
+    <!-- BontaMultiworld — Windows-only (WPF UI) -->
     <Compile Remove="Extensions\BontaMultiworld\**\*.cs" />
     <Page Remove="Extensions\BontaMultiworld\**\*.xaml" />
     <!-- NDI — Windows-only -->
@@ -134,8 +126,6 @@
     <!-- VoiceRecognition — requires Windows-only System.Speech -->
     <Compile Remove="Extensions\VoiceRecognition\**\*.cs" />
     <Page Remove="Extensions\VoiceRecognition\**\*.xaml" />
-    <!-- ConnectorLib provider — requires Windows-only ConnectorLib -->
-    <Compile Remove="Providers\ConnectorLib\**\*.cs" />
     <!-- Discord P/Invoke wrapper (Windows-only native SDK) -->
     <Compile Remove="Utility\DiscordRPC.cs" />
     <!-- WPF/Framework-dependent generated files -->
@@ -156,14 +146,6 @@
 
   <!-- Copy Windows-only native dependencies on net8.0-windows builds -->
   <Target Name="CopyNativeDependencies" AfterTargets="Build" Condition="$(TargetFramework.Contains('-windows'))">
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyHook32*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyHook64*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyLoad32*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyLoad64*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\Connectors\bizhawk\*.*&quot; &quot;$(TargetDir)Connectors\bizhawk\&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\Connectors\snes9x\*.*&quot; &quot;$(TargetDir)Connectors\snes9x\&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\Connectors\common\*.*&quot; &quot;$(TargetDir)Connectors\bizhawk\&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\Connectors\common\*.*&quot; &quot;$(TargetDir)Connectors\snes9x\&quot;" ContinueOnError="true" />
     <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\Discord\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
     <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\NDI\distrib\x86\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
     <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\NDI\distrib\x64\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />

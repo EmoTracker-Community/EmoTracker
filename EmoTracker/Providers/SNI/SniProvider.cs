@@ -5,6 +5,8 @@ using Serilog;
 using SNI;
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmoTracker.Providers.SNI
@@ -25,7 +27,7 @@ namespace EmoTracker.Providers.SNI
             mOptions = new List<IProviderOption>
             {
                 new SniProviderOption("address_space", "Address Space", ProviderOptionKind.Dropdown,
-                    "FxPakPro", new List<object> { "FxPakPro", "SnesABus", "Raw" }),
+                    "SnesABus", new List<object> { "SnesABus", "FxPakPro", "Raw" }),
                 new SniProviderOption("memory_mapping", "Memory Mapping", ProviderOptionKind.Dropdown,
                     "Auto", new List<object> { "Auto", "LoROM", "HiROM", "ExHiROM", "SA1" })
             };
@@ -47,14 +49,40 @@ namespace EmoTracker.Providers.SNI
 
         internal GrpcChannel Channel => mChannel;
 
+        static string GetUserAgent()
+        {
+            return $"EmoTracker/{Core.ApplicationVersion.Current}";
+        }
+
         GrpcChannel EnsureChannel()
         {
             if (mChannel == null)
             {
-                Log.Debug("[SNI] Creating gRPC channel to http://localhost:8191");
-                mChannel = GrpcChannel.ForAddress("http://localhost:8191");
+                var userAgent = GetUserAgent();
+                Log.Debug("[SNI] Creating gRPC channel to http://localhost:8191 (User-Agent: {UserAgent})", userAgent);
+                mChannel = GrpcChannel.ForAddress("http://localhost:8191", new GrpcChannelOptions
+                {
+                    HttpHandler = new UserAgentHandler(userAgent)
+                });
             }
             return mChannel;
+        }
+
+        class UserAgentHandler : DelegatingHandler
+        {
+            readonly string mUserAgent;
+
+            public UserAgentHandler(string userAgent) : base(new HttpClientHandler())
+            {
+                mUserAgent = userAgent;
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                request.Headers.UserAgent.Clear();
+                request.Headers.UserAgent.ParseAdd(mUserAgent);
+                return base.SendAsync(request, cancellationToken);
+            }
         }
 
         public override async Task RefreshDevicesAsync()

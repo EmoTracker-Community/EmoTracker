@@ -326,8 +326,6 @@ namespace EmoTracker.Extensions.AutoTracker
 
         public AutoTrackerExtension()
         {
-            AutoTrackingProviderRegistry.Instance.DiscoverProviders();
-
             StartCommand = new DelegateCommand(StartAutoTracking, CanStartAutoTracking);
             StopCommand = new DelegateCommand(StopAutoTracking, CanStopAutoTracking);
             SetProviderCommand = new DelegateCommand(SetProvider);

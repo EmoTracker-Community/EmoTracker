@@ -17,7 +17,7 @@ namespace EmoTracker.Data.AutoTracking
         public abstract IReadOnlyList<IProviderOption> Options { get; }
         public abstract IReadOnlyList<IProviderOperation> Operations { get; }
 
-        // Sync read — override in providers where sync is native (e.g., ConnectorLib)
+        // Sync read — override in providers where sync is native
         public virtual bool Read(ulong startAddress, byte[] buffer)
         {
             var result = ReadAsync(startAddress, buffer.Length).GetAwaiter().GetResult();
