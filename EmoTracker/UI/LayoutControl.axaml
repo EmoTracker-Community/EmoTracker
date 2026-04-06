@@ -459,21 +459,22 @@
         </DataTemplate>
 
         <DataTemplate DataType="layout:ButtonPopup">
-            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
-                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
-                <LayoutTransformControl.LayoutTransform>
-                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
-                </LayoutTransformControl.LayoutTransform>
-                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
-                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
-                      IsHitTestVisible="{Binding HitTestVisible}"
-                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
-                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
-                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
-                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
-                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
-                    <Panel>
+            <!-- Outer Grid mirrors WPF structure: Popup is a sibling of the
+                 LayoutTransformControl so its content is NOT affected by the
+                 ButtonPopup's EffectiveScale. -->
+            <Grid>
+                <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}">
+                    <LayoutTransformControl.LayoutTransform>
+                        <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                    </LayoutTransformControl.LayoutTransform>
+                    <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                          Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                          IsHitTestVisible="{Binding HitTestVisible}"
+                          MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                          MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                          MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                          MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                          Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                         <!-- Toggle button: visual appearance changes based on ButtonPopup.Style -->
                         <controls:MouseOnlyToggleButton Name="OpenSettingsButton"
                                                          Background="Transparent"
@@ -496,30 +497,29 @@
                                 <!-- Solid mode: transparent background, no visible content -->
                             </Panel>
                         </controls:MouseOnlyToggleButton>
+                    </Grid>
+                </LayoutTransformControl>
 
-                        <!-- Popup shown when toggle button is checked -->
-                        <Popup Name="SettingsPopup"
-                               IsOpen="{Binding #OpenSettingsButton.IsChecked, Mode=TwoWay}"
-                               IsLightDismissEnabled="True"
-                               Placement="Top"
-                               HorizontalOffset="4" VerticalOffset="4"
-                               PlacementTarget="{Binding #OpenSettingsButton}">
-                            <Border BorderBrush="DarkGray" BorderThickness="3"
-                                    Background="{Binding PopupBackground, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#ff212121}"
-                                    CornerRadius="5" Margin="20">
-                                <Border.Effect>
-                                    <DropShadowDirectionEffect Opacity="0.8" BlurRadius="20" ShadowDepth="3" />
-                                </Border.Effect>
-                                <Grid Margin="0">
-                                    <ContentControl Content="{Binding Layout.Root}"
-                                                    HorizontalContentAlignment="Stretch"
-                                                    VerticalContentAlignment="Stretch" />
-                                </Grid>
-                            </Border>
-                        </Popup>
-                    </Panel>
-                </Grid>
-            </LayoutTransformControl>
+                <!-- Popup shown when toggle button is checked.
+                     Placed outside LayoutTransformControl (matching WPF layout) so popup
+                     content renders at natural size, unaffected by the button's EffectiveScale. -->
+                <Popup Name="SettingsPopup"
+                       IsOpen="{Binding #OpenSettingsButton.IsChecked, Mode=TwoWay}"
+                       IsLightDismissEnabled="True"
+                       Placement="Top"
+                       PlacementTarget="{Binding #OpenSettingsButton}">
+                    <Border BorderBrush="DarkGray" BorderThickness="3"
+                            Background="{Binding PopupBackground, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#ff212121}"
+                            CornerRadius="5" Margin="20">
+                        <Border.Effect>
+                            <DropShadowDirectionEffect Opacity="0.8" BlurRadius="20" ShadowDepth="3" />
+                        </Border.Effect>
+                        <Grid Margin="0">
+                            <ContentControl Content="{Binding Layout.Root}" />
+                        </Grid>
+                    </Border>
+                </Popup>
+            </Grid>
         </DataTemplate>
 
     </UserControl.DataTemplates>
