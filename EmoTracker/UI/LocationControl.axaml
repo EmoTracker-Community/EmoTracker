@@ -13,24 +13,26 @@
         <ControlTheme x:Key="PushPinCheckBox" TargetType="CheckBox">
             <Setter Property="Template">
                 <ControlTemplate>
-                    <Grid x:Name="pin" Width="16" Height="16" Background="Transparent">
-                        <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
-                                   Text="&#xf08d;"
-                                   Foreground="WhiteSmoke"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Center"
-                                   FontSize="9"
-                                   RenderTransformOrigin="0.5, 0.5" />
-                    </Grid>
+                    <LayoutTransformControl x:Name="pinTransform">
+                        <Grid x:Name="pin" Width="16" Height="16" Background="Transparent">
+                            <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
+                                       Text="&#xf08d;"
+                                       Foreground="WhiteSmoke"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       FontSize="9" />
+                        </Grid>
+                    </LayoutTransformControl>
                 </ControlTemplate>
             </Setter>
             <!-- Hidden when the control is disabled -->
             <Style Selector="^:disabled /template/ Grid#pin">
                 <Setter Property="IsVisible" Value="False" />
             </Style>
-            <!-- Rotated 90° when unchecked (not pinned) -->
-            <Style Selector="^:not(:checked) /template/ TextBlock">
-                <Setter Property="RenderTransform">
+            <!-- Rotated 90° when unchecked (not pinned) via LayoutTransformControl
+                 so the layout box adjusts correctly (matching WPF's LayoutTransform on Grid). -->
+            <Style Selector="^:not(:checked) /template/ LayoutTransformControl#pinTransform">
+                <Setter Property="LayoutTransform">
                     <RotateTransform Angle="90" />
                 </Setter>
             </Style>
