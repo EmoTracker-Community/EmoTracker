@@ -1,4 +1,5 @@
 using EmoTracker.Core;
+using EmoTracker.Data.Layout;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Settings;
 using System;
@@ -11,6 +12,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 #else
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -435,6 +437,31 @@ namespace EmoTracker.UI.Converters
                 return false;
 
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Multi-value converter that selects the correct <see cref="ITemplate{Panel}"/>
+    /// based on <see cref="PanelStyle"/> and <see cref="EmoTracker.Data.Layout.Orientation"/>.
+    /// <para>values[0] = PanelStyle, values[1] = EmoTracker.Data.Layout.Orientation.</para>
+    /// Returns a StackPanel template for Stack, WrapPanel template for Wrap.
+    /// </summary>
+    public class PanelStyleToTemplateConverter : Singleton<PanelStyleToTemplateConverter>, IMultiValueConverter
+    {
+        public object Convert(IList<object> values, Type targetType, object parameter, CultureInfo culture)
+        {
+            var style = values.Count > 0 && values[0] is PanelStyle ps ? ps : PanelStyle.Stack;
+            var orientation = Avalonia.Layout.Orientation.Vertical;
+            if (values.Count > 1 && values[1] is EmoTracker.Data.Layout.Orientation dataOrientation
+                && dataOrientation == EmoTracker.Data.Layout.Orientation.Horizontal)
+            {
+                orientation = Avalonia.Layout.Orientation.Horizontal;
+            }
+
+            if (style == PanelStyle.Wrap)
+                return new FuncTemplate<Panel?>(() => new WrapPanel { Orientation = orientation });
+            else
+                return new FuncTemplate<Panel?>(() => new StackPanel { Orientation = orientation });
         }
     }
 #endif

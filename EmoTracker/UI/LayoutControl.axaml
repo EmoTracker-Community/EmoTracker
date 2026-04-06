@@ -64,13 +64,12 @@
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                     <ItemsControl ItemsSource="{Binding Locations}">
                         <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <!-- RecentPinnedLocations inherits Orientation/Style from
-                                     ArrayPanel; packs typically set style=wrap + orientation=horizontal. -->
-                                <WrapPanel Orientation="{Binding DataContext.Orientation,
-                                    RelativeSource={RelativeSource AncestorType=ItemsControl},
-                                    Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
-                            </ItemsPanelTemplate>
+                            <!-- RecentPinnedLocations inherits Style/Orientation from ArrayPanel.
+                                 Style=Stack → StackPanel (stretches items), Style=Wrap → WrapPanel. -->
+                            <MultiBinding Converter="{x:Static converters:PanelStyleToTemplateConverter.Instance}">
+                                <Binding Path="Style" />
+                                <Binding Path="Orientation" />
+                            </MultiBinding>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
