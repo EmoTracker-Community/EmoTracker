@@ -1,3 +1,4 @@
+using EmoTracker.Data;
 using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Packages;
 using Grpc.Net.Client;
@@ -14,6 +15,9 @@ namespace EmoTracker.Providers.SNI
     [AutoTrackingProvider]
     public class SniProvider : AutoTrackingProviderBase
     {
+        const string DefaultAddress = "http://localhost:8191";
+        const string SettingKey = "sni_grpc_address";
+
         readonly List<IAutoTrackingDevice> mAvailableDevices = new List<IAutoTrackingDevice>();
         readonly List<IProviderOption> mOptions;
         IAutoTrackingDevice mDefaultDevice;
@@ -54,13 +58,19 @@ namespace EmoTracker.Providers.SNI
             return $"EmoTracker/{Core.ApplicationVersion.Current}";
         }
 
+        string GetAddress()
+        {
+            return ApplicationSettings.Instance.GetProviderSetting(SettingKey, DefaultAddress);
+        }
+
         GrpcChannel EnsureChannel()
         {
             if (mChannel == null)
             {
+                var address = GetAddress();
                 var userAgent = GetUserAgent();
-                Log.Debug("[SNI] Creating gRPC channel to http://localhost:8191 (User-Agent: {UserAgent})", userAgent);
-                mChannel = GrpcChannel.ForAddress("http://localhost:8191", new GrpcChannelOptions
+                Log.Debug("[SNI] Creating gRPC channel to {Address} (User-Agent: {UserAgent})", address, userAgent);
+                mChannel = GrpcChannel.ForAddress(address, new GrpcChannelOptions
                 {
                     HttpHandler = new UserAgentHandler(userAgent)
                 });

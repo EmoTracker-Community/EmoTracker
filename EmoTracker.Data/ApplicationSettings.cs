@@ -20,6 +20,24 @@ namespace EmoTracker.Data
 
     public class ApplicationSettings : ObservableSingleton<ApplicationSettings>
     {
+        readonly Dictionary<string, string> mProviderSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        public string GetProviderSetting(string key, string defaultValue = null)
+        {
+            if (mProviderSettings.TryGetValue(key, out var value))
+                return value;
+            return defaultValue;
+        }
+
+        public void SetProviderSetting(string key, string value)
+        {
+            if (value == null)
+                mProviderSettings.Remove(key);
+            else
+                mProviderSettings[key] = value;
+            WriteSettings();
+        }
+
         double mInitialWidth = -1.0;
         double mInitialHeight = -1.0;
         double mNDIFrameRate = 30.0;
@@ -254,6 +272,16 @@ namespace EmoTracker.Data
                                     mPackageRepositories.Add(url);
                             }
                         }
+
+                        JObject providerSettings = root.GetValue<JObject>("provider_settings");
+                        if (providerSettings != null)
+                        {
+                            foreach (var kvp in providerSettings)
+                            {
+                                if (kvp.Value != null && kvp.Value.Type == JTokenType.String)
+                                    mProviderSettings[kvp.Key] = kvp.Value.Value<string>();
+                            }
+                        }
                     }
                 }
 
@@ -341,6 +369,14 @@ namespace EmoTracker.Data
                         JArray reposVal = JArray.FromObject(AdditionalRepositories);
                         if (reposVal != null)
                             root.Add("package_repositories", reposVal);
+
+                        if (mProviderSettings.Count > 0)
+                        {
+                            var providerObj = new JObject();
+                            foreach (var kvp in mProviderSettings)
+                                providerObj.Add(kvp.Key, JToken.FromObject(kvp.Value));
+                            root.Add("provider_settings", providerObj);
+                        }
 
                         jsonWriter.WriteToken(root.CreateReader());
                     }
