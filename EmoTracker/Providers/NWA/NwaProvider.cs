@@ -1,8 +1,10 @@
+using EmoTracker.Data;
 using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Packages;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmoTracker.Providers.NWA
@@ -13,10 +15,14 @@ namespace EmoTracker.Providers.NWA
         const int DefaultBasePort = 0xBEEF; // 48879
         const int DefaultPortCount = 10;
         const string DefaultHost = "localhost";
+        const string SettingKey = "nwa_host";
+        const int ScanIntervalMs = 5000;
 
         readonly List<IAutoTrackingDevice> mAvailableDevices = new List<IAutoTrackingDevice>();
         readonly List<IProviderOption> mOptions;
         IAutoTrackingDevice mDefaultDevice;
+        Timer mScanTimer;
+        bool mScanning;
 
         static readonly IReadOnlyList<GamePlatform> sSupportedPlatforms = new[]
         {
@@ -51,6 +57,7 @@ namespace EmoTracker.Providers.NWA
             { "gamecube", GamePlatform.Gamecube },
             { "gc", GamePlatform.Gamecube },
             { "ngc", GamePlatform.Gamecube },
+            { "gen", GamePlatform.Genesis },
             { "genesis", GamePlatform.Genesis },
             { "megadrive", GamePlatform.Genesis },
             { "mega drive", GamePlatform.Genesis },
@@ -63,7 +70,7 @@ namespace EmoTracker.Providers.NWA
         }
 
         public override string UID => "nwa";
-        public override string DisplayName => "NWA (Bizhawk)";
+        public override string DisplayName => "NWA";
         public override IReadOnlyList<GamePlatform> SupportedPlatforms => sSupportedPlatforms;
         public override IReadOnlyList<IAutoTrackingDevice> AvailableDevices => mAvailableDevices;
 
@@ -75,6 +82,11 @@ namespace EmoTracker.Providers.NWA
 
         public override IReadOnlyList<IProviderOption> Options => mOptions;
         public override IReadOnlyList<IProviderOperation> Operations => EmptyOperations;
+
+        static string GetHost()
+        {
+            return ApplicationSettings.Instance.GetProviderSetting(SettingKey, DefaultHost);
+        }
 
         static (int basePort, int count) GetPortRange()
         {
@@ -106,59 +118,128 @@ namespace EmoTracker.Providers.NWA
 
         public override async Task RefreshDevicesAsync()
         {
-            Log.Debug("[NWA] Refreshing device list...");
-            mAvailableDevices.Clear();
+            if (mScanning)
+                return;
 
-            var (basePort, portCount) = GetPortRange();
-            var probeTasks = new List<Task<NwaEmulatorInfo>>();
-
-            for (int i = 0; i < portCount; i++)
-            {
-                int port = basePort + i;
-                probeTasks.Add(NwaDevice.ProbeAsync(DefaultHost, port));
-            }
-
-            NwaEmulatorInfo[] results;
+            mScanning = true;
             try
             {
-                results = await Task.WhenAll(probeTasks).ConfigureAwait(false);
-            }
-            catch
-            {
-                // WhenAll throws on first faulted task; handle individually below
-                results = new NwaEmulatorInfo[probeTasks.Count];
-                for (int i = 0; i < probeTasks.Count; i++)
+                Log.Debug("[NWA] Refreshing device list...");
+
+                // Index existing devices by port so we can reuse instances
+                var existingByPort = new Dictionary<int, NwaDevice>();
+                foreach (var device in mAvailableDevices)
                 {
-                    try { results[i] = await probeTasks[i].ConfigureAwait(false); }
-                    catch { results[i] = null; }
-                }
-            }
-
-            foreach (var info in results)
-            {
-                if (info == null)
-                    continue;
-
-                string displayName = !string.IsNullOrEmpty(info.Version)
-                    ? $"{info.Name} v{info.Version} (:{info.Port})"
-                    : $"{info.Name} (:{info.Port})";
-
-                if (!string.IsNullOrEmpty(info.Game))
-                {
-                    const int MaxGameNameLength = 30;
-                    string gameName = info.Game.Length > MaxGameNameLength
-                        ? info.Game.Substring(0, MaxGameNameLength) + "\u2026"
-                        : info.Game;
-                    displayName += $" \u2014 {gameName}";
+                    var nwaDevice = device as NwaDevice;
+                    if (nwaDevice != null)
+                        existingByPort[nwaDevice.Port] = nwaDevice;
                 }
 
-                string platform = info.Platform;
+                // Identify connected ports — skip these during probing
+                var connectedPorts = new HashSet<int>();
+                foreach (var kvp in existingByPort)
+                {
+                    if (kvp.Value.IsConnected)
+                        connectedPorts.Add(kvp.Key);
+                }
 
-                Log.Debug("[NWA] Found emulator: {DisplayName}, platform={Platform}", displayName, platform ?? "(unknown)");
-                mAvailableDevices.Add(new NwaDevice(info.Host, info.Port, displayName, platform, this));
+                mAvailableDevices.Clear();
+
+                // Re-add connected devices first
+                foreach (var port in connectedPorts)
+                    mAvailableDevices.Add(existingByPort[port]);
+
+                var host = GetHost();
+                var (basePort, portCount) = GetPortRange();
+                var probeTasks = new List<Task<NwaEmulatorInfo>>();
+
+                for (int i = 0; i < portCount; i++)
+                {
+                    int port = basePort + i;
+                    if (connectedPorts.Contains(port))
+                        continue;
+                    probeTasks.Add(NwaDevice.ProbeAsync(host, port));
+                }
+
+                NwaEmulatorInfo[] results;
+                try
+                {
+                    results = await Task.WhenAll(probeTasks).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // WhenAll throws on first faulted task; handle individually below
+                    results = new NwaEmulatorInfo[probeTasks.Count];
+                    for (int i = 0; i < probeTasks.Count; i++)
+                    {
+                        try { results[i] = await probeTasks[i].ConfigureAwait(false); }
+                        catch { results[i] = null; }
+                    }
+                }
+
+                foreach (var info in results)
+                {
+                    if (info == null)
+                        continue;
+
+                    // Reuse existing device instance for this port if one exists
+                    if (existingByPort.TryGetValue(info.Port, out var existing))
+                    {
+                        mAvailableDevices.Add(existing);
+                        continue;
+                    }
+
+                    string displayName = !string.IsNullOrEmpty(info.Version)
+                        ? $"{info.Name} v{info.Version} (:{info.Port})"
+                        : $"{info.Name} (:{info.Port})";
+
+                    if (!string.IsNullOrEmpty(info.Game))
+                    {
+                        const int MaxGameNameLength = 30;
+                        string gameName = info.Game.Length > MaxGameNameLength
+                            ? info.Game.Substring(0, MaxGameNameLength) + "\u2026"
+                            : info.Game;
+                        displayName += $" \u2014 {gameName}";
+                    }
+
+                    string platform = info.Platform;
+
+                    Log.Debug("[NWA] Found emulator: {DisplayName}, platform={Platform}", displayName, platform ?? "(unknown)");
+                    mAvailableDevices.Add(new NwaDevice(info.Host, info.Port, displayName, platform, this));
+                }
+
+                // Clear DefaultDevice if it's no longer in the available list
+                if (mDefaultDevice != null && !mAvailableDevices.Contains(mDefaultDevice))
+                    mDefaultDevice = null;
+
+                Log.Debug("[NWA] Found {Count} device(s) ({ConnectedCount} connected)", mAvailableDevices.Count, connectedPorts.Count);
+
+                // Start periodic scanning if not already running
+                if (mScanTimer == null)
+                {
+                    mScanTimer = new Timer(OnScanTimerElapsed, null, ScanIntervalMs, ScanIntervalMs);
+                }
             }
+            finally
+            {
+                mScanning = false;
+            }
+        }
 
-            Log.Debug("[NWA] Found {Count} device(s)", mAvailableDevices.Count);
+        void OnScanTimerElapsed(object state)
+        {
+            // Fire-and-forget; RefreshDevicesAsync guards against re-entrancy
+            _ = RefreshDevicesAsync();
+        }
+
+        /// <summary>
+        /// Called by NwaDevice when it detects a forceful disconnection.
+        /// Triggers an immediate rescan to update the device list.
+        /// </summary>
+        internal void OnDeviceDisconnected()
+        {
+            Log.Debug("[NWA] Device disconnected, scheduling rescan...");
+            _ = RefreshDevicesAsync();
         }
 
         internal static GamePlatform MapPlatform(string platform)
@@ -175,6 +256,13 @@ namespace EmoTracker.Providers.NWA
         public override void Dispose()
         {
             Log.Debug("[NWA] Disposing provider");
+
+            if (mScanTimer != null)
+            {
+                mScanTimer.Dispose();
+                mScanTimer = null;
+            }
+
             base.Dispose();
         }
     }

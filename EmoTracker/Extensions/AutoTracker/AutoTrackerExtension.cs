@@ -389,15 +389,10 @@ namespace EmoTracker.Extensions.AutoTracker
 
                 var providerInstance = ActiveProvider;
 
-                //  Detect disconnection
+                //  Detect disconnection — stop autotracking automatically
                 if (providerInstance != null && !providerInstance.IsConnected)
                 {
-                    //  Mark all segments dirty to force a re-read when/if we come back from the error
-                    foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
-                    {
-                        update.MarkDirty();
-                    }
-
+                    Dispatch.BeginInvoke(() => StopAutoTracking());
                     Error = true;
                     return;
                 }

@@ -14,17 +14,20 @@ namespace EmoTracker.Providers.NWA
 {
     public class NwaDevice : AutoTrackingDeviceBase
     {
+        const int LockTimeoutMs = 5000;
+
         readonly string mHost;
         readonly int mPort;
         readonly string mDisplayName;
         readonly NwaProvider mParentProvider;
-        readonly List<IProviderOperation> mOperations;
         readonly SemaphoreSlim mLock = new SemaphoreSlim(1, 1);
 
         TcpClient mClient;
         NetworkStream mStream;
         bool mConnected;
         string mPlatform;
+        string mCoreName;
+        string mGameName;
         Dictionary<string, NwaMemoryRegion> mMemoryRegions;
         INwaAddressMap mAddressMap;
 
@@ -35,34 +38,21 @@ namespace EmoTracker.Providers.NWA
             mDisplayName = displayName;
             mParentProvider = parentProvider;
             mPlatform = platform;
-
-            mOperations = new List<IProviderOperation>
-            {
-                new NwaProviderOperation("emulation_reset", "Reset", () => mConnected, async () =>
-                {
-                    await SendCommandAsync("EMULATION_RESET").ConfigureAwait(false);
-                }),
-                new NwaProviderOperation("emulation_pause", "Pause", () => mConnected, async () =>
-                {
-                    await SendCommandAsync("EMULATION_PAUSE").ConfigureAwait(false);
-                }),
-                new NwaProviderOperation("emulation_resume", "Resume", () => mConnected, async () =>
-                {
-                    await SendCommandAsync("EMULATION_RESUME").ConfigureAwait(false);
-                })
-            };
         }
 
         public override string Id => $"nwa:{mHost}:{mPort}";
         public override string DisplayName => mDisplayName;
         public override bool IsConnected => mConnected;
         public string Platform => mPlatform;
+        internal int Port => mPort;
 
         static readonly IReadOnlyList<IProviderOption> EmptyOptions = Array.Empty<IProviderOption>();
+        static readonly IReadOnlyList<IProviderOperation> EmptyOperations = Array.Empty<IProviderOperation>();
         public override IReadOnlyList<IProviderOption> Options => EmptyOptions;
-        public override IReadOnlyList<IProviderOperation> Operations => mOperations;
+        public override IReadOnlyList<IProviderOperation> Operations => EmptyOperations;
 
         public override event EventHandler<bool> ConnectionStatusChanged;
+
 
         public override async Task ConnectAsync()
         {
@@ -84,10 +74,13 @@ namespace EmoTracker.Providers.NWA
                 var nameReply = await SendCommandAsync($"MY_NAME_IS {clientName}").ConfigureAwait(false);
                 Log.Debug("[NWA] Identified as: {Name}", nameReply.GetValueOrDefault("name", clientName));
 
+                // Record current core/game/platform for change detection
+                await RefreshCoreInfoAsync().ConfigureAwait(false);
+
                 // Refresh memory regions
                 await RefreshMemoryRegionsAsync().ConfigureAwait(false);
 
-                // Verify core and initialize address map for the platform
+                // Initialize address map — prefer System Bus, fall back to platform-specific map
                 await InitializeAddressMapAsync().ConfigureAwait(false);
 
                 mConnected = true;
@@ -102,91 +95,93 @@ namespace EmoTracker.Providers.NWA
             }
         }
 
-        const string RequiredSnesCore = "BSNESv115+";
-        const int CoreSwitchPollIntervalMs = 500;
-        const int CoreSwitchTimeoutMs = 15000;
-
         async Task InitializeAddressMapAsync()
         {
+            // Prefer "System Bus" domain — allows bus addresses directly, no translation needed.
+            if (mMemoryRegions != null && mMemoryRegions.ContainsKey("System Bus"))
+            {
+                mAddressMap = new DefaultAddressMap("System Bus");
+                Log.Debug("[NWA] Using address map with domain: System Bus");
+                return;
+            }
+
+            // System Bus not available — try a platform-specific address map.
+            var domainNames = mMemoryRegions != null
+                ? string.Join(", ", mMemoryRegions.Keys)
+                : "(none)";
+            Log.Warning("[NWA] \"System Bus\" memory domain not available. Reported domains: {Domains}", domainNames);
+
             var gamePlatform = NwaProvider.MapPlatform(mPlatform);
+            INwaAddressMap platformMap = CreatePlatformAddressMap(gamePlatform);
 
-            if (gamePlatform == GamePlatform.SNES)
+            if (platformMap == null)
             {
-                await EnsureBsnesCoreAsync().ConfigureAwait(false);
-
-                // Re-enumerate memory regions after a potential core switch
-                await RefreshMemoryRegionsAsync().ConfigureAwait(false);
-            }
-
-            // Verify that the core exposes a "System Bus" domain, which allows
-            // bus addresses to be used directly without address translation.
-            if (mMemoryRegions == null || !mMemoryRegions.ContainsKey("System Bus"))
-            {
-                var domainNames = mMemoryRegions != null
-                    ? string.Join(", ", mMemoryRegions.Keys)
-                    : "(none)";
-                Log.Warning("[NWA] \"System Bus\" memory domain not available. Reported domains: {Domains}", domainNames);
                 throw new InvalidOperationException(
-                    $"Core does not expose a \"System Bus\" memory domain (available: {domainNames})");
+                    $"Core does not expose a \"System Bus\" memory domain and no address map " +
+                    $"is available for platform \"{mPlatform}\" (available domains: {domainNames})");
             }
 
-            mAddressMap = new DefaultAddressMap("System Bus");
-            Log.Debug("[NWA] Using address map with domain: System Bus");
+            await platformMap.InitializeAsync(ReadRawDomainAsync).ConfigureAwait(false);
+            mAddressMap = platformMap;
+            Log.Information("[NWA] Using {Platform} platform address map (available domains: {Domains})",
+                gamePlatform, domainNames);
         }
 
-        async Task EnsureBsnesCoreAsync()
+        async Task RefreshCoreInfoAsync()
         {
-            var coreReply = await SendCommandAsync("CORE_CURRENT_INFO").ConfigureAwait(false);
-            string coreName = coreReply.GetValueOrDefault("name", "");
-            Log.Debug("[NWA] Current core: {Core}", coreName);
-
-            if (string.Equals(coreName, RequiredSnesCore, StringComparison.OrdinalIgnoreCase))
-                return;
-
-            Log.Information("[NWA] Switching core from {Current} to {Required}...", coreName, RequiredSnesCore);
-
-            // Save state before switching cores so we can restore it afterwards
-            Log.Debug("[NWA] Saving state before core switch...");
-            await SendCommandAsync("SAVE_STATE emotracker_core_switch.state").ConfigureAwait(false);
-
-            await SendCommandAsync($"LOAD_CORE {RequiredSnesCore}").ConfigureAwait(false);
-            await SendCommandAsync("CORE_RESET").ConfigureAwait(false);
-
-            // Wait for the game to be running on the new core
-            var deadline = DateTime.UtcNow.AddMilliseconds(CoreSwitchTimeoutMs);
-            while (DateTime.UtcNow < deadline)
-            {
-                await Task.Delay(CoreSwitchPollIntervalMs).ConfigureAwait(false);
-
-                var statusReply = await SendCommandAsync("EMULATION_STATUS").ConfigureAwait(false);
-                string state = statusReply.GetValueOrDefault("state", "");
-                if (state == "running" || state == "paused")
-                    break;
-            }
-
-            // Restore the save state on the new core
-            Log.Debug("[NWA] Restoring state after core switch...");
             try
             {
-                await SendCommandAsync("LOAD_STATE emotracker_core_switch.state").ConfigureAwait(false);
+                var reply = await SendCommandAsync("CORE_CURRENT_INFO").ConfigureAwait(false);
+                mCoreName = reply.GetValueOrDefault("name", null);
+                mGameName = reply.GetValueOrDefault("game", null);
+                string platform = reply.GetValueOrDefault("platform", null);
+                if (!string.IsNullOrEmpty(platform))
+                    mPlatform = platform;
+                Log.Debug("[NWA] Core info — core: {Core}, game: {Game}, platform: {Platform}",
+                    mCoreName ?? "(unknown)", mGameName ?? "(none)", mPlatform ?? "(unknown)");
             }
-            catch (Exception ex)
+            catch
             {
-                Log.Warning("[NWA] Failed to restore state after core switch: {Message}", ex.Message);
+                mCoreName = null;
+                mGameName = null;
             }
+        }
 
-            // Verify the switch succeeded
-            coreReply = await SendCommandAsync("CORE_CURRENT_INFO").ConfigureAwait(false);
-            coreName = coreReply.GetValueOrDefault("name", "");
-            Log.Debug("[NWA] Core after switch: {Core}", coreName);
-
-            if (!string.Equals(coreName, RequiredSnesCore, StringComparison.OrdinalIgnoreCase))
+        async Task<bool> HasCoreOrGameChangedAsync()
+        {
+            try
             {
-                throw new InvalidOperationException(
-                    $"Failed to switch to {RequiredSnesCore} core (got \"{coreName}\")");
+                var reply = await SendCommandAsync("CORE_CURRENT_INFO").ConfigureAwait(false);
+                string core = reply.GetValueOrDefault("name", null);
+                string game = reply.GetValueOrDefault("game", null);
+                return !string.Equals(core, mCoreName, StringComparison.Ordinal)
+                    || !string.Equals(game, mGameName, StringComparison.Ordinal);
             }
+            catch
+            {
+                return false;
+            }
+        }
 
-            Log.Information("[NWA] Successfully switched to {Core}", coreName);
+        async Task ReinitializeAddressMapAsync()
+        {
+            Log.Information("[NWA] Core or game changed, reinitializing address map...");
+            await RefreshCoreInfoAsync().ConfigureAwait(false);
+            await RefreshMemoryRegionsAsync().ConfigureAwait(false);
+            await InitializeAddressMapAsync().ConfigureAwait(false);
+        }
+
+        static INwaAddressMap CreatePlatformAddressMap(GamePlatform platform)
+        {
+            switch (platform)
+            {
+                case GamePlatform.SNES:
+                    return new SnesAddressMap();
+                case GamePlatform.Genesis:
+                    return new DefaultAddressMap("M68K BUS");
+                default:
+                    return null;
+            }
         }
 
         /// <summary>
@@ -213,6 +208,8 @@ namespace EmoTracker.Providers.NWA
             mConnected = false;
             mMemoryRegions = null;
             mAddressMap = null;
+            mCoreName = null;
+            mGameName = null;
 
             if (mStream != null)
             {
@@ -260,17 +257,22 @@ namespace EmoTracker.Providers.NWA
 
         async Task<NwaReply> SendCommandAsync(string command)
         {
-            await mLock.WaitAsync().ConfigureAwait(false);
+            if (!await mLock.WaitAsync(LockTimeoutMs).ConfigureAwait(false))
+                throw new TimeoutException("Timed out waiting for NWA command lock");
             try
             {
-                if (mStream == null || !mClient.Connected)
-                    throw new InvalidOperationException("Not connected");
+                ThrowIfDisconnected();
 
                 byte[] commandBytes = Encoding.ASCII.GetBytes(command + "\n");
                 await mStream.WriteAsync(commandBytes, 0, commandBytes.Length).ConfigureAwait(false);
                 await mStream.FlushAsync().ConfigureAwait(false);
 
                 return await ReadAsciiReplyAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (IsConnectionException(ex))
+            {
+                HandleConnectionFailure();
+                throw;
             }
             finally
             {
@@ -280,11 +282,11 @@ namespace EmoTracker.Providers.NWA
 
         async Task<byte[]> SendReadCommandAsync(string command)
         {
-            await mLock.WaitAsync().ConfigureAwait(false);
+            if (!await mLock.WaitAsync(LockTimeoutMs).ConfigureAwait(false))
+                throw new TimeoutException("Timed out waiting for NWA command lock");
             try
             {
-                if (mStream == null || !mClient.Connected)
-                    throw new InvalidOperationException("Not connected");
+                ThrowIfDisconnected();
 
                 byte[] commandBytes = Encoding.ASCII.GetBytes(command + "\n");
                 await mStream.WriteAsync(commandBytes, 0, commandBytes.Length).ConfigureAwait(false);
@@ -309,6 +311,11 @@ namespace EmoTracker.Providers.NWA
                     throw new NwaProtocolException("protocol_error", $"Unexpected response byte: 0x{firstByte:X2}");
                 }
             }
+            catch (Exception ex) when (IsConnectionException(ex))
+            {
+                HandleConnectionFailure();
+                throw;
+            }
             finally
             {
                 mLock.Release();
@@ -317,11 +324,11 @@ namespace EmoTracker.Providers.NWA
 
         async Task SendWriteCommandAsync(string command, byte[] data)
         {
-            await mLock.WaitAsync().ConfigureAwait(false);
+            if (!await mLock.WaitAsync(LockTimeoutMs).ConfigureAwait(false))
+                throw new TimeoutException("Timed out waiting for NWA command lock");
             try
             {
-                if (mStream == null || !mClient.Connected)
-                    throw new InvalidOperationException("Not connected");
+                ThrowIfDisconnected();
 
                 // Send the command
                 byte[] commandBytes = Encoding.ASCII.GetBytes(command + "\n");
@@ -343,10 +350,29 @@ namespace EmoTracker.Providers.NWA
                 if (reply.ContainsKey("error"))
                     throw new NwaProtocolException(reply.GetValueOrDefault("error", "unknown"), reply.GetValueOrDefault("reason", ""));
             }
+            catch (Exception ex) when (IsConnectionException(ex))
+            {
+                HandleConnectionFailure();
+                throw;
+            }
             finally
             {
                 mLock.Release();
             }
+        }
+
+        void ThrowIfDisconnected()
+        {
+            if (mStream == null || mClient == null || !mClient.Connected)
+                throw new InvalidOperationException("Not connected");
+        }
+
+        static bool IsConnectionException(Exception ex)
+        {
+            return ex is SocketException
+                || ex is IOException
+                || ex is EndOfStreamException
+                || ex is ObjectDisposedException;
         }
 
         async Task<int> ReadByteAsync()
@@ -434,6 +460,11 @@ namespace EmoTracker.Providers.NWA
 
         public override async Task<(bool success, byte[] data)> ReadAsync(ulong startAddress, int length)
         {
+            return await ReadAsyncInternal(startAddress, length, allowRetry: true).ConfigureAwait(false);
+        }
+
+        async Task<(bool success, byte[] data)> ReadAsyncInternal(ulong startAddress, int length, bool allowRetry)
+        {
             if (!mConnected || mStream == null || mAddressMap == null)
                 return (false, null);
 
@@ -461,6 +492,11 @@ namespace EmoTracker.Providers.NWA
             catch (NwaProtocolException ex)
             {
                 Log.Warning("[NWA] Read error at 0x{Address:X6}: [{Error}] {Reason}", startAddress, ex.ErrorType, ex.Reason);
+                if (allowRetry && await HasCoreOrGameChangedAsync().ConfigureAwait(false))
+                {
+                    await ReinitializeAddressMapAsync().ConfigureAwait(false);
+                    return await ReadAsyncInternal(startAddress, length, allowRetry: false).ConfigureAwait(false);
+                }
                 return (false, null);
             }
             catch (Exception ex)
@@ -505,6 +541,11 @@ namespace EmoTracker.Providers.NWA
 
         public override async Task<bool> WriteAsync(ulong startAddress, byte[] buffer)
         {
+            return await WriteAsyncInternal(startAddress, buffer, allowRetry: true).ConfigureAwait(false);
+        }
+
+        async Task<bool> WriteAsyncInternal(ulong startAddress, byte[] buffer, bool allowRetry)
+        {
             if (!mConnected || mStream == null || mAddressMap == null)
                 return false;
 
@@ -528,6 +569,11 @@ namespace EmoTracker.Providers.NWA
             catch (NwaProtocolException ex)
             {
                 Log.Warning("[NWA] Write error at 0x{Address:X6}: [{Error}] {Reason}", startAddress, ex.ErrorType, ex.Reason);
+                if (allowRetry && await HasCoreOrGameChangedAsync().ConfigureAwait(false))
+                {
+                    await ReinitializeAddressMapAsync().ConfigureAwait(false);
+                    return await WriteAsyncInternal(startAddress, buffer, allowRetry: false).ConfigureAwait(false);
+                }
                 return false;
             }
             catch (Exception ex)
@@ -629,8 +675,9 @@ namespace EmoTracker.Providers.NWA
                 return;
 
             Log.Warning("[NWA] Connection to {DisplayName} lost", mDisplayName);
-            mConnected = false;
+            CleanupConnection();
             ConnectionStatusChanged?.Invoke(this, false);
+            mParentProvider.OnDeviceDisconnected();
         }
 
         public override void Dispose()
