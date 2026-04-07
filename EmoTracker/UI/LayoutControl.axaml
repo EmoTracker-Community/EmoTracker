@@ -386,6 +386,35 @@
             </LayoutTransformControl>
         </DataTemplate>
 
+        <!-- NOTE: ScrollPanel must be declared before Container because ScrollPanel
+             derives from Container and Avalonia's DataTemplate matching picks the
+             first template whose DataType is assignable from the item. Placing
+             Container first would shadow ScrollPanel (and any other Container
+             subclass defined after it). -->
+        <DataTemplate DataType="layout:ScrollPanel">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <ScrollViewer HorizontalScrollBarVisibility="{Binding HorizontalScrollBarVisibility, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                  VerticalScrollBarVisibility="{Binding VerticalScrollBarVisibility, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                        <ItemsControl ItemsSource="{Binding Items}" />
+                    </ScrollViewer>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
         <DataTemplate DataType="layout:Container">
             <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
                                     HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
@@ -414,31 +443,6 @@
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
-                </Grid>
-            </LayoutTransformControl>
-        </DataTemplate>
-
-        <DataTemplate DataType="layout:ScrollPanel">
-            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
-                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
-                <LayoutTransformControl.LayoutTransform>
-                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
-                </LayoutTransformControl.LayoutTransform>
-                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
-                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
-                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
-                      IsHitTestVisible="{Binding HitTestVisible}"
-                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
-                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
-                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
-                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
-                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                  VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding Items}"
-                                      ItemContainerTheme="{StaticResource StretchItemContainer}" />
-                    </ScrollViewer>
                 </Grid>
             </LayoutTransformControl>
         </DataTemplate>
