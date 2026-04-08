@@ -4,7 +4,6 @@ using EmoTracker.Data;
 using EmoTracker.Extensions;
 using EmoTracker.Extensions.NDI;
 using System.ComponentModel;
-using System.Runtime.InteropServices;
 
 namespace EmoTracker.UI
 {
@@ -16,15 +15,15 @@ namespace EmoTracker.UI
         {
             InitializeComponent();
 
-            // On Windows the hidden HiddenBroadcastWindow handles NDI when
-            // EnableBackgroundNdi is on, so the visible container must stay
-            // dormant to avoid advertising a duplicate source.  On other
-            // platforms (or with the setting off) the visible container owns
-            // the NDI stream as before.
+            // When background NDI is enabled, the hidden HiddenBroadcastWindow
+            // handles NDI broadcasting on all platforms, so the visible container
+            // must stay dormant to avoid advertising a duplicate source.  With the
+            // setting off, the visible container owns the NDI stream (legacy
+            // "NDI only while broadcast view is open" behaviour).
             //
             // NdiEnabled is read once in NdiSendContainer.OnAttachedToVisualTree,
             // so we set it BEFORE the window attaches to the visual tree.
-            NDIHost.NdiEnabled = !BackgroundNdiIsActive;
+            NDIHost.NdiEnabled = !ApplicationSettings.Instance.EnableBackgroundNdi;
 
             if (NDIHost.NdiEnabled)
             {
@@ -32,10 +31,6 @@ namespace EmoTracker.UI
                 UpdateNDIExtensionStatus();
             }
         }
-
-        private static bool BackgroundNdiIsActive =>
-            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
-            ApplicationSettings.Instance.EnableBackgroundNdi;
 
         protected override void OnKeyDown(KeyEventArgs e)
         {

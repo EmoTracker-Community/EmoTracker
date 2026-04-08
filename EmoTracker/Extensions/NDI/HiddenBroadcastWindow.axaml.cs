@@ -31,6 +31,28 @@ namespace EmoTracker.Extensions.NDI
     /// compositor renders the main window (which happens whenever tracker state
     /// changes), we trigger a capture on our NdiSendContainer.  This naturally
     /// aligns NDI frames with real state changes.
+    ///
+    /// Cross-platform notes:
+    ///  * Windows (tested): off-screen positioning + Opacity=0.01 works
+    ///    reliably.  Opacity=0 is the failure mode — DWM short-circuits the
+    ///    rasterizer for fully transparent windows, leaving the composition
+    ///    visual's backing store empty.
+    ///  * Linux X11 (untested): absolute positioning is supported by most
+    ///    window managers; -32000/-32000 should place the window well outside
+    ///    any conceivable monitor layout.  If a compositor clamps the window
+    ///    back to a monitor edge, Opacity=0.01 still keeps it imperceptible.
+    ///  * Linux Wayland (untested): Wayland protocols do NOT permit clients
+    ///    to set absolute window positions — the off-screen coordinates will
+    ///    be ignored and the compositor will place the window somewhere
+    ///    visible.  Opacity=0.01 is the primary fallback for invisibility
+    ///    here; users may observe a near-transparent ghost window.  A future
+    ///    improvement could set the window state to Minimized or use a
+    ///    compositor-specific layer-shell protocol.
+    ///  * macOS (untested): Cocoa generally honours absolute positioning
+    ///    including off-screen coordinates, but some window server versions
+    ///    will clamp the window back to a screen if detected as fully
+    ///    off-screen.  Opacity=0.01 is again the fallback.  ShowInTaskbar
+    ///    maps to the Dock on macOS; Avalonia's macOS backend honours it.
     /// </summary>
     public partial class HiddenBroadcastWindow : Window
     {
