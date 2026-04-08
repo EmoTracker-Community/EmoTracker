@@ -3,6 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:EmoTracker.UI"
         xmlns:app="clr-namespace:EmoTracker"
+        xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+        xmlns:ndi="clr-namespace:EmoTracker.Extensions.NDI"
         DataContext="{Binding Path=BroadcastLayout, Source={x:Static app:ApplicationModel.Instance}}"
         Title="EmoTracker: Broadcast View"
         MinWidth="200" MinHeight="100"
@@ -10,6 +12,13 @@
         CanResize="False"
         Background="#FF212121">
     <Grid>
-        <local:LayoutControl x:Name="HostedLayout" DataContext="{Binding}" IsEnabled="False" />
+        <ndi:NdiSendContainer Name="NDIHost"
+                              NdiName="EmoTracker Broadcast View"
+                              NdiDropShadow="{Binding Root.BroadcastShadow}"
+                              NdiIntegerScale="{Binding Path=NdiOutputScale, Source={x:Static data:ApplicationSettings.Instance}}"
+                              NdiFrameRateNumerator="{Binding Path=NdiFrameRate, Source={x:Static data:ApplicationSettings.Instance}}"
+                              NdiFrameRateDenominator="1">
+            <local:LayoutControl x:Name="HostedLayout" DataContext="{Binding}" IsEnabled="False" />
+        </ndi:NdiSendContainer>
     </Grid>
 </Window>
