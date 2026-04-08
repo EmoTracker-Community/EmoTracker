@@ -5,7 +5,6 @@ using Newtonsoft.Json.Linq;
 using Serilog;
 using System;
 using System.ComponentModel;
-using System.Runtime.InteropServices;
 
 namespace EmoTracker.Extensions.NDI
 {
@@ -25,7 +24,7 @@ namespace EmoTracker.Extensions.NDI
         public object StatusBarControl { get; set; }
 
         // -------------------------------------------------------------------------
-        // Hidden-window-based background NDI broadcasting (Windows only)
+        // Hidden-window-based background NDI broadcasting
         // -------------------------------------------------------------------------
         // When enabled, an off-screen HiddenBroadcastWindow is created as soon as
         // the loaded package exposes a BroadcastLayout.  The hidden window hosts
@@ -33,14 +32,14 @@ namespace EmoTracker.Extensions.NDI
         // renders frames on demand (when a receiver connects).
         //
         // The feature is gated on:
-        //   1. Running on Windows — other platforms lack verified hidden-window
-        //      behaviour for Avalonia's compositor snapshot path.
-        //   2. ApplicationSettings.EnableBackgroundNdi — user opt-out switch.
-        //   3. ApplicationModel.Instance.BroadcastLayout having valid content.
+        //   1. ApplicationSettings.EnableBackgroundNdi — user opt-out switch.
+        //   2. ApplicationModel.Instance.BroadcastLayout having valid content.
         //
-        // When any of those conditions become false the hidden window is torn
-        // down.  The visible BroadcastView retains its own NdiSendContainer for
-        // the non-background code path (non-Windows, or setting disabled).
+        // When either becomes false the hidden window is torn down.  When the
+        // setting is off, the visible BroadcastView retains its own
+        // NdiSendContainer for the legacy "NDI only while broadcast view is open"
+        // behaviour.  See HiddenBroadcastWindow for the cross-platform concerns
+        // around its off-screen / opacity strategy.
         // -------------------------------------------------------------------------
 
         private HiddenBroadcastWindow _hiddenWindow;
@@ -107,19 +106,18 @@ namespace EmoTracker.Extensions.NDI
 
         /// <summary>
         /// Brings the hidden window into the correct state for the current
-        /// platform / setting / layout combination — creating it if it should
-        /// exist and doesn't, destroying it if it shouldn't and does.
+        /// setting / layout combination — creating it if it should exist and
+        /// doesn't, destroying it if it shouldn't and does.
         /// </summary>
         private void ReconcileHiddenWindow()
         {
-            bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
             bool settingEnabled = ApplicationSettings.Instance.EnableBackgroundNdi;
             bool hasContent = HasBroadcastContent();
-            bool shouldExist = isWindows && settingEnabled && hasContent;
+            bool shouldExist = settingEnabled && hasContent;
 
             Log.Debug(
-                "[NDI] Reconcile hidden window: Windows={W}, EnableBackgroundNdi={S}, HasBroadcastContent={C}, shouldExist={Should}, exists={Exists}",
-                isWindows, settingEnabled, hasContent, shouldExist, _hiddenWindow != null);
+                "[NDI] Reconcile hidden window: EnableBackgroundNdi={S}, HasBroadcastContent={C}, shouldExist={Should}, exists={Exists}",
+                settingEnabled, hasContent, shouldExist, _hiddenWindow != null);
 
             if (shouldExist && _hiddenWindow == null)
                 CreateHiddenWindow();

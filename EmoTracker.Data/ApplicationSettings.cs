@@ -211,8 +211,8 @@ namespace EmoTracker.Data
         /// When enabled (default), the broadcast view renders to a hidden off-screen
         /// window so the NDI source is advertised on the network and frames flow to
         /// receivers whether or not the user has opened the visible broadcast view.
-        /// Platform-ignored on non-Windows targets until cross-platform hidden-window
-        /// support lands.
+        /// When disabled, NDI is only broadcast while the visible broadcast view
+        /// window is open (legacy behaviour).
         /// </summary>
         public bool EnableBackgroundNdi
         {
