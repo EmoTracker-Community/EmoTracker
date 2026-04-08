@@ -440,9 +440,20 @@ namespace EmoTracker.Extensions.NDI
                 // than inferring it from the OS.  The compositor backend decides channel
                 // order (BGRA on Windows/D3D, RGBA on macOS/Metal), and reading it here
                 // handles any future backend changes automatically.
-                NDIlib.FourCC_type_e ndiFormat = snapshot.Format == PixelFormat.Rgba8888
-                    ? NDIlib.FourCC_type_e.FourCC_type_RGBA
-                    : NDIlib.FourCC_type_e.FourCC_type_BGRA;
+                NDIlib.FourCC_type_e ndiFormat;
+                switch (snapshot.Format)
+                {
+                    case PixelFormat f when f == PixelFormat.Bgra8888:
+                        ndiFormat = NDIlib.FourCC_type_e.FourCC_type_BGRA;
+                        break;
+                    case PixelFormat f when f == PixelFormat.Rgba8888:
+                        ndiFormat = NDIlib.FourCC_type_e.FourCC_type_RGBA;
+                        break;
+                    default:
+                        Log.Warning("[NDI] Unsupported snapshot pixel format {Format}; defaulting to BGRA.", snapshot.Format);
+                        ndiFormat = NDIlib.FourCC_type_e.FourCC_type_BGRA;
+                        break;
+                }
 
                 int width  = snapshot.PixelSize.Width;
                 int height = snapshot.PixelSize.Height;
