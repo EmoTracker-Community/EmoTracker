@@ -42,6 +42,7 @@ namespace EmoTracker.Data
         double mInitialHeight = -1.0;
         double mNDIFrameRate = 30.0;
         int mNDIOutputScale = 1;
+        bool mbEnableBackgroundNdi = true;
         bool mbAlwaysOnTop = false;
         bool mbEnableDiscordRichPresence = false;
         bool mbEnableVoice = true;
@@ -206,6 +207,19 @@ namespace EmoTracker.Data
             set { SetProperty(ref mNDIOutputScale, Math.Max(value, 1)); }
         }
 
+        /// <summary>
+        /// When enabled (default), the broadcast view renders to a hidden off-screen
+        /// window so the NDI source is advertised on the network and frames flow to
+        /// receivers whether or not the user has opened the visible broadcast view.
+        /// Platform-ignored on non-Windows targets until cross-platform hidden-window
+        /// support lands.
+        /// </summary>
+        public bool EnableBackgroundNdi
+        {
+            get { return mbEnableBackgroundNdi; }
+            set { SetProperty(ref mbEnableBackgroundNdi, value); }
+        }
+
         public IEnumerable<string> AdditionalRepositories
         {
             get { return mPackageRepositories; }
@@ -243,6 +257,7 @@ namespace EmoTracker.Data
                         InitialHeight = root.GetValue<double>("initial_height", -1.0);
                         NdiFrameRate = root.GetValue<double>("ndi_frame_rate", 30.0);
                         NdiOutputScale = root.GetValue<int>("ndi_output_scale", 1);
+                        EnableBackgroundNdi = root.GetValue<bool>("enable_background_ndi", true);
                         AlwaysOnTop = root.GetValue<bool>("always_on_top", false);
                         EnableDiscordRichPresence = root.GetValue<bool>("discord_rich_presence", false);
                         EnableVoiceControl = root.GetValue<bool>("enable_voice_control", true);
@@ -338,6 +353,8 @@ namespace EmoTracker.Data
 
                         if (NdiOutputScale > 1)
                             root.Add("ndi_output_scale", JToken.FromObject(NdiOutputScale));
+
+                        root.Add("enable_background_ndi", JToken.FromObject(EnableBackgroundNdi));
 
                         root.Add("always_on_top", JToken.FromObject(AlwaysOnTop));
                         root.Add("discord_rich_presence", JToken.FromObject(EnableDiscordRichPresence));

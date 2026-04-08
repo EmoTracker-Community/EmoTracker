@@ -1,0 +1,30 @@
+<Window x:Class="EmoTracker.Extensions.NDI.HiddenBroadcastWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:EmoTracker.UI"
+        xmlns:app="clr-namespace:EmoTracker"
+        xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+        xmlns:ndi="clr-namespace:EmoTracker.Extensions.NDI"
+        DataContext="{Binding Path=BroadcastLayout, Source={x:Static app:ApplicationModel.Instance}}"
+        Title="EmoTracker: Hidden NDI Broadcast"
+        MinWidth="1" MinHeight="1"
+        SizeToContent="WidthAndHeight"
+        CanResize="False"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="False"
+        SystemDecorations="None"
+        Opacity="0.01"
+        Background="#FF212121">
+    <Grid>
+        <ndi:NdiSendContainer Name="NDIHost"
+                              NdiName="EmoTracker Broadcast View"
+                              NdiDropShadow="{Binding Root.BroadcastShadow}"
+                              NdiIntegerScale="{Binding Path=NdiOutputScale, Source={x:Static data:ApplicationSettings.Instance}}"
+                              NdiFrameRateNumerator="{Binding Path=NdiFrameRate, Source={x:Static data:ApplicationSettings.Instance}}"
+                              NdiFrameRateDenominator="1"
+                              UseExternalCaptureDriver="True">
+            <local:LayoutControl x:Name="HostedLayout" DataContext="{Binding}" IsEnabled="False" />
+        </ndi:NdiSendContainer>
+    </Grid>
+</Window>
