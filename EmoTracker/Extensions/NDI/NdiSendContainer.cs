@@ -5,6 +5,7 @@ using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using NewTek;      // NDIlib + nested types
 using NewTek.NDI;  // UTF
+using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.ComponentModel;
@@ -93,6 +94,50 @@ namespace EmoTracker.Extensions.NDI
             set => SetValue(NdiClockToVideoProperty, value);
         }
 
+        /// <summary>
+        /// Gates all NDI initialisation.  When <c>false</c>, attaching this control
+        /// to the visual tree does NOT create an NDI sender, start the capture timer,
+        /// or spin up the send thread — the control becomes a plain ContentControl.
+        /// Used by the visible <see cref="UI.BroadcastView"/> to yield NDI responsibility
+        /// to the hidden background window when that path is active, avoiding the
+        /// double-source conflict that would otherwise occur.
+        ///
+        /// Must be set before the control is attached to the visual tree — runtime
+        /// changes are not honoured for an already-attached container.
+        /// </summary>
+        public static readonly StyledProperty<bool> NdiEnabledProperty =
+            AvaloniaProperty.Register<NdiSendContainer, bool>(nameof(NdiEnabled), true);
+
+        public bool NdiEnabled
+        {
+            get => GetValue(NdiEnabledProperty);
+            set => SetValue(NdiEnabledProperty, value);
+        }
+
+        /// <summary>
+        /// When <c>true</c>, the container does NOT start its own DispatcherTimer-based
+        /// capture loop on attach.  An external driver is responsible for calling
+        /// <see cref="TriggerCaptureAsync"/> whenever a new frame should be captured.
+        ///
+        /// This exists for the <see cref="HiddenBroadcastWindow"/> case: an off-screen
+        /// window doesn't participate in Avalonia's render loop, so its own
+        /// DispatcherTimer ticks can't produce valid composition snapshots (no render
+        /// pulse has ever updated the visual tree).  The hidden window instead hooks
+        /// into the visible main window's <c>RequestAnimationFrame</c>, which fires
+        /// whenever the compositor is actively rendering it (i.e. whenever tracker
+        /// state changes).
+        ///
+        /// Must be set before the control is attached to the visual tree.
+        /// </summary>
+        public static readonly StyledProperty<bool> UseExternalCaptureDriverProperty =
+            AvaloniaProperty.Register<NdiSendContainer, bool>(nameof(UseExternalCaptureDriver), false);
+
+        public bool UseExternalCaptureDriver
+        {
+            get => GetValue(UseExternalCaptureDriverProperty);
+            set => SetValue(UseExternalCaptureDriverProperty, value);
+        }
+
         // Re-create the NDI sender when name or clock mode changes.
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
@@ -130,6 +175,13 @@ namespace EmoTracker.Extensions.NDI
         private bool _attached;
         private bool _disposed;
 
+        // True only when this instance successfully called NDIlib.initialize().
+        // Must be checked in Dispose to avoid calling NDIlib.destroy() unbalanced
+        // — the NDI library is reference-counted, and extra destroy calls from
+        // dormant containers (NdiEnabled=false) would tear down the shared library
+        // state while another container is still using it.
+        private bool _ndiInitialized;
+
         // Prevents re-entry if a snapshot takes longer than the capture interval.
         // CreateCompositionVisualSnapshot is async; without this guard, slow frames
         // would stack up and eventually exhaust memory.
@@ -161,17 +213,50 @@ namespace EmoTracker.Extensions.NDI
             base.OnAttachedToVisualTree(e);
             _attached = true;
 
+            Log.Debug(
+                "[NDI] NdiSendContainer attached (Enabled={Enabled}, ExternalDriver={External}, Name={Name})",
+                NdiEnabled, UseExternalCaptureDriver, NdiName);
+
+            // Opt-out gate: another component (the hidden background window) is
+            // handling NDI for this app, so this container stays dormant to avoid
+            // advertising a duplicate source.
+            if (!NdiEnabled)
+            {
+                Log.Debug("[NDI] Container dormant (NdiEnabled=false); skipping init.");
+                return;
+            }
+
             NdiLibrary.EnsureRuntimeOnPath();
 
             if (!NDIlib.initialize())
-                return; // CPU too old or NDI runtime not installed — stay paused.
+            {
+                Log.Warning("[NDI] NDIlib.initialize() returned false. CPU unsupported or runtime not installed.");
+                return;
+            }
+            _ndiInitialized = true;
 
             InitializeNdi();
+            if (_sendInstancePtr == IntPtr.Zero)
+            {
+                Log.Warning("[NDI] NDIlib.send_create returned IntPtr.Zero for {Name}", NdiName);
+            }
+            else
+            {
+                Log.Information("[NDI] Sender created for {Name} (ptr={Ptr:X})", NdiName, _sendInstancePtr.ToInt64());
+            }
 
             _exitThread = false;
             _sendThread = new Thread(SendThreadProc) { IsBackground = true, Name = "AvaloniaNdiSendThread" };
             _sendThread.Start();
 
+            // Always start a DispatcherTimer, but at different rates depending
+            // on whether an external driver is also feeding us captures:
+            //   - Internal driver only: timer fires at the configured NDI frame
+            //     rate (primary capture source).
+            //   - External driver + slow poll: timer fires at a slow interval
+            //     (~250ms) purely to poll receiver count and catch transitions
+            //     when the external driver is idle (e.g. main window not
+            //     rendering because user isn't interacting).
             StartCaptureTimer();
         }
 
@@ -219,12 +304,57 @@ namespace EmoTracker.Extensions.NDI
         // Capture timer — fires on the UI thread at the target NDI frame rate
         // -------------------------------------------------------------------------
 
+        // Slow-poll interval used when an external driver is the primary capture
+        // source.  This exists solely to detect receiver-count transitions while
+        // the external driver is idle — too fast wastes CPU, too slow adds
+        // perceptible latency to the "OBS just connected" state change.
+        private const double ExternalDriverPollIntervalMs = 250.0;
+
+        // Throttle for "_sendInstancePtr was zero when TriggerCaptureAsync ran"
+        // warnings so a persistent bug doesn't flood the log at 4 Hz.
+        private DateTime _lastMissingSenderLogUtc = DateTime.MinValue;
+        private void LogSenderMissingWarning()
+        {
+            DateTime now = DateTime.UtcNow;
+            if ((now - _lastMissingSenderLogUtc).TotalSeconds < 5) return;
+            _lastMissingSenderLogUtc = now;
+            Log.Warning(
+                "[NDI] TriggerCaptureAsync called but _sendInstancePtr is zero "
+                + "(Attached={Attached}, Enabled={Enabled}, NdiInitialized={Init}, Name={Name})",
+                _attached, NdiEnabled, _ndiInitialized, NdiName);
+        }
+
+        // Throttled debug heartbeat showing that captures are being produced.
+        // One line every ~5s keeps the log readable while still confirming flow.
+        private DateTime _lastCaptureHeartbeatUtc = DateTime.MinValue;
+        private int _capturesSinceLastHeartbeat;
+        private void LogCaptureHeartbeat(int width, int height)
+        {
+            _capturesSinceLastHeartbeat++;
+            DateTime now = DateTime.UtcNow;
+            if ((now - _lastCaptureHeartbeatUtc).TotalSeconds < 5) return;
+            Log.Debug("[NDI] Captured {Count} frames in last interval ({W}x{H})",
+                _capturesSinceLastHeartbeat, width, height);
+            _lastCaptureHeartbeatUtc = now;
+            _capturesSinceLastHeartbeat = 0;
+        }
+
         private void StartCaptureTimer()
         {
-            double fps = NdiFrameRateNumerator / (double)NdiFrameRateDenominator;
+            double intervalMs;
+            if (UseExternalCaptureDriver)
+            {
+                intervalMs = ExternalDriverPollIntervalMs;
+            }
+            else
+            {
+                double fps = NdiFrameRateNumerator / (double)NdiFrameRateDenominator;
+                intervalMs = 1000.0 / Math.Max(fps, 1.0);
+            }
+
             _captureTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(1000.0 / Math.Max(fps, 1.0))
+                Interval = TimeSpan.FromMilliseconds(intervalMs)
             };
             _captureTimer.Tick += OnCaptureTick;
             _captureTimer.Start();
@@ -232,8 +362,33 @@ namespace EmoTracker.Extensions.NDI
 
         private async void OnCaptureTick(object sender, EventArgs e)
         {
-            if (_captureInProgress || _sendInstancePtr == IntPtr.Zero)
+            await TriggerCaptureAsync();
+        }
+
+        /// <summary>
+        /// Captures one frame from the control's visual tree and queues it for NDI
+        /// transmission.  Safe to call from the UI thread; reentry is guarded so
+        /// overlapping calls collapse to a single capture.
+        ///
+        /// For the internally-timer-driven case this is called automatically by the
+        /// DispatcherTimer.  For the <see cref="UseExternalCaptureDriver"/> case
+        /// (HiddenBroadcastWindow), an external driver calls this from the main
+        /// window's RequestAnimationFrame so captures align with the compositor's
+        /// actual render cycle rather than a dead off-screen tree.
+        /// </summary>
+        public async Task TriggerCaptureAsync()
+        {
+            if (_captureInProgress || _disposed)
                 return;
+
+            if (_sendInstancePtr == IntPtr.Zero)
+            {
+                // Warn once per ~5s so we don't flood the log if this is a
+                // persistent bug; ticks fire at 250ms in the external-driver
+                // path, which would be 20 log entries per second otherwise.
+                LogSenderMissingWarning();
+                return;
+            }
 
             // Update send-paused state based on live receiver count.
             bool hasReceivers = NDIlib.send_get_no_connections(_sendInstancePtr, 0) > 0;
@@ -241,6 +396,17 @@ namespace EmoTracker.Extensions.NDI
 
             if (!hasReceivers)
                 return;
+
+            // Force a synchronous layout pass on this subtree so Bounds reflect the
+            // current content.  An off-screen window's layout system may not run on
+            // its own (the compositor skips rendering it), which would leave Bounds
+            // at 0x0 and the snapshot empty.  Measuring with Infinity gives the
+            // control the same unconstrained sizing it would get from the window's
+            // SizeToContent pass.
+            if (!IsMeasureValid)
+                Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            if (!IsArrangeValid)
+                Arrange(new Rect(DesiredSize));
 
             if (Bounds.Width < 8 || Bounds.Height < 8)
                 return;
@@ -319,11 +485,14 @@ namespace EmoTracker.Extensions.NDI
                     Scale        = Math.Max(NdiIntegerScale, 1),
                     DropShadow   = NdiDropShadow,
                 });
+
+                LogCaptureHeartbeat(width, height);
             }
-            catch
+            catch (Exception ex)
             {
                 // Snapshot/draw/copy can throw if the visual tree is torn down
                 // mid-capture.  Skip the frame rather than crashing the UI thread.
+                Log.Warning(ex, "[NDI] Capture failed: {Msg}", ex.Message);
             }
             finally
             {
@@ -337,33 +506,65 @@ namespace EmoTracker.Extensions.NDI
 
         private void SendThreadProc()
         {
-            while (!_exitThread)
+            Log.Debug("[NDI] Send thread started.");
+            try
             {
-                if (!_pendingFrames.TryTake(out PendingFrame frame, 250))
-                    continue;
+                while (!_exitThread)
+                {
+                    try
+                    {
+                        ProcessOneFrame();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // BlockingCollection completed (normal shutdown).
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Per-frame failures must NOT kill the send thread —
+                        // a single bad frame (e.g. bogus dimensions) should
+                        // log and move on.  Throttled so a persistent failure
+                        // can't flood the log.
+                        LogSendFailure(ex);
+                    }
+                }
+            }
+            finally
+            {
+                Log.Debug("[NDI] Send thread exiting (exitRequested={Exit}).", _exitThread);
+            }
+        }
 
-                // Drop stale frames to prevent lag accumulation.
-                while (_pendingFrames.Count > 1)
-                    _pendingFrames.TryTake(out _);
+        private void ProcessOneFrame()
+        {
+            if (!_pendingFrames.TryTake(out PendingFrame frame, 250))
+                return;
 
-                // Avalonia's RenderTargetBitmap outputs premultiplied BGRA.
-                // Convert to straight alpha before shadow compositing and NDI send;
-                // NDI's FourCC_type_BGRA and the drop-shadow algorithm both expect
-                // straight (un-premultiplied) values.
-                NdiImageProcessing.UnPremultiply(frame.Pixels);
+            // Drop stale frames to prevent lag accumulation.
+            while (_pendingFrames.Count > 1)
+                _pendingFrames.TryTake(out _);
 
-                byte[] pixels = frame.DropShadow
-                    ? NdiImageProcessing.FastDropShadow(frame.Pixels, frame.Width, frame.Height, frame.Stride)
-                    : frame.Pixels;
+            // Avalonia's RenderTargetBitmap outputs premultiplied BGRA.
+            // Convert to straight alpha before shadow compositing and NDI send;
+            // NDI's FourCC_type_BGRA and the drop-shadow algorithm both expect
+            // straight (un-premultiplied) values.
+            NdiImageProcessing.UnPremultiply(frame.Pixels);
 
-                pixels = NdiImageProcessing.ScaleBuffer(pixels, frame.Width, frame.Height, frame.Stride, frame.Scale);
+            byte[] pixels = frame.DropShadow
+                ? NdiImageProcessing.FastDropShadow(frame.Pixels, frame.Width, frame.Height, frame.Stride)
+                : frame.Pixels;
 
-                int scaledWidth  = frame.Width  * frame.Scale;
-                int scaledHeight = frame.Height * frame.Scale;
-                int stride       = scaledWidth  * 4;
-                int bufferSize   = scaledHeight * stride;
+            pixels = NdiImageProcessing.ScaleBuffer(pixels, frame.Width, frame.Height, frame.Stride, frame.Scale);
 
-                IntPtr bufferPtr = Marshal.AllocHGlobal(bufferSize);
+            int scaledWidth  = frame.Width  * frame.Scale;
+            int scaledHeight = frame.Height * frame.Scale;
+            int stride       = scaledWidth  * 4;
+            int bufferSize   = scaledHeight * stride;
+
+            IntPtr bufferPtr = Marshal.AllocHGlobal(bufferSize);
+            try
+            {
                 Marshal.Copy(pixels, 0, bufferPtr, bufferSize);
 
                 NDIlib.video_frame_v2_t videoFrame = new NDIlib.video_frame_v2_t
@@ -382,12 +583,16 @@ namespace EmoTracker.Extensions.NDI
                     timestamp            = 0,
                 };
 
+                bool sent = false;
                 if (Monitor.TryEnter(_sendInstanceLock, 250))
                 {
                     try
                     {
                         if (_sendInstancePtr != IntPtr.Zero)
+                        {
                             NDIlib.send_send_video_v2(_sendInstancePtr, ref videoFrame);
+                            sent = true;
+                        }
                     }
                     finally
                     {
@@ -395,8 +600,36 @@ namespace EmoTracker.Extensions.NDI
                     }
                 }
 
+                if (sent)
+                    LogSendHeartbeat();
+            }
+            finally
+            {
                 Marshal.FreeHGlobal(bufferPtr);
             }
+        }
+
+        // Throttled heartbeat showing that frames are actually being sent.
+        private DateTime _lastSendHeartbeatUtc = DateTime.MinValue;
+        private int _sendsSinceLastHeartbeat;
+        private void LogSendHeartbeat()
+        {
+            _sendsSinceLastHeartbeat++;
+            DateTime now = DateTime.UtcNow;
+            if ((now - _lastSendHeartbeatUtc).TotalSeconds < 5) return;
+            Log.Debug("[NDI] Sent {Count} frames in last interval.", _sendsSinceLastHeartbeat);
+            _lastSendHeartbeatUtc = now;
+            _sendsSinceLastHeartbeat = 0;
+        }
+
+        // Throttled send-failure logging so a persistent exception doesn't flood.
+        private DateTime _lastSendFailureLogUtc = DateTime.MinValue;
+        private void LogSendFailure(Exception ex)
+        {
+            DateTime now = DateTime.UtcNow;
+            if ((now - _lastSendFailureLogUtc).TotalSeconds < 5) return;
+            _lastSendFailureLogUtc = now;
+            Log.Error(ex, "[NDI] Send thread frame processing failed: {Msg}", ex.Message);
         }
 
         // -------------------------------------------------------------------------
@@ -439,7 +672,21 @@ namespace EmoTracker.Extensions.NDI
                 }
             }
 
-            NDIlib.destroy();
+            // Only balance NDIlib.destroy() against our own successful initialize().
+            // A dormant container (NdiEnabled=false) never called initialize, so it
+            // must not call destroy — otherwise it would tear down the shared NDI
+            // library state while another container (e.g. HiddenBroadcastWindow) is
+            // still actively using it.
+            if (_ndiInitialized)
+            {
+                NDIlib.destroy();
+                _ndiInitialized = false;
+                Log.Debug("[NDI] NdiSendContainer disposed; NDIlib.destroy() called.");
+            }
+            else
+            {
+                Log.Debug("[NDI] NdiSendContainer disposed; skipping NDIlib.destroy() (was dormant).");
+            }
         }
     }
 }
