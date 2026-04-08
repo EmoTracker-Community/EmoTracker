@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
 using NewTek;      // NDIlib + nested types
@@ -202,6 +203,7 @@ namespace EmoTracker.Extensions.NDI
             public int FrameRateNum, FrameRateDen;
             public int Scale;
             public bool DropShadow;
+            public NDIlib.FourCC_type_e FourCC;
         }
 
         // -------------------------------------------------------------------------
@@ -434,6 +436,14 @@ namespace EmoTracker.Extensions.NDI
                 if (snapshot == null || _disposed)
                     return;
 
+                // Derive the NDI pixel format from the snapshot's reported format rather
+                // than inferring it from the OS.  The compositor backend decides channel
+                // order (BGRA on Windows/D3D, RGBA on macOS/Metal), and reading it here
+                // handles any future backend changes automatically.
+                NDIlib.FourCC_type_e ndiFormat = snapshot.Format == PixelFormat.Rgba8888
+                    ? NDIlib.FourCC_type_e.FourCC_type_RGBA
+                    : NDIlib.FourCC_type_e.FourCC_type_BGRA;
+
                 int width  = snapshot.PixelSize.Width;
                 int height = snapshot.PixelSize.Height;
                 int stride     = width * 4;
@@ -488,6 +498,7 @@ namespace EmoTracker.Extensions.NDI
                     FrameRateDen = NdiFrameRateDenominator,
                     Scale        = Math.Max(NdiIntegerScale, 1),
                     DropShadow   = NdiDropShadow,
+                    FourCC       = ndiFormat,
                 });
 
                 LogCaptureHeartbeat(width, height);
@@ -575,12 +586,10 @@ namespace EmoTracker.Extensions.NDI
                 {
                     xres                 = scaledWidth,
                     yres                 = scaledHeight,
-                    // Avalonia's Metal backend (macOS/Linux) produces RGBA pixels;
-                    // the Windows D3D/Skia backend produces BGRA.  Tell NDI which
-                    // layout the bytes are actually in so colours render correctly.
-                    FourCC               = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                                             ? NDIlib.FourCC_type_e.FourCC_type_BGRA
-                                             : NDIlib.FourCC_type_e.FourCC_type_RGBA,
+                    // FourCC is derived from the snapshot's reported pixel format at
+                    // capture time — see TriggerCaptureAsync — so it matches whatever
+                    // the compositor backend actually produced.
+                    FourCC               = frame.FourCC,
                     frame_rate_N         = frame.FrameRateNum,
                     frame_rate_D         = frame.FrameRateDen,
                     picture_aspect_ratio = (float)frame.Width / frame.Height,
