@@ -454,7 +454,11 @@ namespace EmoTracker.Extensions.NDI
 
                 using (var ctx = _rtb.CreateDrawingContext())
                 {
-                    ctx.DrawImage(snapshot, new Rect(0, 0, width, height));
+                    // DrawImage destination is in logical coordinates, but width/height
+                    // are physical pixels from the snapshot.  Divide by renderScale so the
+                    // snapshot fills the RTB at 1:1 physical pixels rather than being
+                    // stretched (which would zoom in and cut off content on Retina/HiDPI).
+                    ctx.DrawImage(snapshot, new Rect(0, 0, width / renderScale, height / renderScale));
                 }
 
                 byte[] pixels = new byte[bufferSize];
@@ -571,7 +575,12 @@ namespace EmoTracker.Extensions.NDI
                 {
                     xres                 = scaledWidth,
                     yres                 = scaledHeight,
-                    FourCC               = NDIlib.FourCC_type_e.FourCC_type_BGRA,
+                    // Avalonia's Metal backend (macOS/Linux) produces RGBA pixels;
+                    // the Windows D3D/Skia backend produces BGRA.  Tell NDI which
+                    // layout the bytes are actually in so colours render correctly.
+                    FourCC               = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                                             ? NDIlib.FourCC_type_e.FourCC_type_BGRA
+                                             : NDIlib.FourCC_type_e.FourCC_type_RGBA,
                     frame_rate_N         = frame.FrameRateNum,
                     frame_rate_D         = frame.FrameRateDen,
                     picture_aspect_ratio = (float)frame.Width / frame.Height,
