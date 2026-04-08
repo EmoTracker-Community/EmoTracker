@@ -1,0 +1,13 @@
+<UserControl x:Class="EmoTracker.Extensions.NDI.NDIStatusIndicator"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <Grid>
+        <Image Source="avares://EmoTracker/Resources/ndi.png"
+               VerticalAlignment="Center"
+               Height="12"
+               IsVisible="{Binding Active}" />
+    </Grid>
+</UserControl>
