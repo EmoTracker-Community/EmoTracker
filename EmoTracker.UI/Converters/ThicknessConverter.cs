@@ -32,6 +32,22 @@ namespace EmoTracker.UI.Converters
     }
 
     /// <summary>
+    /// Converts a <see cref="double"/> to a uniform <see cref="Thickness"/>.
+    /// Use for BorderThickness bindings where the data model stores a single double.
+    /// </summary>
+    public class DoubleToThicknessConverter : Singleton<DoubleToThicknessConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            double d = value is double dv ? dv : 0.0;
+            return new Thickness(d);
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
     /// Converts a margin string (e.g. "5", "5,10", "5,10,5,10") to an Avalonia
     /// <see cref="Thickness"/>.
     /// <para>
