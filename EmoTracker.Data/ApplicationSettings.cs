@@ -11,12 +11,7 @@ using System.Linq;
 
 namespace EmoTracker.Data
 {
-    public enum MultiworldNotificationLevel
-    {
-        None = 0,
-        Normal = 1,
-        Verbose = 2
-    }
+
 
     public class ApplicationSettings : ObservableSingleton<ApplicationSettings>
     {
@@ -47,8 +42,6 @@ namespace EmoTracker.Data
         bool mbAlwaysOnTop = false;
         bool mbEnableDiscordRichPresence = false;
         bool mbEnableVoice = true;
-        bool mbEnableBontaMultiWorld = false;
-        bool mbIgnoreBontaMultiWorldRomCheck = false;
         bool mbPromptOnRefreshClose = false;
 
         private bool mbDisplayAllLocations = false;
@@ -107,13 +100,6 @@ namespace EmoTracker.Data
 
         ObservableCollection<string> mPackageRepositories = new ObservableCollection<string>();
 
-        MultiworldNotificationLevel mMultiworldNotificationLevel = MultiworldNotificationLevel.Normal;
-        public MultiworldNotificationLevel MultiworldNotificationLevel
-        {
-            get { return mMultiworldNotificationLevel; }
-            set { SetProperty(ref mMultiworldNotificationLevel, value); }
-        }
-
         public double InitialWidth
         {
             get { return mInitialWidth; }
@@ -136,18 +122,6 @@ namespace EmoTracker.Data
         {
             get { return mbEnableVoice; }
             set { SetProperty(ref mbEnableVoice, value); }
-        }
-
-        public bool EnableBontaMultiWorld
-        {
-            get { return mbEnableBontaMultiWorld; }
-            set { SetProperty(ref mbEnableBontaMultiWorld, value); }
-        }
-
-        public bool IgnoreBontaMultiWorldRomCheck
-        {
-            get { return mbIgnoreBontaMultiWorldRomCheck; }
-            set { SetProperty(ref mbIgnoreBontaMultiWorldRomCheck, value); }
         }
 
         public bool PromptOnRefreshClose
@@ -269,9 +243,6 @@ namespace EmoTracker.Data
                         AlwaysOnTop = root.GetValue<bool>("always_on_top", false);
                         EnableDiscordRichPresence = root.GetValue<bool>("discord_rich_presence", false);
                         EnableVoiceControl = root.GetValue<bool>("enable_voice_control", true);
-                        EnableBontaMultiWorld = root.GetValue<bool>("enable_bonta_alttpr_multiworld", false);
-                        IgnoreBontaMultiWorldRomCheck = root.GetValue<bool>("ignore_bonta_alttpr_multiworld_rom_check", false);
-                        MultiworldNotificationLevel = root.GetEnumValue<MultiworldNotificationLevel>("multiworld_notification_level", MultiworldNotificationLevel.Normal);
                         PromptOnRefreshClose = root.GetValue<bool>("prompt_on_refresh_close", false);
                         LastActivePackage = root.GetValue<string>("last_active_package");
                         LastActivePackageVariant = root.GetValue<string>("last_active_package_variant");
@@ -369,8 +340,6 @@ namespace EmoTracker.Data
                         root.Add("discord_rich_presence", JToken.FromObject(EnableDiscordRichPresence));
                         root.Add("enable_voice_control", JToken.FromObject(EnableVoiceControl));
                         root.Add("prompt_on_refresh_close", JToken.FromObject(PromptOnRefreshClose));
-                        root.Add("ignore_bonta_alttpr_multiworld_rom_check", JToken.FromObject(IgnoreBontaMultiWorldRomCheck));
-                        root.Add("multiworld_notification_level", JToken.FromObject(MultiworldNotificationLevel));
 
                         if (!string.IsNullOrWhiteSpace(ServiceBaseURL))
                             root.Add("service_base_url", JToken.FromObject(ServiceBaseURL));

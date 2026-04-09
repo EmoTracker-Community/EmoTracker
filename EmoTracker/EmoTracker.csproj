@@ -111,9 +111,6 @@
     <!-- AutoTracker WPF views — replaced by *.axaml.cs counterparts -->
     <Compile Remove="Extensions\AutoTracker\**\*.xaml.cs" />
     <Page Remove="Extensions\AutoTracker\**\*.xaml" />
-    <!-- BontaMultiworld — Windows-only (WPF UI) -->
-    <Compile Remove="Extensions\BontaMultiworld\**\*.cs" />
-    <Page Remove="Extensions\BontaMultiworld\**\*.xaml" />
     <!-- NDI — only the WPF-specific files are excluded; the Avalonia equivalents
          (NdiSendContainer.cs, NdiLibrary.cs, NdiImageProcessing.cs,
           NDIExtension.cs, NDIStatusIndicator.axaml.cs) are included. -->

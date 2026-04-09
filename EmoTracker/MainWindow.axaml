@@ -141,11 +141,6 @@
                                 <MenuItem Header="Voice Control"
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding EnableVoiceControl, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                <MenuItem Header="Multi-World">
-                                    <MenuItem Header="ALTPPR Bonta Multi-World"
-                                              ToggleType="CheckBox"
-                                              IsChecked="{Binding EnableBontaMultiWorld, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                </MenuItem>
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Assistance">
