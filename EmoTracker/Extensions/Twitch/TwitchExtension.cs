@@ -200,6 +200,9 @@ namespace EmoTracker.Extensions.Twitch
 
         private void OnChatCommandReceived(object sender, OnChatCommandReceivedArgs e)
         {
+            if (!string.Equals(e.Command.CommandText, "tracker", StringComparison.OrdinalIgnoreCase))
+                return;
+
             HandleCommand(e.Command.ArgumentsAsList.ToArray(), e.Command.ChatMessage);
         }
 
