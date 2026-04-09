@@ -6,7 +6,7 @@
     <Grid Background="Transparent" ToolTip.Tip="Voice Recognition">
         <Grid.ContextMenu>
             <ContextMenu Opened="ContextMenu_Opened">
-                <MenuItem Header="Active" ToggleType="CheckBox" IsChecked="{Binding Active}"/>
+                <MenuItem Header="Active" ToggleType="CheckBox" IsChecked="{Binding Active, Mode=TwoWay}"/>
                 <Separator/>
                 <MenuItem Header="Input Device" Name="DeviceSubMenu"/>
             </ContextMenu>

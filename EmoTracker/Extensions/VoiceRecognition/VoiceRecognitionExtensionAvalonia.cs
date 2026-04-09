@@ -147,9 +147,30 @@ namespace EmoTracker.Extensions.VoiceRecognition
             string modelPath = FindModelPath();
             if (modelPath == null)
             {
+                // Delay briefly so any open context menu fully dismisses before we show a dialog.
+                await Task.Delay(150);
+
                 var mainWindow = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                if (mainWindow == null)
+                {
+                    Serilog.Log.Warning("[Voice] Cannot show model download dialog: main window not available");
+                    _active = false;
+                    NotifyPropertyChanged(nameof(Active));
+                    return;
+                }
+
                 var dlg = new VoskModelDownloadWindow();
-                await dlg.ShowDialog(mainWindow);
+                try
+                {
+                    await dlg.ShowDialog(mainWindow);
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Error(ex, "[Voice] Failed to show model download dialog");
+                    _active = false;
+                    NotifyPropertyChanged(nameof(Active));
+                    return;
+                }
 
                 if (!dlg.Success)
                 {
@@ -293,12 +314,47 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private void AddCommand(string phrase, Action action)
         {
-            phrase = phrase.Trim().ToLowerInvariant();
+            phrase = NormalizePhrase(phrase.Trim().ToLowerInvariant());
             if (!_commandMap.ContainsKey(phrase))
             {
                 _commandMap[phrase] = action;
                 _phraseList.Add(phrase);
             }
+        }
+
+        // Splits a single word into space-separated known sub-words using the Vosk vocabulary.
+        // e.g. "hookshot" → "hook shot", "silverarrows" → "silver arrows"
+        private static string SplitForVosk(string word, Model model)
+        {
+            if (model.FindWord(word) >= 0) return word;
+
+            for (int i = 1; i < word.Length; i++)
+            {
+                string left = word[..i];
+                if (model.FindWord(left) < 0) continue;
+                string right = SplitForVosk(word[i..], model);
+                return $"{left} {right}";
+            }
+
+            return word; // no split found; Vosk will warn and ignore
+        }
+
+        private string NormalizePhrase(string phrase)
+        {
+            if (_model == null) return phrase;
+            var words = phrase.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return string.Join(' ', words.Select(w => SplitForVosk(w, _model)));
+        }
+
+        private static IEnumerable<string> GetItemNameVariants(ITrackableItem item)
+        {
+            if (!string.IsNullOrWhiteSpace(item.Name))
+                yield return item.Name.ToLowerInvariant();
+
+            if (item is ItemBase baseItem && baseItem.PhoneticSubstitutes != null)
+                foreach (var sub in baseItem.PhoneticSubstitutes)
+                    if (!string.IsNullOrWhiteSpace(sub))
+                        yield return sub.ToLowerInvariant();
         }
 
         private string BuildGrammarJson()
@@ -324,59 +380,61 @@ namespace EmoTracker.Extensions.VoiceRecognition
             {
                 foreach (var item in ItemDatabase.Instance.Items)
                 {
-                    string itemName = item.Name?.ToLowerInvariant();
-                    if (string.IsNullOrWhiteSpace(itemName)) continue;
+                    if (string.IsNullOrWhiteSpace(item.Name)) continue;
                     string code = ItemDatabase.Instance.GetPersistableItemReference(item);
 
-                    if (item is ToggleItem || item is ProgressiveToggleItem)
+                    foreach (var itemName in GetItemNameVariants(item))
                     {
-                        foreach (var pfx in new[] { "track", "track a", "track the", "toggle", "toggle the" })
+                        if (item is ToggleItem || item is ProgressiveToggleItem)
                         {
-                            AddCommand($"{wake} {pfx} {itemName}", () => ExecuteToggle(code, true));
-                            AddCommand($"{wake} {pfx} {itemName} off", () => ExecuteToggle(code, false));
-                        }
-
-                        if (item is ProgressiveToggleItem progToggle)
-                        {
-                            for (uint idx = 0; idx < progToggle.StageCount; idx++)
+                            foreach (var pfx in new[] { "track", "track a", "track the", "toggle", "toggle the" })
                             {
-                                var stage = progToggle.GetActiveStageForIndex(idx);
-                                if (stage == null) continue;
-                                foreach (var privateCode in stage.PrivateCodes.ProvidedCodes)
+                                AddCommand($"{wake} {pfx} {itemName}", () => ExecuteToggle(code, true));
+                                AddCommand($"{wake} {pfx} {itemName} off", () => ExecuteToggle(code, false));
+                            }
+
+                            if (item is ProgressiveToggleItem progToggle)
+                            {
+                                for (uint idx = 0; idx < progToggle.StageCount; idx++)
                                 {
-                                    if (string.IsNullOrWhiteSpace(privateCode)) continue;
-                                    string pc = privateCode;
-                                    foreach (var pfx in new[] { "track", "mark", "set" })
-                                        AddCommand($"{wake} {pfx} {itemName} as {pc.ToLowerInvariant()}", () => ExecuteSetSecondaryCode(code, pc));
+                                    var stage = progToggle.GetActiveStageForIndex(idx);
+                                    if (stage == null) continue;
+                                    foreach (var privateCode in stage.PrivateCodes.ProvidedCodes)
+                                    {
+                                        if (string.IsNullOrWhiteSpace(privateCode)) continue;
+                                        string pc = privateCode;
+                                        foreach (var pfx in new[] { "track", "mark", "set" })
+                                            AddCommand($"{wake} {pfx} {itemName} as {pc.ToLowerInvariant()}", () => ExecuteSetSecondaryCode(code, pc));
+                                    }
                                 }
                             }
                         }
-                    }
-                    else if (item is ProgressiveItem progressive)
-                    {
-                        foreach (var pfx in new[] { "track", "track a", "track the" })
+                        else if (item is ProgressiveItem progressive)
                         {
-                            AddCommand($"{wake} {pfx} {itemName}", () => ExecuteAdvanceProgressive(code, null));
-                            AddCommand($"{wake} {pfx} {itemName} down", () => ExecuteAdvanceProgressive(code, "down"));
-                        }
-
-                        foreach (var stage in progressive.Stages)
-                        {
-                            foreach (var stageCode in stage.ProvidedCodes)
+                            foreach (var pfx in new[] { "track", "track a", "track the" })
                             {
-                                if (string.IsNullOrWhiteSpace(stageCode)) continue;
-                                string sc = stageCode;
-                                foreach (var pfx in new[] { "track", "track a", "track the", "set", "set the" })
-                                    AddCommand($"{wake} {pfx} {itemName} as {sc.ToLowerInvariant()}", () => ExecuteAdvanceProgressive(code, sc));
+                                AddCommand($"{wake} {pfx} {itemName}", () => ExecuteAdvanceProgressive(code, null));
+                                AddCommand($"{wake} {pfx} {itemName} down", () => ExecuteAdvanceProgressive(code, "down"));
+                            }
+
+                            foreach (var stage in progressive.Stages)
+                            {
+                                foreach (var stageCode in stage.ProvidedCodes)
+                                {
+                                    if (string.IsNullOrWhiteSpace(stageCode)) continue;
+                                    string sc = stageCode;
+                                    foreach (var pfx in new[] { "track", "track a", "track the", "set", "set the" })
+                                        AddCommand($"{wake} {pfx} {itemName} as {sc.ToLowerInvariant()}", () => ExecuteAdvanceProgressive(code, sc));
+                                }
                             }
                         }
-                    }
-                    else if (item is ConsumableItem)
-                    {
-                        foreach (var pfx in new[] { "track", "track a", "track an", "add a", "add an" })
-                            AddCommand($"{wake} {pfx} {itemName}", () => ExecuteIncrementConsumable(code));
-                        foreach (var pfx in new[] { "remove", "remove a", "remove an" })
-                            AddCommand($"{wake} {pfx} {itemName}", () => ExecuteDecrementConsumable(code));
+                        else if (item is ConsumableItem)
+                        {
+                            foreach (var pfx in new[] { "track", "track a", "track an", "add a", "add an" })
+                                AddCommand($"{wake} {pfx} {itemName}", () => ExecuteIncrementConsumable(code));
+                            foreach (var pfx in new[] { "remove", "remove a", "remove an" })
+                                AddCommand($"{wake} {pfx} {itemName}", () => ExecuteDecrementConsumable(code));
+                        }
                     }
                 }
 
@@ -389,15 +447,17 @@ namespace EmoTracker.Extensions.VoiceRecognition
                     .ToList();
                 foreach (var item in capturables)
                 {
-                    string itemName = item.Name.ToLowerInvariant();
                     string itemCode = ItemDatabase.Instance.GetPersistableItemReference(item);
-                    foreach (var location in LocationDatabase.Instance.VisibleLocations)
+                    foreach (var itemName in GetItemNameVariants(item))
                     {
-                        string locCode = LocationDatabase.Instance.GetPersistableLocationReference(location);
-                        foreach (var locPhrase in GetLocationPhrases(location))
+                        foreach (var location in LocationDatabase.Instance.VisibleLocations)
                         {
-                            foreach (var prep in new[] { "on", "at" })
-                                AddCommand($"{wake} mark {itemName} {prep} {locPhrase}", () => ExecuteCapture(itemCode, locCode));
+                            string locCode = LocationDatabase.Instance.GetPersistableLocationReference(location);
+                            foreach (var locPhrase in GetLocationPhrases(location))
+                            {
+                                foreach (var prep in new[] { "on", "at" })
+                                    AddCommand($"{wake} mark {itemName} {prep} {locPhrase}", () => ExecuteCapture(itemCode, locCode));
+                            }
                         }
                     }
                 }

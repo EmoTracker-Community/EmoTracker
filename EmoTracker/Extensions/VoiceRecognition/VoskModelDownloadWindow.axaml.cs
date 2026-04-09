@@ -63,30 +63,33 @@ namespace EmoTracker.Extensions.VoiceRecognition
                 response.EnsureSuccessStatusCode();
 
                 long? totalBytes = response.Content.Headers.ContentLength;
-                using var httpStream = await response.Content.ReadAsStreamAsync(token);
-                using var fileStream = File.Create(zipPath);
 
-                byte[] buffer = new byte[81920];
-                long bytesRead = 0;
-                int read;
-
-                while ((read = await httpStream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
+                // Nested block ensures fileStream is fully closed before ZipFile reads the same path
+                using (var httpStream = await response.Content.ReadAsStreamAsync(token))
+                using (var fileStream = File.Create(zipPath))
                 {
-                    await fileStream.WriteAsync(buffer, 0, read, token);
-                    bytesRead += read;
+                    byte[] buffer = new byte[81920];
+                    long bytesRead = 0;
+                    int read;
 
-                    if (totalBytes > 0)
+                    while ((read = await httpStream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
                     {
-                        double pct = (double)bytesRead / totalBytes.Value * 100.0;
-                        double mb = bytesRead / 1_048_576.0;
-                        double totalMb = totalBytes.Value / 1_048_576.0;
-                        Dispatcher.UIThread.Post(() =>
+                        await fileStream.WriteAsync(buffer, 0, read, token);
+                        bytesRead += read;
+
+                        if (totalBytes > 0)
                         {
-                            DownloadProgress.Value = pct;
-                            StatusText.Text = $"Downloading speech model… {mb:F1} / {totalMb:F1} MB";
-                        });
+                            double pct = (double)bytesRead / totalBytes.Value * 100.0;
+                            double mb = bytesRead / 1_048_576.0;
+                            double totalMb = totalBytes.Value / 1_048_576.0;
+                            Dispatcher.UIThread.Post(() =>
+                            {
+                                DownloadProgress.Value = pct;
+                                StatusText.Text = $"Downloading speech model… {mb:F1} / {totalMb:F1} MB";
+                            });
+                        }
                     }
-                }
+                } // fileStream disposed and flushed here before extraction
 
                 // Extract
                 Dispatcher.UIThread.Post(() =>
