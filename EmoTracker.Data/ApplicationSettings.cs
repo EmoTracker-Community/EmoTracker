@@ -43,6 +43,7 @@ namespace EmoTracker.Data
         double mNDIFrameRate = 30.0;
         int mNDIOutputScale = 1;
         bool mbEnableBackgroundNdi = true;
+        bool mbEnableAutoUpdateCheck = true;
         bool mbAlwaysOnTop = false;
         bool mbEnableDiscordRichPresence = false;
         bool mbEnableVoice = true;
@@ -220,6 +221,12 @@ namespace EmoTracker.Data
             set { SetProperty(ref mbEnableBackgroundNdi, value); }
         }
 
+        public bool EnableAutoUpdateCheck
+        {
+            get { return mbEnableAutoUpdateCheck; }
+            set { SetProperty(ref mbEnableAutoUpdateCheck, value); }
+        }
+
         public IEnumerable<string> AdditionalRepositories
         {
             get { return mPackageRepositories; }
@@ -258,6 +265,7 @@ namespace EmoTracker.Data
                         NdiFrameRate = root.GetValue<double>("ndi_frame_rate", 30.0);
                         NdiOutputScale = root.GetValue<int>("ndi_output_scale", 1);
                         EnableBackgroundNdi = root.GetValue<bool>("enable_background_ndi", true);
+                        EnableAutoUpdateCheck = root.GetValue<bool>("enable_auto_update_check", true);
                         AlwaysOnTop = root.GetValue<bool>("always_on_top", false);
                         EnableDiscordRichPresence = root.GetValue<bool>("discord_rich_presence", false);
                         EnableVoiceControl = root.GetValue<bool>("enable_voice_control", true);
@@ -355,6 +363,7 @@ namespace EmoTracker.Data
                             root.Add("ndi_output_scale", JToken.FromObject(NdiOutputScale));
 
                         root.Add("enable_background_ndi", JToken.FromObject(EnableBackgroundNdi));
+                        root.Add("enable_auto_update_check", JToken.FromObject(EnableAutoUpdateCheck));
 
                         root.Add("always_on_top", JToken.FromObject(AlwaysOnTop));
                         root.Add("discord_rich_presence", JToken.FromObject(EnableDiscordRichPresence));

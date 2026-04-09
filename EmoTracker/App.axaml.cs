@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using EmoTracker.Core;
 using EmoTracker.Services;
+using EmoTracker.Services.Updates;
 using Serilog;
 using Serilog.Events;
 using System;
@@ -54,6 +55,7 @@ namespace EmoTracker
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 desktop.MainWindow = new MainWindow();
+                UpdateService.Instance.StartBackgroundCheck();
 
                 desktop.Exit += (s, e) =>
                 {
