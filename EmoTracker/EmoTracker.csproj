@@ -75,6 +75,8 @@
     <PackageReference Include="NetSparkleUpdater.SparkleUpdater" Version="3.0.4" />
     <PackageReference Include="NetSparkleUpdater.UI.Avalonia" Version="3.0.4" />
     <PackageReference Include="Markdig" Version="0.38.0" />
+    <PackageReference Include="Vosk" Version="0.3.38" />
+    <PackageReference Include="PortAudioSharp" Version="0.3.0" />
   </ItemGroup>
 
   <!-- Shared packages (both targets) -->
@@ -122,8 +124,9 @@
     <!-- Twitch WPF code-behind replaced by axaml.cs -->
     <Compile Remove="Extensions\Twitch\**\*.xaml.cs" />
     <Page Remove="Extensions\Twitch\**\*.xaml" />
-    <!-- VoiceRecognition — requires Windows-only System.Speech -->
-    <Compile Remove="Extensions\VoiceRecognition\**\*.cs" />
+    <!-- VoiceRecognition: exclude WPF-only files; Avalonia implementation included -->
+    <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionExtension.cs" />
+    <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.xaml.cs" />
     <Page Remove="Extensions\VoiceRecognition\**\*.xaml" />
     <!-- Discord P/Invoke wrapper (Windows-only native SDK) -->
     <Compile Remove="Utility\DiscordRPC.cs" />
@@ -145,6 +148,10 @@
     <Compile Remove="Extensions\NDI\NdiLibrary.cs" />
     <Compile Remove="Extensions\NDI\NdiImageProcessing.cs" />
     <Compile Remove="Extensions\NDI\**\*.axaml.cs" />
+    <!-- VoiceRecognition Avalonia files excluded from WPF build -->
+    <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionExtensionAvalonia.cs" />
+    <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.axaml.cs" />
+    <Page Remove="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.axaml" />
   </ItemGroup>
 
   <!-- Copy Windows-only native dependencies on net8.0-windows builds -->

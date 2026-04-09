@@ -43,6 +43,7 @@ namespace EmoTracker.Data
         bool mbEnableDiscordRichPresence = false;
         bool mbEnableVoice = true;
         bool mbPromptOnRefreshClose = false;
+        string mbVoiceInputDeviceName;
 
         private bool mbDisplayAllLocations = false;
         private bool mbIgnoreAllLogic = false;
@@ -122,6 +123,12 @@ namespace EmoTracker.Data
         {
             get { return mbEnableVoice; }
             set { SetProperty(ref mbEnableVoice, value); }
+        }
+
+        public string VoiceInputDeviceName
+        {
+            get { return mbVoiceInputDeviceName; }
+            set { SetProperty(ref mbVoiceInputDeviceName, value); }
         }
 
         public bool PromptOnRefreshClose
@@ -243,6 +250,7 @@ namespace EmoTracker.Data
                         AlwaysOnTop = root.GetValue<bool>("always_on_top", false);
                         EnableDiscordRichPresence = root.GetValue<bool>("discord_rich_presence", false);
                         EnableVoiceControl = root.GetValue<bool>("enable_voice_control", true);
+                        VoiceInputDeviceName = root.GetValue<string>("voice_input_device_name");
                         PromptOnRefreshClose = root.GetValue<bool>("prompt_on_refresh_close", false);
                         LastActivePackage = root.GetValue<string>("last_active_package");
                         LastActivePackageVariant = root.GetValue<string>("last_active_package_variant");
@@ -339,6 +347,8 @@ namespace EmoTracker.Data
                         root.Add("always_on_top", JToken.FromObject(AlwaysOnTop));
                         root.Add("discord_rich_presence", JToken.FromObject(EnableDiscordRichPresence));
                         root.Add("enable_voice_control", JToken.FromObject(EnableVoiceControl));
+                        if (!string.IsNullOrWhiteSpace(VoiceInputDeviceName))
+                            root.Add("voice_input_device_name", JToken.FromObject(VoiceInputDeviceName));
                         root.Add("prompt_on_refresh_close", JToken.FromObject(PromptOnRefreshClose));
 
                         if (!string.IsNullOrWhiteSpace(ServiceBaseURL))
