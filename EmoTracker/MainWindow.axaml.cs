@@ -6,6 +6,7 @@ using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Core.Transactions.Processors;
 using EmoTracker.Data.Layout;
+using EmoTracker.Services.Updates;
 using System;
 using System.ComponentModel;
 using System.Linq;
@@ -44,10 +45,18 @@ namespace EmoTracker
             if (this.FindControl<Button>("SettingsButton") is Button settingsBtn)
                 settingsBtn.Click += SettingsButton_Click;
 
+            if (this.FindControl<MenuItem>("CheckForUpdatesMenuItem") is MenuItem checkUpdatesItem)
+                checkUpdatesItem.Click += CheckForUpdatesMenuItem_Click;
+
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 TrackerLayout?.Focus();
             });
+        }
+
+        private async void CheckForUpdatesMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            await UpdateService.Instance.CheckAndShowUpdateWindowAsync();
         }
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)

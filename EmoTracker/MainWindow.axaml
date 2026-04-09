@@ -156,6 +156,8 @@
                                           IsChecked="{Binding FastToolTips, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                             </MenuItem>
                             <Separator />
+                            <MenuItem Header="Check for Updates…" Name="CheckForUpdatesMenuItem" />
+                            <Separator />
                             <MenuItem Header="Advanced">
                                 <MenuItem Header="Export Overrides" Command="{Binding ExportPackageOverrideCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                                 <Separator />
