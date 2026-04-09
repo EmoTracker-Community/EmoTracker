@@ -2,7 +2,6 @@ using EmoTracker.Data;
 using NetSparkleUpdater;
 using NetSparkleUpdater.Enums;
 using NetSparkleUpdater.SignatureVerifiers;
-using NetSparkleUpdater.UI.Avalonia;
 using Serilog;
 using System;
 using System.Threading.Tasks;
@@ -36,9 +35,9 @@ namespace EmoTracker.Services.Updates
     /// </summary>
     public class UpdateService : IDisposable
     {
-        private const string RepoOwner   = "EmoTracker-Community";
-        private const string RepoName    = "EmoTracker";
-        private const string AppCastUrl  = $"https://github.com/{RepoOwner}/{RepoName}";
+        private const string RepoOwner  = "EmoTracker-Community";
+        private const string RepoName   = "EmoTracker";
+        private const string AppCastUrl = $"https://github.com/{RepoOwner}/{RepoName}";
 
         private readonly EmoTrackerSparkleUpdater _sparkle;
         private bool _disposed;
@@ -51,27 +50,30 @@ namespace EmoTracker.Services.Updates
             // Enable once Ed25519 keys are configured in the release workflow.
             var signatureVerifier = new Ed25519Checker(SecurityMode.Unsafe, null);
 
+            var uiFactory = new EmoTrackerUIFactory();
+
             _sparkle = new EmoTrackerSparkleUpdater(AppCastUrl, signatureVerifier)
             {
-                UIFactory               = new UIFactory(null),
-                // Inject our GitHub-backed appcast downloader.
-                AppCastDataDownloader   = new GitHubAppCastDataDownloader(RepoOwner, RepoName),
-                RelaunchAfterUpdate     = true,
+                UIFactory             = uiFactory,
+                AppCastDataDownloader = new GitHubAppCastDataDownloader(RepoOwner, RepoName),
+                RelaunchAfterUpdate   = true,
             };
 
             Log.Debug("[Update] AppCastUrl: {Url}", _sparkle.AppCastUrl);
 
-            _sparkle.UpdateDetected           += (_, info) =>
+            _sparkle.UpdateDetected      += (_, info) =>
                 Log.Information("[Update] Update available: {Version}", info.LatestVersion);
-            _sparkle.UpdateCheckFinished      += (_, status) =>
+            _sparkle.UpdateCheckFinished += (_, status) =>
                 Log.Debug("[Update] Update check finished. Status: {Status}", status);
-            _sparkle.DownloadStarted          += (_, _) =>
+            _sparkle.DownloadStarted     += (_, _) =>
                 Log.Information("[Update] Download started.");
-            _sparkle.DownloadFinished         += (_, _) =>
+            _sparkle.DownloadFinished    += (_, _) =>
                 Log.Information("[Update] Download finished.");
-            _sparkle.DownloadHadError         += (item, path, ex) =>
+            _sparkle.DownloadHadError    += (item, path, ex) =>
                 Log.Warning("[Update] Download error for {Item}: {Err}", item?.DownloadLink, ex?.Message);
         }
+
+        // ── Public API ─────────────────────────────────────────────────────────
 
         /// <summary>
         /// Runs a silent background update check on startup.  Shows the update
