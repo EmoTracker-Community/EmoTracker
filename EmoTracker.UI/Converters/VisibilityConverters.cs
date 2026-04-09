@@ -513,4 +513,25 @@ namespace EmoTracker.UI.Converters
             return "Package Manager";
         }
     }
+
+    /// <summary>
+    /// Replicates the WPF MultiDataTrigger that controlled chest accessibility.
+    /// Returns <c>false</c> (inaccessible / grayed-out / disabled) when all three conditions
+    /// are true: AccessibilityLevel == None, AlwaysAllowChestManipulation == false, and
+    /// AlwaysAllowClearing == false.  Returns <c>true</c> in all other cases.
+    /// <para>Binding order:
+    /// [0] AccessibilityLevel, [1] AlwaysAllowChestManipulation (bool),
+    /// [2] ApplicationSettings.AlwaysAllowClearing (bool).</para>
+    /// </summary>
+    public class ChestAccessibleConverter : Singleton<ChestAccessibleConverter>, IMultiValueConverter
+    {
+        public object Convert(IList<object> values, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (values.Count < 3) return true;
+            bool isNone             = values[0] is AccessibilityLevel level && level == AccessibilityLevel.None;
+            bool alwaysAllowSection = values[1] is true;
+            bool alwaysAllowGlobal  = values[2] is true;
+            return !(isNone && !alwaysAllowSection && !alwaysAllowGlobal);
+        }
+    }
 }

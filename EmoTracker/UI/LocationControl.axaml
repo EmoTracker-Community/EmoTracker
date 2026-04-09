@@ -154,7 +154,22 @@
                                                                     ClosedChest="{Binding ClosedChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
                                                                     UnavailableOpenChest="{Binding UnavailableOpenChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
                                                                     UnavailableClosedChest="{Binding UnavailableClosedChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
-                                                                    IsVisible="{Binding ChestCount, Converter={x:Static converters:NonZeroToBoolConverter.Instance}}" />
+                                                                    IsVisible="{Binding ChestCount, Converter={x:Static converters:NonZeroToBoolConverter.Instance}}">
+                                                <local:ChestListControl.Accessible>
+                                                    <MultiBinding Converter="{x:Static converters:ChestAccessibleConverter.Instance}">
+                                                        <Binding Path="AccessibilityLevel" />
+                                                        <Binding Path="AlwaysAllowChestManipulation" />
+                                                        <Binding Path="AlwaysAllowClearing" Source="{x:Static data:ApplicationSettings.Instance}" />
+                                                    </MultiBinding>
+                                                </local:ChestListControl.Accessible>
+                                                <local:ChestListControl.IsEnabled>
+                                                    <MultiBinding Converter="{x:Static converters:ChestAccessibleConverter.Instance}">
+                                                        <Binding Path="AccessibilityLevel" />
+                                                        <Binding Path="AlwaysAllowChestManipulation" />
+                                                        <Binding Path="AlwaysAllowClearing" Source="{x:Static data:ApplicationSettings.Instance}" />
+                                                    </MultiBinding>
+                                                </local:ChestListControl.IsEnabled>
+                                            </local:ChestListControl>
                                             <local:TrackableItemControl Grid.Column="3"
                                                                         DataContext="{Binding HostedItem}"
                                                                         Margin="4,2,0,2"
