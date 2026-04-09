@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EmoTracker.UI.ApplicationIsUpToDateWindow"
+        Title="Software Update"
+        Width="480" Height="140"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#212121">
+
+    <Window.Styles>
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="#35e0b5"/>
+            <Setter Property="Foreground" Value="#111111"/>
+            <Setter Property="BorderBrush" Value="#35e0b5"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="16,7"/>
+            <Setter Property="MinWidth" Value="100"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#28c49e"/>
+        </Style>
+        <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#1ea882"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,Auto">
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#252030" Padding="20,16,20,16">
+            <StackPanel Spacing="4">
+                <TextBlock Text="EmoTracker is up to date."
+                           Foreground="WhiteSmoke"
+                           FontSize="15"
+                           FontWeight="SemiBold"/>
+                <TextBlock x:Name="SubtitleText"
+                           Foreground="#888888"
+                           FontSize="12"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Footer -->
+        <Border Grid.Row="1" Background="#252030" Padding="16,12">
+            <Button x:Name="OkButton"
+                    Classes="primary"
+                    Content="OK"
+                    HorizontalAlignment="Right"
+                    Click="OkButton_Click"/>
+        </Border>
+
+    </Grid>
+</Window>

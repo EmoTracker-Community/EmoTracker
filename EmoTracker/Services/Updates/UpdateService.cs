@@ -50,7 +50,7 @@ namespace EmoTracker.Services.Updates
             // Enable once Ed25519 keys are configured in the release workflow.
             var signatureVerifier = new Ed25519Checker(SecurityMode.Unsafe, null);
 
-            var uiFactory = new EmoTrackerUIFactory();
+            var uiFactory = new UpdateUIFactory();
 
             _sparkle = new EmoTrackerSparkleUpdater(AppCastUrl, signatureVerifier)
             {
