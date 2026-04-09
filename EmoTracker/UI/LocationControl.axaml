@@ -83,7 +83,7 @@
                                FontWeight="DemiBold"
                                Text="{Binding TitleText, RelativeSource={RelativeSource AncestorType=local:LocationControl}}" />
                     <local:NoteTakingIconPopup Grid.Column="1"
-                                              Margin="10,0,0,0"
+                                              Margin="10,-2,0,0"
                                               DataContext="{Binding NoteTakingSite}"
                                               VerticalAlignment="Center"
                                               FontSize="9"/>

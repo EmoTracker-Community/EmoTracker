@@ -42,7 +42,7 @@ namespace EmoTracker.Extensions.Twitch
 
             if (_extension == null)
             {
-                icon.Foreground = Brushes.WhiteSmoke;
+                icon.Foreground = SolidColorBrush.Parse("#717171");
                 return;
             }
 
@@ -55,7 +55,7 @@ namespace EmoTracker.Extensions.Twitch
                     icon.Foreground = SolidColorBrush.Parse(ApplicationColors.Instance.Status_Generic_Warning);
                     break;
                 default:
-                    icon.Foreground = Brushes.WhiteSmoke;
+                    icon.Foreground = SolidColorBrush.Parse("#717171");
                     break;
             }
         }

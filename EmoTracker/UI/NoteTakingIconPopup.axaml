@@ -29,11 +29,12 @@
                       BorderThickness="0"
                       Padding="0"
                       Focusable="False"
+                      VerticalAlignment="Center"
                       Checked="OpenNotesButton_Checked"
                       Unchecked="OpenNotesButton_Unchecked">
             <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
-                    <Border Background="Transparent" Padding="2">
+                    <Border Background="Transparent">
                         <TextBlock Name="Icon"
                                    FontFamily="{StaticResource FontAwesome5Free}"
                                    Text="&#xf044;"

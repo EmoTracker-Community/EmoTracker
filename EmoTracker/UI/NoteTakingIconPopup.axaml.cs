@@ -24,7 +24,7 @@ namespace EmoTracker.UI
             new FuncValueConverter<bool, IBrush>(empty =>
             {
                 if (empty)
-                    return new SolidColorBrush(Color.Parse("#717171"));
+                    return new SolidColorBrush(Color.Parse("#F5F5F5")); // WhiteSmoke
 
                 Color active = Color.Parse(ApplicationColors.Instance.Status_Generic_Active);
                 return new SolidColorBrush(active);

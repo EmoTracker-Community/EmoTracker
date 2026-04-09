@@ -19,10 +19,7 @@ namespace EmoTracker.Extensions.NoteTaking
 
         public object StatusBarControl
         {
-            get
-            {
-                return new NoteTakingIconPopup() { DataContext = NoteTakingSite };
-            }
+            get { return null; }
         }
 
         NoteTakingSite mNoteTakingSite = new NoteTakingSite();
