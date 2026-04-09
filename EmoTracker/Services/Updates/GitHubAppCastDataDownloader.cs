@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -85,8 +86,16 @@ namespace EmoTracker.Services.Updates
                     return EmptyAppCast();
                 }
 
-                string releaseJson = doc.RootElement[0].GetRawText();
-                string appcast = BuildAppCastXml(releaseJson);
+                var releaseElement = doc.RootElement[0];
+                string releaseJson = releaseElement.GetRawText();
+
+                // Render the release body markdown to HTML via the GitHub Markdown API.
+                string bodyMarkdown = releaseElement.TryGetProperty("body", out var bodyProp)
+                    ? bodyProp.GetString() ?? string.Empty
+                    : string.Empty;
+                string releaseNotesHtml = await RenderMarkdownAsync(bodyMarkdown).ConfigureAwait(false);
+
+                string appcast = BuildAppCastXml(releaseJson, releaseNotesHtml);
                 Log.Debug("[Update] Generated appcast XML:\n{Appcast}", appcast);
                 return appcast;
             }
@@ -97,12 +106,42 @@ namespace EmoTracker.Services.Updates
             }
         }
 
+        /// <summary>
+        /// Calls the GitHub Markdown API to render <paramref name="markdown"/> as HTML.
+        /// Falls back to a plain-text preformatted block on any error.
+        /// </summary>
+        private async Task<string> RenderMarkdownAsync(string markdown)
+        {
+            if (string.IsNullOrWhiteSpace(markdown))
+                return string.Empty;
+            try
+            {
+                // Use GFM mode with the repo context so issue/PR references resolve.
+                var payload = new
+                {
+                    text    = markdown,
+                    mode    = "gfm",
+                    context = $"{_repoOwner}/{_repoName}"
+                };
+                using var response = await Http
+                    .PostAsJsonAsync($"{ApiBase}/markdown", payload)
+                    .ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[Update] Failed to render release notes markdown; falling back to plain text.");
+                return $"<pre>{EscapeXml(markdown)}</pre>";
+            }
+        }
+
         // Returns the encoding used by the app cast data (UTF-8).
         public Encoding GetAppCastEncoding() => Encoding.UTF8;
 
         // -----------------------------------------------------------------------
 
-        private string BuildAppCastXml(string releaseJson)
+        private string BuildAppCastXml(string releaseJson, string releaseNotesHtml)
         {
             var release = JsonNode.Parse(releaseJson)!;
 
@@ -119,8 +158,6 @@ namespace EmoTracker.Services.Updates
                                   out var dt)
                               ? dt.ToString("R")
                               : DateTime.UtcNow.ToString("R");
-            string releaseNotesUrl =
-                $"https://github.com/{_repoOwner}/{_repoName}/releases/tag/{tagName}";
 
             // Only emit the enclosure for the platform we're running on.
             // Omitting sparkle:os means NetSparkle's OS filter won't reject the item —
@@ -161,6 +198,11 @@ namespace EmoTracker.Services.Updates
                 return EmptyAppCast();
             }
 
+            // Inline HTML release notes in a CDATA block so the XML parser ignores the HTML.
+            string descriptionElement = string.IsNullOrWhiteSpace(releaseNotesHtml)
+                ? string.Empty
+                : $"      <description><![CDATA[{releaseNotesHtml}]]></description>";
+
             return $"""
                 <?xml version="1.0" encoding="UTF-8"?>
                 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
@@ -168,8 +210,8 @@ namespace EmoTracker.Services.Updates
                     <title>EmoTracker</title>
                     <item>
                       <title>{EscapeXml(title)}</title>
-                      <sparkle:releaseNotesLink>{releaseNotesUrl}</sparkle:releaseNotesLink>
                       <pubDate>{pubDate}</pubDate>
+                {descriptionElement}
                 {enclosure}
                     </item>
                   </channel>
