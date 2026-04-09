@@ -3,95 +3,23 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-#if WINDOWS
-using Microsoft.Win32;
-using System.Windows;
-#else
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using MessageBox.Avalonia.Enums;
 using MsBox.Avalonia;
 using MsBox.Avalonia.Enums;
-#endif
 
 namespace EmoTracker.Services
 {
     public static class DialogService
     {
         private static IDialogService mInstance =
-#if WINDOWS
-            new WpfDialogService();
-#else
             new AvaloniaDialogService();
-#endif
         public static IDialogService Instance => mInstance;
         public static void SetBackend(IDialogService service) { mInstance = service; }
     }
 
-#if WINDOWS
-    public class WpfDialogService : IDialogService
-    {
-        public bool? ShowYesNoCancel(string title, string message)
-        {
-            var result = MessageBox.Show(message, title, MessageBoxButton.YesNoCancel, MessageBoxImage.Exclamation);
-            return result switch
-            {
-                MessageBoxResult.Yes => true,
-                MessageBoxResult.No => false,
-                _ => null
-            };
-        }
-
-        public bool ShowYesNo(string title, string message, bool defaultYes = true)
-        {
-            var defaultButton = defaultYes ? MessageBoxResult.Yes : MessageBoxResult.No;
-            var result = MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Warning, defaultButton);
-            return result == MessageBoxResult.Yes;
-        }
-
-        public void ShowOK(string title, string message)
-        {
-            MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-
-        public string OpenFile(string filter, string initialDirectory)
-        {
-            var dialog = new OpenFileDialog { Filter = filter, InitialDirectory = initialDirectory };
-            return dialog.ShowDialog() == true ? dialog.FileName : null;
-        }
-
-        public string SaveFile(string filter, string initialDirectory)
-        {
-            var dialog = new SaveFileDialog
-            {
-                Filter = filter,
-                InitialDirectory = initialDirectory,
-                AddExtension = true,
-                CheckPathExists = true
-            };
-            return dialog.ShowDialog() == true ? dialog.FileName : null;
-        }
-
-        public Task<bool?> ShowYesNoCancelAsync(string title, string message)
-            => Task.FromResult(ShowYesNoCancel(title, message));
-
-        public Task<bool> ShowYesNoAsync(string title, string message, bool defaultYes = true)
-            => Task.FromResult(ShowYesNo(title, message, defaultYes));
-
-        public Task ShowOKAsync(string title, string message)
-        {
-            ShowOK(title, message);
-            return Task.CompletedTask;
-        }
-
-        public Task<string> OpenFileAsync(string filter, string initialDirectory)
-            => Task.FromResult(OpenFile(filter, initialDirectory));
-
-        public Task<string> SaveFileAsync(string filter, string initialDirectory)
-            => Task.FromResult(SaveFile(filter, initialDirectory));
-    }
-#else
     /// <summary>
     /// Avalonia dialog service using MsBox.Avalonia for message boxes and
     /// Avalonia StorageProvider for file pickers.
@@ -194,5 +122,4 @@ namespace EmoTracker.Services
             return types;
         }
     }
-#endif
 }

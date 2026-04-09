@@ -5,14 +5,8 @@
     <OutputType>Library</OutputType>
     <RootNamespace>EmoTracker.UI</RootNamespace>
     <AssemblyName>EmoTracker.UI</AssemblyName>
-    <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
-    <UseWpf Condition="'$(TargetFramework)' == 'net8.0-windows'">true</UseWpf>
+    <TargetFramework>net8.0</TargetFramework>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-  </PropertyGroup>
-
-  <!-- Define WINDOWS for the Windows target -->
-  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,13 +14,8 @@
     <ProjectReference Include="..\EmoTracker.Data\EmoTracker.Data.csproj" />
   </ItemGroup>
 
-  <!-- WPF-only packages -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-    <PackageReference Include="Markdig.Wpf" Version="0.5.0.1" />
-  </ItemGroup>
-
-  <!-- Avalonia packages — Phase 5 implementation -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+  <!-- Avalonia packages -->
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.3" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.3" />
@@ -36,17 +25,9 @@
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
   </ItemGroup>
 
-  <!-- Exclude WPF-only files from the net8.0 (Avalonia) target.
-       All other files compile for both targets using #if WINDOWS guards. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <Compile Remove="Controls\MarkdownViewer.xaml.cs" />
+  <!-- Exclude WPF-only file; Avalonia implementation is Controls/MarkdownViewer.cs -->
+  <ItemGroup>
     <Compile Remove="Properties\Settings.Designer.cs" />
-    <Page Remove="**\*.xaml" />
-  </ItemGroup>
-
-  <!-- Exclude Avalonia code-only implementation from the net8.0-windows (WPF) target -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-    <Compile Remove="Controls\MarkdownViewer.cs" />
   </ItemGroup>
 
 </Project>

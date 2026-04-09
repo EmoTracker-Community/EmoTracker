@@ -3,11 +3,7 @@ using System;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-#if WINDOWS
-using System.Windows.Data;
-#else
 using Avalonia.Data.Converters;
-#endif
 
 namespace EmoTracker.UI.Converters
 {

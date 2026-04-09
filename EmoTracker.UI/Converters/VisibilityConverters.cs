@@ -7,11 +7,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-#if WINDOWS
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Media;
-#else
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -19,7 +14,6 @@ using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-#endif
 
 namespace EmoTracker.UI.Converters
 {
@@ -30,11 +24,7 @@ namespace EmoTracker.UI.Converters
     public class NullToTrueConverter : Singleton<NullToTrueConverter>, IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-#if WINDOWS
-            => value == null;
-#else
             => value == null || value == AvaloniaProperty.UnsetValue || value == BindingOperations.DoNothing;
-#endif
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();
@@ -46,11 +36,7 @@ namespace EmoTracker.UI.Converters
     public class NullToFalseConverter : Singleton<NullToFalseConverter>, IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-#if WINDOWS
-            => value != null;
-#else
             => value != null && value != AvaloniaProperty.UnsetValue && value != BindingOperations.DoNothing;
-#endif
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();
@@ -194,11 +180,7 @@ namespace EmoTracker.UI.Converters
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             double d = value is double dv ? dv : 0.0;
-#if WINDOWS
-            return new System.Windows.Thickness(d);
-#else
             return new Avalonia.Thickness(d);
-#endif
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -217,11 +199,7 @@ namespace EmoTracker.UI.Converters
             {
                 try
                 {
-#if WINDOWS
-                    return (Brush)new BrushConverter().ConvertFromString(s);
-#else
                     return Brush.Parse(s);
-#endif
                 }
                 catch { }
             }
@@ -260,11 +238,7 @@ namespace EmoTracker.UI.Converters
 
             try
             {
-#if WINDOWS
-                return (Brush)new BrushConverter().ConvertFromString(colorStr);
-#else
                 return Brush.Parse(colorStr);
-#endif
             }
             catch
             {
@@ -300,7 +274,6 @@ namespace EmoTracker.UI.Converters
             => value is bool b ? !b : value;
     }
 
-#if !WINDOWS
     /// <summary>
     /// Returns <see cref="Avalonia.AvaloniaProperty.UnsetValue"/> when the value is negative,
     /// causing the binding to fall back to the target property's default value.
@@ -540,5 +513,4 @@ namespace EmoTracker.UI.Converters
             return "Package Manager";
         }
     }
-#endif
 }

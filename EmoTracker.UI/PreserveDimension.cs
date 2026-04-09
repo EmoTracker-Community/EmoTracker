@@ -1,4 +1,3 @@
-#if !WINDOWS
 namespace EmoTracker.UI
 {
     public enum PreserveDimension
@@ -8,4 +7,3 @@ namespace EmoTracker.UI
         Height
     }
 }
-#endif

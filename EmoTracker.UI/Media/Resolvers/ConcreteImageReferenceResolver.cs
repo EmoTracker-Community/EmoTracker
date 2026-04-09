@@ -3,11 +3,7 @@ using EmoTracker.Data.Media;
 using System;
 using System.IO;
 
-#if WINDOWS
-using System.Windows.Media;
-#else
 using Avalonia.Media;
-#endif
 
 namespace EmoTracker.UI.Media.Resolvers
 {
@@ -18,11 +14,7 @@ namespace EmoTracker.UI.Media.Resolvers
             return imageRef as ConcreteImageReference != null;
         }
 
-#if WINDOWS
-        public override ImageSource ResolveReference(ImageReference imageRef)
-#else
         public override IImage ResolveReference(ImageReference imageRef)
-#endif
         {
             ConcreteImageReference concreteRef = imageRef as ConcreteImageReference;
             if (concreteRef == null)

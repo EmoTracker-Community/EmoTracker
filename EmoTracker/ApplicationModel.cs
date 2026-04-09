@@ -1,4 +1,4 @@
-﻿#nullable enable annotations
+#nullable enable annotations
 using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
@@ -22,11 +22,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-#if WINDOWS
-using System.Windows;
-using System.Windows.Controls.Primitives;
-using System.Windows.Data;
-#endif
 
 namespace EmoTracker
 {
@@ -127,18 +122,11 @@ namespace EmoTracker
         {
             InitializeNotifications();
 
-#if WINDOWS
-            if (Application.Current is App)
-            {
-#endif
                 //  Force initialize core managers
                 PackageManager.CreateInstance();
                 PackageManager.Instance.Initialize();
 
                 InitializePackageManagerViews();
-#if WINDOWS
-            }
-#endif
 
             Tracker.Instance.OnPackageLoadStarting += Tracker_OnPackageLoadStarting;
             Tracker.Instance.OnPackageLoadComplete += Tracker_OnPackageLoadComplete;
@@ -162,16 +150,13 @@ namespace EmoTracker
             InstallPackageCommand = new DelegateCommand(InstallPackage);
             UninstallPackageCommand = new DelegateCommand(UninstallPackage, CanUninstallPackage);
 
-#if !WINDOWS
             // When HTTP game images finish downloading, refresh the package list once.
             // Multiple images often load near-simultaneously, so we coalesce the refreshes:
             // the first completion schedules a single Background-priority update; subsequent
             // completions that arrive before it runs are folded into that one refresh.
             EmoTracker.UI.Media.Utility.IconUtility.HttpImageLoaded += OnHttpImageLoaded;
-#endif
         }
 
-#if !WINDOWS
         private bool _httpRefreshScheduled = false;
 
         private void OnHttpImageLoaded(object? sender, EventArgs e)
@@ -186,7 +171,6 @@ namespace EmoTracker
                 NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
             }, Avalonia.Threading.DispatcherPriority.Background);
         }
-#endif
 
         public void Initialize()
         {
@@ -210,11 +194,6 @@ namespace EmoTracker
 
         private void ShowBroadcastView(object obj)
         {
-#if WINDOWS
-            MainWindow appWindow = Application.Current.MainWindow as MainWindow;
-            if (appWindow != null)
-                appWindow.ShowBroadcastView();
-#else
             if (mBroadcastView == null)
             {
                 mBroadcastView = new BroadcastView();
@@ -229,24 +208,15 @@ namespace EmoTracker
             {
                 mBroadcastView.Activate();
             }
-#endif
         }
 
-#if !WINDOWS
         private BroadcastView mBroadcastView;
-#endif
 
         private void ShowDevleoperConsole(object obj)
         {
-#if WINDOWS
-            MainWindow appWindow = Application.Current.MainWindow as MainWindow;
-            if (appWindow != null)
-                appWindow.ShowDeveloperConsole();
-#else
             var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime
                 as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainWindow;
             mainWindow?.ShowDeveloperConsole();
-#endif
         }
 
         private async void InstallPackage(object obj)
@@ -370,14 +340,9 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
                 else
                 {
                     OverrideExportDialog dialog = new OverrideExportDialog();
-#if WINDOWS
-                    dialog.Owner = Application.Current.MainWindow;
-                    dialog.ShowDialog();
-#else
                     _ = dialog.ShowDialog(
                         (Avalonia.Application.Current?.ApplicationLifetime as
                             Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow);
-#endif
                 }
             }
         }
@@ -385,14 +350,9 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
         private void ShowPackManagerHandler(object obj)
         {
             UI.PackageManagerWindow window = new UI.PackageManagerWindow();
-#if WINDOWS
-            window.Owner = Application.Current.MainWindow;
-            window.ShowDialog();
-#else
             _ = window.ShowDialog(
                 (Avalonia.Application.Current?.ApplicationLifetime as
                     Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow);
-#endif
 
             WindowService.Instance.FocusMainWindow();
         }
@@ -807,11 +767,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             {
                 if (SetProperty(ref mAvailablePackagesViewFilter, value))
                 {
-#if WINDOWS
-                    AvailablePackagesView.Refresh();
-#else
                     NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
-#endif
                 }
             }
         }
@@ -837,19 +793,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             }
         }
 
-#if WINDOWS
-        ListCollectionView mAvailablePackagesView;
-        ListCollectionView mInstalledPackagesView;
-
-        public CollectionView AvailablePackagesView
-        {
-            get { return mAvailablePackagesView; }
-        }
-        public CollectionView InstalledPackagesView
-        {
-            get { return mInstalledPackagesView; }
-        }
-#else
         /// <summary>
         /// Groups available packages by game name for display in the Avalonia package manager.
         /// Each entry has a <c>Name</c> (game name) and <c>Items</c> (packages in that group).
@@ -996,7 +939,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                 Items = items;
             }
         }
-#endif
 
         void InitializePackageManagerViews()
         {
@@ -1004,19 +946,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             PackageManager.Instance.OnGameListDownloaded += PackageManager_OnGameListDownloaded;
 
-#if WINDOWS
-            mAvailablePackagesView = new ListCollectionView(PackageManager.Instance.AvailablePackages as IList);
-            mAvailablePackagesView.CustomSort = new RepoEntryGameNameSort();
-            mAvailablePackagesView.Filter = new Predicate<object>(PackageFilter);
-            mAvailablePackagesView.GroupDescriptions.Add(new PropertyGroupDescription("Game", UI.Converters.GameNameToActualGameNameConverter.Instance));
-
-            mInstalledPackagesView = new ListCollectionView(PackageManager.Instance.InstalledPackages as IList);
-            mInstalledPackagesView.CustomSort = new GameNameSort();
-            mInstalledPackagesView.GroupDescriptions.Add(new PropertyGroupDescription("Game", UI.Converters.GameNameToActualGameNameConverter.Instance));
-
-            AvailablePackagesView.Refresh();
-            InstalledPackagesView.Refresh();
-#endif
 
             //  Configure auto-refresh for the package manager
             System.Timers.Timer timer = new System.Timers.Timer(TimeSpan.FromMinutes(30).TotalMilliseconds);
@@ -1039,13 +968,8 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void PackageManager_OnGameListDownloaded(object sender, EventArgs e)
         {
-#if WINDOWS
-            AvailablePackagesView.Refresh();
-            InstalledPackagesView.Refresh();
-#else
             NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
             NotifyPropertyChanged(nameof(InstalledPackagesView));
-#endif
         }
 
         private string mPackFilterText;
@@ -1063,11 +987,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void RefreshPackageCollectionView()
         {
-#if WINDOWS
-            mAvailablePackagesView.Refresh();
-#else
             NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
-#endif
         }
 
         private bool PackageFilter(object obj)
@@ -1318,24 +1238,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             foreach (Notification n in mNotifications)
             {
-#if WINDOWS
-                System.Windows.FrameworkElement container = null;
-                {
-                    MainWindow appWindow = Application.Current.MainWindow as MainWindow;
-                    if (appWindow != null)
-                    {
-                        //  This is bit lame, but WPF has some unfortunate limitations with respect to
-                        //  handling completed events for animations triggered from DataTriggers
-                        container = appWindow.NotificationsHost.ItemContainerGenerator.ContainerFromItem(n) as System.Windows.FrameworkElement;
-                    }
-                }
-
-                if (container != null && container.IsMouseOver)
-                {
-                    n.ExpirationTime = now;
-                    continue;
-                }
-#endif
 
                 if (n.ExpirationTime <= now || n.Expired)
                 {
@@ -1345,13 +1247,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                     {
                         toRemove.Add(n);
                     }
-#if WINDOWS
-                    else if (container != null)
-                    {
-                        if (container.RenderSize.Height == 0)
-                            toRemove.Add(n);
-                    }
-#endif
                 }
             }
 

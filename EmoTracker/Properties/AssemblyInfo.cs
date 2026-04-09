@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Resources;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -29,12 +29,6 @@ using System.Runtime.InteropServices;
 //[assembly: NeutralResourcesLanguage("en-US", UltimateResourceFallbackLocation.Satellite)]
 
 
-#if WINDOWS
-[assembly: System.Windows.ThemeInfo(
-    System.Windows.ResourceDictionaryLocation.None,
-    System.Windows.ResourceDictionaryLocation.SourceAssembly
-)]
-#endif
 
 
 // Version information for an assembly consists of the following four values:

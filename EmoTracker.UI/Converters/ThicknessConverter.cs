@@ -2,12 +2,8 @@ using EmoTracker.Core;
 using System;
 using System.Globalization;
 
-#if WINDOWS
-using System.Windows.Data;
-#else
 using Avalonia;
 using Avalonia.Data.Converters;
-#endif
 
 namespace EmoTracker.UI.Converters
 {
@@ -22,11 +18,7 @@ namespace EmoTracker.UI.Converters
             try
             {
                 Data.Media.Thickness thickness = (Data.Media.Thickness)value;
-#if WINDOWS
-                return new System.Windows.Thickness(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
-#else
                 return new Thickness(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
-#endif
             }
             catch { }
 
@@ -39,7 +31,6 @@ namespace EmoTracker.UI.Converters
         }
     }
 
-#if !WINDOWS
     /// <summary>
     /// Converts a margin string (e.g. "5", "5,10", "5,10,5,10") to an Avalonia
     /// <see cref="Thickness"/>.
@@ -64,5 +55,4 @@ namespace EmoTracker.UI.Converters
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();
     }
-#endif
 }

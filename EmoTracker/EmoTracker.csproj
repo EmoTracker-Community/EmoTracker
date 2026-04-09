@@ -2,21 +2,12 @@
 
   <PropertyGroup>
     <ProjectGuid>{37EF8519-4426-455F-9D23-292839365EE0}</ProjectGuid>
-    <OutputType Condition="'$(TargetFramework)' == 'net8.0-windows'">WinExe</OutputType>
-    <OutputType Condition="'$(TargetFramework)' == 'net8.0'">WinExe</OutputType>
+    <OutputType>WinExe</OutputType>
     <RootNamespace>EmoTracker</RootNamespace>
     <AssemblyName>EmoTracker</AssemblyName>
-    <TargetFrameworks>net8.0-windows;net8.0</TargetFrameworks>
-    <UseWpf Condition="'$(TargetFramework)' == 'net8.0-windows'">true</UseWpf>
+    <TargetFramework>net8.0</TargetFramework>
     <ApplicationIcon>emohead_icon_transparent_7h3_icon.ico</ApplicationIcon>
-    <ApplicationManifest Condition="'$(TargetFramework)' == 'net8.0-windows'">app.manifest</ApplicationManifest>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <AutoGenerateBindingRedirects Condition="'$(TargetFramework)' == 'net8.0-windows'">true</AutoGenerateBindingRedirects>
-  </PropertyGroup>
-
-  <!-- Define WINDOWS for the Windows target -->
-  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
   <!-- PluginManager.cs is intentionally excluded from compilation -->
@@ -24,26 +15,12 @@
     <Compile Remove="PluginManager.cs" />
   </ItemGroup>
 
-  <!-- WPF resource items (net8.0-windows only) -->
-  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <Resource Include="emohead_icon_transparent_7h3_icon.ico" />
-    <Resource Include="emotracker_icon.ico" />
-    <Resource Include="release_notes.txt" />
-    <Resource Include="Resources\**\*" />
-  </ItemGroup>
-
-  <!-- Avalonia resource items (net8.0 cross-platform) — accessible via avares://EmoTracker/... -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+  <!-- Avalonia resource items — accessible via avares://EmoTracker/... -->
+  <ItemGroup>
     <AvaloniaResource Include="emohead_icon_transparent_7h3_icon.ico" />
     <AvaloniaResource Include="emotracker_icon.ico" />
     <AvaloniaResource Include="release_notes.txt" />
     <AvaloniaResource Include="Resources\**\*" />
-  </ItemGroup>
-
-  <!-- Windows-only packages -->
-  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <PackageReference Include="System.ComponentModel.Composition" Version="4.7.0" />
-    <PackageReference Include="System.Speech" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -52,25 +29,14 @@
     <ProjectReference Include="..\EmoTracker.UI\EmoTracker.UI.csproj" />
   </ItemGroup>
 
-  <!-- NDI is Windows-only -->
-  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <ProjectReference Include="..\External\NDI\NDILibDotNet2\NDILibDotNet2.csproj" />
-  </ItemGroup>
-
-  <!-- WPF-only packages -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-    <PackageReference Include="Markdig.Wpf" Version="0.5.0.1" />
-    <PackageReference Include="WpfScreenHelper" Version="2.1.1" />
-  </ItemGroup>
-
-  <!-- Avalonia packages (cross-platform target) -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+  <!-- Avalonia packages -->
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.3" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.3" />
     <PackageReference Include="Avalonia.Xaml.Behaviors" Version="11.3.0.6" />
     <PackageReference Include="MsBox.Avalonia" Version="3.0.0-rc2" />
-    <!-- NDI cross-platform P/Invoke wrapper (net8.0 port of NDILibDotNet2) -->
+    <!-- NDI cross-platform P/Invoke wrapper -->
     <PackageReference Include="NDILibDotNetCoreBase" Version="2024.7.22.1" />
     <PackageReference Include="NetSparkleUpdater.SparkleUpdater" Version="3.0.4" />
     <PackageReference Include="NetSparkleUpdater.UI.Avalonia" Version="3.0.4" />
@@ -79,7 +45,7 @@
     <PackageReference Include="PortAudioSharp" Version="0.3.0" />
   </ItemGroup>
 
-  <!-- Shared packages (both targets) -->
+  <!-- Shared packages -->
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Serilog" Version="4.3.1" />
@@ -96,75 +62,5 @@
   <ItemGroup>
     <Protobuf Include="Providers\SNI\Protos\sni.proto" GrpcServices="Client" ProtoRoot="Providers\SNI\Protos" />
   </ItemGroup>
-
-  <!--
-    Exclude WPF-dependent and Windows-only source from the cross-platform net8.0 target.
-    Avalonia equivalents (*.axaml / *.axaml.cs) are included via the AvaloniaXaml glob below.
-  -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <!-- App entry point and main window (WPF) — replaced by App.axaml.cs / MainWindow.axaml.cs -->
-    <Compile Remove="App.xaml.cs" />
-    <Page Remove="App.xaml" />
-    <Compile Remove="MainWindow.xaml.cs" />
-    <Page Remove="MainWindow.xaml" />
-    <!-- WPF code-behind files for UI controls — replaced by *.axaml.cs counterparts -->
-    <Compile Remove="UI\**\*.xaml.cs" />
-    <Page Remove="UI\**\*.xaml" />
-    <!-- AutoTracker WPF views — replaced by *.axaml.cs counterparts -->
-    <Compile Remove="Extensions\AutoTracker\**\*.xaml.cs" />
-    <Page Remove="Extensions\AutoTracker\**\*.xaml" />
-    <!-- NDI — only the WPF-specific files are excluded; the Avalonia equivalents
-         (NdiSendContainer.cs, NdiLibrary.cs, NdiImageProcessing.cs,
-          NDIExtension.cs, NDIStatusIndicator.axaml.cs) are included. -->
-    <Compile Remove="Extensions\NDI\NDIStatusIndicator.xaml.cs" />
-    <Page Remove="Extensions\NDI\NDIStatusIndicator.xaml" />
-    <!-- NoteTaking WPF code-behind replaced by axaml.cs -->
-    <Compile Remove="Extensions\NoteTaking\**\*.xaml.cs" />
-    <Page Remove="Extensions\NoteTaking\**\*.xaml" />
-    <!-- Twitch WPF code-behind replaced by axaml.cs -->
-    <Compile Remove="Extensions\Twitch\**\*.xaml.cs" />
-    <Page Remove="Extensions\Twitch\**\*.xaml" />
-    <!-- VoiceRecognition: exclude WPF-only files; Avalonia implementation included -->
-    <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionExtension.cs" />
-    <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.xaml.cs" />
-    <Page Remove="Extensions\VoiceRecognition\**\*.xaml" />
-    <!-- Discord P/Invoke wrapper (Windows-only native SDK) -->
-    <Compile Remove="Utility\DiscordRPC.cs" />
-    <!-- WPF/Framework-dependent generated files -->
-    <Compile Remove="Properties\Settings.Designer.cs" />
-  </ItemGroup>
-
-  <!-- Exclude Avalonia-only source from the net8.0-windows (WPF) target -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-    <Compile Remove="Program.cs" />
-    <Compile Remove="App.axaml.cs" />
-    <Compile Remove="MainWindow.axaml.cs" />
-    <Compile Remove="UI\**\*.axaml.cs" />
-    <Compile Remove="Extensions\AutoTracker\**\*.axaml.cs" />
-    <Compile Remove="Extensions\Twitch\**\*.axaml.cs" />
-    <Compile Remove="Extensions\NoteTaking\**\*.axaml.cs" />
-    <!-- NDI Avalonia-specific files (reference Avalonia types; WPF uses NDILibDotNet2 instead) -->
-    <Compile Remove="Extensions\NDI\NdiSendContainer.cs" />
-    <Compile Remove="Extensions\NDI\NdiLibrary.cs" />
-    <Compile Remove="Extensions\NDI\NdiImageProcessing.cs" />
-    <Compile Remove="Extensions\NDI\**\*.axaml.cs" />
-    <!-- VoiceRecognition Avalonia files excluded from WPF build -->
-    <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionExtensionAvalonia.cs" />
-    <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.axaml.cs" />
-    <Page Remove="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.axaml" />
-    <Compile Remove="Extensions\VoiceRecognition\VoskModelDownloadWindow.axaml.cs" />
-    <Page Remove="Extensions\VoiceRecognition\VoskModelDownloadWindow.axaml" />
-  </ItemGroup>
-
-  <!-- Copy Windows-only native dependencies on net8.0-windows builds -->
-  <Target Name="CopyNativeDependencies" AfterTargets="Build" Condition="$(TargetFramework.Contains('-windows'))">
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\Discord\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\NDI\distrib\x86\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\NDI\distrib\x64\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-  </Target>
-
-  <Target Name="GenerateInstaller" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and $(TargetFramework.Contains('-windows'))">
-    <Exec Command="&quot;C:\Program Files (x86)\Inno Setup 5\ISCC.exe&quot; &quot;$(SolutionDir)Installer\emotracker_setup.iss&quot;" ContinueOnError="true" />
-  </Target>
 
 </Project>

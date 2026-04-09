@@ -3,11 +3,7 @@ using EmoTracker.Data.Layout;
 using System;
 using System.Globalization;
 
-#if WINDOWS
-using System.Windows.Data;
-#else
 using Avalonia.Data.Converters;
-#endif
 
 namespace EmoTracker.UI.Converters
 {

@@ -27,11 +27,7 @@ namespace EmoTracker.Extensions.AutoTracker
         {
             get
             {
-#if WINDOWS
-                return new AutoTrackerExtensionView() { DataContext = this };
-#else
                 return new AutoTrackerExtensionView { DataContext = this };
-#endif
             }
         }
 

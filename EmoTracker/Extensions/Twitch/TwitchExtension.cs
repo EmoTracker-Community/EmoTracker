@@ -415,13 +415,6 @@ namespace EmoTracker.Extensions.Twitch
 
                                     mLastVFXCommandTime = System.DateTime.Now;
 
-#if WINDOWS
-                                    MainWindow main = System.Windows.Application.Current.MainWindow as MainWindow;
-                                    if (main != null && main.BroadcastView != null)
-                                    {
-                                        main.BroadcastView.Flush();
-                                    }
-#endif
                                 });
                                 return;
                             }
@@ -438,24 +431,6 @@ namespace EmoTracker.Extensions.Twitch
 
                                     mLastVFXCommandTime = System.DateTime.Now;
 
-#if WINDOWS
-                                    MainWindow main = System.Windows.Application.Current.MainWindow as MainWindow;
-                                    if (main != null && main.BroadcastView != null)
-                                    {
-                                        if (args.Length > 1 && !string.IsNullOrWhiteSpace(args[1]))
-                                        {
-                                            System.Windows.Media.ImageSource img = IconUtility.GetImage(new Uri(Path.Combine(ExtensionManager.GetExtensionPath(this), string.Format("images/{0}.png", args[1]))));
-                                            if (img == null)
-                                            {
-                                                Uri imageUri = new Uri(string.Format("pack://application:,,,/EmoTracker;component/Resources/{0}.png", args[1]));
-                                                img = IconUtility.GetImage(imageUri);
-                                            }
-
-                                            if (img != null)
-                                                main.BroadcastView.Rain(img);
-                                        }
-                                    }
-#endif
                                 });
                                 return;
                             }

@@ -1,39 +1,3 @@
-#if WINDOWS
-using System;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-
-namespace EmoTracker.UI.Controls
-{
-    public class InputMaskingImage : Image
-    {
-        protected override HitTestResult HitTestCore(PointHitTestParameters hitTestParameters)
-        {
-            try
-            {
-                var source = (BitmapSource)Source;
-
-                var x = Math.Min((int)(hitTestParameters.HitPoint.X / ActualWidth * source.PixelWidth), source.PixelWidth - 1);
-                var y = Math.Min((int)(hitTestParameters.HitPoint.Y / ActualHeight * source.PixelHeight), source.PixelHeight - 1);
-
-                var pixel = new byte[4];
-                source.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
-
-                if (pixel[3] < 10)
-                    return null;
-
-                return new PointHitTestResult(this, hitTestParameters.HitPoint);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-    }
-}
-#else
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -91,4 +55,3 @@ namespace EmoTracker.UI.Controls
         }
     }
 }
-#endif
