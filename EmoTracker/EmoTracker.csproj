@@ -152,6 +152,8 @@
     <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionExtensionAvalonia.cs" />
     <Compile Remove="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.axaml.cs" />
     <Page Remove="Extensions\VoiceRecognition\VoiceRecognitionStatusIndicator.axaml" />
+    <Compile Remove="Extensions\VoiceRecognition\VoskModelDownloadWindow.axaml.cs" />
+    <Page Remove="Extensions\VoiceRecognition\VoskModelDownloadWindow.axaml" />
   </ItemGroup>
 
   <!-- Copy Windows-only native dependencies on net8.0-windows builds -->

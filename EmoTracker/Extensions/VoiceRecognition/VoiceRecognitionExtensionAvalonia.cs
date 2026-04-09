@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using EmoTracker.Core;
 using EmoTracker.Data;
@@ -140,15 +142,30 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private const int FramesPerBuffer = 4000; // ~250ms at 16 kHz
 
-        private void StartRecognition()
+        private async void StartRecognition()
         {
             string modelPath = FindModelPath();
             if (modelPath == null)
             {
-                Serilog.Log.Warning("[Voice] Vosk model not found. Place a 'vosk-model' directory in {Path}", UserDirectory.Path);
-                _active = false;
-                NotifyPropertyChanged(nameof(Active));
-                return;
+                var mainWindow = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                var dlg = new VoskModelDownloadWindow();
+                await dlg.ShowDialog(mainWindow);
+
+                if (!dlg.Success)
+                {
+                    _active = false;
+                    NotifyPropertyChanged(nameof(Active));
+                    return;
+                }
+
+                modelPath = FindModelPath();
+                if (modelPath == null)
+                {
+                    Serilog.Log.Warning("[Voice] Vosk model still not found after download");
+                    _active = false;
+                    NotifyPropertyChanged(nameof(Active));
+                    return;
+                }
             }
 
             try
