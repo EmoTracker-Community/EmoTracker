@@ -5,43 +5,61 @@
              xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI">
     <Grid MinWidth="100">
-        <!-- Markdown viewer: visible when NOT in edit mode -->
-        <controls:MarkdownViewer
-            Markdown="{Binding MarkdownSource}"
-            IsVisible="{Binding IsEditModeEnabled,
-                        RelativeSource={RelativeSource AncestorType=local:MarkdownTextNoteControl},
-                        Converter={x:Static converters:InverseBoolConverter.Instance}}" />
+        <!-- Markdown viewer: visible when NOT in edit mode (visibility managed in code-behind) -->
+        <controls:MarkdownViewer x:Name="MarkdownViewerControl"
+            Markdown="{Binding MarkdownSource}" />
 
         <Grid Name="EditorContainer" Background="Transparent">
             <!-- Text editor: visible when in edit mode -->
             <TextBox Name="MarkdownSourceEditor"
-                     Text="{Binding MarkdownSource, UpdateSourceTrigger=LostFocus}"
+                     Text="{Binding MarkdownSource, UpdateSourceTrigger=PropertyChanged}"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"
-                     Background="{x:Null}"
-                     Foreground="WhiteSmoke"
-                     CaretBrush="WhiteSmoke"
-                     IsVisible="{Binding IsEditModeEnabled,
-                                 RelativeSource={RelativeSource AncestorType=local:MarkdownTextNoteControl}}" />
+                     Padding="6,4"
+                     MinHeight="60"
+                     IsVisible="False">
+                <TextBox.Resources>
+                    <SolidColorBrush x:Key="TextControlBackground" Color="#1a1a1a"/>
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#222222"/>
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#1a1a1a"/>
+                    <SolidColorBrush x:Key="TextControlForeground" Color="WhiteSmoke"/>
+                    <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="WhiteSmoke"/>
+                    <SolidColorBrush x:Key="TextControlForegroundFocused" Color="WhiteSmoke"/>
+                    <SolidColorBrush x:Key="TextControlCaretForeground" Color="WhiteSmoke"/>
+                    <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="#35e0b5"/>
+                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="#444444"/>
+                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#555555"/>
+                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#555560"/>
+                </TextBox.Resources>
+            </TextBox>
 
             <!-- Edit button: visible when not in edit mode and (mouse over OR markdown is empty) -->
             <Button Name="EditButton"
                     Click="EditButton_Click"
                     Background="Transparent"
                     BorderThickness="0"
-                    Padding="0">
+                    Padding="0"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
-                        <Border CornerRadius="3"
-                                Background="DarkGray"
+                        <Border CornerRadius="4"
+                                Background="#333339"
+                                BorderBrush="#444444"
+                                BorderThickness="1"
+                                Padding="8,4"
                                 Name="EditBorder">
                             <StackPanel Orientation="Horizontal"
                                         HorizontalAlignment="Center"
-                                        VerticalAlignment="Center">
+                                        VerticalAlignment="Center"
+                                        Spacing="5">
                                 <TextBlock Text="&#xf303;"
-                                           FontFamily="{StaticResource FontAwesome5Free}" />
-                                <TextBlock Text="Edit Markdown"
-                                           Margin="5,0" />
+                                           FontFamily="{StaticResource FontAwesome5Free}"
+                                           Foreground="WhiteSmoke"
+                                           FontSize="11" />
+                                <TextBlock Text="Edit"
+                                           Foreground="WhiteSmoke"
+                                           FontSize="11" />
                             </StackPanel>
                         </Border>
                     </ControlTemplate>

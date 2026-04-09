@@ -82,12 +82,11 @@
                                Foreground="WhiteSmoke"
                                FontWeight="DemiBold"
                                Text="{Binding TitleText, RelativeSource={RelativeSource AncestorType=local:LocationControl}}" />
-                    <!-- Note-taking on locations is currently disabled -->
-                    <!--<local:NoteTakingIconPopup Grid.Column="1"
+                    <local:NoteTakingIconPopup Grid.Column="1"
                                               Margin="10,0,0,0"
                                               DataContext="{Binding NoteTakingSite}"
                                               VerticalAlignment="Center"
-                                              FontSize="9"/>-->
+                                              FontSize="9"/>
                     <CheckBox Grid.Column="2"
                               IsChecked="{Binding Pinned}"
                               Margin="0"

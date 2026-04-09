@@ -110,8 +110,8 @@
                                                     HorizontalAlignment="Left"
                                                     BorderBrush="#212121"
                                                     Background="{Binding Location.AccessibilityLevel, Converter={x:Static converters:AccessibilityLevelToBrushConverter.Instance}}">
-                                                <!-- Note indicator (note-taking on locations is currently disabled) -->
-                                                <!--<Viewbox Width="{Binding NoteIndicatorSize}"
+                                                <!-- Note indicator: shown when a location has notes -->
+                                                <Viewbox Width="{Binding NoteIndicatorSize}"
                                                          Height="{Binding NoteIndicatorSize}"
                                                          StretchDirection="Both"
                                                          VerticalAlignment="Top"
@@ -126,7 +126,7 @@
                                                                    Foreground="{Binding Status_Generic_Active, Source={x:Static settings:ApplicationColors.Instance}}"
                                                                    Margin="1" />
                                                     </Border>
-                                                </Viewbox>-->
+                                                </Viewbox>
                                             </Border>
 
                                             <!-- Badges host -->

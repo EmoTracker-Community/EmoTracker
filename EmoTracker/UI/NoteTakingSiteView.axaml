@@ -6,7 +6,7 @@
     <Grid>
         <Grid Margin="5">
             <Grid.RowDefinitions>
-                <RowDefinition />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
@@ -60,16 +60,16 @@
                                             Padding="0">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
-                                                <Grid>
+                                                <Border Background="Transparent" Padding="4">
                                                     <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
-                                                               FontSize="14"
+                                                               FontSize="13"
                                                                Text="&#xf2ed;"
                                                                ToolTip.Tip="Delete this note"
                                                                VerticalAlignment="Center"
                                                                HorizontalAlignment="Center"
-                                                               Foreground="DarkGray"
+                                                               Foreground="#666666"
                                                                Name="DeleteIcon" />
-                                                </Grid>
+                                                </Border>
                                             </ControlTemplate>
                                         </Button.Template>
                                     </Button>
@@ -147,17 +147,25 @@
                         Padding="0">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border CornerRadius="3"
-                                    Background="DarkGray"
+                            <Border CornerRadius="4"
+                                    Background="#333339"
+                                    BorderBrush="#444444"
+                                    BorderThickness="1"
                                     Name="AddBorder">
-                                <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
-                                           FontSize="14"
-                                           Text="&#xf0fe;"
-                                           ToolTip.Tip="Add a new note"
-                                           Foreground="#212121"
-                                           VerticalAlignment="Center"
-                                           HorizontalAlignment="Center"
-                                           Margin="3" />
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            Spacing="6"
+                                            Margin="10,5">
+                                    <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
+                                               FontSize="12"
+                                               Text="&#xf0fe;"
+                                               Foreground="WhiteSmoke"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="Add note"
+                                               Foreground="WhiteSmoke"
+                                               FontSize="12"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
                             </Border>
                         </ControlTemplate>
                     </Button.Template>

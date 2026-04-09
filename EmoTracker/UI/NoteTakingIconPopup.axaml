@@ -12,6 +12,7 @@
                Placement="Top"
                HorizontalOffset="4"
                VerticalOffset="4"
+               IsLightDismissEnabled="False"
                PlacementTarget="{Binding ElementName=OpenNotesButton}">
             <Border Name="PopupRegion"
                     BorderBrush="DarkGray"
@@ -32,12 +33,14 @@
                       Unchecked="OpenNotesButton_Unchecked">
             <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
-                    <TextBlock Name="Icon"
-                               FontFamily="{StaticResource FontAwesome5Free}"
-                               Text="&#xf044;"
-                               ToolTip.Tip="View and edit notes"
-                               VerticalAlignment="Center"
-                               Foreground="{Binding Empty, Converter={x:Static local:NoteTakingIconPopup.EmptyToForegroundConverter}}" />
+                    <Border Background="Transparent" Padding="2">
+                        <TextBlock Name="Icon"
+                                   FontFamily="{StaticResource FontAwesome5Free}"
+                                   Text="&#xf044;"
+                                   ToolTip.Tip="View and edit notes"
+                                   VerticalAlignment="Center"
+                                   Foreground="{Binding Empty, Converter={x:Static local:NoteTakingIconPopup.EmptyToForegroundConverter}}" />
+                    </Border>
                 </ControlTemplate>
             </ToggleButton.Template>
         </ToggleButton>

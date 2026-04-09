@@ -31,8 +31,8 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.3.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.3" />
     <PackageReference Include="Avalonia.Xaml.Behaviors" Version="11.3.0.6" />
-    <PackageReference Include="Markdig" Version="0.37.0" />
-    <PackageReference Include="Markdown.Avalonia" Version="11.0.2" />
+    <PackageReference Include="Markdig" Version="0.38.0" />
+    <PackageReference Include="Avalonia.HtmlRenderer" Version="11.2.0" />
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
   </ItemGroup>
 

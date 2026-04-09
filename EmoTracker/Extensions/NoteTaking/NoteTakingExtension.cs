@@ -21,9 +21,7 @@ namespace EmoTracker.Extensions.NoteTaking
         {
             get
             {
-                // Note-taking extension UI is currently disabled
-                return null;
-                //return new NoteTakingIconPopup() { DataContext = NoteTakingSite };
+                return new NoteTakingIconPopup() { DataContext = NoteTakingSite };
             }
         }
 

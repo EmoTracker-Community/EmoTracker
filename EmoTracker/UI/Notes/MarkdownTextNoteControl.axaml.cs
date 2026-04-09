@@ -4,6 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using EmoTracker.UI.Controls;
+using System;
+using System.ComponentModel;
 
 namespace EmoTracker.UI.Notes
 {
@@ -39,20 +41,19 @@ namespace EmoTracker.UI.Notes
             get => mbIsEditModeEnabled;
             set
             {
-                if (SetProperty(ref mbIsEditModeEnabled, value))
-                {
-                    // When leaving edit mode the TextBox binding uses UpdateSourceTrigger=LostFocus,
-                    // so the source is already updated when focus leaves the editor.
-                    // We only need to ensure the editor loses focus when edit mode is turned off
-                    // programmatically (e.g. Escape key).
-                    if (!mbIsEditModeEnabled && MarkdownSourceEditor.IsFocused)
-                    {
-                        // Moving focus away triggers the LostFocus binding update.
-                        TopLevel.GetTopLevel(this)?.FocusManager?.ClearFocus();
-                    }
+                if (mbIsEditModeEnabled == value) return;
+                mbIsEditModeEnabled = value;
 
-                    UpdateEditButtonVisibility();
-                }
+                // Manage visibility directly — RelativeSource bindings on this control
+                // cannot observe property changes because ObservableUserControl shadows
+                // Avalonia's INotifyPropertyChanged event.
+                MarkdownSourceEditor.IsVisible = value;
+                MarkdownViewerControl.IsVisible = !value;
+
+                if (!value && MarkdownSourceEditor.IsFocused)
+                    TopLevel.GetTopLevel(this)?.FocusManager?.ClearFocus();
+
+                UpdateEditButtonVisibility();
             }
         }
 
@@ -107,6 +108,39 @@ namespace EmoTracker.UI.Notes
             EditorContainer.PointerExited -= EditorContainer_PointerExited;
         }
 
+        private INotifyPropertyChanged? _dataContextObservable;
+
+        protected override void OnDataContextChanged(EventArgs e)
+        {
+            base.OnDataContextChanged(e);
+
+            if (_dataContextObservable != null)
+                _dataContextObservable.PropertyChanged -= DataContext_PropertyChanged;
+
+            _dataContextObservable = DataContext as INotifyPropertyChanged;
+
+            if (_dataContextObservable != null)
+                _dataContextObservable.PropertyChanged += DataContext_PropertyChanged;
+
+            // Sync initial state from the new DataContext.
+            SyncMarkdownSourceEmpty();
+        }
+
+        private void DataContext_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is "MarkdownSourceEmpty" or "MarkdownSource")
+                SyncMarkdownSourceEmpty();
+        }
+
+        private void SyncMarkdownSourceEmpty()
+        {
+            // Read MarkdownSourceEmpty via reflection-free duck-typing on the data model.
+            bool empty = true;
+            if (DataContext is Data.Notes.MarkdownTextNote note)
+                empty = note.MarkdownSourceEmpty;
+            MarkdownSourceEmpty = empty;
+        }
+
         private void EditorContainer_PointerEntered(object? sender, PointerEventArgs e)
         {
             mbEditorContainerIsPointerOver = true;
@@ -141,7 +175,10 @@ namespace EmoTracker.UI.Notes
         private void EditButton_Click(object? sender, RoutedEventArgs e)
         {
             IsEditModeEnabled = true;
-            MarkdownSourceEditor.Focus();
+            // Defer focus until the layout pass has made the TextBox visible.
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => MarkdownSourceEditor.Focus(),
+                Avalonia.Threading.DispatcherPriority.Loaded);
         }
     }
 }
