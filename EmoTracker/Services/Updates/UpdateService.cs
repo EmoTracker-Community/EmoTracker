@@ -59,6 +59,8 @@ namespace EmoTracker.Services.Updates
                 RelaunchAfterUpdate     = true,
             };
 
+            Log.Debug("[Update] AppCastUrl: {Url}", _sparkle.AppCastUrl);
+
             _sparkle.UpdateDetected           += (_, info) =>
                 Log.Information("[Update] Update available: {Version}", info.LatestVersion);
             _sparkle.UpdateCheckFinished      += (_, status) =>
