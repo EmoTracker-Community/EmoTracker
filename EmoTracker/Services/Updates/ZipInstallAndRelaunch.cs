@@ -68,18 +68,16 @@ namespace EmoTracker.Services.Updates
         {
             string lower = archivePath.ToLowerInvariant();
 
-            if (lower.EndsWith(".zip"))
+            //  Windows platform uses zip; other platforms use various tar formats
+            //  TODO: Make this safer and more resilient
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 await Task.Run(() => ZipFile.ExtractToDirectory(archivePath, destDir, overwriteFiles: true), ct);
             }
-            else if (lower.EndsWith(".tar.gz") || lower.EndsWith(".tar.xz") || lower.EndsWith(".tgz"))
+            else
             {
                 // Use the system tar — available on macOS, Linux, and Windows 10+.
                 await RunProcessAsync("tar", $"xf \"{archivePath}\" -C \"{destDir}\"", ct);
-            }
-            else
-            {
-                throw new NotSupportedException($"Unsupported archive format: {Path.GetFileName(archivePath)}");
             }
         }
 

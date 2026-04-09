@@ -10,8 +10,7 @@ namespace EmoTracker.Services.Updates
 {
     /// <summary>
     /// Custom <see cref="UIFactory"/> that substitutes EmoTracker-styled windows for
-    /// the "Checking for updates" and "Update available" dialogs while inheriting the
-    /// built-in download-progress and error windows from the base class.
+    /// the "Checking for updates", "Update available", and download-progress dialogs.
     /// </summary>
     public class UpdateUIFactory : UIFactory
     {
@@ -38,6 +37,11 @@ namespace EmoTracker.Services.Updates
         {
             var window = new EmoTracker.UI.UpdateAvailableWindow(updates, currentVersion, appName);
             return window;
+        }
+
+        public override IDownloadProgress CreateProgressWindow(string downloadTitle, string actionButtonTitleAfterDownload)
+        {
+            return new EmoTracker.UI.UpdateDownloadWindow(downloadTitle, actionButtonTitleAfterDownload);
         }
     }
 }
