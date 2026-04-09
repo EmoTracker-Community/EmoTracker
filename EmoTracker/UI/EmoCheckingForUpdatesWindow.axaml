@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EmoTracker.UI.EmoCheckingForUpdatesWindow"
+        Title="Software Update"
+        Width="340" Height="130"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#212121"
+        SystemDecorations="BorderOnly">
+
+    <Grid RowDefinitions="*,Auto" Margin="24,20,24,16">
+
+        <StackPanel Grid.Row="0" VerticalAlignment="Center" Spacing="12">
+            <TextBlock Text="Checking for updates…"
+                       Foreground="WhiteSmoke"
+                       FontSize="14"
+                       HorizontalAlignment="Center"/>
+            <ProgressBar IsIndeterminate="True"
+                         Height="4"
+                         Foreground="#35e0b5"
+                         Background="#333339"
+                         CornerRadius="2"/>
+        </StackPanel>
+
+        <Button Grid.Row="1"
+                Content="Cancel"
+                x:Name="CancelButton"
+                HorizontalAlignment="Right"
+                Padding="14,6"
+                CornerRadius="6"
+                Background="#333339"
+                Foreground="WhiteSmoke"
+                BorderThickness="1"
+                BorderBrush="#444444"
+                Click="CancelButton_Click"/>
+    </Grid>
+</Window>

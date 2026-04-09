@@ -1,10 +1,10 @@
+using Markdig;
 using NetSparkleUpdater.Interfaces;
 using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -86,16 +86,9 @@ namespace EmoTracker.Services.Updates
                     return EmptyAppCast();
                 }
 
-                var releaseElement = doc.RootElement[0];
-                string releaseJson = releaseElement.GetRawText();
+                string releaseJson = doc.RootElement[0].GetRawText();
 
-                // Render the release body markdown to HTML via the GitHub Markdown API.
-                string bodyMarkdown = releaseElement.TryGetProperty("body", out var bodyProp)
-                    ? bodyProp.GetString() ?? string.Empty
-                    : string.Empty;
-                string releaseNotesHtml = await RenderMarkdownAsync(bodyMarkdown).ConfigureAwait(false);
-
-                string appcast = BuildAppCastXml(releaseJson, releaseNotesHtml);
+                string appcast = BuildAppCastXml(releaseJson);
                 Log.Debug("[Update] Generated appcast XML:\n{Appcast}", appcast);
                 return appcast;
             }
@@ -106,42 +99,12 @@ namespace EmoTracker.Services.Updates
             }
         }
 
-        /// <summary>
-        /// Calls the GitHub Markdown API to render <paramref name="markdown"/> as HTML.
-        /// Falls back to a plain-text preformatted block on any error.
-        /// </summary>
-        private async Task<string> RenderMarkdownAsync(string markdown)
-        {
-            if (string.IsNullOrWhiteSpace(markdown))
-                return string.Empty;
-            try
-            {
-                // Use GFM mode with the repo context so issue/PR references resolve.
-                var payload = new
-                {
-                    text    = markdown,
-                    mode    = "gfm",
-                    context = $"{_repoOwner}/{_repoName}"
-                };
-                using var response = await Http
-                    .PostAsJsonAsync($"{ApiBase}/markdown", payload)
-                    .ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "[Update] Failed to render release notes markdown; falling back to plain text.");
-                return $"<pre>{EscapeXml(markdown)}</pre>";
-            }
-        }
-
         // Returns the encoding used by the app cast data (UTF-8).
         public Encoding GetAppCastEncoding() => Encoding.UTF8;
 
         // -----------------------------------------------------------------------
 
-        private string BuildAppCastXml(string releaseJson, string releaseNotesHtml)
+        private string BuildAppCastXml(string releaseJson)
         {
             var release = JsonNode.Parse(releaseJson)!;
 
@@ -198,10 +161,12 @@ namespace EmoTracker.Services.Updates
                 return EmptyAppCast();
             }
 
-            // Inline HTML release notes in a CDATA block so the XML parser ignores the HTML.
-            string descriptionElement = string.IsNullOrWhiteSpace(releaseNotesHtml)
+            // Convert markdown release notes to HTML using Markdig.
+            // HtmlLabel (Avalonia.HtmlRenderer) renders the HTML in the update dialog.
+            string bodyMarkdown = release["body"]?.GetValue<string>() ?? string.Empty;
+            string descriptionElement = string.IsNullOrWhiteSpace(bodyMarkdown)
                 ? string.Empty
-                : $"      <description><![CDATA[{releaseNotesHtml}]]></description>";
+                : $"      <description><![CDATA[{MarkdownToHtml(bodyMarkdown)}]]></description>";
 
             return $"""
                 <?xml version="1.0" encoding="UTF-8"?>
@@ -218,6 +183,12 @@ namespace EmoTracker.Services.Updates
                 </rss>
                 """;
         }
+
+        private static readonly MarkdownPipeline MarkdigPipeline =
+            new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+
+        private static string MarkdownToHtml(string markdown) =>
+            Markdig.Markdown.ToHtml(markdown, MarkdigPipeline);
 
         private static string DetectPlatformKey(string assetName)
         {
