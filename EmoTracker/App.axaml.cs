@@ -54,6 +54,7 @@ namespace EmoTracker
 
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
+                desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
                 desktop.MainWindow = new MainWindow();
                 UpdateService.Instance.StartBackgroundCheck();
 

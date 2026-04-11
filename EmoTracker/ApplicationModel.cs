@@ -210,6 +210,7 @@ namespace EmoTracker
             }
         }
 
+        public BroadcastView BroadcastView => mBroadcastView;
         private BroadcastView mBroadcastView;
 
         private void ShowDevleoperConsole(object obj)

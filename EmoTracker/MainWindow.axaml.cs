@@ -296,6 +296,12 @@ namespace EmoTracker
                 DeveloperConsole = null;
             }
 
+            var broadcastView = ApplicationModel.Instance.BroadcastView;
+            if (broadcastView != null)
+            {
+                broadcastView.Close();
+            }
+
             base.OnClosing(e);
         }
 
