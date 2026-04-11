@@ -410,15 +410,20 @@
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                     <ScrollViewer HorizontalScrollBarVisibility="{Binding HorizontalScrollBarVisibility, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                                   VerticalScrollBarVisibility="{Binding VerticalScrollBarVisibility, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
-                        <!-- MinHeight ensures the content fills at least the visible viewport area.
-                             Without this, Avalonia's ScrollViewer passes infinite height to content,
-                             which prevents DockPanel LastChildFill from allocating remaining space
-                             to the last child (e.g. the Pinned Locations GroupBox). By constraining
-                             content to at least the viewport height, the DockPanel receives a finite
-                             height and LastChildFill works correctly, while content taller than the
-                             viewport still scrolls normally. -->
+                        <!-- Use a Grid panel (not the default StackPanel) so the single content
+                             child is stretched to fill the ItemsControl's full arranged height.
+                             MinHeight ties that height to the ScrollViewer's visible viewport so
+                             DockPanel LastChildFill receives a finite height and allocates the
+                             remaining space to the last child (e.g. the Pinned Locations GroupBox).
+                             Content taller than the viewport still overflows and scrolls normally. -->
                         <ItemsControl ItemsSource="{Binding Items}"
-                                      MinHeight="{Binding $parent[ScrollViewer].Bounds.Height}" />
+                                      MinHeight="{Binding $parent[ScrollViewer].Bounds.Height}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Grid />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
                     </ScrollViewer>
                 </Grid>
             </LayoutTransformControl>
