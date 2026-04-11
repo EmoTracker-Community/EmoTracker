@@ -17,7 +17,7 @@
                 BorderThickness="0">
             <Button.Template>
                 <ControlTemplate TargetType="Button">
-                    <Grid Background="Transparent">
+                    <Grid Background="{x:Null}">
                         <controls:InputMaskingImage
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
@@ -25,12 +25,14 @@
                             <controls:InputMaskingImage.Width>
                                 <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Width">
                                     <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="IconHeight" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
                                     <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
                                 </MultiBinding>
                             </controls:InputMaskingImage.Width>
                             <controls:InputMaskingImage.Height>
                                 <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Height">
                                     <Binding Path="IconHeight" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
                                     <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
                                 </MultiBinding>
                             </controls:InputMaskingImage.Height>
@@ -38,7 +40,7 @@
                         <Grid VerticalAlignment="Bottom"
                               HorizontalAlignment="Right"
                               MaxWidth="{Binding IconWidth, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
-                              IsVisible="{Binding BadgeText, Converter={x:Static converters:NonEmptyStringToBoolConverter.Instance}}">
+                              IsVisible="{Binding BadgeText, Converter={x:Static converters:NonEmptyStringToBoolConverter.Instance}, FallbackValue=False}">
                             <TextBlock Text="{Binding BadgeText}"
                                        Background="Black"
                                        FontWeight="Bold"
