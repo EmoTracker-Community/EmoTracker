@@ -17,6 +17,15 @@
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
         </ControlTheme>
     </UserControl.Resources>
+    <UserControl.Styles>
+        <!-- LayoutTransformControl overrides ClipToBounds to true in its static constructor.
+             Application.Styles is too far from the element for that override to be beaten
+             reliably; a UserControl-scoped style wins via proximity. All other element types
+             are covered by the global Application.Styles in App.axaml. -->
+        <Style Selector="LayoutTransformControl">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+    </UserControl.Styles>
     <UserControl.DataTemplates>
 
         <!-- Each DataTemplate wraps its content in a LayoutTransformControl so that the
@@ -475,8 +484,9 @@
                       MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
                       MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
-                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
-                    <local:ItemGridControl DataContext="{Binding Data}" />
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}"
+                      ClipToBounds="False">
+                    <local:ItemGridControl DataContext="{Binding Data}" ClipToBounds="False" />
                 </Grid>
             </LayoutTransformControl>
         </DataTemplate>

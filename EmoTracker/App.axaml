@@ -6,6 +6,52 @@
 
     <Application.Styles>
         <FluentTheme />
+        <!-- WPF layout containers don't clip children by default. Pack makers rely on negative
+             margins to intentionally overflow elements (e.g. close buttons positioned outside
+             their containing box). Override ClipToBounds on every possible panel/control type
+             to match WPF behaviour throughout the layout tree. -->
+        <Style Selector="Panel">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="Grid">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="StackPanel">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="WrapPanel">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="DockPanel">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="ItemsControl">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="ContentControl">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="ContentPresenter">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="LayoutTransformControl">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="Border">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="Decorator">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="Viewbox">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="ScrollContentPresenter">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+        <Style Selector="ItemsPresenter">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
     </Application.Styles>
 
     <Application.Resources>
