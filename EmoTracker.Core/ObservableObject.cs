@@ -50,6 +50,60 @@ namespace EmoTracker.Core
         public event PropertyChangedEventHandler PropertyChanged;
         public event PropertyChangingEventHandler PropertyChanging;
 
+        // --- Notification suspension ---
+        // Wrapping a batch operation in SuspendNotifications() causes all PropertyChanged
+        // calls to be queued and deduplicated; they fire together when the returned
+        // IDisposable is disposed.  PropertyChanging is dropped during suspension because
+        // the change has already occurred by the time the flush runs.
+        // Supports nesting: notifications resume only when the outermost scope is disposed.
+
+        static int _suspendDepth = 0;
+        static readonly object _suspendLock = new object();
+        static Dictionary<ObservableObject, HashSet<string>> _pendingNotifications = null;
+
+        public static IDisposable SuspendNotifications()
+        {
+            lock (_suspendLock)
+            {
+                if (_suspendDepth == 0)
+                    _pendingNotifications = new Dictionary<ObservableObject, HashSet<string>>();
+                _suspendDepth++;
+            }
+            return new NotificationSuspension();
+        }
+
+        static void ResumeNotifications()
+        {
+            Dictionary<ObservableObject, HashSet<string>> pending;
+            lock (_suspendLock)
+            {
+                if (--_suspendDepth > 0)
+                    return;
+                pending = _pendingNotifications;
+                _pendingNotifications = null;
+            }
+            if (pending != null)
+                foreach (var kvp in pending)
+                    foreach (var name in kvp.Value)
+                        kvp.Key.FirePropertyChanged(name);
+        }
+
+        void FirePropertyChanged(string propertyName)
+        {
+            var pc = PropertyChanged;
+            if (pc != null)
+            {
+                pc(this, new PropertyChangedEventArgs(propertyName));
+                NotifyDependentProperties(pc, this.GetType(), propertyName);
+            }
+        }
+
+        sealed class NotificationSuspension : IDisposable
+        {
+            bool _disposed;
+            public void Dispose() { if (!_disposed) { _disposed = true; ResumeNotifications(); } }
+        }
+
         /// <summary>
         /// Generates property change notifications for all dependent properties of the
         /// specified property, recursively (depth first).
@@ -88,18 +142,29 @@ namespace EmoTracker.Core
 
         protected virtual void NotifyPropertyChanged([CallerMemberName] string propertyName = null)
         {
-            var pc = PropertyChanged;
-            if (pc != null)
+            lock (_suspendLock)
             {
-                pc(this, new PropertyChangedEventArgs(propertyName));
-
-                //  Notify for dependent properties as well
-                NotifyDependentProperties(pc, this.GetType(), propertyName);
+                if (_suspendDepth > 0)
+                {
+                    if (!_pendingNotifications.TryGetValue(this, out var names))
+                        _pendingNotifications[this] = names = new HashSet<string>();
+                    names.Add(propertyName);
+                    return;
+                }
             }
+            FirePropertyChanged(propertyName);
         }
 
         protected virtual void NotifyPropertyChanging([CallerMemberName] string propertyName = null)
         {
+            // Pre-change notifications are dropped during suspension: by the time the
+            // queued PropertyChanged events flush, the change has already taken effect.
+            lock (_suspendLock)
+            {
+                if (_suspendDepth > 0)
+                    return;
+            }
+
             var pc = PropertyChanging;
             if (pc != null)
             {

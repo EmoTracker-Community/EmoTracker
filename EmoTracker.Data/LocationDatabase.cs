@@ -298,27 +298,34 @@ namespace EmoTracker.Data
                     {
                         mbInRefresh = true;
 
-                        while (mPendingRefreshCount > 0)
+                        using (ObservableObject.SuspendNotifications())
                         {
-                            mPendingRefreshCount = 0;
-                            bRefreshedAccessibility = true;
+                            while (mPendingRefreshCount > 0)
+                            {
+                                mPendingRefreshCount = 0;
+                                bRefreshedAccessibility = true;
 
-                            AccessibilityRule.ClearCaches();
-                            ScriptManager.Instance.ClearExpressionCache();
+                                AccessibilityRule.ClearCaches();
+                                ScriptManager.Instance.ClearExpressionCache();
 
-                            ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
+                                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
 
-                            if (mRoot != null)
-                                mRoot.RefreshAccessibility();
+                                if (mRoot != null)
+                                    mRoot.RefreshAccessibility();
 
-                            MapDatabase.Instance.MarkVisibilityDirty();
-                        }
+                                MapDatabase.Instance.MarkVisibilityDirty();
+                            }
+                        } // queued PropertyChanged notifications fire here, before AccessibilityUpdated
                     }
                     finally
                     {
                         mbInRefresh = false;
 
-                        AccessibilityRule.ClearCaches();
+                        // Do NOT clear caches here — they were built during RefreshAccessibility()
+                        // above and must survive into the AccessibilityUpdated callback so that
+                        // any rule evaluations triggered by that callback benefit from the cache.
+                        // Clearing here negated all caching, reproducing the slow-update symptom
+                        // that enable_accessibility_rule_caching was introduced to fix.
                         MapDatabase.Instance.UpdateVisibilityIfNecessary();
 
                         if (bRefreshedAccessibility)
