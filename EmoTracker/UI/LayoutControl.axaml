@@ -410,7 +410,15 @@
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
                     <ScrollViewer HorizontalScrollBarVisibility="{Binding HorizontalScrollBarVisibility, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                                   VerticalScrollBarVisibility="{Binding VerticalScrollBarVisibility, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
-                        <ItemsControl ItemsSource="{Binding Items}" />
+                        <!-- MinHeight ensures the content fills at least the visible viewport area.
+                             Without this, Avalonia's ScrollViewer passes infinite height to content,
+                             which prevents DockPanel LastChildFill from allocating remaining space
+                             to the last child (e.g. the Pinned Locations GroupBox). By constraining
+                             content to at least the viewport height, the DockPanel receives a finite
+                             height and LastChildFill works correctly, while content taller than the
+                             viewport still scrolls normally. -->
+                        <ItemsControl ItemsSource="{Binding Items}"
+                                      MinHeight="{Binding $parent[ScrollViewer].Bounds.Height}" />
                     </ScrollViewer>
                 </Grid>
             </LayoutTransformControl>
