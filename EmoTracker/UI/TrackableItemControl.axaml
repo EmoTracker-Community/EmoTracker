@@ -14,7 +14,9 @@
                 Focusable="False"
                 Background="{x:Null}"
                 Padding="0"
-                BorderThickness="0">
+                BorderThickness="0"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
             <Button.Template>
                 <ControlTemplate TargetType="Button">
                     <Grid Background="{x:Null}">
