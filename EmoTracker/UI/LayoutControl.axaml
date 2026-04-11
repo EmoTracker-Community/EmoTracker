@@ -387,7 +387,7 @@
                                       ItemContainerTheme="{StaticResource StretchItemContainer}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <Grid />
+                                    <StackPanel Orientation="Vertical" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                         </ItemsControl>
