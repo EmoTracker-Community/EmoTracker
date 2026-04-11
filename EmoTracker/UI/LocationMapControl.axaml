@@ -86,7 +86,7 @@
                                 </ItemsControl.ItemContainerTheme>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="locations:MapLocation">
-                                        <Grid Name="MinifiedLocation">
+                                        <Grid Name="MinifiedLocation" ClipToBounds="False">
                                             <Grid.IsVisible>
                                                 <MultiBinding Converter="{x:Static converters:MapLocationVisibilityConverter.Instance}">
                                                     <Binding Path="ForceVisible" />
@@ -129,13 +129,18 @@
                                                 </Viewbox>
                                             </Border>
 
-                                            <!-- Badges host -->
+                                            <!-- Badges host: top-left corner of each badge is placed at the
+                                                 center of the location dot (size/2, size/2), so the badge
+                                                 overlaps the dot corner and extends to the lower-right.
+                                                 Margin is applied to the ItemsControl directly; the Grid
+                                                 panel has no margin so items render from (0,0) within it. -->
                                             <ItemsControl ItemsSource="{Binding Location.Badges}"
-                                                          VerticalAlignment="Bottom"
-                                                          HorizontalAlignment="Right">
+                                                          VerticalAlignment="Top"
+                                                          HorizontalAlignment="Left"
+                                                          Margin="{Binding DataContext.BadgeMargin, ElementName=MinifiedLocation, Converter={x:Static converters:ThicknessConverter.Instance}}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
-                                                        <Grid Margin="{Binding DataContext.BadgeMargin, ElementName=MinifiedLocation, Converter={x:Static converters:ThicknessConverter.Instance}}"/>
+                                                        <Grid />
                                                     </ItemsPanelTemplate>
                                                 </ItemsControl.ItemsPanel>
                                                 <ItemsControl.ItemTemplate>

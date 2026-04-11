@@ -131,7 +131,10 @@ namespace EmoTracker.Data.Locations
 
         private void UpdateBadgeMargin()
         {
-            mBadgeMargin = new Thickness((mSize * 0.5) + (mBadgeSize * -0.5), (mSize * 0.5) + (mBadgeSize * -0.5), 0, 0);
+            // Place the top-left corner of the badge at the centre of the location
+            // dot.  The badge then extends to the lower-right, reproducing the v2
+            // behaviour where the badge overlapped the dot's corner.
+            mBadgeMargin = new Thickness(mSize * 0.5, mSize * 0.5, 0, 0);
             NotifyPropertyChanged("BadgeMargin");
         }
 
