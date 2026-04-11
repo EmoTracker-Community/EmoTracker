@@ -6,7 +6,8 @@
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
              xmlns:layout="clr-namespace:EmoTracker.Data.Layout;assembly=EmoTracker.Data"
-             xmlns:local="clr-namespace:EmoTracker.UI">
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             FontSize="12">
     <UserControl.Resources>
         <!-- In WPF, ContentPresenter.HorizontalContentAlignment defaults to Stretch.
              In Avalonia it defaults to Left, so item container ContentPresenters size
@@ -113,11 +114,14 @@
                                   ItemContainerTheme="{StaticResource StretchItemContainer}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <!-- Orientation is bound via RelativeSource to the owning ItemsControl's DataContext (the ArrayPanel).
-                                     TrivialEnumConverter maps EmoTracker.Data.Layout.Orientation → Avalonia.Layout.Orientation. -->
-                                <StackPanel Orientation="{Binding DataContext.Orientation,
-                                    RelativeSource={RelativeSource AncestorType=ItemsControl},
-                                    Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+                                <!-- The StackPanel inherits DataContext from the ItemsControl (the
+                                     ArrayPanel model), so we can bind Orientation directly without
+                                     RelativeSource.  RelativeSource AncestorType bindings inside
+                                     ItemsPanelTemplate are unreliable in Avalonia because the panel
+                                     is not yet in the visual tree when the binding is first evaluated,
+                                     causing the orientation to silently default to Vertical for all
+                                     arrays and collapsing horizontal layouts into a single column. -->
+                                <StackPanel Orientation="{Binding Orientation, Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
