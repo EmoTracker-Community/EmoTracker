@@ -568,8 +568,6 @@ namespace EmoTracker.Data.Packages
                                             !string.IsNullOrWhiteSpace(instance.URL))
                                         {
                                             mPackages.Add(instance);
-                                            PackageManager.Instance.ForceRefreshProperty("UpdatesAvailable");
-                                            PackageManager.Instance.ForceRefreshProperty("CurrentPackageHasUpdateAvailable");
                                         }
                                     }
                                 }
@@ -579,6 +577,8 @@ namespace EmoTracker.Data.Packages
                 }
 
                 DownloadStatus = DownloadStatus.Complete;
+                PackageManager.Instance.ForceRefreshProperty("UpdatesAvailable");
+                PackageManager.Instance.ForceRefreshProperty("CurrentPackageHasUpdateAvailable");
             }
             catch
             {
