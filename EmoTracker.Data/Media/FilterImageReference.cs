@@ -1,4 +1,6 @@
-﻿namespace EmoTracker.Data.Media
+﻿using System;
+
+namespace EmoTracker.Data.Media
 {
     public class FilterImageReference : ImageReference
     {
@@ -15,5 +17,13 @@
             get { return mFilter; }
             set { SetProperty(ref mFilter, value); }
         }
+
+        public override bool Equals(object obj)
+            => obj is FilterImageReference other
+               && Equals(mReference, other.mReference)
+               && mFilter == other.mFilter;
+
+        public override int GetHashCode()
+            => HashCode.Combine(mReference, mFilter);
     }
 }
