@@ -1,34 +1,17 @@
 using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.Media;
+using Avalonia.Rendering;
 using EmoTracker.UI.Media.Utility;
 
 namespace EmoTracker.UI.Controls
 {
-    // Avalonia version: per-pixel hit testing uses the precomputed alpha mask from IconUtility.
-    // The correct HitTestCore override will be wired up in Phase 6 once the Avalonia control
-    // hierarchy is fully understood. For now, pointer event filtering handles transparent areas.
-    public class InputMaskingImage : Image
+    // Avalonia version: per-pixel hit testing via ICustomHitTest so transparent pixels
+    // are excluded from Avalonia's visual hit-test walk.  This prevents transparent
+    // areas from blocking pointer events on elements below in z-order.
+    public class InputMaskingImage : Image, ICustomHitTest
     {
-        protected override void OnPointerMoved(PointerEventArgs e)
+        public bool HitTest(Avalonia.Point point)
         {
-            if (!HitTestAlphaMask(e.GetPosition(this)))
-                return;
-            base.OnPointerMoved(e);
-        }
-
-        protected override void OnPointerPressed(PointerPressedEventArgs e)
-        {
-            if (!HitTestAlphaMask(e.GetPosition(this)))
-                return;
-            base.OnPointerPressed(e);
-        }
-
-        protected override void OnPointerReleased(PointerReleasedEventArgs e)
-        {
-            if (!HitTestAlphaMask(e.GetPosition(this)))
-                return;
-            base.OnPointerReleased(e);
+            return HitTestAlphaMask(point);
         }
 
         private bool HitTestAlphaMask(Avalonia.Point point)
