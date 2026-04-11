@@ -114,28 +114,45 @@ namespace EmoTracker.UI.Converters
     }
 
     /// <summary>
-    /// Multi-value converter for icon dimensions. Returns the explicit dimension when it is
-    /// a valid positive number; otherwise falls back to the pixel dimensions of the bound
-    /// <see cref="Bitmap"/> source image. Use <c>ConverterParameter="Width"</c> or
-    /// <c>"Height"</c> to select which pixel dimension to read.
-    /// <para>values[0] = dimension (double, e.g. IconWidth), values[1] = Image.Source (IImage).</para>
+    /// Multi-value converter for icon dimensions. Supports three behaviours:
+    /// <list type="bullet">
+    ///   <item>Both dimensions specified → honor both (image may be distorted).</item>
+    ///   <item>Only this dimension specified → use it directly.</item>
+    ///   <item>Only the other dimension specified → compute this one proportionally from
+    ///     the source image's aspect ratio.</item>
+    ///   <item>Neither specified → fall back to the source image's natural pixel size.</item>
+    /// </list>
+    /// Use <c>ConverterParameter="Width"</c> or <c>"Height"</c> to select which dimension
+    /// is being resolved.
+    /// <para>values[0] = this dimension (IconWidth or IconHeight),
+    ///       values[1] = other dimension (IconHeight or IconWidth),
+    ///       values[2] = Image.Source (IImage, for aspect-ratio and pixel-size fallback).</para>
     /// </summary>
     public class IconDimensionMultiConverter : Singleton<IconDimensionMultiConverter>, IMultiValueConverter
     {
         public object Convert(IList<object> values, Type targetType, object parameter, CultureInfo culture)
         {
-            double dimension = values.Count > 0 && values[0] is double d ? d : double.NaN;
+            double myDim    = values.Count > 0 && values[0] is double d0 ? d0 : double.NaN;
+            double otherDim = values.Count > 1 && values[1] is double d1 ? d1 : double.NaN;
+            bool isWidth = string.Equals(parameter?.ToString(), "Width", StringComparison.OrdinalIgnoreCase);
+            Bitmap bitmap = values.Count > 2 ? values[2] as Bitmap : null;
 
-            // If the layout specifies a valid positive size, use it directly.
-            if (dimension > 0 && !double.IsNaN(dimension))
-                return dimension;
+            // If this dimension is explicitly specified (including zero), use it directly.
+            if (!double.IsNaN(myDim) && myDim >= 0)
+                return myDim;
 
-            // Fall back to the source image's pixel dimensions.
-            if (values.Count > 1 && values[1] is Bitmap bitmap)
+            // Only the other dimension was specified: scale proportionally from the image aspect ratio.
+            if (otherDim > 0 && !double.IsNaN(otherDim) && bitmap != null)
             {
-                bool useWidth = string.Equals(parameter?.ToString(), "Width", StringComparison.OrdinalIgnoreCase);
-                return (double)(useWidth ? bitmap.PixelSize.Width : bitmap.PixelSize.Height);
+                double pixW = bitmap.PixelSize.Width;
+                double pixH = bitmap.PixelSize.Height;
+                if (pixW > 0 && pixH > 0)
+                    return isWidth ? otherDim * pixW / pixH : otherDim * pixH / pixW;
             }
+
+            // Neither dimension specified: fall back to the image's natural pixel size.
+            if (bitmap != null)
+                return isWidth ? (double)bitmap.PixelSize.Width : (double)bitmap.PixelSize.Height;
 
             // Last resort default.
             return 32.0;
