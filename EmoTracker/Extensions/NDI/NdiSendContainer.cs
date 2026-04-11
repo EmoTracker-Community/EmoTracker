@@ -326,14 +326,14 @@ namespace EmoTracker.Extensions.NDI
                 _attached, NdiEnabled, _ndiInitialized, NdiName);
         }
 
-        // Throttle for unsupported pixel format warnings.
-        private DateTime _lastFormatWarningLogUtc = DateTime.MinValue;
+        // Log unsupported pixel format once per application run so the user sees
+        // it exactly once without flooding the log on every capture tick.
+        private bool _formatWarningLogged = false;
         private void LogUnsupportedFormatWarning(Avalonia.Platform.PixelFormat? format)
         {
-            DateTime now = DateTime.UtcNow;
-            if ((now - _lastFormatWarningLogUtc).TotalSeconds < 5) return;
-            _lastFormatWarningLogUtc = now;
-            Log.Warning("[NDI] Unsupported snapshot pixel format {Format}; defaulting to BGRA.", format);
+            if (_formatWarningLogged) return;
+            _formatWarningLogged = true;
+            Log.Warning("[NDI] Unsupported snapshot pixel format {Format}; defaulting to platform default.", format);
         }
 
         // Throttled debug heartbeat showing that captures are being produced.
@@ -450,11 +450,14 @@ namespace EmoTracker.Extensions.NDI
                 // than inferring it from the OS.  The compositor backend decides channel
                 // order (BGRA on Windows/D3D, RGBA on macOS/Metal), and reading it here
                 // handles any future backend changes automatically.
+                // Derive NDI pixel format from the snapshot's reported format.
                 // A null format means the compositor returned an unusable snapshot
-                // (e.g. the visual tree isn't ready yet).  Skip the frame silently
-                // rather than trying to send garbage pixels.
-                if (snapshot.Format == null)
-                    return;
+                // (e.g. the visual tree isn't ready yet); fall back to the platform
+                // default rather than dropping the frame.
+                // macOS/Metal uses RGBA, Windows/D3D and Linux use BGRA.
+                NDIlib.FourCC_type_e platformDefault = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                    ? NDIlib.FourCC_type_e.FourCC_type_RGBA
+                    : NDIlib.FourCC_type_e.FourCC_type_BGRA;
 
                 NDIlib.FourCC_type_e ndiFormat;
                 switch (snapshot.Format)
@@ -467,7 +470,7 @@ namespace EmoTracker.Extensions.NDI
                         break;
                     default:
                         LogUnsupportedFormatWarning(snapshot.Format);
-                        ndiFormat = NDIlib.FourCC_type_e.FourCC_type_BGRA;
+                        ndiFormat = platformDefault;
                         break;
                 }
 
