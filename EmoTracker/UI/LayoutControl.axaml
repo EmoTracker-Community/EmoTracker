@@ -6,7 +6,8 @@
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
              xmlns:layout="clr-namespace:EmoTracker.Data.Layout;assembly=EmoTracker.Data"
-             xmlns:local="clr-namespace:EmoTracker.UI">
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             FontSize="12">
     <UserControl.Resources>
         <!-- In WPF, ContentPresenter.HorizontalContentAlignment defaults to Stretch.
              In Avalonia it defaults to Left, so item container ContentPresenters size
