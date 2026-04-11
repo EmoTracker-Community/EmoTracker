@@ -199,10 +199,10 @@ namespace EmoTracker
                 mBroadcastView = new BroadcastView();
                 mBroadcastView.Closing += (_, _) => mBroadcastView = null;
 
-                var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime
-                    as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-
-                mBroadcastView.Show(mainWindow);
+                // Show without an owner so the broadcast view is an independent
+                // top-level window.  Passing the main window as owner causes the
+                // OS to force the broadcast view above the main window at all times.
+                mBroadcastView.Show();
             }
             else
             {
