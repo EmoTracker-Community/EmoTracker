@@ -326,6 +326,16 @@ namespace EmoTracker.Extensions.NDI
                 _attached, NdiEnabled, _ndiInitialized, NdiName);
         }
 
+        // Log unsupported pixel format once per application run so the user sees
+        // it exactly once without flooding the log on every capture tick.
+        private bool _formatWarningLogged = false;
+        private void LogUnsupportedFormatWarning(Avalonia.Platform.PixelFormat? format)
+        {
+            if (_formatWarningLogged) return;
+            _formatWarningLogged = true;
+            Log.Warning("[NDI] Unsupported snapshot pixel format {Format}; defaulting to platform default.", format);
+        }
+
         // Throttled debug heartbeat showing that captures are being produced.
         // One line every ~5s keeps the log readable while still confirming flow.
         private DateTime _lastCaptureHeartbeatUtc = DateTime.MinValue;
@@ -440,6 +450,15 @@ namespace EmoTracker.Extensions.NDI
                 // than inferring it from the OS.  The compositor backend decides channel
                 // order (BGRA on Windows/D3D, RGBA on macOS/Metal), and reading it here
                 // handles any future backend changes automatically.
+                // Derive NDI pixel format from the snapshot's reported format.
+                // A null format means the compositor returned an unusable snapshot
+                // (e.g. the visual tree isn't ready yet); fall back to the platform
+                // default rather than dropping the frame.
+                // macOS/Metal uses RGBA, Windows/D3D and Linux use BGRA.
+                NDIlib.FourCC_type_e platformDefault = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                    ? NDIlib.FourCC_type_e.FourCC_type_RGBA
+                    : NDIlib.FourCC_type_e.FourCC_type_BGRA;
+
                 NDIlib.FourCC_type_e ndiFormat;
                 switch (snapshot.Format)
                 {
@@ -450,8 +469,8 @@ namespace EmoTracker.Extensions.NDI
                         ndiFormat = NDIlib.FourCC_type_e.FourCC_type_RGBA;
                         break;
                     default:
-                        Log.Warning("[NDI] Unsupported snapshot pixel format {Format}; defaulting to BGRA.", snapshot.Format);
-                        ndiFormat = NDIlib.FourCC_type_e.FourCC_type_BGRA;
+                        LogUnsupportedFormatWarning(snapshot.Format);
+                        ndiFormat = platformDefault;
                         break;
                 }
 
