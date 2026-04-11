@@ -298,21 +298,24 @@ namespace EmoTracker.Data
                     {
                         mbInRefresh = true;
 
-                        while (mPendingRefreshCount > 0)
+                        using (ObservableObject.SuspendNotifications())
                         {
-                            mPendingRefreshCount = 0;
-                            bRefreshedAccessibility = true;
+                            while (mPendingRefreshCount > 0)
+                            {
+                                mPendingRefreshCount = 0;
+                                bRefreshedAccessibility = true;
 
-                            AccessibilityRule.ClearCaches();
-                            ScriptManager.Instance.ClearExpressionCache();
+                                AccessibilityRule.ClearCaches();
+                                ScriptManager.Instance.ClearExpressionCache();
 
-                            ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
+                                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
 
-                            if (mRoot != null)
-                                mRoot.RefreshAccessibility();
+                                if (mRoot != null)
+                                    mRoot.RefreshAccessibility();
 
-                            MapDatabase.Instance.MarkVisibilityDirty();
-                        }
+                                MapDatabase.Instance.MarkVisibilityDirty();
+                            }
+                        } // queued PropertyChanged notifications fire here, before AccessibilityUpdated
                     }
                     finally
                     {
