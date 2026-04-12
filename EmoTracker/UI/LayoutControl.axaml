@@ -552,7 +552,8 @@
                       MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
-                    <TextBlock Text="{Binding Text}" />
+                    <TextBlock Text="{Binding Text}"
+                               FontSize="{Binding FontSize, Converter={x:Static converters:NegativeToUnsetConverter.Instance}}" />
                 </Grid>
             </LayoutTransformControl>
         </DataTemplate>
