@@ -141,6 +141,9 @@
                                 <MenuItem Header="Voice Control"
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding EnableVoiceControl, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Note Taking"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding EnableNoteTaking, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Assistance">

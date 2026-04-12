@@ -42,6 +42,7 @@ namespace EmoTracker.Data
         bool mbAlwaysOnTop = false;
         bool mbEnableDiscordRichPresence = false;
         bool mbEnableVoice = true;
+        bool mbEnableNoteTaking = true;
         bool mbPromptOnRefreshClose = false;
         string mbVoiceInputDeviceName;
 
@@ -123,6 +124,12 @@ namespace EmoTracker.Data
         {
             get { return mbEnableVoice; }
             set { SetProperty(ref mbEnableVoice, value); }
+        }
+
+        public bool EnableNoteTaking
+        {
+            get { return mbEnableNoteTaking; }
+            set { SetProperty(ref mbEnableNoteTaking, value); }
         }
 
         public string VoiceInputDeviceName
@@ -250,6 +257,7 @@ namespace EmoTracker.Data
                         AlwaysOnTop = root.GetValue<bool>("always_on_top", false);
                         EnableDiscordRichPresence = root.GetValue<bool>("discord_rich_presence", false);
                         EnableVoiceControl = root.GetValue<bool>("enable_voice_control", true);
+                        EnableNoteTaking = root.GetValue<bool>("enable_note_taking", true);
                         VoiceInputDeviceName = root.GetValue<string>("voice_input_device_name");
                         PromptOnRefreshClose = root.GetValue<bool>("prompt_on_refresh_close", false);
                         LastActivePackage = root.GetValue<string>("last_active_package");
@@ -347,6 +355,7 @@ namespace EmoTracker.Data
                         root.Add("always_on_top", JToken.FromObject(AlwaysOnTop));
                         root.Add("discord_rich_presence", JToken.FromObject(EnableDiscordRichPresence));
                         root.Add("enable_voice_control", JToken.FromObject(EnableVoiceControl));
+                        root.Add("enable_note_taking", JToken.FromObject(EnableNoteTaking));
                         if (!string.IsNullOrWhiteSpace(VoiceInputDeviceName))
                             root.Add("voice_input_device_name", JToken.FromObject(VoiceInputDeviceName));
                         root.Add("prompt_on_refresh_close", JToken.FromObject(PromptOnRefreshClose));

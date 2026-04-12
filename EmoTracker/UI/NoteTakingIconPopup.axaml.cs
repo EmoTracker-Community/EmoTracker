@@ -6,6 +6,7 @@ using Avalonia.Data.Converters;
 using Avalonia.Media;
 using EmoTracker.Data.Settings;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace EmoTracker.UI
@@ -16,18 +17,31 @@ namespace EmoTracker.UI
     public partial class NoteTakingIconPopup : UserControl
     {
         /// <summary>
-        /// Converts the note-taking <c>Empty</c> bool to a foreground brush:
-        /// <c>true</c>  → WhiteSmoke (no notes)
-        /// <c>false</c> → Status_Generic_Active color (has notes)
+        /// The foreground color used when the note site has no notes.
+        /// Defaults to WhiteSmoke for use in location headers; set to #717171 for the status bar.
         /// </summary>
-        public static readonly IValueConverter EmptyToForegroundConverter =
-            new FuncValueConverter<bool, IBrush>(empty =>
-            {
-                if (empty)
-                    return new SolidColorBrush(Color.Parse("#F5F5F5")); // WhiteSmoke
+        public static readonly StyledProperty<string> EmptyForegroundProperty =
+            AvaloniaProperty.Register<NoteTakingIconPopup, string>(nameof(EmptyForeground), "#F5F5F5");
 
-                Color active = Color.Parse(ApplicationColors.Instance.Status_Generic_Active);
-                return new SolidColorBrush(active);
+        public string EmptyForeground
+        {
+            get => GetValue(EmptyForegroundProperty);
+            set => SetValue(EmptyForegroundProperty, value);
+        }
+
+        /// <summary>
+        /// Multi-value converter: [0] Empty (bool), [1] EmptyForeground (string).
+        /// Returns the empty-foreground brush when no notes exist, otherwise the active color.
+        /// </summary>
+        public static readonly IMultiValueConverter EmptyToForegroundConverter =
+            new FuncMultiValueConverter<object?, IBrush?>(values =>
+            {
+                var list = new List<object?>(values);
+                bool empty = list.Count > 0 && list[0] is true;
+                string emptyColor = list.Count > 1 && list[1] is string s ? s : "#F5F5F5";
+                if (empty)
+                    return new SolidColorBrush(Color.Parse(emptyColor));
+                return new SolidColorBrush(Color.Parse(ApplicationColors.Instance.Status_Generic_Active));
             });
 
         public NoteTakingIconPopup()

@@ -1,11 +1,5 @@
 ﻿using EmoTracker.Data.Notes;
-using EmoTracker.UI;
 using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EmoTracker.Extensions.NoteTaking
 {
@@ -17,9 +11,15 @@ namespace EmoTracker.Extensions.NoteTaking
 
         public int Priority { get { return -300; } }
 
+        private NoteTakingStatusBarIndicator mStatusBarControl;
         public object StatusBarControl
         {
-            get { return null; }
+            get
+            {
+                if (mStatusBarControl == null)
+                    mStatusBarControl = new NoteTakingStatusBarIndicator { DataContext = NoteTakingSite };
+                return mStatusBarControl;
+            }
         }
 
         NoteTakingSite mNoteTakingSite = new NoteTakingSite();

@@ -39,8 +39,14 @@
                                    FontFamily="{StaticResource FontAwesome5Free}"
                                    Text="&#xf044;"
                                    ToolTip.Tip="View and edit notes"
-                                   VerticalAlignment="Center"
-                                   Foreground="{Binding Empty, Converter={x:Static local:NoteTakingIconPopup.EmptyToForegroundConverter}}" />
+                                   VerticalAlignment="Center">
+                            <TextBlock.Foreground>
+                                <MultiBinding Converter="{x:Static local:NoteTakingIconPopup.EmptyToForegroundConverter}">
+                                    <Binding Path="Empty" />
+                                    <Binding Path="EmptyForeground" RelativeSource="{RelativeSource AncestorType=local:NoteTakingIconPopup}" />
+                                </MultiBinding>
+                            </TextBlock.Foreground>
+                        </TextBlock>
                     </Border>
                 </ControlTemplate>
             </ToggleButton.Template>
