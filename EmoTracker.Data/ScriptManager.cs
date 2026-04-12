@@ -484,6 +484,28 @@ function print(...)
         }
 
         [NLua.LuaHide]
+        public object[] ExecuteLuaString(string luaCode)
+        {
+            if (mLua == null)
+                throw new InvalidOperationException("No Lua environment is loaded");
+            return mLua.DoString(luaCode);
+        }
+
+        [NLua.LuaHide]
+        public object GetLuaGlobal(string name)
+        {
+            if (mLua == null)
+                throw new InvalidOperationException("No Lua environment is loaded");
+            return mLua[name];
+        }
+
+        [NLua.LuaHide]
+        public bool IsLuaLoaded
+        {
+            get { return mLua != null; }
+        }
+
+        [NLua.LuaHide]
         public object FindObjectForCode(string code)
         {
             return null;
