@@ -72,7 +72,7 @@ namespace EmoTracker.Data
                     {
                         foreach (string code in codes)
                         {
-                            string key = code.ToLower();
+                            string key = code;
                             if (!mCodeToProviders.TryGetValue(key, out var list))
                             {
                                 list = new List<ITrackableItem>();
@@ -154,8 +154,6 @@ namespace EmoTracker.Data
 
         internal bool CodeIsProvided(string code)
         {
-            code = code.ToLower();
-
             if (mCodeIndexBuilt)
             {
                 // Check indexed items
@@ -195,8 +193,6 @@ namespace EmoTracker.Data
 
         public uint ProviderCountForCode(string code, out AccessibilityLevel maxAccessibilityLevel)
         {
-            code = code.ToLower();
-
             //  Item codes never constrain accessibility
             maxAccessibilityLevel = AccessibilityLevel.Normal;
 
@@ -231,8 +227,6 @@ namespace EmoTracker.Data
         {
             if (string.IsNullOrWhiteSpace(code))
                 return null;
-
-            code = code.ToLower();
 
             if (mCodeIndexBuilt)
             {
@@ -269,8 +263,6 @@ namespace EmoTracker.Data
 
             if (string.IsNullOrWhiteSpace(code))
                 return found.ToArray();
-
-            code = code.ToLower();
 
             if (mCodeIndexBuilt)
             {
