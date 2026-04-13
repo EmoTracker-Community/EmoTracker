@@ -6,7 +6,6 @@ using EmoTracker.Data.Core.Transactions.Processors;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Layout;
 using EmoTracker.Data.Locations;
-using EmoTracker.Data.Media;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
 using EmoTracker.Extensions;
@@ -168,13 +167,31 @@ namespace EmoTracker
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 _httpRefreshScheduled = false;
-                EmoTracker.UI.Media.ImageReferenceService.Instance.ClearImageCache();
-                NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
+
+                // Resolve game banner images into ResolvedImage so that
+                // bindings ({Binding Game.Image.ResolvedImage}) update.
+                // HTTP images bypass the ImageReferenceService pipeline
+                // (they download asynchronously into IconUtility.sHttpCache),
+                // so we bridge the two systems here.
+                foreach (var game in PackageManager.Instance.AvailableGames)
+                {
+                    if (game.Image != null && game.Image.ResolvedImage == null)
+                    {
+                        var resolved = EmoTracker.UI.Media.ImageReferenceService.Instance.ResolveImageReference(game.Image);
+                        if (resolved != null)
+                            game.Image.ResolvedImage = resolved;
+                    }
+                }
             }, Avalonia.Threading.DispatcherPriority.Background);
         }
 
         public void Initialize()
         {
+            //  Start the image resolution service.  When --no-async-images is
+            //  set, resolution falls back to synchronous on-demand behaviour.
+            ImageReferenceService.Instance.SyncMode = Data.ApplicationSettings.Instance.NoAsyncImages;
+            ImageReferenceService.Instance.Start();
+
             //  Load and start extensions
             Extensions.ExtensionManager.CreateInstance();
             Extensions.ExtensionManager.Instance.Start();
@@ -699,11 +716,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
 
-            // Kick off background pre-caching of all image references collected during pack load
-            var collectedRefs = ImageReference.LastCollectedReferences;
-            if (collectedRefs != null && collectedRefs.Count > 0)
-                _ = ImageReferenceService.Instance.PreCacheImagesAsync(collectedRefs);
-
             WindowService.Instance.FocusMainWindow();
         }
         public void AcquireLayouts()
@@ -860,7 +872,11 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                         var game = PackageManager.Instance.FindGame(e.Game);
                         return game?.Name ?? e.Game;
                     })
-                    .Select(g => new PackageGroup(g.Key, g));
+                    .Select(g =>
+                    {
+                        var game = PackageManager.Instance.FindGame(g.Key);
+                        return new PackageGroup(g.Key, g, game);
+                    });
             }
         }
 
@@ -940,10 +956,12 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         {
             public string Name { get; }
             public IEnumerable<PackageRepositoryEntry> Items { get; }
-            public PackageGroup(string name, IEnumerable<PackageRepositoryEntry> items)
+            public PackageManager.Game Game { get; }
+            public PackageGroup(string name, IEnumerable<PackageRepositoryEntry> items, PackageManager.Game game = null)
             {
                 Name = name;
                 Items = items;
+                Game = game;
             }
         }
 

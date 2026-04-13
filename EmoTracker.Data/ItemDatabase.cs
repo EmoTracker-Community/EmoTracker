@@ -64,28 +64,25 @@ namespace EmoTracker.Data
             {
                 try
                 {
-                    LocationDatabase.Instance.SuspendRefresh = true;
-
-                    using (StreamReader reader = new StreamReader(package.Open(path)))
+                    using (new LocationDatabase.SuspendRefreshScope())
                     {
-                        JArray items = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
-                        foreach (JObject item in items)
+                        using (StreamReader reader = new StreamReader(package.Open(path)))
                         {
-                            ITrackableItem instance = ItemBase.CreateItem(item, package);
-                            if (instance != null)
-                                mItems.Add(instance);
+                            JArray items = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
+                            foreach (JObject item in items)
+                            {
+                                ITrackableItem instance = ItemBase.CreateItem(item, package);
+                                if (instance != null)
+                                    mItems.Add(instance);
+                            }
                         }
-                    }
 
-                    bSuccess = true;
+                        bSuccess = true;
+                    }
                 }
                 catch (Exception e)
                 {
                     ScriptManager.Instance.OutputException(e);
-                }
-                finally
-                {
-                    LocationDatabase.Instance.SuspendRefresh = false;
                 }
             }
 

@@ -16,17 +16,14 @@ namespace EmoTracker.Data
     {
         public class SuspendRefreshScope : IDisposable
         {
-            bool mbSuspend;
-
             public SuspendRefreshScope()
             {
-                mbSuspend = LocationDatabase.Instance.SuspendRefresh;
-                LocationDatabase.Instance.SuspendRefresh = true;
+                LocationDatabase.Instance.PushSuspendRefresh();
             }
 
             public virtual void Dispose()
             {
-                LocationDatabase.Instance.SuspendRefresh = mbSuspend;
+                LocationDatabase.Instance.PopSuspendRefresh();
             }
         }
 
@@ -39,13 +36,37 @@ namespace EmoTracker.Data
 
         public bool SuspendRefresh
         {
-            get { return mbSuspendRefresh; }
+            get { return mSuspendRefreshCount > 0; }
             set
             {
-                if (SetProperty(ref mbSuspendRefresh, value) && !mbSuspendRefresh)
-                {
-                    RefeshAccessibility(bPendingOnly: true);
-                }
+                // Legacy compatibility: direct assignment is discouraged.
+                // Prefer SuspendRefreshScope for reentrant-safe scoping.
+                if (value)
+                    PushSuspendRefresh();
+                else
+                    PopSuspendRefresh();
+            }
+        }
+
+        internal void PushSuspendRefresh()
+        {
+            ++mSuspendRefreshCount;
+        }
+
+        internal void PopSuspendRefresh()
+        {
+            if (mSuspendRefreshCount <= 0)
+            {
+                ScriptManager.Instance.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
+                System.Diagnostics.Debug.Fail("PopSuspendRefresh: underflow — more Pops than Pushes");
+                return;
+            }
+
+            --mSuspendRefreshCount;
+
+            if (mSuspendRefreshCount == 0)
+            {
+                RefeshAccessibility(bPendingOnly: true);
             }
         }
 
@@ -141,7 +162,7 @@ namespace EmoTracker.Data
             {
                 try
                 {
-                    mbSuspendRefresh = true;
+                    PushSuspendRefresh();
 
                     using (Stream s = package.Open(path))
                     {
@@ -170,7 +191,7 @@ namespace EmoTracker.Data
                 }
                 finally
                 {
-                    mbSuspendRefresh = false;
+                    PopSuspendRefresh();
                 }
 
                 RefeshAccessibility();
@@ -279,13 +300,13 @@ namespace EmoTracker.Data
             mPinnedLocations.Remove(location);
         }
 
-        bool mbSuspendRefresh = false;
+        int mSuspendRefreshCount = 0;
         bool mbInRefresh = false;
         uint mPendingRefreshCount = 0;
 
         internal void RefeshAccessibility(bool bPendingOnly = false)
         {
-            if (!mbSuspendRefresh)
+            if (mSuspendRefreshCount == 0)
             {
                 if (!bPendingOnly)
                     ++mPendingRefreshCount;
@@ -595,10 +616,9 @@ namespace EmoTracker.Data
 
         internal bool Load(JObject root)
         {
+            PushSuspendRefresh();
             try
             {
-                SuspendRefresh = true;
-
                 JObject locationDatabaseData = root.GetValue<JObject>("location_database");
                 if (locationDatabaseData == null)
                     return true;
@@ -665,7 +685,7 @@ namespace EmoTracker.Data
             }
             finally
             {
-                SuspendRefresh = false;
+                PopSuspendRefresh();
             }
         }
 

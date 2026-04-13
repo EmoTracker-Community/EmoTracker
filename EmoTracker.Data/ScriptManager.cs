@@ -681,8 +681,6 @@ function print(...)
                     {
                         using (new LocationDatabase.SuspendRefreshScope())
                         {
-                            LocationDatabase.Instance.SuspendRefresh = true;
-
                             if (callback != null)
                             {
                                 object[] results = callback.Call(segment);

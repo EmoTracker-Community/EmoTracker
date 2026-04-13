@@ -23,7 +23,7 @@
                         <controls:InputMaskingImage
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
-                            Source="{Binding Icon, Converter={x:Static converters:ImageReferenceConverter.Instance}}">
+                            Source="{Binding Icon.ResolvedImage, FallbackValue={x:Null}}">
                             <controls:InputMaskingImage.Width>
                                 <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Width">
                                     <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />

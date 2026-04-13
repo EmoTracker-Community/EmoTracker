@@ -21,7 +21,11 @@ namespace EmoTracker.UI.Controls
                 if (Source == null) return false;
 
                 var maskEntry = IconUtility.GetAlphaMask(Source);
-                if (maskEntry == null) return true;
+                // No mask → treat as fully transparent (click-through).
+                // This is critical for the async image pipeline: placeholder images
+                // don't have alpha masks, and returning true here would make them
+                // block ALL input until the real image loads.
+                if (maskEntry == null) return false;
 
                 var (mask, maskW, maskH) = maskEntry.Value;
 

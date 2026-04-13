@@ -34,7 +34,7 @@
                 </Button.Template>
                 <Button.ContentTemplate>
                     <DataTemplate>
-                        <Image Source="{Binding PotentialIcon, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                        <Image Source="{Binding PotentialIcon.ResolvedImage, FallbackValue={x:Null}}"
                                Width="32" Height="32"/>
                     </DataTemplate>
                 </Button.ContentTemplate>
@@ -46,7 +46,7 @@
             <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
                     <Grid Width="32" Height="32">
-                        <Image Source="{Binding CapturedItem.PotentialIcon, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                        <Image Source="{Binding CapturedItem.PotentialIcon.ResolvedImage, FallbackValue={x:Null}}"
                                Width="32" Height="32"/>
                         <Grid Name="UnknownControl"
                               IsVisible="{Binding CapturedItem, Converter={x:Static converters:NullToTrueConverter.Instance}}">

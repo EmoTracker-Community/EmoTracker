@@ -128,10 +128,8 @@ namespace EmoTracker.UI
 
             public void Execute(object? parameter)
             {
-                try
+                using (new LocationDatabase.SuspendRefreshScope())
                 {
-                    LocationDatabase.Instance.SuspendRefresh = true;
-
                     ITrackableItem? item = parameter as ITrackableItem;
                     if (item != null)
                     {
@@ -147,10 +145,6 @@ namespace EmoTracker.UI
                             }
                         }
                     }
-                }
-                finally
-                {
-                    LocationDatabase.Instance.SuspendRefresh = false;
                 }
             }
         }
@@ -175,10 +169,8 @@ namespace EmoTracker.UI
 
             public void Execute(object? parameter)
             {
-                try
+                using (new LocationDatabase.SuspendRefreshScope())
                 {
-                    LocationDatabase.Instance.SuspendRefresh = true;
-
                     ITrackableItem? item = parameter as ITrackableItem;
                     if (item != null)
                     {
@@ -194,10 +186,6 @@ namespace EmoTracker.UI
                             }
                         }
                     }
-                }
-                finally
-                {
-                    LocationDatabase.Instance.SuspendRefresh = false;
                 }
             }
         }
