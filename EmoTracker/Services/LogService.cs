@@ -12,6 +12,10 @@ namespace EmoTracker.Services
     {
         private readonly IFormatProvider mFormatProvider;
 
+        // Log messages from these subsystems are internal infrastructure concerns
+        // and should not surface in the pack developer console.
+        private static readonly string[] sExcludedPrefixes = { "[Voice]", "[NDI]", "[MCP]" };
+
         public DeveloperConsoleSink(IFormatProvider formatProvider)
         {
             mFormatProvider = formatProvider;
@@ -20,6 +24,14 @@ namespace EmoTracker.Services
         public void Emit(LogEvent logEvent)
         {
             var message = logEvent.RenderMessage(mFormatProvider);
+
+            // Filter out infrastructure subsystem messages that are not relevant
+            // to pack developers using the developer console.
+            foreach (var prefix in sExcludedPrefixes)
+            {
+                if (message.StartsWith(prefix, StringComparison.Ordinal))
+                    return;
+            }
 
             switch (logEvent.Level)
             {

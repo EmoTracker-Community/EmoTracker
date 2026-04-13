@@ -228,38 +228,45 @@ namespace EmoTracker.Extensions.NDI
                 return;
             }
 
-            NdiLibrary.EnsureRuntimeOnPath();
-
-            if (!NDIlib.initialize())
+            try
             {
-                Log.Warning("[NDI] NDIlib.initialize() returned false. CPU unsupported or runtime not installed.");
-                return;
-            }
-            _ndiInitialized = true;
+                NdiLibrary.EnsureRuntimeOnPath();
 
-            InitializeNdi();
-            if (_sendInstancePtr == IntPtr.Zero)
+                if (!NDIlib.initialize())
+                {
+                    Log.Warning("[NDI] NDIlib.initialize() returned false. CPU unsupported or runtime not installed.");
+                    return;
+                }
+                _ndiInitialized = true;
+
+                InitializeNdi();
+                if (_sendInstancePtr == IntPtr.Zero)
+                {
+                    Log.Warning("[NDI] NDIlib.send_create returned IntPtr.Zero for {Name}", NdiName);
+                }
+                else
+                {
+                    Log.Information("[NDI] Sender created for {Name} (ptr={Ptr:X})", NdiName, _sendInstancePtr.ToInt64());
+                }
+
+                _exitThread = false;
+                _sendThread = new Thread(SendThreadProc) { IsBackground = true, Name = "AvaloniaNdiSendThread" };
+                _sendThread.Start();
+
+                // Always start a DispatcherTimer, but at different rates depending
+                // on whether an external driver is also feeding us captures:
+                //   - Internal driver only: timer fires at the configured NDI frame
+                //     rate (primary capture source).
+                //   - External driver + slow poll: timer fires at a slow interval
+                //     (~250ms) purely to poll receiver count and catch transitions
+                //     when the external driver is idle (e.g. main window not
+                //     rendering because user isn't interacting).
+                StartCaptureTimer();
+            }
+            catch (Exception ex)
             {
-                Log.Warning("[NDI] NDIlib.send_create returned IntPtr.Zero for {Name}", NdiName);
+                Log.Warning(ex, "[NDI] Failed to initialize NDI: {Msg}", ex.Message);
             }
-            else
-            {
-                Log.Information("[NDI] Sender created for {Name} (ptr={Ptr:X})", NdiName, _sendInstancePtr.ToInt64());
-            }
-
-            _exitThread = false;
-            _sendThread = new Thread(SendThreadProc) { IsBackground = true, Name = "AvaloniaNdiSendThread" };
-            _sendThread.Start();
-
-            // Always start a DispatcherTimer, but at different rates depending
-            // on whether an external driver is also feeding us captures:
-            //   - Internal driver only: timer fires at the configured NDI frame
-            //     rate (primary capture source).
-            //   - External driver + slow poll: timer fires at a slow interval
-            //     (~250ms) purely to poll receiver count and catch transitions
-            //     when the external driver is idle (e.g. main window not
-            //     rendering because user isn't interacting).
-            StartCaptureTimer();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -711,29 +718,36 @@ namespace EmoTracker.Extensions.NDI
                 _rtb = null;
             }
 
-            lock (_sendInstanceLock)
+            try
             {
-                if (_sendInstancePtr != IntPtr.Zero)
+                lock (_sendInstanceLock)
                 {
-                    NDIlib.send_destroy(_sendInstancePtr);
-                    _sendInstancePtr = IntPtr.Zero;
+                    if (_sendInstancePtr != IntPtr.Zero)
+                    {
+                        NDIlib.send_destroy(_sendInstancePtr);
+                        _sendInstancePtr = IntPtr.Zero;
+                    }
+                }
+
+                // Only balance NDIlib.destroy() against our own successful initialize().
+                // A dormant container (NdiEnabled=false) never called initialize, so it
+                // must not call destroy — otherwise it would tear down the shared NDI
+                // library state while another container (e.g. HiddenBroadcastWindow) is
+                // still actively using it.
+                if (_ndiInitialized)
+                {
+                    NDIlib.destroy();
+                    _ndiInitialized = false;
+                    Log.Debug("[NDI] NdiSendContainer disposed; NDIlib.destroy() called.");
+                }
+                else
+                {
+                    Log.Debug("[NDI] NdiSendContainer disposed; skipping NDIlib.destroy() (was dormant).");
                 }
             }
-
-            // Only balance NDIlib.destroy() against our own successful initialize().
-            // A dormant container (NdiEnabled=false) never called initialize, so it
-            // must not call destroy — otherwise it would tear down the shared NDI
-            // library state while another container (e.g. HiddenBroadcastWindow) is
-            // still actively using it.
-            if (_ndiInitialized)
+            catch (Exception ex)
             {
-                NDIlib.destroy();
-                _ndiInitialized = false;
-                Log.Debug("[NDI] NdiSendContainer disposed; NDIlib.destroy() called.");
-            }
-            else
-            {
-                Log.Debug("[NDI] NdiSendContainer disposed; skipping NDIlib.destroy() (was dormant).");
+                Log.Warning(ex, "[NDI] Error during NDI cleanup: {Msg}", ex.Message);
             }
         }
     }
