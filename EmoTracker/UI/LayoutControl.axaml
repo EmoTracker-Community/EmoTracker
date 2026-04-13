@@ -360,6 +360,7 @@
                 <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                       Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
                       IsHitTestVisible="{Binding HitTestVisible}"
+                      ClipToBounds="True"
                       MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
                       MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
                       MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
