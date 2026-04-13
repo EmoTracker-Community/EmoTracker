@@ -112,7 +112,7 @@
                                         <ColumnDefinition />
                                     </Grid.ColumnDefinitions>
                                     <Image Grid.Column="0"
-                                           Source="{Binding Thumbnail.ResolvedImage}"
+                                           Source="{Binding Thumbnail.ResolvedImage, FallbackValue={x:Null}}"
                                            Width="48"
                                            Height="48"
                                            Margin="0,0,5,0"
@@ -150,10 +150,10 @@
                                                                     ClearAsGroup="{Binding ClearAsGroup}"
                                                                     Compact="{Binding Compact, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
                                                                     HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
-                                                                    OpenChest="{Binding OpenChestImage.ResolvedImage}"
-                                                                    ClosedChest="{Binding ClosedChestImage.ResolvedImage}"
-                                                                    UnavailableOpenChest="{Binding UnavailableOpenChestImage.ResolvedImage}"
-                                                                    UnavailableClosedChest="{Binding UnavailableClosedChestImage.ResolvedImage}"
+                                                                    OpenChest="{Binding OpenChestImage.ResolvedImage, FallbackValue={x:Null}}"
+                                                                    ClosedChest="{Binding ClosedChestImage.ResolvedImage, FallbackValue={x:Null}}"
+                                                                    UnavailableOpenChest="{Binding UnavailableOpenChestImage.ResolvedImage, FallbackValue={x:Null}}"
+                                                                    UnavailableClosedChest="{Binding UnavailableClosedChestImage.ResolvedImage, FallbackValue={x:Null}}"
                                                                     IsVisible="{Binding ChestCount, Converter={x:Static converters:NonZeroToBoolConverter.Instance}}">
                                                 <local:ChestListControl.Accessible>
                                                     <MultiBinding Converter="{x:Static converters:ChestAccessibleConverter.Instance}">

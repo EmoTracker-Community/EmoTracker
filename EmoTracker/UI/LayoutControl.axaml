@@ -305,7 +305,7 @@
                         <TabControl.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" Spacing="0">
-                                    <Image Source="{Binding Icon.ResolvedImage}"
+                                    <Image Source="{Binding Icon.ResolvedImage, FallbackValue={x:Null}}"
                                            MaxHeight="16" VerticalAlignment="Center"
                                            IsVisible="{Binding Icon, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
                                     <Grid Width="8"
@@ -532,7 +532,7 @@
                       MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
                       Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
-                    <Image Source="{Binding Content.ResolvedImage}" />
+                    <Image Source="{Binding Content.ResolvedImage, FallbackValue={x:Null}}" />
                 </Grid>
             </LayoutTransformControl>
         </DataTemplate>
@@ -600,9 +600,9 @@
                                            IsVisible="{Binding Style, Converter={x:Static converters:ObjectEqualsConverter.Instance}, ConverterParameter=Settings}" />
                                 <!-- Image mode -->
                                 <Panel IsVisible="{Binding Style, Converter={x:Static converters:ObjectEqualsConverter.Instance}, ConverterParameter=Image}">
-                                    <Image Source="{Binding Image.ResolvedImage}"
+                                    <Image Source="{Binding Image.ResolvedImage, FallbackValue={x:Null}}"
                                            IsVisible="{Binding MaskInput, Converter={x:Static converters:BoolInverseConverter.Instance}}" />
-                                    <controls:InputMaskingImage Source="{Binding Image.ResolvedImage}"
+                                    <controls:InputMaskingImage Source="{Binding Image.ResolvedImage, FallbackValue={x:Null}}"
                                                                 IsVisible="{Binding MaskInput}" />
                                 </Panel>
                                 <!-- Solid mode: transparent background, no visible content -->

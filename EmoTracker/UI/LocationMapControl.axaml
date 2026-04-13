@@ -70,7 +70,7 @@
                     <DataTemplate DataType="locations:Map">
                         <Grid Name="MapHost" Margin="25,25">
                             <controls:InputMaskingImage Name="MapImage"
-                                                        Source="{Binding Image.ResolvedImage}"/>
+                                                        Source="{Binding Image.ResolvedImage, FallbackValue={x:Null}}"/>
                             <ItemsControl ItemsSource="{Binding Locations}" ClipToBounds="False">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
