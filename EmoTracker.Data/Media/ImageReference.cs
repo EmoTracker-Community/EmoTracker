@@ -1,10 +1,31 @@
 ﻿using EmoTracker.Core;
 using System;
+using System.Collections.Generic;
 
 namespace EmoTracker.Data.Media
 {
     public abstract class ImageReference : ObservableObject
     {
+        static bool sTracking;
+        static List<ImageReference> sTrackedReferences;
+
+        public static List<ImageReference> LastCollectedReferences { get; private set; }
+
+        public static void BeginTrackingCreatedReferences()
+        {
+            sTrackedReferences = new List<ImageReference>();
+            sTracking = true;
+        }
+
+        public static List<ImageReference> EndTrackingCreatedReferences()
+        {
+            sTracking = false;
+            LastCollectedReferences = sTrackedReferences;
+            var result = sTrackedReferences;
+            sTrackedReferences = null;
+            return result;
+        }
+
         public static ImageReference FromPackRelativePath(string path, string filter = null)
         {
             return FromPackRelativePath(Tracker.Instance.ActiveGamePackage, path, filter);
@@ -26,11 +47,16 @@ namespace EmoTracker.Data.Media
                 path = "gamepackage://" + path;
             }
 
-            return new ConcreteImageReference()
+            var result = new ConcreteImageReference()
             {
                 URI = new Uri(path),
                 Filter = filter
             };
+
+            if (sTracking)
+                sTrackedReferences?.Add(result);
+
+            return result;
         }
 
         public static ImageReference FromImageReference(ImageReference existingReference, string filter = null)
@@ -41,11 +67,16 @@ namespace EmoTracker.Data.Media
             if (string.IsNullOrWhiteSpace(filter))
                 return existingReference;
 
-            return new FilterImageReference()
+            var result = new FilterImageReference()
             {
                 Reference = existingReference,
                 Filter = filter
             };
+
+            if (sTracking)
+                sTrackedReferences?.Add(result);
+
+            return result;
         }
 
         public static ImageReference FromExternalURI(Uri uri, string filter = null)
@@ -68,7 +99,12 @@ namespace EmoTracker.Data.Media
             }
 
             if (instance.Layers.Count > 0)
+            {
+                if (sTracking)
+                    sTrackedReferences?.Add(instance);
+
                 return instance;
+            }
 
             return null;
         }
