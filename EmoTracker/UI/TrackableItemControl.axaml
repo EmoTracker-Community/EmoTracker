@@ -8,6 +8,7 @@
     <Grid ToolTip.Tip="{Binding Name}"
           ToolTip.ShowDelay="{Binding FastToolTips, Source={x:Static data:ApplicationSettings.Instance}, Converter={x:Static local:TrackableItemControl.FastToolTipsToDelayConverter}}"
           Opacity="{Binding Converter={x:Static local:TrackableItemControl.NullToZeroOpacityConverter}}"
+          IsHitTestVisible="{Binding IgnoreUserInput, Converter={x:Static converters:BoolInverseConverter.Instance}, FallbackValue=True}"
           PointerReleased="Grid_PointerReleased">
         <Button Command="{Binding OnLeftClickCommand, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
                 CommandParameter="{Binding}"
@@ -20,9 +21,30 @@
             <Button.Template>
                 <ControlTemplate TargetType="Button">
                     <Grid Background="{x:Null}">
+                        <Image
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            IsVisible="{Binding MaskInput, Converter={x:Static converters:BoolInverseConverter.Instance}, FallbackValue=True}"
+                            Source="{Binding Icon.ResolvedImage, FallbackValue={x:Null}}">
+                            <Image.Width>
+                                <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Width">
+                                    <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="IconHeight" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
+                                </MultiBinding>
+                            </Image.Width>
+                            <Image.Height>
+                                <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Height">
+                                    <Binding Path="IconHeight" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
+                                </MultiBinding>
+                            </Image.Height>
+                        </Image>
                         <controls:InputMaskingImage
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
+                            IsVisible="{Binding MaskInput, FallbackValue=False}"
                             Source="{Binding Icon.ResolvedImage, FallbackValue={x:Null}}">
                             <controls:InputMaskingImage.Width>
                                 <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Width">
