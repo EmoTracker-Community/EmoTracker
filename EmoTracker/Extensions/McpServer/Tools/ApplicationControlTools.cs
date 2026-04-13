@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Data.Core.Transactions.Processors;
 using EmoTracker.Data.Items;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Packages;
@@ -218,6 +219,29 @@ namespace EmoTracker.Extensions.McpServer.Tools
 
                     window.Close();
                     return JsonSerializer.Serialize(new { success = true });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+                }
+            });
+        }
+
+        [McpServerTool(Name = "undo")]
+        [Description("Undo the last tracker action (equivalent to Ctrl+Z)")]
+        public static async Task<string> Undo()
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    if (TransactionProcessor.Current is IUndoableTransactionProcessor undo)
+                    {
+                        undo.Undo();
+                        return JsonSerializer.Serialize(new { success = true });
+                    }
+
+                    return JsonSerializer.Serialize(new { success = false, error = "Undo not available" });
                 }
                 catch (Exception ex)
                 {

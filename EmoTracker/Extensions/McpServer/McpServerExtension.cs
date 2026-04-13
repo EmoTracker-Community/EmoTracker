@@ -104,6 +104,13 @@ namespace EmoTracker.Extensions.McpServer
                 .WithTools<Tools.LuaTools>()
                 .WithTools<Tools.ScreenshotTools>()
                 .WithTools<Tools.UiAutomationTools>()
+                .WithTools<Tools.SettingsTools>()
+                .WithTools<Tools.LocationTools>()
+                .WithTools<Tools.SaveLoadTools>()
+                .WithTools<Tools.WindowTools>()
+                .WithTools<Tools.NoteTools>()
+                .WithTools<Tools.ExtensionTools>()
+                .WithTools<Tools.PackageTools>()
                 .WithHttpTransport();
 
                 mApp = builder.Build();
