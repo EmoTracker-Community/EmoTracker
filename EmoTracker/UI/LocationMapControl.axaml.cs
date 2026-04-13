@@ -34,7 +34,8 @@ namespace EmoTracker.UI
             this.AttachedToVisualTree += LocationMapControl_Loaded;
             this.DetachedFromVisualTree += LocationMapControl_Unloaded;
             this.DoubleTapped += LocationMapControl_DoubleTapped;
-            LocationDetails.Closed += (s, e) => LocationDetails.IsOpen = false;
+            LocationDetails.Opened += LocationDetails_Opened;
+            LocationDetails.Closed += LocationDetails_Closed;
             BadgeDetails.Closed   += (s, e) => BadgeDetails.IsOpen = false;
             BadgeItemsControl.ItemsSource = mBadgeImages;
         }
@@ -63,6 +64,14 @@ namespace EmoTracker.UI
             {
                 w.OnGlobalPreviewKeyDown -= MainWindow_OnGlobalPreviewKeyEvent;
                 w.OnGlobalPreviewKeyUp -= MainWindow_OnGlobalPreviewKeyEvent;
+            }
+
+            // Ensure the global dismiss handler is removed if the popup was still open
+            LocationDetails.IsOpen = false;
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel != null)
+            {
+                topLevel.RemoveHandler(PointerPressedEvent, TopLevel_PointerPressedTunnel);
             }
         }
 
@@ -138,6 +147,62 @@ namespace EmoTracker.UI
         {
             get => mDetailsLocation;
             set => SetProperty(ref mDetailsLocation, value);
+        }
+
+        /// <summary>
+        /// When the location details popup opens, install a tunneling PointerPressed handler
+        /// on the top-level window so that clicks anywhere outside the popup will close it.
+        /// This replaces IsLightDismissEnabled (which creates an overlay that swallows the
+        /// second click of a double-click sequence).
+        /// </summary>
+        private void LocationDetails_Opened(object? sender, EventArgs e)
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel != null)
+            {
+                topLevel.AddHandler(PointerPressedEvent, TopLevel_PointerPressedTunnel, RoutingStrategies.Tunnel);
+            }
+        }
+
+        private void LocationDetails_Closed(object? sender, EventArgs e)
+        {
+            LocationDetails.IsOpen = false;
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel != null)
+            {
+                topLevel.RemoveHandler(PointerPressedEvent, TopLevel_PointerPressedTunnel);
+            }
+        }
+
+        /// <summary>
+        /// Tunneling handler on the top-level window. Closes the location details popup
+        /// when the pointer press lands outside the popup content. The press still reaches
+        /// the target control (map location, item, etc.) because we don't mark it handled.
+        /// </summary>
+        private void TopLevel_PointerPressedTunnel(object? sender, PointerPressedEventArgs e)
+        {
+            if (!LocationDetails.IsOpen)
+                return;
+
+            // Check whether the press landed inside the popup content.
+            // The popup's child renders on the overlay layer, outside the normal visual tree,
+            // so we walk up from e.Source looking for our LocationDetailsContent control.
+            var source = e.Source as Visual;
+            bool insidePopup = false;
+            while (source != null)
+            {
+                if (source == LocationDetailsContent)
+                {
+                    insidePopup = true;
+                    break;
+                }
+                source = source.GetVisualParent();
+            }
+
+            if (!insidePopup)
+            {
+                LocationDetails.IsOpen = false;
+            }
         }
 
         #endregion
@@ -294,10 +359,10 @@ namespace EmoTracker.UI
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
-            // Always close the popup on any press; it will reopen below if a location was clicked.
-            // This avoids using IsLightDismissEnabled (which creates an overlay layer that swallows
-            // the second click of a double-click before OnPointerPressed sees ClickCount=2).
-            LocationDetails.IsOpen = false;
+            // The popup is closed by TopLevel_PointerPressedTunnel (a tunneling handler on the
+            // top-level window) so that clicks on controls outside this map control also dismiss
+            // the popup. The tunnel handler fires before this override, so the popup is already
+            // closed by the time we get here. If a map location was clicked, we reopen it below.
 
             var props = e.GetCurrentPoint(this).Properties;
 

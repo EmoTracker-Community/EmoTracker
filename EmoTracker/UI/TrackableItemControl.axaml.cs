@@ -124,7 +124,12 @@ namespace EmoTracker.UI
                 CanExecuteChanged?.Invoke(this, EventArgs.Empty);
             }
 
-            public bool CanExecute(object? parameter) => true;
+            public bool CanExecute(object? parameter)
+            {
+                if (parameter is ITrackableItem item && item.IgnoreUserInput)
+                    return false;
+                return true;
+            }
 
             public void Execute(object? parameter)
             {
@@ -165,7 +170,12 @@ namespace EmoTracker.UI
                 CanExecuteChanged?.Invoke(this, EventArgs.Empty);
             }
 
-            public bool CanExecute(object? parameter) => true;
+            public bool CanExecute(object? parameter)
+            {
+                if (parameter is ITrackableItem item && item.IgnoreUserInput)
+                    return false;
+                return true;
+            }
 
             public void Execute(object? parameter)
             {
@@ -202,6 +212,12 @@ namespace EmoTracker.UI
         {
             if (e.InitialPressMouseButton == Avalonia.Input.MouseButton.Right)
             {
+                if (DataContext is ITrackableItem item && item.IgnoreUserInput)
+                {
+                    e.Handled = true;
+                    return;
+                }
+
                 mRegressCmd.Execute(DataContext);
                 e.Handled = true;
             }
