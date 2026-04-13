@@ -29,6 +29,8 @@ namespace EmoTracker.Data.Items
             return false;
         }
 
+        public override IEnumerable<string> GetAllProvidedCodes() => mProvidedCodes.ProvidedCodes;
+
         public override uint ProvidesCode(string code)
         {
             if (mProvidedCodes.ProvidesCode(code))

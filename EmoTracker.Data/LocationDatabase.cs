@@ -31,6 +31,7 @@ namespace EmoTracker.Data
         Location mLastClearedLocation;
 
         ObservableCollection<Location> mAllLocations = new ObservableCollection<Location>();
+        Dictionary<Location, int> mLocationIndex = new Dictionary<Location, int>();
         ObservableCollection<Location> mPinnedLocations = new ObservableCollection<Location>();
         ObservableCollection<Location> mVisibleLocations = new ObservableCollection<Location>();
 
@@ -105,6 +106,7 @@ namespace EmoTracker.Data
         {
             LastClearedLocation = null;
             mAllLocations.Clear();
+            mLocationIndex.Clear();
             mPinnedLocations.Clear();
             mVisibleLocations.Clear();
             mRoot = new Location()
@@ -546,6 +548,7 @@ namespace EmoTracker.Data
                 }
             }
 
+            mLocationIndex[instance] = mAllLocations.Count;
             mAllLocations.Add(instance);
 
             var children = data.GetValue<JArray>("children");
@@ -691,9 +694,7 @@ namespace EmoTracker.Data
 
         public string GetPersistableLocationReference(Location location)
         {
-            int idx = mAllLocations.IndexOf(location);
-
-            if (idx < 0)
+            if (!mLocationIndex.TryGetValue(location, out int idx))
                 throw new InvalidOperationException("Cannot generate persistable reference for location that is not in the LocationDatabase");
 
             if (!string.IsNullOrWhiteSpace(location.Name))

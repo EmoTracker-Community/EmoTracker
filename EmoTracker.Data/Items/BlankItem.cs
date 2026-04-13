@@ -1,5 +1,7 @@
 ﻿using EmoTracker.Core;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace EmoTracker.Data.Items
 {
@@ -15,6 +17,8 @@ namespace EmoTracker.Data.Items
         {
             return false;
         }
+
+        public override IEnumerable<string> GetAllProvidedCodes() => Enumerable.Empty<string>();
 
         public override void OnLeftClick()
         {

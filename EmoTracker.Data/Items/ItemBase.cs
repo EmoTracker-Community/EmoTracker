@@ -3,6 +3,7 @@ using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace EmoTracker.Data.Items
@@ -105,6 +106,13 @@ namespace EmoTracker.Data.Items
         public abstract uint ProvidesCode(string code);
         public abstract bool CanProvideCode(string code);
         public abstract void AdvanceToCode(string code = null);
+
+        /// <summary>
+        /// Returns the set of all codes this item can potentially provide, for indexing purposes.
+        /// Returns null if the item's codes are dynamic and cannot be statically enumerated
+        /// (e.g. LuaItem with a Lua callback).
+        /// </summary>
+        public virtual IEnumerable<string> GetAllProvidedCodes() => null;
 
 
         #region -- Static Methods ---
