@@ -38,6 +38,8 @@ namespace EmoTracker.Data.AutoTracking
             remove { if (DefaultDevice != null) DefaultDevice.ConnectionStatusChanged -= value; }
         }
 
+        public virtual event EventHandler AvailableDevicesChanged { add { } remove { } }
+
         // Sync read — delegates to DefaultDevice
         public virtual bool Read(ulong startAddress, byte[] buffer)
         {

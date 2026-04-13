@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Threading;
 using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Settings;
 using System;
@@ -16,6 +17,12 @@ namespace EmoTracker.Extensions.AutoTracker
         }
 
         private AutoTrackerExtension _extension;
+
+        // Pulse animation state
+        private DispatcherTimer _pulseTimer;
+        private double _pulsePhase = 0.0;
+        private static readonly Color PulseFrom = Color.Parse("#717171");
+        private static readonly Color PulseTo = Color.Parse("#53A893");
 
         private void OnDataContextChanged(object sender, EventArgs e)
         {
@@ -53,9 +60,53 @@ namespace EmoTracker.Extensions.AutoTracker
                 case nameof(AutoTrackerExtension.Connected):
                 case nameof(AutoTrackerExtension.Error):
                 case nameof(AutoTrackerExtension.ActiveProvider):
+                case nameof(AutoTrackerExtension.SelectedProvider):
                     UpdateStatusColor();
                     break;
             }
+        }
+
+        private bool CanStartAutoTracking =>
+            _extension != null &&
+            _extension.ActiveProvider == null &&
+            _extension.SelectedProvider != null &&
+            _extension.SelectedProvider.DefaultDevice != null;
+
+        private void StartPulse()
+        {
+            if (_pulseTimer != null)
+                return;
+
+            _pulsePhase = 0.0;
+            _pulseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+            _pulseTimer.Tick += OnPulseTick;
+            _pulseTimer.Start();
+        }
+
+        private void StopPulse()
+        {
+            if (_pulseTimer == null)
+                return;
+
+            _pulseTimer.Stop();
+            _pulseTimer.Tick -= OnPulseTick;
+            _pulseTimer = null;
+        }
+
+        private void OnPulseTick(object sender, EventArgs e)
+        {
+            _pulsePhase += 0.0125; // full grey→cyan→grey cycle in ~4 seconds at 50ms intervals
+            if (_pulsePhase >= 1.0)
+                _pulsePhase -= 1.0;
+
+            double t = (Math.Sin(_pulsePhase * 2 * Math.PI) + 1.0) / 2.0;
+
+            byte r = (byte)(PulseFrom.R + (PulseTo.R - PulseFrom.R) * t);
+            byte g = (byte)(PulseFrom.G + (PulseTo.G - PulseFrom.G) * t);
+            byte b = (byte)(PulseFrom.B + (PulseTo.B - PulseFrom.B) * t);
+
+            if (this.FindControl<TextBlock>("StatusIcon") is TextBlock icon)
+                icon.Foreground = new SolidColorBrush(new Color(255, r, g, b));
         }
 
         private void UpdateStatusColor()
@@ -65,25 +116,34 @@ namespace EmoTracker.Extensions.AutoTracker
 
             if (_extension == null)
             {
+                StopPulse();
                 icon.Foreground = SolidColorBrush.Parse("#717171");
                 return;
             }
 
             if (_extension.Error)
             {
+                StopPulse();
                 icon.Foreground = SolidColorBrush.Parse(ApplicationColors.Instance.Status_Generic_Error);
             }
             else if (!_extension.Connected && _extension.ActiveProvider != null)
             {
+                StopPulse();
                 icon.Foreground = SolidColorBrush.Parse(ApplicationColors.Instance.Status_Generic_Warning);
             }
-            else if (_extension.ActiveProvider == null)
+            else if (_extension.ActiveProvider != null)
             {
-                icon.Foreground = SolidColorBrush.Parse("#717171");
+                StopPulse();
+                icon.Foreground = new SolidColorBrush(Color.Parse("#35e0b5"));
+            }
+            else if (CanStartAutoTracking)
+            {
+                StartPulse();
             }
             else
             {
-                icon.Foreground = SolidColorBrush.Parse("#35e0b5");
+                StopPulse();
+                icon.Foreground = SolidColorBrush.Parse("#717171");
             }
         }
 

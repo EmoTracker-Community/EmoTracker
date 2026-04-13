@@ -103,11 +103,31 @@ namespace EmoTracker.Extensions.AutoTracker
             get { return mSelectedProvider; }
             private set
             {
+                var prev = mSelectedProvider;
                 if (SetProperty(ref mSelectedProvider, value))
                 {
+                    if (prev != null)
+                        prev.AvailableDevicesChanged -= SelectedProvider_AvailableDevicesChanged;
+
+                    if (mSelectedProvider != null)
+                        mSelectedProvider.AvailableDevicesChanged += SelectedProvider_AvailableDevicesChanged;
+
                     InvalidateCommandAvailability();
                 }
             }
+        }
+
+        private void SelectedProvider_AvailableDevicesChanged(object sender, EventArgs e)
+        {
+            // Auto-select first device if the previously selected one is gone or none was chosen
+            if (SelectedProvider != null && SelectedProvider.DefaultDevice == null && SelectedProvider.AvailableDevices.Count > 0)
+                SelectedProvider.DefaultDevice = SelectedProvider.AvailableDevices[0];
+
+            Dispatch.BeginInvoke(() =>
+            {
+                InvalidateCommandAvailability();
+                NotifyPropertyChanged(nameof(SelectedProvider));
+            });
         }
 
         IAutoTrackingProvider mActiveProvider;

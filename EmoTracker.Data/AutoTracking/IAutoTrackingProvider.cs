@@ -24,6 +24,9 @@ namespace EmoTracker.Data.AutoTracking
         bool IsConnected { get; }
         event EventHandler<bool> ConnectionStatusChanged;
 
+        // Fired when AvailableDevices or DefaultDevice changes due to background scanning
+        event EventHandler AvailableDevicesChanged;
+
         // Provider-level synchronous memory read (delegates to DefaultDevice)
         bool Read(ulong startAddress, byte[] buffer);
         bool Read8(ulong address, out byte value);
