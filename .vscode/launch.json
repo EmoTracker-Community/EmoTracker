@@ -13,6 +13,17 @@
             "console": "internalConsole"
         },
         {
+            "name": "Launch EmoTracker Avalonia (Dev-Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build Avalonia (Debug)",
+            "program": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0/EmoTracker.dll",
+            "args": ["-dev"],
+            "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
             "name": "Attach to EmoTracker",
             "type": "coreclr",
             "request": "attach"
