@@ -32,29 +32,49 @@ namespace EmoTracker.UI.Media
         readonly ConcurrentDictionary<ImageReference, IImage> mCache = new ConcurrentDictionary<ImageReference, IImage>();
         readonly object mResolutionLock = new object();
 
-        // ── Placeholder ─────────────────────────────────────────────────
-        static IImage sPlaceholder;
+        // ── Sized Placeholders ──────────────────────────────────────────
+        // Cache of transparent placeholder bitmaps keyed by (width, height).
+        // Shared across all references with the same source dimensions so
+        // we don't create thousands of identical bitmaps.
+        static readonly Dictionary<(int w, int h), IImage> sPlaceholderCache = new Dictionary<(int, int), IImage>();
+        static readonly object sPlaceholderLock = new object();
 
         /// <summary>
-        /// Returns a tiny transparent placeholder image used while the real
-        /// image is being resolved on the background thread.
+        /// Returns a transparent placeholder image of the specified size.
+        /// Reuses cached instances for identical dimensions.
+        /// Falls back to 1×1 if width or height is zero.
         /// </summary>
-        public static IImage Placeholder
+        public static IImage GetPlaceholder(int width, int height)
         {
-            get
+            if (width <= 0 || height <= 0)
+                width = height = 1;
+
+            lock (sPlaceholderLock)
             {
-                if (sPlaceholder == null)
-                {
-                    // 1×1 transparent PNG – lightweight and compatible with all Image controls
-                    var bmp = new WriteableBitmap(
-                        new Avalonia.PixelSize(1, 1),
-                        new Avalonia.Vector(96, 96),
-                        Avalonia.Platform.PixelFormat.Bgra8888,
-                        AlphaFormat.Premul);
-                    sPlaceholder = bmp;
-                }
-                return sPlaceholder;
+                var key = (width, height);
+                if (sPlaceholderCache.TryGetValue(key, out IImage existing))
+                    return existing;
+
+                var bmp = new WriteableBitmap(
+                    new Avalonia.PixelSize(width, height),
+                    new Avalonia.Vector(96, 96),
+                    Avalonia.Platform.PixelFormat.Bgra8888,
+                    AlphaFormat.Premul);
+                sPlaceholderCache[key] = bmp;
+                return bmp;
             }
+        }
+
+        /// <summary>
+        /// Returns a correctly-sized transparent placeholder for the given
+        /// image reference, using its <see cref="ImageReference.SourceWidth"/>
+        /// and <see cref="ImageReference.SourceHeight"/> to determine size.
+        /// </summary>
+        public static IImage GetPlaceholder(ImageReference imageRef)
+        {
+            if (imageRef == null)
+                return GetPlaceholder(1, 1);
+            return GetPlaceholder(imageRef.SourceWidth, imageRef.SourceHeight);
         }
 
         // ── Priority Queue ──────────────────────────────────────────────
@@ -104,6 +124,15 @@ namespace EmoTracker.UI.Media
 
             ImageReference.OnImageReferenceCreated = (imageRef) =>
             {
+                // Set a correctly-sized placeholder as ResolvedImage immediately
+                // so Avalonia's layout system measures controls at the right size
+                // before the real image is resolved on the background thread.
+                if (imageRef.ResolvedImage == null &&
+                    imageRef.SourceWidth > 0 && imageRef.SourceHeight > 0)
+                {
+                    imageRef.ResolvedImage = GetPlaceholder(imageRef);
+                }
+
                 QueueResolution(imageRef, ImagePriority.Normal);
             };
 
@@ -146,6 +175,9 @@ namespace EmoTracker.UI.Media
                 mQueueSignal.Reset();
             }
             mCache.Clear();
+
+            // Clear the source image cache used by ConcreteImageReferenceResolver
+            ConcreteImageReferenceResolver.ClearSourceCache();
         }
 
         /// <summary>
@@ -236,7 +268,7 @@ namespace EmoTracker.UI.Media
         /// Called by UI-thread code (converters, bindings) when an image is
         /// needed for display.  Returns the cached image if available, otherwise
         /// boosts the reference to <see cref="ImagePriority.Immediate"/> and
-        /// returns the placeholder.
+        /// returns a correctly-sized placeholder.
         /// </summary>
         public IImage RequestImage(ImageReference imageRef)
         {
@@ -250,7 +282,7 @@ namespace EmoTracker.UI.Media
                 return ResolveImageReference(imageRef);
 
             QueueResolution(imageRef, ImagePriority.Immediate);
-            return Placeholder;
+            return GetPlaceholder(imageRef);
         }
 
         /// <summary>
@@ -333,6 +365,18 @@ namespace EmoTracker.UI.Media
                         // the UI will continue showing the placeholder.
                     }
                 }
+
+                // All Immediate-priority items have been resolved.  Force
+                // the UI to re-measure layouts so controls that were sized
+                // for placeholders adopt the final image dimensions.
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (Avalonia.Application.Current?.ApplicationLifetime
+                        is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                    {
+                        desktop.MainWindow?.InvalidateMeasure();
+                    }
+                }, DispatcherPriority.Background);
             }
         }
 
