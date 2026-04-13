@@ -99,6 +99,7 @@ namespace EmoTracker.Data
         string mLastActivePackageVariant;
         string mCommandLinePackage;
         string mCommandLinePackageVariant;
+        bool mNoAsyncImages;
 
         ObservableCollection<string> mPackageRepositories = new ObservableCollection<string>();
 
@@ -178,6 +179,17 @@ namespace EmoTracker.Data
         {
             get { return mCommandLinePackageVariant; }
             set { SetProperty(ref mCommandLinePackageVariant, value); }
+        }
+
+        /// <summary>
+        /// When true, disables async background image pre-caching and forces
+        /// synchronous image resolution on the UI thread (the pre-refactor
+        /// behavior).  Set via the <c>--no-async-images</c> command-line flag.
+        /// </summary>
+        public bool NoAsyncImages
+        {
+            get { return mNoAsyncImages; }
+            set { SetProperty(ref mNoAsyncImages, value); }
         }
 
         public string TwitchChannelName
@@ -315,6 +327,11 @@ namespace EmoTracker.Data
 
                         CommandLinePackageVariant = cargs[n];
 
+                    }
+
+                    if (String.Equals(cargs[n], "--no-async-images"))
+                    {
+                        NoAsyncImages = true;
                     }
 
                 }

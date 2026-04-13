@@ -68,6 +68,13 @@ namespace EmoTracker.UI.Media
         Thread mWorkerThread;
         volatile bool mShutdown;
 
+        /// <summary>
+        /// When true, <see cref="RequestImage"/> resolves synchronously on the
+        /// calling thread (the pre-refactor behavior).  The background worker
+        /// thread is not started.  Set before calling <see cref="Start"/>.
+        /// </summary>
+        public bool SyncMode { get; set; }
+
         // ── Public API ──────────────────────────────────────────────────
 
         /// <summary>
@@ -82,6 +89,18 @@ namespace EmoTracker.UI.Media
                 return;
 
             mShutdown = false;
+
+            if (SyncMode)
+            {
+                // In sync mode, resolve images immediately on creation so
+                // path-through bindings ({Binding Icon.ResolvedImage}) see
+                // the resolved image right away.
+                ImageReference.OnImageReferenceCreated = (imageRef) =>
+                {
+                    ResolveImageReference(imageRef);
+                };
+                return;
+            }
 
             ImageReference.OnImageReferenceCreated = (imageRef) =>
             {
@@ -194,14 +213,23 @@ namespace EmoTracker.UI.Media
                 return cachedSrc;
 
             // Slow path: acquire lock for resolution
+            IImage result;
             lock (mResolutionLock)
             {
                 // Double-check after acquiring lock
                 if (mCache.TryGetValue(imageRef, out cachedSrc))
                     return cachedSrc;
 
-                return ResolveAndCache(imageRef);
+                result = ResolveAndCache(imageRef);
             }
+
+            // In sync mode, set ResolvedImage directly so path-through
+            // bindings see the image immediately.  This is safe because
+            // sync-mode callers are on the UI thread.
+            if (result != null && SyncMode)
+                imageRef.ResolvedImage = result;
+
+            return result;
         }
 
         /// <summary>
@@ -218,9 +246,25 @@ namespace EmoTracker.UI.Media
             if (mCache.TryGetValue(imageRef, out IImage cached))
                 return cached;
 
+            if (SyncMode)
+                return ResolveImageReference(imageRef);
+
             QueueResolution(imageRef, ImagePriority.Immediate);
             return Placeholder;
         }
+
+        /// <summary>
+        /// Returns the number of items currently in the background work queue.
+        /// </summary>
+        public int QueueCount
+        {
+            get { lock (mQueueLock) { return mQueue.Count; } }
+        }
+
+        /// <summary>
+        /// Returns the number of resolved images in the cache.
+        /// </summary>
+        public int CacheCount => mCache.Count;
 
         // ── Internal Resolution ─────────────────────────────────────────
 

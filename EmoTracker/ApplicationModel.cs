@@ -174,8 +174,9 @@ namespace EmoTracker
 
         public void Initialize()
         {
-            //  Start the background image resolution service so that images
-            //  created during pack load are queued and resolved concurrently.
+            //  Start the image resolution service.  When --no-async-images is
+            //  set, resolution falls back to synchronous on-demand behaviour.
+            ImageReferenceService.Instance.SyncMode = Data.ApplicationSettings.Instance.NoAsyncImages;
             ImageReferenceService.Instance.Start();
 
             //  Load and start extensions
