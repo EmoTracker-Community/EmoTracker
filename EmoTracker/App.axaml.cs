@@ -62,6 +62,8 @@ namespace EmoTracker
                 {
                     try
                     {
+                        UpdateService.Instance.Dispose();
+
                         if (e.ApplicationExitCode == 0)
                             Extensions.ExtensionManager.Instance.OnApplicationClosing();
 
@@ -74,6 +76,10 @@ namespace EmoTracker
 #endif
                     }
                     catch { }
+                    finally
+                    {
+                        Log.CloseAndFlush();
+                    }
                 };
             }
 

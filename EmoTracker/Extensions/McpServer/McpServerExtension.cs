@@ -64,8 +64,13 @@ namespace EmoTracker.Extensions.McpServer
             {
                 try
                 {
-                    mApp.StopAsync().GetAwaiter().GetResult();
-                    mApp.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                    // Run async shutdown on a ThreadPool thread to avoid deadlocking
+                    // the main thread's synchronization context.
+                    Task.Run(async () =>
+                    {
+                        await mApp.StopAsync();
+                        await mApp.DisposeAsync();
+                    }).GetAwaiter().GetResult();
                 }
                 catch (Exception ex)
                 {

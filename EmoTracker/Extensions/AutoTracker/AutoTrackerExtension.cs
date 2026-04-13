@@ -436,6 +436,13 @@ namespace EmoTracker.Extensions.AutoTracker
         public void Stop()
         {
             StopAutoTracking();
+
+            if (mUpdateTimer != null)
+            {
+                mUpdateTimer.Stop();
+                mUpdateTimer.Dispose();
+                mUpdateTimer = null;
+            }
         }
 
         public JToken SerializeToJson()
