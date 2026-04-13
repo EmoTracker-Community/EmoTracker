@@ -8,7 +8,6 @@
     <Grid ToolTip.Tip="{Binding Name}"
           ToolTip.ShowDelay="{Binding FastToolTips, Source={x:Static data:ApplicationSettings.Instance}, Converter={x:Static local:TrackableItemControl.FastToolTipsToDelayConverter}}"
           Opacity="{Binding Converter={x:Static local:TrackableItemControl.NullToZeroOpacityConverter}}"
-          IsHitTestVisible="{Binding IgnoreUserInput, Converter={x:Static converters:BoolInverseConverter.Instance}, FallbackValue=True}"
           PointerReleased="Grid_PointerReleased">
         <Button Command="{Binding OnLeftClickCommand, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
                 CommandParameter="{Binding}"
