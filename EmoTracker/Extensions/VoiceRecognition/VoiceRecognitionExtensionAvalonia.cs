@@ -38,6 +38,8 @@ namespace EmoTracker.Extensions.VoiceRecognition
         public string UID => "emotracker_voice_recognition";
         public int Priority => -10000;
 
+        private CancellationTokenSource _buildCommandMapCts;
+
         private bool _active = false;
         public bool Active
         {
@@ -92,7 +94,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         public void Start() { }
         public void Stop() => Active = false;
-        public void OnPackageLoaded() => BuildCommandMap();
+        public void OnPackageLoaded() => BuildCommandMapAsync();
         public void OnPackageUnloaded() { }
         public JToken SerializeToJson() => null;
         public bool DeserializeFromJson(JToken token) => true;
@@ -315,10 +317,13 @@ namespace EmoTracker.Extensions.VoiceRecognition
         private void AddCommand(string phrase, Action action)
         {
             phrase = NormalizePhrase(phrase.Trim().ToLowerInvariant());
-            if (!_commandMap.ContainsKey(phrase))
+            lock (_commandMap)
             {
-                _commandMap[phrase] = action;
-                _phraseList.Add(phrase);
+                if (!_commandMap.ContainsKey(phrase))
+                {
+                    _commandMap[phrase] = action;
+                    _phraseList.Add(phrase);
+                }
             }
         }
 
@@ -359,38 +364,101 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private string BuildGrammarJson()
         {
-            var sb = new StringBuilder("[");
-            for (int i = 0; i < _phraseList.Count; i++)
+            lock (_commandMap)
             {
-                if (i > 0) sb.Append(',');
-                sb.Append('"').Append(_phraseList[i].Replace("\\", "\\\\").Replace("\"", "\\\"")).Append('"');
+                var sb = new StringBuilder("[");
+                for (int i = 0; i < _phraseList.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append('"').Append(_phraseList[i].Replace("\\", "\\\\").Replace("\"", "\\\"")).Append('"');
+                }
+                sb.Append(",\"[unk]\"]");
+                return sb.ToString();
             }
-            sb.Append(",\"[unk]\"]");
-            return sb.ToString();
         }
 
-        private void BuildCommandMap()
+        private void BuildCommandMapAsync()
         {
-            _commandMap.Clear();
-            _phraseList.Clear();
+            // Cancel any in-flight background build
+            _buildCommandMapCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            _buildCommandMapCts = cts;
+
+            // Snapshot all data we need from the UI thread before going to background.
+            // Item/location databases are only mutated on the UI thread during pack load,
+            // and OnPackageLoaded fires after load completes, so this snapshot is safe.
+            var itemSnapshots = new List<(ITrackableItem item, string code, string[] names)>();
+            foreach (var item in ItemDatabase.Instance.Items)
+            {
+                if (string.IsNullOrWhiteSpace(item.Name)) continue;
+                string code = ItemDatabase.Instance.GetPersistableItemReference(item);
+                string[] names = GetItemNameVariants(item).ToArray();
+                itemSnapshots.Add((item, code, names));
+            }
+
+            var locationSnapshots = new List<(Location location, string locCode, string[] phrases)>();
+            foreach (var location in LocationDatabase.Instance.VisibleLocations)
+            {
+                string locCode = LocationDatabase.Instance.GetPersistableLocationReference(location);
+                string[] phrases = GetLocationPhrases(location).ToArray();
+                locationSnapshots.Add((location, locCode, phrases));
+            }
+
+            var capturableSnapshots = itemSnapshots
+                .Where(s => s.item.Capturable)
+                .ToList();
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    BuildCommandMapCore(itemSnapshots, locationSnapshots, capturableSnapshots, cts.Token);
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Warning(ex, "[Voice] Failed to build command map");
+                }
+            }, cts.Token);
+        }
+
+        private void BuildCommandMapCore(
+            List<(ITrackableItem item, string code, string[] names)> itemSnapshots,
+            List<(Location location, string locCode, string[] phrases)> locationSnapshots,
+            List<(ITrackableItem item, string code, string[] names)> capturableSnapshots,
+            CancellationToken token)
+        {
+            var commandMap = new Dictionary<string, Action>(StringComparer.OrdinalIgnoreCase);
+            var phraseList = new List<string>();
+
+            void addCommand(string phrase, Action action)
+            {
+                phrase = NormalizePhrase(phrase.Trim().ToLowerInvariant());
+                if (!commandMap.ContainsKey(phrase))
+                {
+                    commandMap[phrase] = action;
+                    phraseList.Add(phrase);
+                }
+            }
 
             string[] wakes = { "hey tracker", "hey babe" };
 
             foreach (var wake in wakes)
             {
-                foreach (var item in ItemDatabase.Instance.Items)
-                {
-                    if (string.IsNullOrWhiteSpace(item.Name)) continue;
-                    string code = ItemDatabase.Instance.GetPersistableItemReference(item);
+                token.ThrowIfCancellationRequested();
 
-                    foreach (var itemName in GetItemNameVariants(item))
+                foreach (var (item, code, names) in itemSnapshots)
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    foreach (var itemName in names)
                     {
                         if (item is ToggleItem || item is ProgressiveToggleItem)
                         {
                             foreach (var pfx in new[] { "track", "track a", "track the", "toggle", "toggle the" })
                             {
-                                AddCommand($"{wake} {pfx} {itemName}", () => ExecuteToggle(code, true));
-                                AddCommand($"{wake} {pfx} {itemName} off", () => ExecuteToggle(code, false));
+                                addCommand($"{wake} {pfx} {itemName}", () => ExecuteToggle(code, true));
+                                addCommand($"{wake} {pfx} {itemName} off", () => ExecuteToggle(code, false));
                             }
 
                             if (item is ProgressiveToggleItem progToggle)
@@ -404,7 +472,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
                                         if (string.IsNullOrWhiteSpace(privateCode)) continue;
                                         string pc = privateCode;
                                         foreach (var pfx in new[] { "track", "mark", "set" })
-                                            AddCommand($"{wake} {pfx} {itemName} as {pc.ToLowerInvariant()}", () => ExecuteSetSecondaryCode(code, pc));
+                                            addCommand($"{wake} {pfx} {itemName} as {pc.ToLowerInvariant()}", () => ExecuteSetSecondaryCode(code, pc));
                                     }
                                 }
                             }
@@ -413,8 +481,8 @@ namespace EmoTracker.Extensions.VoiceRecognition
                         {
                             foreach (var pfx in new[] { "track", "track a", "track the" })
                             {
-                                AddCommand($"{wake} {pfx} {itemName}", () => ExecuteAdvanceProgressive(code, null));
-                                AddCommand($"{wake} {pfx} {itemName} down", () => ExecuteAdvanceProgressive(code, "down"));
+                                addCommand($"{wake} {pfx} {itemName}", () => ExecuteAdvanceProgressive(code, null));
+                                addCommand($"{wake} {pfx} {itemName} down", () => ExecuteAdvanceProgressive(code, "down"));
                             }
 
                             foreach (var stage in progressive.Stages)
@@ -424,39 +492,46 @@ namespace EmoTracker.Extensions.VoiceRecognition
                                     if (string.IsNullOrWhiteSpace(stageCode)) continue;
                                     string sc = stageCode;
                                     foreach (var pfx in new[] { "track", "track a", "track the", "set", "set the" })
-                                        AddCommand($"{wake} {pfx} {itemName} as {sc.ToLowerInvariant()}", () => ExecuteAdvanceProgressive(code, sc));
+                                        addCommand($"{wake} {pfx} {itemName} as {sc.ToLowerInvariant()}", () => ExecuteAdvanceProgressive(code, sc));
                                 }
                             }
                         }
                         else if (item is ConsumableItem)
                         {
                             foreach (var pfx in new[] { "track", "track a", "track an", "add a", "add an" })
-                                AddCommand($"{wake} {pfx} {itemName}", () => ExecuteIncrementConsumable(code));
+                                addCommand($"{wake} {pfx} {itemName}", () => ExecuteIncrementConsumable(code));
                             foreach (var pfx in new[] { "remove", "remove a", "remove an" })
-                                AddCommand($"{wake} {pfx} {itemName}", () => ExecuteDecrementConsumable(code));
+                                addCommand($"{wake} {pfx} {itemName}", () => ExecuteDecrementConsumable(code));
                         }
                     }
                 }
 
-                foreach (var location in LocationDatabase.Instance.VisibleLocations)
-                    RegisterLocationCommands(wake, location);
+                foreach (var (location, locCode, phrases) in locationSnapshots)
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    foreach (var phrase in phrases)
+                    {
+                        addCommand($"{wake} clear {phrase}", () => ExecuteClearLocation(locCode));
+                        addCommand($"{wake} reset {phrase}", () => ExecuteResetLocation(locCode));
+                        addCommand($"{wake} pin {phrase}", () => ExecutePinLocation(locCode, true));
+                        addCommand($"{wake} remove pin for {phrase}", () => ExecutePinLocation(locCode, false));
+                    }
+                }
 
                 // Capturable items × locations
-                var capturables = ItemDatabase.Instance.Items
-                    .Where(i => i.Capturable && !string.IsNullOrWhiteSpace(i.Name))
-                    .ToList();
-                foreach (var item in capturables)
+                foreach (var (item, itemCode, names) in capturableSnapshots)
                 {
-                    string itemCode = ItemDatabase.Instance.GetPersistableItemReference(item);
-                    foreach (var itemName in GetItemNameVariants(item))
+                    token.ThrowIfCancellationRequested();
+
+                    foreach (var itemName in names)
                     {
-                        foreach (var location in LocationDatabase.Instance.VisibleLocations)
+                        foreach (var (location, locCode, locPhrases) in locationSnapshots)
                         {
-                            string locCode = LocationDatabase.Instance.GetPersistableLocationReference(location);
-                            foreach (var locPhrase in GetLocationPhrases(location))
+                            foreach (var locPhrase in locPhrases)
                             {
                                 foreach (var prep in new[] { "on", "at" })
-                                    AddCommand($"{wake} mark {itemName} {prep} {locPhrase}", () => ExecuteCapture(itemCode, locCode));
+                                    addCommand($"{wake} mark {itemName} {prep} {locPhrase}", () => ExecuteCapture(itemCode, locCode));
                             }
                         }
                     }
@@ -467,31 +542,62 @@ namespace EmoTracker.Extensions.VoiceRecognition
                     foreach (var feature in new[] { "show all locations", "chat hud" })
                     {
                         string o = op, f = feature;
-                        AddCommand($"{wake} {op} {feature}", () => ExecuteSetOption(o, f));
+                        addCommand($"{wake} {op} {feature}", () => ExecuteSetOption(o, f));
                     }
 
                 // Control
-                AddCommand($"{wake} stop listening", () => { SpeakAsync("Okay, I'm no longer listening."); Active = false; });
-                AddCommand($"{wake} undo that", () =>
+                addCommand($"{wake} stop listening", () => { SpeakAsync("Okay, I'm no longer listening."); Active = false; });
+                addCommand($"{wake} undo that", () =>
                 {
                     SpeakAsync("Okay, I'll undo the last operation");
                     (TransactionProcessor.Current as IUndoableTransactionProcessor)?.Undo();
                 });
             }
-        }
 
-        private void RegisterLocationCommands(string wake, Location location)
-        {
-            if (location == null) return;
-            string locCode = LocationDatabase.Instance.GetPersistableLocationReference(location);
-            foreach (var phrase in GetLocationPhrases(location))
+            token.ThrowIfCancellationRequested();
+
+            // Atomically swap in the new command map
+            lock (_commandMap)
             {
-                AddCommand($"{wake} clear {phrase}", () => ExecuteClearLocation(locCode));
-                AddCommand($"{wake} reset {phrase}", () => ExecuteResetLocation(locCode));
-                AddCommand($"{wake} pin {phrase}", () => ExecutePinLocation(locCode, true));
-                AddCommand($"{wake} remove pin for {phrase}", () => ExecutePinLocation(locCode, false));
+                _commandMap.Clear();
+                foreach (var kvp in commandMap)
+                    _commandMap[kvp.Key] = kvp.Value;
+
+                _phraseList.Clear();
+                _phraseList.AddRange(phraseList);
             }
         }
+
+        /// <summary>
+        /// Synchronous BuildCommandMap used when starting recognition (needs grammar immediately).
+        /// </summary>
+        private void BuildCommandMap()
+        {
+            var itemSnapshots = new List<(ITrackableItem item, string code, string[] names)>();
+            foreach (var item in ItemDatabase.Instance.Items)
+            {
+                if (string.IsNullOrWhiteSpace(item.Name)) continue;
+                string code = ItemDatabase.Instance.GetPersistableItemReference(item);
+                string[] names = GetItemNameVariants(item).ToArray();
+                itemSnapshots.Add((item, code, names));
+            }
+
+            var locationSnapshots = new List<(Location location, string locCode, string[] phrases)>();
+            foreach (var location in LocationDatabase.Instance.VisibleLocations)
+            {
+                string locCode = LocationDatabase.Instance.GetPersistableLocationReference(location);
+                string[] phrases = GetLocationPhrases(location).ToArray();
+                locationSnapshots.Add((location, locCode, phrases));
+            }
+
+            var capturableSnapshots = itemSnapshots
+                .Where(s => s.item.Capturable)
+                .ToList();
+
+            BuildCommandMapCore(itemSnapshots, locationSnapshots, capturableSnapshots, CancellationToken.None);
+        }
+
+        // RegisterLocationCommands has been inlined into BuildCommandMapCore
 
         private static IEnumerable<string> GetLocationPhrases(Location location)
         {
@@ -509,8 +615,12 @@ namespace EmoTracker.Extensions.VoiceRecognition
             {
                 Listening = false;
 
-                if (_commandMap.TryGetValue(text, out var action))
-                    action();
+                Action action;
+                lock (_commandMap)
+                {
+                    _commandMap.TryGetValue(text, out action);
+                }
+                action?.Invoke();
 
                 if (text.StartsWith("hey babe", StringComparison.OrdinalIgnoreCase))
                     SpeakAsync(GetBabeResponse());

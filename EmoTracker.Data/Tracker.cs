@@ -499,6 +499,8 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
                     mbReloadInProgress = false;
 
+                    ItemDatabase.Instance.BuildCodeIndex();
+
                     if (OnPackageLoadComplete != null)
                         OnPackageLoadComplete(this, EventArgs.Empty);
 

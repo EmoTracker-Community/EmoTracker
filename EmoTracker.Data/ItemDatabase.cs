@@ -2,6 +2,7 @@
 using EmoTracker.Data.Items;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
+using EmoTracker.Data.Scripting;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -14,6 +15,14 @@ namespace EmoTracker.Data
     public class ItemDatabase : Singleton<ItemDatabase>, ICodeProvider
     {
         ObservableCollection<ITrackableItem> mItems = new ObservableCollection<ITrackableItem>();
+        Dictionary<ITrackableItem, int> mItemIndex = new Dictionary<ITrackableItem, int>();
+
+        // Code→provider index: maps lowercase code strings to lists of items that can provide them.
+        // LuaItems have dynamic code providers (Lua callbacks) and cannot be statically indexed,
+        // so they are kept in a separate list and brute-force checked as a fallback.
+        Dictionary<string, List<ITrackableItem>> mCodeToProviders = new Dictionary<string, List<ITrackableItem>>(StringComparer.OrdinalIgnoreCase);
+        List<ITrackableItem> mDynamicCodeItems = new List<ITrackableItem>();
+        bool mCodeIndexBuilt = false;
 
         public IEnumerable<ITrackableItem> Items
         {
@@ -32,13 +41,64 @@ namespace EmoTracker.Data
                     item.Dispose();
             }
 
-            mItems.Clear();            
+            mItems.Clear();
+            mItemIndex.Clear();
+            mCodeToProviders.Clear();
+            mDynamicCodeItems.Clear();
+            mCodeIndexBuilt = false;
+        }
+
+        /// <summary>
+        /// Builds the code→provider lookup index. Should be called once after all items are loaded.
+        /// Items that return null from GetAllProvidedCodes (e.g. LuaItem) are placed in the
+        /// dynamic fallback list and checked via brute-force on every query.
+        /// </summary>
+        public void BuildCodeIndex()
+        {
+            mCodeToProviders.Clear();
+            mDynamicCodeItems.Clear();
+
+            foreach (var item in mItems)
+            {
+                if (item is ItemBase itemBase)
+                {
+                    var codes = itemBase.GetAllProvidedCodes();
+                    if (codes == null)
+                    {
+                        // Dynamic code provider (e.g. LuaItem) — must be brute-force checked
+                        mDynamicCodeItems.Add(item);
+                    }
+                    else
+                    {
+                        foreach (string code in codes)
+                        {
+                            string key = code.ToLower();
+                            if (!mCodeToProviders.TryGetValue(key, out var list))
+                            {
+                                list = new List<ITrackableItem>();
+                                mCodeToProviders[key] = list;
+                            }
+                            list.Add(item);
+                        }
+                    }
+                }
+                else
+                {
+                    // Non-ItemBase implementors — treat as dynamic
+                    mDynamicCodeItems.Add(item);
+                }
+            }
+
+            mCodeIndexBuilt = true;
         }
 
         public void RegisterItem(ITrackableItem item)
         {
-            if (!mItems.Contains(item))
+            if (!mItemIndex.ContainsKey(item))
+            {
+                mItemIndex[item] = mItems.Count;
                 mItems.Add(item);
+            }
         }
 
         public bool LegacyLoad(IGamePackage package)
@@ -73,7 +133,10 @@ namespace EmoTracker.Data
                             {
                                 ITrackableItem instance = ItemBase.CreateItem(item, package);
                                 if (instance != null)
+                                {
+                                    mItemIndex[instance] = mItems.Count;
                                     mItems.Add(instance);
+                                }
                             }
                         }
 
@@ -91,6 +154,31 @@ namespace EmoTracker.Data
 
         internal bool CodeIsProvided(string code)
         {
+            code = code.ToLower();
+
+            if (mCodeIndexBuilt)
+            {
+                // Check indexed items
+                if (mCodeToProviders.TryGetValue(code, out var indexed))
+                {
+                    foreach (var item in indexed)
+                    {
+                        if (item.ProvidesCode(code) > 0)
+                            return true;
+                    }
+                }
+
+                // Check dynamic items (LuaItems)
+                foreach (var item in mDynamicCodeItems)
+                {
+                    if (item.ProvidesCode(code) > 0)
+                        return true;
+                }
+
+                return false;
+            }
+
+            // Fallback: no index built yet
             foreach (ITrackableItem item in Items)
             {
                 if (item.ProvidesCode(code) > 0)
@@ -112,24 +200,64 @@ namespace EmoTracker.Data
             //  Item codes never constrain accessibility
             maxAccessibilityLevel = AccessibilityLevel.Normal;
 
-            uint nCount = 0;
-            foreach (ITrackableItem item in Items)
+            if (mCodeIndexBuilt)
             {
-                nCount += item.ProvidesCode(code);
+                uint nCount = 0;
+
+                // Check indexed items first
+                if (mCodeToProviders.TryGetValue(code, out var indexed))
+                {
+                    foreach (var item in indexed)
+                        nCount += item.ProvidesCode(code);
+                }
+
+                // Check dynamic items (LuaItems)
+                foreach (var item in mDynamicCodeItems)
+                    nCount += item.ProvidesCode(code);
+
+                return nCount;
             }
 
-            return nCount;
+            // Fallback: no index built yet
+            {
+                uint nCount = 0;
+                foreach (ITrackableItem item in Items)
+                    nCount += item.ProvidesCode(code);
+                return nCount;
+            }
         }
 
         internal ITrackableItem FindProvidingItemForCode(string code)
         {
-            if (!string.IsNullOrWhiteSpace(code))
+            if (string.IsNullOrWhiteSpace(code))
+                return null;
+
+            code = code.ToLower();
+
+            if (mCodeIndexBuilt)
             {
-                foreach (ITrackableItem item in Items)
+                if (mCodeToProviders.TryGetValue(code, out var indexed))
+                {
+                    foreach (var item in indexed)
+                    {
+                        if (item.CanProvideCode(code))
+                            return item;
+                    }
+                }
+
+                foreach (var item in mDynamicCodeItems)
                 {
                     if (item.CanProvideCode(code))
                         return item;
                 }
+
+                return null;
+            }
+
+            foreach (ITrackableItem item in Items)
+            {
+                if (item.CanProvideCode(code))
+                    return item;
             }
 
             return null;
@@ -139,13 +267,35 @@ namespace EmoTracker.Data
         {
             List<ITrackableItem> found = new List<ITrackableItem>();
 
-            if (!string.IsNullOrWhiteSpace(code))
+            if (string.IsNullOrWhiteSpace(code))
+                return found.ToArray();
+
+            code = code.ToLower();
+
+            if (mCodeIndexBuilt)
             {
-                foreach (ITrackableItem item in Items)
+                if (mCodeToProviders.TryGetValue(code, out var indexed))
+                {
+                    foreach (var item in indexed)
+                    {
+                        if (item.CanProvideCode(code))
+                            found.Add(item);
+                    }
+                }
+
+                foreach (var item in mDynamicCodeItems)
                 {
                     if (item.CanProvideCode(code))
                         found.Add(item);
                 }
+
+                return found.ToArray();
+            }
+
+            foreach (ITrackableItem item in Items)
+            {
+                if (item.CanProvideCode(code))
+                    found.Add(item);
             }
 
             return found.ToArray();
@@ -204,9 +354,7 @@ namespace EmoTracker.Data
 
         public string GetPersistableItemReference(ITrackableItem item, bool allowAnyType = false)
         {
-            int idx = mItems.IndexOf(item);
-
-            if (idx < 0)
+            if (!mItemIndex.TryGetValue(item, out int idx))
                 throw new InvalidOperationException("Cannot generate persistable reference for item that is not in the ItemDatabase");
 
             string jsonTypeTag = JsonTypeTagsAttribute.GetDefaultTagForType(item.GetType());
