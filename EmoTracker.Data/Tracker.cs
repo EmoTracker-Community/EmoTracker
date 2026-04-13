@@ -483,8 +483,6 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
                             LoadPackageSettings();
 
-                            ImageReference.BeginTrackingCreatedReferences();
-
                             ScriptManager.Instance.Load(mActiveGamePackage);
 
                             //  Legacy loads - should this be contingent on a flag in the manifest
@@ -497,8 +495,6 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                 }
                 finally
                 {
-                    ImageReference.EndTrackingCreatedReferences();
-
                     AccessibilityRule.ClearCaches();
 
                     mbReloadInProgress = false;

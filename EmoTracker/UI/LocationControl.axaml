@@ -112,7 +112,7 @@
                                         <ColumnDefinition />
                                     </Grid.ColumnDefinitions>
                                     <Image Grid.Column="0"
-                                           Source="{Binding Thumbnail, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                                           Source="{Binding Thumbnail.ResolvedImage}"
                                            Width="48"
                                            Height="48"
                                            Margin="0,0,5,0"
@@ -150,10 +150,10 @@
                                                                     ClearAsGroup="{Binding ClearAsGroup}"
                                                                     Compact="{Binding Compact, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
                                                                     HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
-                                                                    OpenChest="{Binding OpenChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
-                                                                    ClosedChest="{Binding ClosedChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
-                                                                    UnavailableOpenChest="{Binding UnavailableOpenChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
-                                                                    UnavailableClosedChest="{Binding UnavailableClosedChestImage, Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                                                                    OpenChest="{Binding OpenChestImage.ResolvedImage}"
+                                                                    ClosedChest="{Binding ClosedChestImage.ResolvedImage}"
+                                                                    UnavailableOpenChest="{Binding UnavailableOpenChestImage.ResolvedImage}"
+                                                                    UnavailableClosedChest="{Binding UnavailableClosedChestImage.ResolvedImage}"
                                                                     IsVisible="{Binding ChestCount, Converter={x:Static converters:NonZeroToBoolConverter.Instance}}">
                                                 <local:ChestListControl.Accessible>
                                                     <MultiBinding Converter="{x:Static converters:ChestAccessibleConverter.Instance}">

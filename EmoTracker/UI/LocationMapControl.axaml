@@ -47,7 +47,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Image Source="{Binding Converter={x:Static converters:ImageReferenceConverter.Instance}}"
+                            <Image Source="{Binding ResolvedImage}"
                                    Margin="2" Width="32"
                                    RenderOptions.BitmapInterpolationMode="None" />
                         </DataTemplate>
@@ -70,7 +70,7 @@
                     <DataTemplate DataType="locations:Map">
                         <Grid Name="MapHost" Margin="25,25">
                             <controls:InputMaskingImage Name="MapImage"
-                                                        Source="{Binding Image, Converter={x:Static converters:ImageReferenceConverter.Instance}}"/>
+                                                        Source="{Binding Image.ResolvedImage}"/>
                             <ItemsControl ItemsSource="{Binding Locations}" ClipToBounds="False">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -151,7 +151,7 @@
                                                                  StretchDirection="Both">
                                                             <controls:InputMaskingImage
                                                                 IsHitTestVisible="{Binding DataContext.EnableBadgeHitTest, ElementName=MinifiedLocation}"
-                                                                Source="{Binding Converter={x:Static converters:ImageReferenceConverter.Instance}}" />
+                                                                Source="{Binding ResolvedImage}" />
                                                         </Viewbox>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>

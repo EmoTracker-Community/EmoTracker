@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using System;
 using System.Collections.Generic;
 
@@ -6,24 +6,30 @@ namespace EmoTracker.Data.Media
 {
     public abstract class ImageReference : ObservableObject
     {
-        static bool sTracking;
-        static List<ImageReference> sTrackedReferences;
-
-        public static List<ImageReference> LastCollectedReferences { get; private set; }
-
-        public static void BeginTrackingCreatedReferences()
+        /// <summary>
+        /// The resolved display-ready image for this reference.  Set by the image
+        /// resolution service on the UI thread once background generation completes.
+        /// XAML bindings should bind to <c>Icon.ResolvedImage</c> (etc.) so that the
+        /// UI updates automatically when the image becomes available.
+        /// </summary>
+        object mResolvedImage;
+        public object ResolvedImage
         {
-            sTrackedReferences = new List<ImageReference>();
-            sTracking = true;
+            get { return mResolvedImage; }
+            set { SetProperty(ref mResolvedImage, value); }
         }
 
-        public static List<ImageReference> EndTrackingCreatedReferences()
+        /// <summary>
+        /// Optional callback invoked whenever a new ImageReference is created via
+        /// a factory method.  Set by the image resolution service at startup so
+        /// that newly-created references are automatically queued for background
+        /// resolution.
+        /// </summary>
+        public static Action<ImageReference> OnImageReferenceCreated { get; set; }
+
+        static void NotifyCreated(ImageReference imageRef)
         {
-            sTracking = false;
-            LastCollectedReferences = sTrackedReferences;
-            var result = sTrackedReferences;
-            sTrackedReferences = null;
-            return result;
+            OnImageReferenceCreated?.Invoke(imageRef);
         }
 
         public static ImageReference FromPackRelativePath(string path, string filter = null)
@@ -53,8 +59,7 @@ namespace EmoTracker.Data.Media
                 Filter = filter
             };
 
-            if (sTracking)
-                sTrackedReferences?.Add(result);
+            NotifyCreated(result);
 
             return result;
         }
@@ -73,8 +78,7 @@ namespace EmoTracker.Data.Media
                 Filter = filter
             };
 
-            if (sTracking)
-                sTrackedReferences?.Add(result);
+            NotifyCreated(result);
 
             return result;
         }
@@ -100,8 +104,7 @@ namespace EmoTracker.Data.Media
 
             if (instance.Layers.Count > 0)
             {
-                if (sTracking)
-                    sTrackedReferences?.Add(instance);
+                NotifyCreated(instance);
 
                 return instance;
             }

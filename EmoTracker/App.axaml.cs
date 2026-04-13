@@ -62,6 +62,7 @@ namespace EmoTracker
                 {
                     try
                     {
+                        UI.Media.ImageReferenceService.Instance.Stop();
                         UpdateService.Instance.Dispose();
 
                         if (e.ApplicationExitCode == 0)

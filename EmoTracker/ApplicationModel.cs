@@ -6,7 +6,6 @@ using EmoTracker.Data.Core.Transactions.Processors;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Layout;
 using EmoTracker.Data.Locations;
-using EmoTracker.Data.Media;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
 using EmoTracker.Extensions;
@@ -175,6 +174,10 @@ namespace EmoTracker
 
         public void Initialize()
         {
+            //  Start the background image resolution service so that images
+            //  created during pack load are queued and resolved concurrently.
+            ImageReferenceService.Instance.Start();
+
             //  Load and start extensions
             Extensions.ExtensionManager.CreateInstance();
             Extensions.ExtensionManager.Instance.Start();
@@ -698,11 +701,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                 undo.ClearUndoHistory();
 
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
-
-            // Kick off background pre-caching of all image references collected during pack load
-            var collectedRefs = ImageReference.LastCollectedReferences;
-            if (collectedRefs != null && collectedRefs.Count > 0)
-                _ = ImageReferenceService.Instance.PreCacheImagesAsync(collectedRefs);
 
             WindowService.Instance.FocusMainWindow();
         }

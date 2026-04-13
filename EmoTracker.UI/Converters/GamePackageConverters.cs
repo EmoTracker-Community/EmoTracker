@@ -38,7 +38,7 @@ namespace EmoTracker.UI.Converters
 
             var game = PackageManager.Instance.FindGame(name);
             if (game != null)
-                return Media.ImageReferenceService.Instance.ResolveImageReference(game.Image);
+                return Media.ImageReferenceService.Instance.RequestImage(game.Image);
 
             return null;
         }
