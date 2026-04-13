@@ -184,22 +184,39 @@ namespace EmoTracker.UI
             if (!LocationDetails.IsOpen)
                 return;
 
-            // Check whether the press landed inside the popup content.
-            // The popup's child renders on the overlay layer, outside the normal visual tree,
-            // so we walk up from e.Source looking for our LocationDetailsContent control.
+            // Check whether the press landed inside the location details popup or any
+            // child popup (e.g. the capture grid). Popup content renders on an overlay
+            // layer whose visual tree is disconnected from the main window tree. Walking
+            // up from e.Source will reach LocationDetailsContent if the click is inside
+            // the location details popup itself. For child popups (capture grid), the
+            // walk terminates at the overlay host without reaching LocationDetailsContent
+            // or the TopLevel — so we treat any click whose visual root is NOT the
+            // TopLevel as "inside a popup" and leave it alone.
             var source = e.Source as Visual;
-            bool insidePopup = false;
+            var topLevel = sender as Visual;
+            bool insidePopupOrOverlay = false;
+            Visual? root = null;
+
             while (source != null)
             {
                 if (source == LocationDetailsContent)
                 {
-                    insidePopup = true;
+                    insidePopupOrOverlay = true;
                     break;
                 }
+                root = source;
                 source = source.GetVisualParent();
             }
 
-            if (!insidePopup)
+            // If the walk ended without finding LocationDetailsContent, check whether
+            // we're inside a popup overlay. Popup overlays have a visual root that is
+            // NOT the TopLevel window — it's an OverlayPopupHost or PopupRoot. If the
+            // root IS the TopLevel, the click landed on the main window content and we
+            // should dismiss.
+            if (!insidePopupOrOverlay && root != null && root != topLevel)
+                insidePopupOrOverlay = true;
+
+            if (!insidePopupOrOverlay)
             {
                 LocationDetails.IsOpen = false;
             }
