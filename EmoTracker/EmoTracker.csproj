@@ -10,9 +10,18 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
+  <!-- MCP dev server: only included in Debug builds -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <!-- PluginManager.cs is intentionally excluded from compilation -->
+  <!-- MCP server extension is excluded from Release builds -->
   <ItemGroup>
     <Compile Remove="PluginManager.cs" />
+    <Compile Remove="Extensions\McpServer\**\*" Condition="'$(Configuration)' != 'Debug'" />
+    <AvaloniaXaml Remove="Extensions\McpServer\**\*" Condition="'$(Configuration)' != 'Debug'" />
+    <AvaloniaResource Remove="Extensions\McpServer\**\*" Condition="'$(Configuration)' != 'Debug'" />
   </ItemGroup>
 
   <!-- Avalonia resource items — accessible via avares://EmoTracker/... -->
@@ -50,6 +59,8 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="ModelContextProtocol" Version="1.2.0" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.2.0" Condition="'$(Configuration)' == 'Debug'" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="TwitchLib" Version="3.5.3" />
     <PackageReference Include="WebSocketSharp" Version="1.0.3-rc11" NoWarn="NU1701" />
