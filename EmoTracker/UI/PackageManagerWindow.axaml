@@ -171,8 +171,7 @@
                                             <Image HorizontalAlignment="Left"
                                                    VerticalAlignment="Center"
                                                    MaxHeight="60"
-                                                   Source="{Binding Name,
-                                                       Converter={x:Static converters:GameNameToActualGameImageConverter.Instance}}"/>
+                                                   Source="{Binding Game.Image.ResolvedImage, FallbackValue={x:Null}}"/>
                                             <TextBlock Grid.Row="0"
                                                        FontSize="14"
                                                        Text="{Binding Name}"

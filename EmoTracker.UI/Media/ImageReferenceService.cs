@@ -32,6 +32,16 @@ namespace EmoTracker.UI.Media
         readonly ConcurrentDictionary<ImageReference, IImage> mCache = new ConcurrentDictionary<ImageReference, IImage>();
         readonly object mResolutionLock = new object();
 
+        // ── Instance Tracking ───────────────────────────────────────────
+        // Multiple distinct ImageReference objects can share the same equality
+        // key (e.g. 10 items that all use "items/small_key.png" each create
+        // their own ConcreteImageReference).  Only one object per equality key
+        // enters the work queue, but ALL objects need their ResolvedImage set
+        // when resolution completes.  This dictionary tracks every unresolved
+        // instance keyed by equality so PostResolvedImage can fan out to all.
+        readonly Dictionary<ImageReference, List<ImageReference>> mPendingInstances = new Dictionary<ImageReference, List<ImageReference>>();
+        readonly object mInstancesLock = new object();
+
         // ── Sized Placeholders ──────────────────────────────────────────
         // Cache of transparent placeholder bitmaps keyed by (width, height).
         // Shared across all references with the same source dimensions so
@@ -124,6 +134,22 @@ namespace EmoTracker.UI.Media
 
             ImageReference.OnImageReferenceCreated = (imageRef) =>
             {
+                // Multiple ImageReference objects can share the same equality key
+                // (same URI + filter) while being distinct object instances (e.g.
+                // 10 items that use the same small-key icon each create their own
+                // ConcreteImageReference).  If the image is already cached (first
+                // instance was resolved), set the result immediately.
+                IImage cached = GetCachedImage(imageRef);
+                if (cached != null)
+                {
+                    imageRef.ResolvedImage = cached;
+                    return;
+                }
+
+                // Register this instance so that when resolution completes for
+                // any equal key, ALL instances get their ResolvedImage updated.
+                RegisterPendingInstance(imageRef);
+
                 // Set a correctly-sized placeholder as ResolvedImage immediately
                 // so Avalonia's layout system measures controls at the right size
                 // before the real image is resolved on the background thread.
@@ -175,6 +201,11 @@ namespace EmoTracker.UI.Media
                 mQueueSignal.Reset();
             }
             mCache.Clear();
+
+            lock (mInstancesLock)
+            {
+                mPendingInstances.Clear();
+            }
 
             // Clear the source image cache used by ConcreteImageReferenceResolver
             ConcreteImageReferenceResolver.ClearSourceCache();
@@ -240,9 +271,16 @@ namespace EmoTracker.UI.Media
             if (imageRef == null)
                 return null;
 
-            // Fast path: lock-free cache read
+            // Fast path: lock-free cache read.
+            // In sync mode, also set ResolvedImage on the requesting object so
+            // duplicate ImageReference instances (same URI+filter, different object)
+            // get the resolved image immediately.
             if (mCache.TryGetValue(imageRef, out IImage cachedSrc))
+            {
+                if (SyncMode && imageRef.ResolvedImage as IImage != cachedSrc)
+                    imageRef.ResolvedImage = cachedSrc;
                 return cachedSrc;
+            }
 
             // Slow path: acquire lock for resolution
             IImage result;
@@ -250,7 +288,11 @@ namespace EmoTracker.UI.Media
             {
                 // Double-check after acquiring lock
                 if (mCache.TryGetValue(imageRef, out cachedSrc))
+                {
+                    if (SyncMode && imageRef.ResolvedImage as IImage != cachedSrc)
+                        imageRef.ResolvedImage = cachedSrc;
                     return cachedSrc;
+                }
 
                 result = ResolveAndCache(imageRef);
             }
@@ -297,6 +339,41 @@ namespace EmoTracker.UI.Media
         /// Returns the number of resolved images in the cache.
         /// </summary>
         public int CacheCount => mCache.Count;
+
+        // ── Instance Tracking ───────────────────────────────────────────
+
+        /// <summary>
+        /// Registers an ImageReference object so that when an equal key is
+        /// resolved, this specific object's ResolvedImage gets set too.
+        /// </summary>
+        void RegisterPendingInstance(ImageReference imageRef)
+        {
+            lock (mInstancesLock)
+            {
+                if (!mPendingInstances.TryGetValue(imageRef, out var list))
+                {
+                    list = new List<ImageReference>();
+                    mPendingInstances[imageRef] = list;
+                }
+                list.Add(imageRef);
+            }
+        }
+
+        /// <summary>
+        /// Removes and returns all pending instances for the given equality key.
+        /// </summary>
+        List<ImageReference> TakePendingInstances(ImageReference imageRef)
+        {
+            lock (mInstancesLock)
+            {
+                if (mPendingInstances.TryGetValue(imageRef, out var list))
+                {
+                    mPendingInstances.Remove(imageRef);
+                    return list;
+                }
+                return null;
+            }
+        }
 
         // ── Internal Resolution ─────────────────────────────────────────
 
@@ -411,11 +488,26 @@ namespace EmoTracker.UI.Media
             if (resolved == null)
                 return;
 
+            // Collect ALL object instances that share this equality key.
+            // Only one instance enters the queue, but many may exist (e.g.
+            // 10 items using the same small-key icon).  Every instance's
+            // ResolvedImage must be set so their bindings update.
+            var instances = TakePendingInstances(imageRef);
+
             // ResolvedImage must be set on the UI thread so that
             // PropertyChanged fires there and Avalonia bindings update.
             Dispatcher.UIThread.Post(() =>
             {
-                imageRef.ResolvedImage = resolved;
+                if (instances != null)
+                {
+                    foreach (var instance in instances)
+                        instance.ResolvedImage = resolved;
+                }
+                else
+                {
+                    // Fallback: set on the specific object that was dequeued
+                    imageRef.ResolvedImage = resolved;
+                }
             });
         }
     }

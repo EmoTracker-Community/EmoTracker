@@ -167,8 +167,21 @@ namespace EmoTracker
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 _httpRefreshScheduled = false;
-                EmoTracker.UI.Media.ImageReferenceService.Instance.ClearImageCache();
-                NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
+
+                // Resolve game banner images into ResolvedImage so that
+                // bindings ({Binding Game.Image.ResolvedImage}) update.
+                // HTTP images bypass the ImageReferenceService pipeline
+                // (they download asynchronously into IconUtility.sHttpCache),
+                // so we bridge the two systems here.
+                foreach (var game in PackageManager.Instance.AvailableGames)
+                {
+                    if (game.Image != null && game.Image.ResolvedImage == null)
+                    {
+                        var resolved = EmoTracker.UI.Media.ImageReferenceService.Instance.ResolveImageReference(game.Image);
+                        if (resolved != null)
+                            game.Image.ResolvedImage = resolved;
+                    }
+                }
             }, Avalonia.Threading.DispatcherPriority.Background);
         }
 
@@ -859,7 +872,11 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                         var game = PackageManager.Instance.FindGame(e.Game);
                         return game?.Name ?? e.Game;
                     })
-                    .Select(g => new PackageGroup(g.Key, g));
+                    .Select(g =>
+                    {
+                        var game = PackageManager.Instance.FindGame(g.Key);
+                        return new PackageGroup(g.Key, g, game);
+                    });
             }
         }
 
@@ -939,10 +956,12 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         {
             public string Name { get; }
             public IEnumerable<PackageRepositoryEntry> Items { get; }
-            public PackageGroup(string name, IEnumerable<PackageRepositoryEntry> items)
+            public PackageManager.Game Game { get; }
+            public PackageGroup(string name, IEnumerable<PackageRepositoryEntry> items, PackageManager.Game game = null)
             {
                 Name = name;
                 Items = items;
+                Game = game;
             }
         }
 

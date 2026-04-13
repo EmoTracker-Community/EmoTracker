@@ -285,11 +285,15 @@ namespace EmoTracker.Data.Media
 
         public static ImageReference FromExternalURI(Uri uri, string filter = null)
         {
-            return new ConcreteImageReference()
+            var result = new ConcreteImageReference()
             {
                 URI = uri,
                 Filter = filter
             };
+
+            NotifyCreated(result);
+
+            return result;
         }
 
         public static ImageReference FromLayeredImageReferences(params ImageReference[] layers)

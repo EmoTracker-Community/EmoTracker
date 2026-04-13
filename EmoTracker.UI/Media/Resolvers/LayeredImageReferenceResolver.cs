@@ -1,6 +1,7 @@
 using EmoTracker.Data.Media;
 
 using Avalonia.Media;
+using SkiaSharp;
 
 namespace EmoTracker.UI.Media.Resolvers
 {
@@ -20,15 +21,38 @@ namespace EmoTracker.UI.Media.Resolvers
             if (concreteRef.Layers.Count == 0)
                 return null;
 
-            IImage img = null;
+            // Composite all layers in SKBitmap space — one PNG conversion at the end
+            // instead of N round-trips through PNG encode→decode per layer.
+            SKBitmap composite = null;
             foreach (ImageReference layerRef in concreteRef.Layers)
             {
                 var layerImg = ImageReferenceService.Instance.ResolveImageReference(layerRef);
-                img = Utility.IconUtility.ApplyOverlayImage(img, layerImg);
+                if (layerImg == null)
+                    continue;
+
+                SKBitmap layerSK = Utility.IconUtility.ToSkBitmapForFilter(layerImg);
+                if (layerSK == null)
+                    continue;
+
+                if (composite == null)
+                {
+                    composite = layerSK;
+                }
+                else
+                {
+                    var prev = composite;
+                    composite = Utility.IconUtility.ApplyOverlaySK(composite, layerSK);
+                    // ApplyOverlaySK disposes overlay (layerSK) and may return a new
+                    // bitmap; dispose the old composite if it changed.
+                    if (composite != prev)
+                        prev.Dispose();
+                }
             }
 
+            if (composite == null)
+                return null;
 
-            return img;
+            return Utility.IconUtility.FinalizeToAvalonia(composite);
         }
     }
 }

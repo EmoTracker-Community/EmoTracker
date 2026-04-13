@@ -5,20 +5,20 @@ using System.Collections.Generic;
 using System.IO;
 
 using Avalonia.Media;
+using SkiaSharp;
 
 namespace EmoTracker.UI.Media.Resolvers
 {
     public class ConcreteImageReferenceResolver : ImageReferenceResolver
     {
         /// <summary>
-        /// Weak-reference cache of decoded base images keyed by the
-        /// pack-relative file path (the gamepackage:// URI path component).
-        /// Multiple <see cref="ConcreteImageReference"/> instances that point
-        /// to the same source image but with different filters will share the
-        /// decoded base image as long as at least one reference is alive.
+        /// Cache of decoded base SKBitmaps keyed by the pack-relative file path.
+        /// Multiple <see cref="ConcreteImageReference"/> instances that point to
+        /// the same source image but with different filters share the decoded
+        /// base bitmap.  Cleared on pack unload via <see cref="ClearSourceCache"/>.
         /// </summary>
-        static readonly Dictionary<string, WeakReference<IImage>> sSourceCache
-            = new Dictionary<string, WeakReference<IImage>>(StringComparer.OrdinalIgnoreCase);
+        static readonly Dictionary<string, SKBitmap> sSourceCache
+            = new Dictionary<string, SKBitmap>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Clears the source image cache.  Called by
@@ -28,6 +28,8 @@ namespace EmoTracker.UI.Media.Resolvers
         {
             lock (sSourceCache)
             {
+                foreach (var kvp in sSourceCache)
+                    kvp.Value?.Dispose();
                 sSourceCache.Clear();
             }
         }
@@ -55,50 +57,54 @@ namespace EmoTracker.UI.Media.Resolvers
                     Uri.UnescapeDataString(concreteRef.URI.Host),
                     Uri.UnescapeDataString(concreteRef.URI.AbsolutePath));
 
-                // Try to reuse a previously decoded base image for the same path
-                IImage baseImage = GetCachedSource(filePath);
-                if (baseImage == null)
+                // Get the decoded base SKBitmap from cache, or decode it
+                SKBitmap baseSK = GetCachedSource(filePath);
+                if (baseSK == null)
                 {
                     using (Stream s = Tracker.Instance.ActiveGamePackage.Open(filePath))
                     {
                         if (s == null)
                             return null;
 
-                        baseImage = Utility.IconUtility.GetImage(s);
+                        baseSK = Utility.IconUtility.DecodeSKBitmap(s);
                     }
 
-                    if (baseImage != null)
-                        PutCachedSource(filePath, baseImage);
+                    if (baseSK == null)
+                        return null;
+
+                    PutCachedSource(filePath, baseSK);
                 }
 
-                return Utility.IconUtility.ApplyFilterSpecToImage(
-                    Tracker.Instance.ActiveGamePackage, baseImage, concreteRef.Filter);
+                // Clone the base bitmap so filter operations don't mutate the
+                // cached original, then run the entire filter chain in SKBitmap
+                // space (no intermediate PNG round-trips).
+                SKBitmap working = baseSK.Copy();
+                working = Utility.IconUtility.ApplyFilterSpecToSKBitmap(
+                    Tracker.Instance.ActiveGamePackage, working, concreteRef.Filter);
+
+                // Convert to Avalonia IImage once at the end, computing the
+                // alpha mask for InputMaskingImage hit-testing.
+                return Utility.IconUtility.FinalizeToAvalonia(working);
             }
 
             return Utility.IconUtility.GetImageRaw(concreteRef.URI);
         }
 
-        static IImage GetCachedSource(string filePath)
+        static SKBitmap GetCachedSource(string filePath)
         {
             lock (sSourceCache)
             {
-                if (sSourceCache.TryGetValue(filePath, out var weakRef) &&
-                    weakRef.TryGetTarget(out IImage image))
-                {
-                    return image;
-                }
-
-                // Entry expired or not present – clean up stale entry
-                sSourceCache.Remove(filePath);
+                if (sSourceCache.TryGetValue(filePath, out SKBitmap bmp))
+                    return bmp;
                 return null;
             }
         }
 
-        static void PutCachedSource(string filePath, IImage image)
+        static void PutCachedSource(string filePath, SKBitmap bmp)
         {
             lock (sSourceCache)
             {
-                sSourceCache[filePath] = new WeakReference<IImage>(image);
+                sSourceCache[filePath] = bmp;
             }
         }
     }

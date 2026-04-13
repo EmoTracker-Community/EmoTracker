@@ -183,14 +183,9 @@ namespace EmoTracker.Data.Scripting
             {
                 if (OnLeftClickFunc != null)
                 {
-                    LocationDatabase.Instance.SuspendRefresh = true;
-                    try
+                    using (new LocationDatabase.SuspendRefreshScope())
                     {
                         OnLeftClickFunc.Call(this);
-                    }
-                    finally
-                    {
-                        LocationDatabase.Instance.SuspendRefresh = false;
                     }
                 }
             }
@@ -206,14 +201,9 @@ namespace EmoTracker.Data.Scripting
             {
                 if (OnRightClickFunc != null)
                 {
-                    LocationDatabase.Instance.SuspendRefresh = true;
-                    try
+                    using (new LocationDatabase.SuspendRefreshScope())
                     {
                         OnRightClickFunc.Call(this);
-                    }
-                    finally
-                    {
-                        LocationDatabase.Instance.SuspendRefresh = false;
                     }
                 }
             }
