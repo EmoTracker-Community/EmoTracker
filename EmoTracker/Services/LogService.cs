@@ -14,7 +14,7 @@ namespace EmoTracker.Services
 
         // Log messages from these subsystems are internal infrastructure concerns
         // and should not surface in the pack developer console.
-        private static readonly string[] sExcludedPrefixes = { "[Voice]", "[NDI]", "[MCP]" };
+        private static readonly string[] sExcludedPrefixes = { "[Voice]", "[NDI]", "[MCP]", "[SNI]", "[NWA]" };
 
         public DeveloperConsoleSink(IFormatProvider formatProvider)
         {

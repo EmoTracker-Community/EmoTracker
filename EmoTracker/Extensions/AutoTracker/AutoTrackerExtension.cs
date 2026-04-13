@@ -139,6 +139,8 @@ namespace EmoTracker.Extensions.AutoTracker
             }
         }
 
+        public IAutoTrackingProvider ActiveConnector => ActiveProvider;
+
         private void ActiveProvider_ConnectionStatusChanged(object sender, bool connected)
         {
             if (mActiveProvider != null)
