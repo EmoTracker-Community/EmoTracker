@@ -91,13 +91,17 @@ namespace EmoTracker.Data.Items
             set { SetProperty(ref mPhoneticSubstitutes, value); }
         }
 
+        // Phase 7a: Icon and PotentialIcon are runtime-derived from item state
+        // (e.g. ProgressiveItem advancing stage, ToggleItem flipping on/off) and
+        // must be session-local so a fork's mutations don't repaint the parent's
+        // UI. Stored in the session-owned PropertyStore via SetSessionLocal.
         [DependentProperty("PotentialIcon")]
         public ImageReference Icon
         {
-            get { return mCurrentIcon; }
+            get { return GetSessionLocal<ImageReference>(); }
             set
             {
-                if (SetProperty(ref mCurrentIcon, value))
+                if (SetSessionLocal(value))
                     Session.TrackerSession.Current.Locations.RefeshAccessibility();
             }
         }
@@ -106,16 +110,13 @@ namespace EmoTracker.Data.Items
         {
             get
             {
-                if (mPotentialIcon != null)
-                    return mPotentialIcon;
+                var p = GetSessionLocal<ImageReference>();
+                if (p != null)
+                    return p;
 
-                return mCurrentIcon;
+                return Icon;
             }
-            set
-            {
-                mPotentialIcon = value;
-                NotifyPropertyChanged();
-            }
+            set { SetSessionLocal(value); }
         }
 
         public void InvalidateAccessibility()
@@ -192,8 +193,6 @@ namespace EmoTracker.Data.Items
 
         #region --- Fields ---
 
-        ImageReference mCurrentIcon;
-        ImageReference mPotentialIcon;
         string mName;
         string mDisabledImageFilterSpec;
         string mBadgeText;
