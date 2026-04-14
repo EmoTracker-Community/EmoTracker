@@ -1,9 +1,10 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Layout
 {
@@ -294,7 +295,7 @@ namespace EmoTracker.Data.Layout
             
             if (!string.IsNullOrWhiteSpace(mUniqueID))
             {
-                LayoutManager.Instance.RegisterLayoutItemForUID(mUniqueID, this);
+                TrackerSession.Current.Layouts.RegisterLayoutItemForUID(mUniqueID, this);
             }
 
             Background = data.GetValue<string>("background", null);
@@ -302,7 +303,7 @@ namespace EmoTracker.Data.Layout
             DockLocation = data.GetValue<string>("dock", null);
             Margin = data.GetValue<string>("margin", "0");
 
-            if (Tracker.Instance.SwapLeftRight)
+            if (TrackerSession.Current.Tracker.SwapLeftRight)
             {
                 bool bModified = false;
 

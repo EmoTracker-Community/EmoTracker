@@ -11,6 +11,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data
 {
@@ -175,16 +176,16 @@ namespace EmoTracker.Data
     {
         public LoggingBlock()
         {
-            ScriptManager.Instance.LogIndent++;
+            TrackerSession.Current.Scripts.LogIndent++;
         }
 
         public void Dispose()
         {
-            ScriptManager.Instance.LogIndent--;
+            TrackerSession.Current.Scripts.LogIndent--;
         }
     }
 
-    public class ScriptManager : ObservableSingleton<ScriptManager>, ICodeProvider
+    public class ScriptManager : ObservableObject, ICodeProvider
     {
         public class LogLine
         {
@@ -406,9 +407,6 @@ end
                 mLua["NotificationType"] = new NotificationType();
                 mLua["ScriptHost"] = this;
                 mLua["ImageReference"] = new ImageReferenceProvider();
-                
-                if (ApplicationSettings.Instance.SupportLua53VersionChecks)
-                    mLua["_VERSION"] = "Lua 5.3";
 
                 foreach (var entry in mGlobals)
                 {
@@ -463,10 +461,10 @@ end
             LuaException luaException = e as LuaException;
             if (jsonException != null)
             {
-                ScriptManager.Instance.OutputError("JSON Parse Error");
+                TrackerSession.Current.Scripts.OutputError("JSON Parse Error");
                 using (new LoggingBlock())
                 {
-                    ScriptManager.Instance.OutputError(jsonException.Message);
+                    TrackerSession.Current.Scripts.OutputError(jsonException.Message);
 
                     if (!string.IsNullOrWhiteSpace(jsonException.HelpLink))
                         OutputError("  For more information, see: {0}", jsonException.HelpLink);
@@ -474,10 +472,10 @@ end
             }
             else if (luaException != null)
             {
-                ScriptManager.Instance.OutputError("Lua Execution Error");
+                TrackerSession.Current.Scripts.OutputError("Lua Execution Error");
                 using (new LoggingBlock())
                 {
-                    ScriptManager.Instance.OutputError(luaException.Message);
+                    TrackerSession.Current.Scripts.OutputError(luaException.Message);
                 }
             }
             else
@@ -708,13 +706,11 @@ end
             FinishLoadingSaveFile,
             PackReady,
             AutoTrackerStarted,
-            AutoTrackerStopped,
-            LocationUpdating,
-            LocationUpdated
+            AutoTrackerStopped
         }
 
         [LuaHide]
-        public void InvokeStandardCallback(StandardCallback callback, params object[] args)
+        public void InvokeStandardCallback(StandardCallback callback)
         {
             string functionName = null;
             switch (callback)
@@ -746,14 +742,6 @@ end
                 case StandardCallback.AutoTrackerStopped:
                     functionName = "autotracker_stopped";
                     break;
-
-                case StandardCallback.LocationUpdating:
-                    functionName = "tracker_on_location_updating";
-                    break;
-
-                case StandardCallback.LocationUpdated:
-                    functionName = "tracker_on_location_updated";
-                    break;
             }
 
             if (!mbInPostLogicUpdate)
@@ -767,7 +755,7 @@ end
                         using (LuaFunction func = mLua[functionName] as LuaFunction)
                         {
                             if (func != null)
-                                SafeCall(func, args);
+                                SafeCall(func);
                         }
                     }
                 }
@@ -840,7 +828,7 @@ end
         public LuaItem CreateLuaItem()
         {
             LuaItem item = new LuaItem();
-            ItemDatabase.Instance.RegisterItem(item);
+            TrackerSession.Current.Items.RegisterItem(item);
 
             return item;
         }

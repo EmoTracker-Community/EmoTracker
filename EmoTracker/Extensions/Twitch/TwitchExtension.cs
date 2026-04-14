@@ -14,6 +14,7 @@ using TwitchLib.Client;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Models;
 using TwitchLib.Communication.Events;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Extensions.Twitch
 {
@@ -91,7 +92,7 @@ namespace EmoTracker.Extensions.Twitch
 
         public void Start()
         {
-            if (!string.IsNullOrWhiteSpace(ApplicationSettings.Instance.TwitchChannelName))
+            if (!string.IsNullOrWhiteSpace(TrackerSession.Current.Global.TwitchChannelName))
             {
                 mbActive = true;
                 LoadPermissions();
@@ -154,7 +155,7 @@ namespace EmoTracker.Extensions.Twitch
             CreatePermissionsFile();
             Disconnect(DisconnectReason.Reset);
 
-            if (!string.IsNullOrWhiteSpace(ApplicationSettings.Instance.TwitchChannelName))
+            if (!string.IsNullOrWhiteSpace(TrackerSession.Current.Global.TwitchChannelName))
             {
                 mbActive = true;
 
@@ -249,7 +250,7 @@ namespace EmoTracker.Extensions.Twitch
             Dispatch.BeginInvoke(() =>
             {
                 ConnectionState = ConnectionState.Connected;
-                mClient.JoinChannel(ApplicationSettings.Instance.TwitchChannelName);
+                mClient.JoinChannel(TrackerSession.Current.Global.TwitchChannelName);
             });
         }
 
@@ -326,7 +327,7 @@ namespace EmoTracker.Extensions.Twitch
                         {
                             Dispatch.BeginInvoke(() =>
                             {
-                                ITrackableItem[] items = ItemDatabase.Instance.FindProvidingItemsForCode(args[0]);
+                                ITrackableItem[] items = TrackerSession.Current.Items.FindProvidingItemsForCode(args[0]);
                                 foreach (ITrackableItem item in items)
                                 {
                                     ToggleItem toggle = item as ToggleItem;
@@ -409,7 +410,7 @@ namespace EmoTracker.Extensions.Twitch
                                 {
                                     if (!src.IsBroadcaster && (System.DateTime.Now - mLastVFXCommandTime) < new System.TimeSpan(0, 0, 0, 30))
                                     {
-                                        mClient.SendMessage(ApplicationSettings.Instance.TwitchChannelName, "That command has a cooldown... Wait a few seconds. Kappa");
+                                        mClient.SendMessage(TrackerSession.Current.Global.TwitchChannelName, "That command has a cooldown... Wait a few seconds. Kappa");
                                         return;
                                     }
 
@@ -425,7 +426,7 @@ namespace EmoTracker.Extensions.Twitch
                                 {
                                     if (!src.IsBroadcaster && (System.DateTime.Now - mLastVFXCommandTime) < new System.TimeSpan(0, 0, 0, 30))
                                     {
-                                        mClient.SendMessage(ApplicationSettings.Instance.TwitchChannelName, "That command has a cooldown... Wait a few seconds. Kappa");
+                                        mClient.SendMessage(TrackerSession.Current.Global.TwitchChannelName, "That command has a cooldown... Wait a few seconds. Kappa");
                                         return;
                                     }
 

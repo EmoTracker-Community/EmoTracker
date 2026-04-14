@@ -22,6 +22,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker
 {
@@ -60,13 +61,13 @@ namespace EmoTracker
             {
                 string title = string.Format("EmoTracker {0}", ApplicationVersion.Current);
 
-                if (Tracker.Instance.ActiveGamePackage != null && Tracker.Instance.ActiveGamePackageVariant != null)
+                if (TrackerSession.Current.Tracker.ActiveGamePackage != null && TrackerSession.Current.Tracker.ActiveGamePackageVariant != null)
                 {
-                    title = string.Format("{0}  ::  {1} | {2}", title, Tracker.Instance.ActiveGamePackage.DisplayName, Tracker.Instance.ActiveGamePackageVariant.DisplayName);
+                    title = string.Format("{0}  ::  {1} | {2}", title, TrackerSession.Current.Tracker.ActiveGamePackage.DisplayName, TrackerSession.Current.Tracker.ActiveGamePackageVariant.DisplayName);
                 }
-                else if (Tracker.Instance.ActiveGamePackage != null)
+                else if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
                 {
-                    title = string.Format("{0}  ::  {1}", title, Tracker.Instance.ActiveGamePackage.DisplayName);
+                    title = string.Format("{0}  ::  {1}", title, TrackerSession.Current.Tracker.ActiveGamePackage.DisplayName);
 
                 }
 
@@ -128,8 +129,8 @@ namespace EmoTracker
 
                 InitializePackageManagerViews();
 
-            Tracker.Instance.OnPackageLoadStarting += Tracker_OnPackageLoadStarting;
-            Tracker.Instance.OnPackageLoadComplete += Tracker_OnPackageLoadComplete;
+            TrackerSession.Current.Tracker.OnPackageLoadStarting += Tracker_OnPackageLoadStarting;
+            TrackerSession.Current.Tracker.OnPackageLoadComplete += Tracker_OnPackageLoadComplete;
 
             RefreshCommand = new DelegateCommand(RefreshHandler);
             ResetUserDataCommand = new DelegateCommand(ResetUserDataHandler);
@@ -189,7 +190,7 @@ namespace EmoTracker
         {
             //  Start the image resolution service.  When --no-async-images is
             //  set, resolution falls back to synchronous on-demand behaviour.
-            ImageReferenceService.Instance.SyncMode = Data.ApplicationSettings.Instance.NoAsyncImages;
+            ImageReferenceService.Instance.SyncMode = Data.Session.TrackerSession.Current.Global.NoAsyncImages;
             ImageReferenceService.Instance.Start();
 
             //  Load and start extensions
@@ -200,7 +201,7 @@ namespace EmoTracker
             bool success;
             string msg;
 
-            (success, msg) = Tracker.Instance.LoadDefaultPackage();
+            (success, msg) = TrackerSession.Current.Tracker.LoadDefaultPackage();
 
             if (!string.IsNullOrWhiteSpace(msg))
             {
@@ -322,35 +323,35 @@ namespace EmoTracker
 
         private void OpenPackOverrideFolderHandler(object obj)
         {
-            if (Tracker.Instance.ActiveGamePackage != null && !string.IsNullOrWhiteSpace(Tracker.Instance.ActiveGamePackage.OverridePath))
+            if (TrackerSession.Current.Tracker.ActiveGamePackage != null && !string.IsNullOrWhiteSpace(TrackerSession.Current.Tracker.ActiveGamePackage.OverridePath))
             {
                 try
                 {
-                    Directory.CreateDirectory(Tracker.Instance.ActiveGamePackage.OverridePath);
+                    Directory.CreateDirectory(TrackerSession.Current.Tracker.ActiveGamePackage.OverridePath);
                 }
                 catch { };
 
-                if (Directory.Exists(Tracker.Instance.ActiveGamePackage.OverridePath))
-                    WindowService.Instance.OpenFolder(Tracker.Instance.ActiveGamePackage.OverridePath);
+                if (Directory.Exists(TrackerSession.Current.Tracker.ActiveGamePackage.OverridePath))
+                    WindowService.Instance.OpenFolder(TrackerSession.Current.Tracker.ActiveGamePackage.OverridePath);
                 else
                     PushMarkdownNotification(NotificationType.Error, string.Format(
 @"### Cannot open override folder
 Failed to find or create the active pack's override folder at `{0}`.
 
 Make sure you have available disk space and permissions for the selected location.",
-Tracker.Instance.ActiveGamePackage.OverridePath)
+TrackerSession.Current.Tracker.ActiveGamePackage.OverridePath)
 );
             }
         }
 
         private void ExportPackageOverrideHandler(object obj)
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
             {
                 string filename = obj as string;
                 if (!string.IsNullOrWhiteSpace(filename))
                 {
-                    GamePackage package = Tracker.Instance.ActiveGamePackage as GamePackage;
+                    GamePackage package = TrackerSession.Current.Tracker.ActiveGamePackage as GamePackage;
                     if (package != null)
                     {
                         package.ExportUserOverride(filename);
@@ -378,7 +379,7 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
         private async void RefreshHandler(object param)
         {
-            if (ApplicationSettings.Instance.PromptOnRefreshClose)
+            if (TrackerSession.Current.Global.PromptOnRefreshClose)
             {
                 bool result = await DialogService.Instance.ShowYesNoAsync("Warning!", "Refreshing will cause you to lose all unsaved progress. Are you sure you want to refresh?", defaultYes: false);
                 if (!result)
@@ -391,16 +392,16 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
         private async void ResetUserDataHandler(object param)
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
             {
-                if (ApplicationSettings.Instance.PromptOnRefreshClose)
+                if (TrackerSession.Current.Global.PromptOnRefreshClose)
                 {
                     bool result = await DialogService.Instance.ShowYesNoAsync("Warning!", "Clearing overrides will cause you to lose all unsaved progress. Are you sure you want to continue?", defaultYes: false);
                     if (!result)
                         return;
                 }
 
-                Tracker.Instance.ActiveGamePackage.ResetUserOverrides();
+                TrackerSession.Current.Tracker.ActiveGamePackage.ResetUserOverrides();
                 Reload();
             }
 
@@ -416,12 +417,12 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
                 if (package != null)
                 {
-                    Tracker.Instance.ActiveGamePackageVariant = null;
-                    Tracker.Instance.ActiveGamePackage = package;
+                    TrackerSession.Current.Tracker.ActiveGamePackageVariant = null;
+                    TrackerSession.Current.Tracker.ActiveGamePackage = package;
                 }
                 else if (variant != null)
                 {
-                    Tracker.Instance.ActiveGamePackageVariant = variant;
+                    TrackerSession.Current.Tracker.ActiveGamePackageVariant = variant;
                 }
             });
         }
@@ -489,7 +490,7 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
         private bool CanSave(object obj)
         {
-            return Tracker.Instance.ActiveGamePackage != null;
+            return TrackerSession.Current.Tracker.ActiveGamePackage != null;
         }
 
         private void SaveHandler(object obj)
@@ -538,7 +539,7 @@ defaultSaveDataPath)
 
             try
             {
-                bool bResult = Tracker.Instance.SaveProgress(path, (JObject root) =>
+                bool bResult = TrackerSession.Current.Tracker.SaveProgress(path, (JObject root) =>
                 {
                     root["main_window_width"] = WindowService.Instance.MainWindowWidth;
                     root["main_window_height"] = WindowService.Instance.MainWindowHeight;
@@ -588,7 +589,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private bool LoadProgress(string path)
         {
-            if (Tracker.Instance.LoadProgress(path, (JObject root) =>
+            if (TrackerSession.Current.Tracker.LoadProgress(path, (JObject root) =>
             {
                 WindowService.Instance.MainWindowWidth = root.GetValue<double>("main_window_width", WindowService.Instance.MainWindowWidth);
                 WindowService.Instance.MainWindowHeight = root.GetValue<double>("main_window_height", WindowService.Instance.MainWindowHeight);
@@ -619,9 +620,9 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private bool CanOpenPackageDocumentation(object obj = null)
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
             {
-                PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(Tracker.Instance.ActiveGamePackage.UniqueID);
+                PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(TrackerSession.Current.Tracker.ActiveGamePackage.UniqueID);
                 if (entry != null && !string.IsNullOrWhiteSpace(entry.DocumentationURL))
                     return true;
             }
@@ -631,9 +632,9 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void OpenPackageDocumentation(object obj = null)
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
             {
-                PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(Tracker.Instance.ActiveGamePackage.UniqueID);
+                PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(TrackerSession.Current.Tracker.ActiveGamePackage.UniqueID);
                 if (entry != null && !string.IsNullOrWhiteSpace(entry.DocumentationURL))
                     WindowService.Instance.OpenUrl(entry.DocumentationURL);
             }
@@ -645,17 +646,17 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void GetFilteredCodeAndProvider(ref string code, out ICodeProvider provider)
         {
-            provider = ItemDatabase.Instance;
+            provider = TrackerSession.Current.Items;
 
             if (code.StartsWith("@"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = LocationDatabase.Instance;
+                provider = TrackerSession.Current.Locations;
             }
             else if (code.StartsWith("$"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = ScriptManager.Instance;
+                provider = TrackerSession.Current.Scripts;
             }
         }
 
@@ -682,7 +683,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         public void Reload()
         {
             ExpireAllNotifications();
-            Tracker.Instance.Reload();
+            TrackerSession.Current.Tracker.Reload();
         }
         private void Tracker_OnPackageLoadStarting(object sender, EventArgs e)
         {
@@ -722,11 +723,11 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         {
             try
             {
-                BroadcastLayout = LayoutManager.Instance.FindLayout("tracker_broadcast");
-                TrackerLayout = LayoutManager.Instance.FindLayout("tracker_default");
-                TrackerHorizontalLayout = LayoutManager.Instance.FindLayout("tracker_horizontal");
-                TrackerVerticalLayout = LayoutManager.Instance.FindLayout("tracker_vertical");
-                TrackerCaptureItemLayout = LayoutManager.Instance.FindLayout("tracker_capture_item");
+                BroadcastLayout = TrackerSession.Current.Layouts.FindLayout("tracker_broadcast");
+                TrackerLayout = TrackerSession.Current.Layouts.FindLayout("tracker_default");
+                TrackerHorizontalLayout = TrackerSession.Current.Layouts.FindLayout("tracker_horizontal");
+                TrackerVerticalLayout = TrackerSession.Current.Layouts.FindLayout("tracker_vertical");
+                TrackerCaptureItemLayout = TrackerSession.Current.Layouts.FindLayout("tracker_capture_item");
             }
             catch (Exception)
             {
@@ -737,12 +738,12 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                 //Added checking for ActiveGamePacakge not being null here. Not sure what this is trying to do maybe be unused at this point
                 if ((TrackerLayout == null && TrackerHorizontalLayout == null && TrackerVerticalLayout == null))
                 {
-                    LayoutManager.Instance.LegacyLoad(Tracker.Instance.ActiveGamePackage);
+                    TrackerSession.Current.Layouts.LegacyLoad(TrackerSession.Current.Tracker.ActiveGamePackage);
 
-                    TrackerLayout = LayoutManager.Instance.FindLayout("tracker_default");
-                    TrackerHorizontalLayout = LayoutManager.Instance.FindLayout("tracker_horizontal");
-                    TrackerVerticalLayout = LayoutManager.Instance.FindLayout("tracker_vertical");
-                    TrackerCaptureItemLayout = LayoutManager.Instance.FindLayout("tracker_capture_item");
+                    TrackerLayout = TrackerSession.Current.Layouts.FindLayout("tracker_default");
+                    TrackerHorizontalLayout = TrackerSession.Current.Layouts.FindLayout("tracker_horizontal");
+                    TrackerVerticalLayout = TrackerSession.Current.Layouts.FindLayout("tracker_vertical");
+                    TrackerCaptureItemLayout = TrackerSession.Current.Layouts.FindLayout("tracker_capture_item");
                 }
             }
             catch (Exception)
@@ -754,11 +755,11 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                 if (BroadcastLayout == null)
                 {
                     BroadcastLayout = new Layout();
-                    ScriptManager.Instance.OutputWarning("Loading legacy broadcast layout data");
+                    TrackerSession.Current.Scripts.OutputWarning("Loading legacy broadcast layout data");
                     using (new LoggingBlock())
                     {
-                        if (Tracker.Instance.ActiveGamePackage != null)
-                            BroadcastLayout.Load(Tracker.Instance.ActiveGamePackage.Open("broadcast_layout.json"), Tracker.Instance.ActiveGamePackage);
+                        if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
+                            BroadcastLayout.Load(TrackerSession.Current.Tracker.ActiveGamePackage.Open("broadcast_layout.json"), TrackerSession.Current.Tracker.ActiveGamePackage);
                     }
                 }
             }
@@ -1245,7 +1246,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             mNotificationUpdateTimer.Start();
             mNotifications.CollectionChanged += Notifications_CollectionChanged;
 
-            ScriptManager.Instance.SetNotificationService(this);
+            TrackerSession.Current.Scripts.SetNotificationService(this);
         }
 
         void ExpireAllNotifications()
@@ -1281,15 +1282,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             }
         }
 
-        private void OnNotificationForceExpired(object sender, EventArgs e)
-        {
-            if (sender is Notification n)
-            {
-                n.ForceExpired -= OnNotificationForceExpired;
-                mNotifications.Remove(n);
-            }
-        }
-
         private void Notifications_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
             NotifyPropertyChanged("HasPendingNotifications");
@@ -1314,7 +1306,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                         mPreviousNotifications.RemoveAt(9);
                     }
 
-                    notification.ForceExpired += OnNotificationForceExpired;
                     mPreviousNotifications.Insert(0, notification);
                     mNotifications.Insert(0, notification);
                 });

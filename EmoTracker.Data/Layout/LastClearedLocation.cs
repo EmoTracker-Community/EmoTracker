@@ -1,8 +1,9 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using Newtonsoft.Json.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Layout
 {
@@ -13,7 +14,7 @@ namespace EmoTracker.Data.Layout
 
         public LastClearedLocation()
         {
-            LocationDatabase.Instance.PropertyChanged += Instance_PropertyChanged;
+            TrackerSession.Current.Locations.PropertyChanged += Instance_PropertyChanged;
         }
 
         private void Instance_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -23,7 +24,7 @@ namespace EmoTracker.Data.Layout
 
         public Location Location
         {
-            get { return LocationDatabase.Instance.LastClearedLocation; }
+            get { return TrackerSession.Current.Locations.LastClearedLocation; }
         }
 
         public bool CompactDisplay

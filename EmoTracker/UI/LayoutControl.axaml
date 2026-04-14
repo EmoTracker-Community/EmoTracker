@@ -5,6 +5,7 @@
              xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             xmlns:session="clr-namespace:EmoTracker.Data.Session;assembly=EmoTracker.Data"
              xmlns:layout="clr-namespace:EmoTracker.Data.Layout;assembly=EmoTracker.Data"
              xmlns:local="clr-namespace:EmoTracker.UI"
              FontSize="12">
@@ -582,7 +583,7 @@
             <ContentControl Content="{Binding Location}">
                 <ContentControl.ContentTemplate>
                     <DataTemplate>
-                        <local:LocationControl DataContext="{Binding LastClearedLocation, Source={x:Static data:LocationDatabase.Instance}}"
+                        <local:LocationControl DataContext="{Binding Locations.LastClearedLocation, Source={x:Static session:TrackerSession.Current}}"
                                                Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource Self}}" />
                     </DataTemplate>
                 </ContentControl.ContentTemplate>

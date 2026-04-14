@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using EmoTracker.Data;
 using System;
 using System.Collections.Specialized;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.UI
 {
@@ -17,7 +18,7 @@ namespace EmoTracker.UI
 
             Opened += DeveloperConsole_Opened;
 
-            if (ScriptManager.Instance.LogOutput is INotifyCollectionChanged changeTracker)
+            if (TrackerSession.Current.Scripts.LogOutput is INotifyCollectionChanged changeTracker)
                 changeTracker.CollectionChanged += LogOutput_CollectionChanged;
         }
 
@@ -63,7 +64,7 @@ namespace EmoTracker.UI
 
         protected override void OnClosed(EventArgs e)
         {
-            if (ScriptManager.Instance.LogOutput is INotifyCollectionChanged changeTracker)
+            if (TrackerSession.Current.Scripts.LogOutput is INotifyCollectionChanged changeTracker)
                 changeTracker.CollectionChanged -= LogOutput_CollectionChanged;
 
             base.OnClosed(e);

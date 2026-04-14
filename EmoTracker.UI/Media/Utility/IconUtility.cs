@@ -1,6 +1,7 @@
 #nullable enable annotations
 using EmoTracker.Core;
 using EmoTracker.Data;
+using EmoTracker.Data.Session;
 using System;
 using System.IO;
 using System.Linq;
@@ -393,7 +394,7 @@ namespace EmoTracker.UI.Media.Utility
 
             if (baseBmp.Width != overlay.Width || baseBmp.Height != overlay.Height)
             {
-                ScriptManager.Instance.OutputError("Not applying overlay to base image because dimensions don't match.");
+                TrackerSession.Current.Scripts.OutputError("Not applying overlay to base image because dimensions don't match.");
                 overlay.Dispose();
                 return baseBmp;
             }
@@ -472,7 +473,7 @@ namespace EmoTracker.UI.Media.Utility
                             }
                         }
                         else if (mod.StartsWith("@disabled", StringComparison.OrdinalIgnoreCase))
-                            bmp = ApplyFilterSpecToSKBitmap(package, bmp, Tracker.Instance.DisabledImageFilterSpec);
+                            bmp = ApplyFilterSpecToSKBitmap(package, bmp, TrackerSession.Current.Tracker.DisabledImageFilterSpec);
 
                         // Dispose the intermediate bitmap if a new one was produced
                         if (bmp != prev)
@@ -727,7 +728,7 @@ namespace EmoTracker.UI.Media.Utility
                         else if (mod.StartsWith("saturation", StringComparison.OrdinalIgnoreCase))
                             image = IconUtility.AdjustSaturation(package, image, args);
                         else if (mod.StartsWith("@disabled", StringComparison.OrdinalIgnoreCase))
-                            image = IconUtility.ApplyFilterSpecToImage(package, image, Tracker.Instance.DisabledImageFilterSpec);
+                            image = IconUtility.ApplyFilterSpecToImage(package, image, TrackerSession.Current.Tracker.DisabledImageFilterSpec);
                     }
                 }
             }

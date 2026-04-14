@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.Items;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
@@ -7,6 +7,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Scripting
 {
@@ -150,11 +151,11 @@ namespace EmoTracker.Data.Scripting
             try
             {
                 if (AdvanceToCodeFunc != null)
-                    ScriptManager.Instance.SafeCall(AdvanceToCodeFunc, this, code);
+                    TrackerSession.Current.Scripts.SafeCall(AdvanceToCodeFunc, this, code);
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputException(e);
             }
         }
 
@@ -164,14 +165,14 @@ namespace EmoTracker.Data.Scripting
             {
                 if (CanProvideCodeFunc != null)
                 {
-                    object[] result = ScriptManager.Instance.SafeCall(CanProvideCodeFunc, this, code);
+                    object[] result = TrackerSession.Current.Scripts.SafeCall(CanProvideCodeFunc, this, code);
                     if (result != null && result.Length > 0)
                         return Convert.ToBoolean(result.First());
                 }
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputException(e);
             }
 
             return false;
@@ -185,13 +186,13 @@ namespace EmoTracker.Data.Scripting
                 {
                     using (new LocationDatabase.SuspendRefreshScope())
                     {
-                        ScriptManager.Instance.SafeCall(OnLeftClickFunc, this);
+                        TrackerSession.Current.Scripts.SafeCall(OnLeftClickFunc, this);
                     }
                 }
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputException(e);
             }
         }
 
@@ -203,13 +204,13 @@ namespace EmoTracker.Data.Scripting
                 {
                     using (new LocationDatabase.SuspendRefreshScope())
                     {
-                        ScriptManager.Instance.SafeCall(OnRightClickFunc, this);
+                        TrackerSession.Current.Scripts.SafeCall(OnRightClickFunc, this);
                     }
                 }
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputException(e);
             }
         }
 
@@ -219,14 +220,14 @@ namespace EmoTracker.Data.Scripting
             {
                 if (ProvidesCodeFunc != null)
                 {
-                    object[] result = ScriptManager.Instance.SafeCall(ProvidesCodeFunc, this, code);
+                    object[] result = TrackerSession.Current.Scripts.SafeCall(ProvidesCodeFunc, this, code);
                     if (result != null && result.Length > 0)
                         return Convert.ToUInt32(result.First());
                 }
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputException(e);
             }
 
             return 0;
@@ -242,7 +243,7 @@ namespace EmoTracker.Data.Scripting
             {
                 if (SaveFunc != null)
                 {
-                    object[] results = ScriptManager.Instance.SafeCall(SaveFunc, this);
+                    object[] results = TrackerSession.Current.Scripts.SafeCall(SaveFunc, this);
                     if (results != null && results.Length > 0)
                     {
                         LuaTable saveData = results.First() as LuaTable;
@@ -279,7 +280,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputException(e);
             }
 
             return false;
@@ -300,11 +301,11 @@ namespace EmoTracker.Data.Scripting
                         }                        
                         catch (Exception e)
                         {                        
-                            ScriptManager.Instance.OutputException(e);
+                            TrackerSession.Current.Scripts.OutputException(e);
                         }
                     }
 
-                    object[] results = ScriptManager.Instance.SafeCall(LoadFunc, this, dataMap);
+                    object[] results = TrackerSession.Current.Scripts.SafeCall(LoadFunc, this, dataMap);
                     if (results != null && results.Length > 0)
                         return Convert.ToBoolean(results.First());
 
@@ -313,7 +314,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputException(e);
             }
 
             return false;
@@ -326,11 +327,11 @@ namespace EmoTracker.Data.Scripting
                 try
                 {
                     if (PropertyChangedFunc != null)
-                        ScriptManager.Instance.SafeCall(PropertyChangedFunc, this, key, v);
+                        TrackerSession.Current.Scripts.SafeCall(PropertyChangedFunc, this, key, v);
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    TrackerSession.Current.Scripts.OutputException(e);
                 }
 
             }, key);

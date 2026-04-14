@@ -8,10 +8,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data
 {
-    public class MapDatabase : ObservableSingleton<MapDatabase>
+    public class MapDatabase : ObservableObject
     {
         ObservableCollection<Map> mMaps = new ObservableCollection<Map>();
 
@@ -36,7 +37,7 @@ namespace EmoTracker.Data
             if (mMaps.Count > 0)
                 return true;
 
-            ScriptManager.Instance.OutputWarning("Loading Legacy Maps");
+            TrackerSession.Current.Scripts.OutputWarning("Loading Legacy Maps");
             using (new LoggingBlock())
             {
                 return IncrementalLoad("maps.json", package);
@@ -45,7 +46,7 @@ namespace EmoTracker.Data
 
         internal bool IncrementalLoad(string path, IGamePackage package)
         {
-            ScriptManager.Instance.Output("Loading Maps: {0}", path);
+            TrackerSession.Current.Scripts.Output("Loading Maps: {0}", path);
             using (new LoggingBlock())
             {
                 try
@@ -71,7 +72,7 @@ namespace EmoTracker.Data
                         }
                         else
                         {
-                            ScriptManager.Instance.Output("File not found");
+                            TrackerSession.Current.Scripts.Output("File not found");
                         }
                     }
 
@@ -79,7 +80,7 @@ namespace EmoTracker.Data
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    TrackerSession.Current.Scripts.OutputException(e);
                     return false;
                 }
             }

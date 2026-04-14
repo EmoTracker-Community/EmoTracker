@@ -5,6 +5,7 @@
                              xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
                              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
                              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+                             xmlns:session="clr-namespace:EmoTracker.Data.Session;assembly=EmoTracker.Data"
                              xmlns:local="clr-namespace:EmoTracker.UI"
                              xmlns:settings="clr-namespace:EmoTracker.Data.Settings;assembly=EmoTracker.Data">
     <UserControl.Resources>
@@ -159,14 +160,14 @@
                                                     <MultiBinding Converter="{x:Static converters:ChestAccessibleConverter.Instance}">
                                                         <Binding Path="AccessibilityLevel" />
                                                         <Binding Path="AlwaysAllowChestManipulation" />
-                                                        <Binding Path="AlwaysAllowClearing" Source="{x:Static data:ApplicationSettings.Instance}" />
+                                                        <Binding Path="Global.AlwaysAllowClearing" Source="{x:Static session:TrackerSession.Current}" />
                                                     </MultiBinding>
                                                 </local:ChestListControl.Accessible>
                                                 <local:ChestListControl.IsEnabled>
                                                     <MultiBinding Converter="{x:Static converters:ChestAccessibleConverter.Instance}">
                                                         <Binding Path="AccessibilityLevel" />
                                                         <Binding Path="AlwaysAllowChestManipulation" />
-                                                        <Binding Path="AlwaysAllowClearing" Source="{x:Static data:ApplicationSettings.Instance}" />
+                                                        <Binding Path="Global.AlwaysAllowClearing" Source="{x:Static session:TrackerSession.Current}" />
                                                     </MultiBinding>
                                                 </local:ChestListControl.IsEnabled>
                                             </local:ChestListControl>

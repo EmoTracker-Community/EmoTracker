@@ -1,4 +1,4 @@
-﻿#pragma warning disable SYSLIB0014 // WebClient is obsolete
+#pragma warning disable SYSLIB0014 // WebClient is obsolete
 using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json;
@@ -9,6 +9,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Net;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Packages
 {
@@ -290,9 +291,9 @@ namespace EmoTracker.Data.Packages
             {
 
                 //duck: this maybe should be moved to the application model fucntion?
-                if (Tracker.Instance.IsActivePackage(mUID))
+                if (TrackerSession.Current.Tracker.IsActivePackage(mUID))
                 {
-                    Tracker.Instance.ActiveGamePackage = null;
+                    TrackerSession.Current.Tracker.ActiveGamePackage = null;
                 }
 
                 PackageManager.Instance.Rescan();
@@ -339,7 +340,7 @@ namespace EmoTracker.Data.Packages
                     if (!string.IsNullOrWhiteSpace(path) && File.Exists(path) && new FileInfo(path).Length > 0)
                     {
                         bool bIsFirstInstalledPackage = PackageManager.Instance.InstalledPackages.Count() == 0;
-                        bool bExistingIsActive = ExistingPackage == Tracker.Instance.ActiveGamePackage;
+                        bool bExistingIsActive = ExistingPackage == TrackerSession.Current.Tracker.ActiveGamePackage;
 
                         if (ExistingPackage != null)
                             ExistingPackage.Source.ReleaseStorage();
@@ -354,7 +355,7 @@ namespace EmoTracker.Data.Packages
                             }
                             catch (Exception innerException)
                             {
-                                ScriptManager.Instance.OutputException(innerException);
+                                TrackerSession.Current.Scripts.OutputException(innerException);
                                 System.Threading.Thread.Sleep(500);
                             }
 
@@ -376,20 +377,20 @@ namespace EmoTracker.Data.Packages
                         if (bIsFirstInstalledPackage)
                         {
                             if (ExistingPackage.AvailableVariants.Count() > 0)
-                                Tracker.Instance.ActiveGamePackageVariant = ExistingPackage.AvailableVariants.First();
+                                TrackerSession.Current.Tracker.ActiveGamePackageVariant = ExistingPackage.AvailableVariants.First();
                             else
-                                Tracker.Instance.ActiveGamePackage = ExistingPackage;
+                                TrackerSession.Current.Tracker.ActiveGamePackage = ExistingPackage;
                         }
                         else if (bExistingIsActive && ExistingPackage != null)
                         {
-                            IGamePackageVariant variant = ExistingPackage.FindVariant(ApplicationSettings.Instance.LastActivePackageVariant) ?? ExistingPackage.AvailableVariants.FirstOrDefault();
+                            IGamePackageVariant variant = ExistingPackage.FindVariant(TrackerSession.Current.Global.LastActivePackageVariant) ?? ExistingPackage.AvailableVariants.FirstOrDefault();
 
                             if (variant != null)
-                                Tracker.Instance.ActiveGamePackageVariant = variant;
+                                TrackerSession.Current.Tracker.ActiveGamePackageVariant = variant;
                             else
-                                Tracker.Instance.ActiveGamePackage = ExistingPackage;
+                                TrackerSession.Current.Tracker.ActiveGamePackage = ExistingPackage;
 
-                            Tracker.Instance.Reload();
+                            TrackerSession.Current.Tracker.Reload();
                         }
 
                         return;
@@ -400,7 +401,7 @@ namespace EmoTracker.Data.Packages
             }
             catch (Exception outerException)
             {
-                ScriptManager.Instance.OutputException(outerException);
+                TrackerSession.Current.Scripts.OutputException(outerException);
             }
             finally
             {
@@ -553,7 +554,7 @@ namespace EmoTracker.Data.Packages
                                         instance.URL = entry.GetValue<string>("link");
                                         instance.DocumentationURL = entry.GetValue<string>("documentation_url");
                                         instance.ExistingPackage = PackageManager.Instance.FindInstalledPackage(instance.UID);
-                                        instance.Flags = ParsePackageFlagsArray(entry.GetValue<JArray>("flags"), instance.URL.ToLower().Contains(ApplicationSettings.Instance.ServiceBaseURL));
+                                        instance.Flags = ParsePackageFlagsArray(entry.GetValue<JArray>("flags"), instance.URL.ToLower().Contains(TrackerSession.Current.Global.ServiceBaseURL));
 
                                         JArray variants = entry.GetValue<JArray>("variants");
                                         if (variants != null)
@@ -563,7 +564,7 @@ namespace EmoTracker.Data.Packages
                                                 instance.Variants.Add(new VariantEntry()
                                                 {
                                                     Name = variantDef.GetValue<string>("name"),
-                                                    Flags = ParsePackageFlagsArray(variantDef.GetValue<JArray>("flags"), instance.URL.ToLower().Contains(ApplicationSettings.Instance.ServiceBaseURL))
+                                                    Flags = ParsePackageFlagsArray(variantDef.GetValue<JArray>("flags"), instance.URL.ToLower().Contains(TrackerSession.Current.Global.ServiceBaseURL))
                                                 });
                                             }
                                         }

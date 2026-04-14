@@ -1,8 +1,9 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Notes
 {
@@ -75,7 +76,7 @@ namespace EmoTracker.Data.Notes
                             {
                                 try
                                 {
-                                    string persistableItemRef = ItemDatabase.Instance.GetPersistableItemReference(item);
+                                    string persistableItemRef = TrackerSession.Current.Items.GetPersistableItemReference(item);
                                     if (!string.IsNullOrWhiteSpace(persistableItemRef))
                                         itemsArray.Add(JToken.FromObject(persistableItemRef));
                                 }
@@ -120,7 +121,7 @@ namespace EmoTracker.Data.Notes
                         {
                             foreach (string itemRef in itemsArray)
                             {
-                                ITrackableItem item = ItemDatabase.Instance.ResolvePersistableItemReference(itemRef);
+                                ITrackableItem item = TrackerSession.Current.Items.ResolvePersistableItemReference(itemRef);
                                 if (item != null)
                                     note.AddItem(item);
                             }

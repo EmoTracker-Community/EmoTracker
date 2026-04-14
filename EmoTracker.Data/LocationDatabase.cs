@@ -9,16 +9,18 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using EmoTracker.Data.Session;
+
 namespace EmoTracker.Data
 {
-    public class LocationDatabase : ObservableSingleton<LocationDatabase>, ICodeProvider
+    public class LocationDatabase : ObservableObject, ICodeProvider
     {
         public class SuspendRefreshScope : IDisposable
         {
             readonly LocationDatabase mDatabase;
 
             public SuspendRefreshScope()
-                : this(LocationDatabase.Instance)
+                : this(TrackerSession.Current.Locations)
             {
             }
 
@@ -65,7 +67,7 @@ namespace EmoTracker.Data
         {
             if (mSuspendRefreshCount <= 0)
             {
-                ScriptManager.Instance.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
+                TrackerSession.Current.Scripts.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
                 System.Diagnostics.Debug.Fail("PopSuspendRefresh: underflow — more Pops than Pushes");
                 return;
             }
@@ -163,9 +165,9 @@ namespace EmoTracker.Data
         internal bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false)
         {
             if (bLegacy)
-                ScriptManager.Instance.OutputWarning("Loading legacy locations");
+                TrackerSession.Current.Scripts.OutputWarning("Loading legacy locations");
             else
-                ScriptManager.Instance.Output("Loading Locations: {0}", path);
+                TrackerSession.Current.Scripts.Output("Loading Locations: {0}", path);
 
             using (new LoggingBlock())
             {
@@ -190,13 +192,13 @@ namespace EmoTracker.Data
                         }
                         else
                         {
-                            ScriptManager.Instance.Output("File not found");
+                            TrackerSession.Current.Scripts.Output("File not found");
                         }
                     }
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    TrackerSession.Current.Scripts.OutputException(e);
                 }
                 finally
                 {
@@ -336,14 +338,14 @@ namespace EmoTracker.Data
                                 bRefreshedAccessibility = true;
 
                                 AccessibilityRule.ClearCaches();
-                                ScriptManager.Instance.ClearExpressionCache();
+                                TrackerSession.Current.Scripts.ClearExpressionCache();
 
-                                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
+                                TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
 
                                 if (mRoot != null)
                                     mRoot.RefreshAccessibility();
 
-                                MapDatabase.Instance.MarkVisibilityDirty();
+                                TrackerSession.Current.Maps.MarkVisibilityDirty();
                             }
                         } // queued PropertyChanged notifications fire here, before AccessibilityUpdated
                     }
@@ -356,11 +358,11 @@ namespace EmoTracker.Data
                         // any rule evaluations triggered by that callback benefit from the cache.
                         // Clearing here negated all caching, reproducing the slow-update symptom
                         // that enable_accessibility_rule_caching was introduced to fix.
-                        MapDatabase.Instance.UpdateVisibilityIfNecessary();
+                        TrackerSession.Current.Maps.UpdateVisibilityIfNecessary();
 
                         if (bRefreshedAccessibility)
                         {
-                            ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdated);
+                            TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdated);
                         }
                     }
                 }
@@ -436,20 +438,6 @@ namespace EmoTracker.Data
                     section.ChestCount = section.AvailableChestCount = sectionData.GetValue<uint>("item_count", 0);
                     section.ClearAsGroup = sectionData.GetValue<bool>("clear_as_group", true);
                     section.CaptureItem = sectionData.GetValue<bool>("capture_item", false);
-                    string captureBadgeOffset = sectionData.GetValue<string>("capture_badge_offset");
-                    if (captureBadgeOffset != null)
-                    {
-                        string[] parts = captureBadgeOffset.Split(',');
-                        if (parts.Length == 2 &&
-                            double.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double ox) &&
-                            double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double oy))
-                        {
-                            section.CaptureBadge = true;
-                            section.CaptureBadgeOffsetX = ox;
-                            section.CaptureBadgeOffsetY = oy;
-                        }
-                    }
-                    section.ClearOnCapture = sectionData.GetValue<bool>("clear_on_capture", false);
                     section.ShowGateItem = sectionData.GetValue<bool>("show_gate_item", true);
 
                     JArray sectionRules = sectionData.GetValue<JArray>("access_rules");
@@ -513,7 +501,7 @@ namespace EmoTracker.Data
                     foreach (JObject entry in mapEntries)
                     {
                         //  TODO: We need to improve referencing to support late binding
-                        Map map = MapDatabase.Instance.FindMap(entry.GetValue<string>("map"));
+                        Map map = TrackerSession.Current.Maps.FindMap(entry.GetValue<string>("map"));
                         if (map != null)
                         {
                             double x = entry.GetValue<double>("x");
@@ -530,30 +518,10 @@ namespace EmoTracker.Data
                             mapLocation.AlwaysVisible = entry.GetValue<bool>("always_visible", false);
                             mapLocation.EnableBadgeHitTest = entry.GetValue<bool>("enable_badge_hit_test", false);
 
-                            if (badgesize >= 0)
+                            if (badgesize > 0)
                             {
                                 mapLocation.OverrideBadgeSize = true;
                                 mapLocation.BadgeSize = badgesize;
-                            }
-
-                            string badgealignment = entry.GetValue<string>("badge_alignment");
-                            if (!string.IsNullOrEmpty(badgealignment))
-                            {
-                                if (System.Enum.TryParse<EmoTracker.Data.Layout.ContentAlignment>(badgealignment, ignoreCase: true, out var alignment))
-                                    mapLocation.BadgeAlignment = alignment;
-                            }
-
-                            string badgeoffset = entry.GetValue<string>("badge_offset");
-                            if (!string.IsNullOrEmpty(badgeoffset))
-                            {
-                                var parts = badgeoffset.Split(',');
-                                if (parts.Length >= 2 &&
-                                    double.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double ox) &&
-                                    double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double oy))
-                                {
-                                    mapLocation.BadgeOffsetX = ox;
-                                    mapLocation.BadgeOffsetY = oy;
-                                }
                             }
 
                             JArray visibilityRules = entry.GetValue<JArray>("restrict_visibility_rules", entry.GetValue<JArray>("visibility_rules"));
@@ -623,7 +591,7 @@ namespace EmoTracker.Data
                             sectionData["available_chest_count"] = section.AvailableChestCount;
 
                             if (section.CapturedItem != null)
-                                sectionData["captured_item"] = ItemDatabase.Instance.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
+                                sectionData["captured_item"] = TrackerSession.Current.Items.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
 
                             sectionDataArray.Add(sectionData);
                         }
@@ -635,39 +603,6 @@ namespace EmoTracker.Data
                     JArray notesDataArray = location.NoteTakingSite.AsJsonArray();
                     if (notesDataArray != null)
                         locationData["notes"] = notesDataArray;
-
-                    if (location.HasBadges)
-                    {
-                        JObject badgesData = new JObject();
-                        foreach (var kvp in location.Badges)
-                        {
-                            var entry = kvp.Value;
-                            JObject badgeData = new JObject();
-
-                            if (entry.Image is ConcreteImageReference concrete)
-                            {
-                                string path = concrete.URI?.ToString()?.Replace("gamepackage://", "") ?? "";
-                                badgeData["image"] = path;
-                                if (!string.IsNullOrEmpty(concrete.Filter))
-                                    badgeData["filter"] = concrete.Filter;
-                            }
-                            else if (entry.Image is FilterImageReference filtered && filtered.Reference is ConcreteImageReference baseRef)
-                            {
-                                string path = baseRef.URI?.ToString()?.Replace("gamepackage://", "") ?? "";
-                                badgeData["image"] = path;
-                                badgeData["filter"] = filtered.Filter;
-                            }
-
-                            if (badgeData.ContainsKey("image"))
-                            {
-                                badgeData["ox"] = entry.OffsetX;
-                                badgeData["oy"] = entry.OffsetY;
-                                badgesData[kvp.Key] = badgeData;
-                            }
-                        }
-                        if (badgesData.Count > 0)
-                            locationData["badges"] = badgesData;
-                    }
 
                     locationDataArray.Add(locationData);
                 }
@@ -730,7 +665,7 @@ namespace EmoTracker.Data
 
                         string capturedItemRef = sectionData.GetValue<string>("captured_item");
                         {
-                            ITrackableItem captureItem = ItemDatabase.Instance.ResolvePersistableItemReference(capturedItemRef);
+                            ITrackableItem captureItem = TrackerSession.Current.Items.ResolvePersistableItemReference(capturedItemRef);
 
                             if (!string.IsNullOrWhiteSpace(capturedItemRef) && captureItem == null)
                                 return false;
@@ -743,28 +678,6 @@ namespace EmoTracker.Data
                     }
 
                     location.NoteTakingSite.PopulateWithJsonArray(locationData.GetValue<JArray>("notes"));
-
-                    JObject badgesData = locationData.GetValue<JObject>("badges");
-                    if (badgesData != null)
-                    {
-                        foreach (JProperty badge in badgesData.Properties())
-                        {
-                            string key = badge.Name;
-                            JObject badgeData = badge.Value as JObject;
-                            if (badgeData == null) continue;
-                            string imagePath = badgeData.GetValue<string>("image");
-                            string filter = badgeData.GetValue<string>("filter");
-                            double ox = badgeData.GetValue<double>("ox", 0);
-                            double oy = badgeData.GetValue<double>("oy", 0);
-
-                            if (!string.IsNullOrEmpty(imagePath))
-                            {
-                                ImageReference imageRef = ImageReference.FromPackRelativePath(imagePath, filter);
-                                if (imageRef != null)
-                                    location.AddBadge(key, imageRef, null, ox, oy);
-                            }
-                        }
-                    }
                 }
 
                 JArray pinArray = locationDatabaseData.GetValue<JArray>("pinned_locations");

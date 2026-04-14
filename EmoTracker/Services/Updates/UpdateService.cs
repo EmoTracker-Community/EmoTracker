@@ -5,6 +5,7 @@ using NetSparkleUpdater.SignatureVerifiers;
 using Serilog;
 using System;
 using System.Threading.Tasks;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Services.Updates
 {
@@ -82,7 +83,7 @@ namespace EmoTracker.Services.Updates
         /// </summary>
         public void StartBackgroundCheck()
         {
-            if (!ApplicationSettings.Instance.EnableAutoUpdateCheck)
+            if (!TrackerSession.Current.Global.EnableAutoUpdateCheck)
             {
                 Log.Debug("[Update] Auto update check disabled by user setting.");
                 return;

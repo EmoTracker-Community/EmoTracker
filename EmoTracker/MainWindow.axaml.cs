@@ -10,15 +10,12 @@ using EmoTracker.Services.Updates;
 using System;
 using System.ComponentModel;
 using System.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker
 {
     public partial class MainWindow : Window
     {
-        // Set to true when we cancel a close, restore the window, then re-close
-        // so we can capture the accurate normal-state bounds before saving.
-        private bool mIsRestoreClosing = false;
-
         public MainWindow()
         {
             InitializeComponent();
@@ -26,22 +23,12 @@ namespace EmoTracker
             ApplicationModel.Instance.Initialize();
             DataContext = ApplicationModel.Instance;
             ApplicationModel.Instance.PropertyChanged += Instance_PropertyChanged;
-            Tracker.Instance.PropertyChanged += Tracker_PropertyChanged;
+            TrackerSession.Current.Tracker.PropertyChanged += Tracker_PropertyChanged;
 
-            if (ApplicationSettings.Instance.InitialWidth >= 0.0)
-                Width = ApplicationSettings.Instance.InitialWidth;
-            if (ApplicationSettings.Instance.InitialHeight >= 0.0)
-                Height = ApplicationSettings.Instance.InitialHeight;
-
-            // Restore window position if previously saved
-            if (!double.IsNaN(ApplicationSettings.Instance.InitialX) &&
-                !double.IsNaN(ApplicationSettings.Instance.InitialY))
-            {
-                WindowStartupLocation = WindowStartupLocation.Manual;
-                Position = new PixelPoint(
-                    (int)ApplicationSettings.Instance.InitialX,
-                    (int)ApplicationSettings.Instance.InitialY);
-            }
+            if (TrackerSession.Current.Global.InitialWidth >= 0.0)
+                Width = TrackerSession.Current.Global.InitialWidth;
+            if (TrackerSession.Current.Global.InitialHeight >= 0.0)
+                Height = TrackerSession.Current.Global.InitialHeight;
 
             this.Loaded += MainWindow_Loaded;
             // Use Tunnel routing to match WPF's PreviewKeyDown — the window
@@ -56,14 +43,6 @@ namespace EmoTracker
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // Validate restored position is still on a visible screen
-            EnsureWindowIsOnScreen();
-
-            // Restore maximized state after position/size are set so the
-            // normal-state bounds are established first
-            if (ApplicationSettings.Instance.InitialMaximized)
-                WindowState = WindowState.Maximized;
-
             if (this.FindControl<Button>("SettingsButton") is Button settingsBtn)
                 settingsBtn.Click += SettingsButton_Click;
 
@@ -74,40 +53,6 @@ namespace EmoTracker
             {
                 TrackerLayout?.Focus();
             });
-        }
-
-        private void EnsureWindowIsOnScreen()
-        {
-            var screens = Screens;
-            if (screens == null || screens.ScreenCount == 0)
-                return;
-
-            var pos = Position;
-            bool onAnyScreen = false;
-
-            foreach (var screen in screens.All)
-            {
-                var bounds = screen.WorkingArea;
-                // Check that at least part of the title bar (top-left corner + some margin) is visible
-                if (pos.X + 50 > bounds.X && pos.X < bounds.X + bounds.Width &&
-                    pos.Y >= bounds.Y && pos.Y < bounds.Y + bounds.Height)
-                {
-                    onAnyScreen = true;
-                    break;
-                }
-            }
-
-            if (!onAnyScreen)
-            {
-                // Reset to center of primary screen
-                WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                var primary = screens.Primary ?? screens.All[0];
-                var wa = primary.WorkingArea;
-                var scaling = primary.Scaling;
-                Position = new PixelPoint(
-                    wa.X + (int)((wa.Width - Width * scaling) / 2),
-                    wa.Y + (int)((wa.Height - Height * scaling) / 2));
-            }
         }
 
         private async void CheckForUpdatesMenuItem_Click(object sender, RoutedEventArgs e)
@@ -198,7 +143,7 @@ namespace EmoTracker
                 });
             }
 
-            if (Tracker.Instance.ActiveGamePackage == package)
+            if (TrackerSession.Current.Tracker.ActiveGamePackage == package)
             {
                 panel.Children.Add(new Border
                 {
@@ -225,7 +170,7 @@ namespace EmoTracker
             var panel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
             panel.Children.Add(new Avalonia.Controls.TextBlock { Text = variant.DisplayName, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
 
-            if (Tracker.Instance.ActiveGamePackageVariant == variant)
+            if (TrackerSession.Current.Tracker.ActiveGamePackageVariant == variant)
             {
                 panel.Children.Add(new Border
                 {
@@ -290,7 +235,7 @@ namespace EmoTracker
             }
             else if (e.Key == Key.F11)
             {
-                ApplicationSettings.Instance.DisplayAllLocations = !ApplicationSettings.Instance.DisplayAllLocations;
+                TrackerSession.Current.Global.DisplayAllLocations = !TrackerSession.Current.Global.DisplayAllLocations;
                 e.Handled = true;
                 return;
             }
@@ -341,29 +286,7 @@ namespace EmoTracker
 
         protected override void OnClosing(WindowClosingEventArgs e)
         {
-            // If closing while maximized or fullscreen, cancel this close, restore the window
-            // to normal so the OS reports accurate bounds, then re-close on the next frame.
-            if (!mIsRestoreClosing && WindowState != WindowState.Normal)
-            {
-                e.Cancel = true;
-                mIsRestoreClosing = true;
-                ApplicationSettings.Instance.InitialMaximized =
-                    WindowState == WindowState.Maximized || WindowState == WindowState.FullScreen;
-                WindowState = WindowState.Normal;
-                Avalonia.Threading.Dispatcher.UIThread.Post(Close, Avalonia.Threading.DispatcherPriority.Background);
-                return;
-            }
-
-            // Save window state, position, and size for next launch.
-            // At this point WindowState is Normal (either it was already, or we just restored it above).
-            if (!mIsRestoreClosing)
-                ApplicationSettings.Instance.InitialMaximized = false;
-            ApplicationSettings.Instance.InitialX = Position.X;
-            ApplicationSettings.Instance.InitialY = Position.Y;
-            ApplicationSettings.Instance.InitialWidth = Width;
-            ApplicationSettings.Instance.InitialHeight = Height;
-
-            if (ApplicationSettings.Instance.PromptOnRefreshClose)
+            if (TrackerSession.Current.Global.PromptOnRefreshClose)
             {
                 // For Phase 6 just close — async dialog in Phase 7
             }
@@ -391,7 +314,7 @@ namespace EmoTracker
 
         private void UpdateResizeMode()
         {
-            if (!Tracker.Instance.AllowResize)
+            if (!TrackerSession.Current.Tracker.AllowResize)
             {
                 CanResize = false;
                 SizeToContent = SizeToContent.WidthAndHeight;
@@ -432,7 +355,6 @@ namespace EmoTracker
 
             base.OnSizeChanged(e);
         }
-
 
         public UI.DeveloperConsole DeveloperConsole { get; private set; }
 

@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using Serilog;
 using System;
 using System.ComponentModel;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Extensions.NDI
 {
@@ -55,7 +56,7 @@ namespace EmoTracker.Extensions.NDI
             //   - package (re)load   → BroadcastLayout property change on ApplicationModel
             //   - user toggles setting → EnableBackgroundNdi property change on ApplicationSettings
             ApplicationModel.Instance.PropertyChanged += OnApplicationModelPropertyChanged;
-            ApplicationSettings.Instance.PropertyChanged += OnApplicationSettingsPropertyChanged;
+            TrackerSession.Current.Global.PropertyChanged += OnApplicationSettingsPropertyChanged;
 
             ReconcileHiddenWindow();
         }
@@ -63,7 +64,7 @@ namespace EmoTracker.Extensions.NDI
         public void Stop()
         {
             ApplicationModel.Instance.PropertyChanged -= OnApplicationModelPropertyChanged;
-            ApplicationSettings.Instance.PropertyChanged -= OnApplicationSettingsPropertyChanged;
+            TrackerSession.Current.Global.PropertyChanged -= OnApplicationSettingsPropertyChanged;
 
             DestroyHiddenWindow();
         }
@@ -111,7 +112,7 @@ namespace EmoTracker.Extensions.NDI
         /// </summary>
         private void ReconcileHiddenWindow()
         {
-            bool settingEnabled = ApplicationSettings.Instance.EnableBackgroundNdi;
+            bool settingEnabled = TrackerSession.Current.Global.EnableBackgroundNdi;
             bool hasContent = HasBroadcastContent();
             bool shouldExist = settingEnabled && hasContent;
 

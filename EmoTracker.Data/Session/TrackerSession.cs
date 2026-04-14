@@ -8,20 +8,22 @@ using System;
 namespace EmoTracker.Data.Session
 {
     /// <summary>
-    /// Aggregates all per-session tracker state. Phases 1–4 of the refactor are
-    /// complete: the session owns the transaction processor, session-scoped
-    /// settings facade, item state store, location state store, and accessibility
-    /// evaluator. The catalog/database singletons (<c>Tracker</c>, <c>ItemDatabase</c>,
-    /// <c>LocationDatabase</c>, <c>MapDatabase</c>, <c>LayoutManager</c>,
-    /// <c>ScriptManager</c>) are still reachable as <c>.Instance</c> for back-compat,
-    /// but new code should reach them through <c>TrackerSession.Current</c>.
+    /// Aggregates all per-session tracker state. The session owns the transaction
+    /// processor, session-scoped settings facade, item state store, location state
+    /// store, accessibility evaluator, and the seven former data-layer singletons
+    /// (<c>Tracker</c>, <c>ItemDatabase</c>, <c>LocationDatabase</c>,
+    /// <c>MapDatabase</c>, <c>LayoutManager</c>, <c>ScriptManager</c>,
+    /// <c>ApplicationSettings</c>).
     ///
-    /// Phase 5 introduces <see cref="DesignInstance"/> for XAML design-time
-    /// previews and converts the remaining script-interface bridge
-    /// (<c>LayoutScriptInterface</c>) to per-session injection. Full retirement
-    /// of the <c>.Instance</c> accessors is deferred — there are ~400 call sites
-    /// across plugins and Extensions, and a phased migration is safer than a
-    /// big-bang removal.
+    /// Phase 6 retired the <c>.Instance</c> accessors on those seven types: all
+    /// callers (C# + XAML) now route through <c>TrackerSession.Current</c>, and
+    /// the types themselves are plain <c>ObservableObject</c>s constructed by the
+    /// session ctor in dependency order. <see cref="DesignInstance"/> bootstraps
+    /// a minimal session for XAML design-time previewers.
+    ///
+    /// Note: <c>ApplicationModel</c>, <c>PackageManager</c>, and
+    /// <c>ExtensionManager</c> remain singletons by design — they live in the UI
+    /// / Extensions layer, outside the session's ownership boundary.
     /// </summary>
     public class TrackerSession : ObservableObject
     {
@@ -44,8 +46,6 @@ namespace EmoTracker.Data.Session
                 // something to resolve against. Only safe to call from the
                 // designer process; the runtime always has Current set early in
                 // App startup.
-                if (ApplicationSettings.Instance == null)
-                    ApplicationSettings.CreateInstance();
                 return CreateCurrent();
             }
         }
@@ -100,46 +100,44 @@ namespace EmoTracker.Data.Session
 
         private TrackerSession()
         {
-            // Phase 4: publish ourselves as the Current session up front, before
-            // any singleton lazy-init below can construct objects whose
-            // transactable property access resolves through TrackerSession.Current
-            // (e.g. LocationDatabase.Instance creating the root Location, which
-            // inherits LocationVisualProperties.PropertyStore → LocationStates).
-            // Without this the first transactable writes would land in a per-
-            // instance dict that later reads (now routed to the session store)
-            // would never see.
+            // Publish ourselves as the Current session up front, before any
+            // subsystem ctor below can construct objects whose transactable
+            // property access resolves through TrackerSession.Current (e.g.
+            // LocationDatabase's root Location, which inherits
+            // LocationVisualProperties.PropertyStore → LocationStates). Without
+            // this the first transactable writes would land in a per-instance
+            // dict that later reads (now routed to the session store) would
+            // never see.
             Current = this;
 
-            // Settings first; it drives persisted flag loading and has no
-            // singleton dependencies.
-            Global = ApplicationSettings.Instance;
+            // Settings first; drives persisted flag loading. ApplicationSettings'
+            // parameterless ctor reads application_settings.json from disk.
+            Global = new ApplicationSettings();
 
-            // Phase 4: location-tree mutable state + accessibility cache must
-            // exist before LocationDatabase is touched (its lazy init constructs
-            // the root Location, which on first transactable-property access
-            // resolves through TrackerSession.Current.LocationStates — that's
-            // why we set Current before reading Instance below).
+            // Location-tree mutable state + accessibility cache must exist
+            // before LocationDatabase is touched — its ctor constructs the root
+            // Location, which on first transactable-property access resolves
+            // through TrackerSession.Current.LocationStates.
             LocationStates = new LocationStateStore();
             Evaluator = new AccessibilityEvaluator();
 
             // LocationDatabase must be constructed before the transaction
-            // processor so the processor can inject it for Undo(); nothing in
-            // LocationDatabase's lazy-init path touches TransactionProcessor.
-            Locations = LocationDatabase.Instance;
+            // processor so the processor can inject it for Undo().
+            Locations = new LocationDatabase();
 
             // Register the session's processor BEFORE any TransactableObject
-            // construction happens via the remaining lazy singleton inits.
+            // construction happens via the remaining subsystem ctors below.
             Transactions = new Core.Transactions.Processors.LocalTransactionProcessorWithUndo(Locations);
             TransactionProcessor.SetTransactionProcessor(Transactions);
 
-            Items = ItemDatabase.Instance;
-            Maps = MapDatabase.Instance;
-            Layouts = LayoutManager.Instance;
-            Scripts = ScriptManager.Instance;
+            Items = new ItemDatabase();
+            Maps = new MapDatabase();
+            Layouts = new Layout.LayoutManager();
+            Scripts = new ScriptManager();
 
             Settings = new SessionSettings(Global);
 
-            Tracker = Tracker.Instance;
+            Tracker = new Tracker();
         }
 
         /// <summary>

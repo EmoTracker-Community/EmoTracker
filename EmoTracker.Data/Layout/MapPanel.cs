@@ -1,10 +1,11 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Layout
 {
@@ -35,13 +36,13 @@ namespace EmoTracker.Data.Layout
                 if (mMaps != null)
                     return mMaps;
 
-                return MapDatabase.Instance.Maps;
+                return TrackerSession.Current.Maps.Maps;
             }
         }
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            if (!Data.Tracker.Instance.MapEnabled)
+            if (!Session.TrackerSession.Current.Tracker.MapEnabled)
                 return false;
 
             Orientation = data.GetEnumValue<MapOrientation>("orientation", MapOrientation.Auto);
@@ -51,7 +52,7 @@ namespace EmoTracker.Data.Layout
             {
                 foreach (string mapName in mapList)
                 {
-                    Map instance = MapDatabase.Instance.FindMap(mapName);
+                    Map instance = TrackerSession.Current.Maps.FindMap(mapName);
                     if (instance != null)
                     {
                         if (mMaps == null)

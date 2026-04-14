@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Providers.NWA
 {
@@ -85,7 +86,7 @@ namespace EmoTracker.Providers.NWA
 
         static string GetHost()
         {
-            return ApplicationSettings.Instance.GetProviderSetting(SettingKey, DefaultHost);
+            return TrackerSession.Current.Global.GetProviderSetting(SettingKey, DefaultHost);
         }
 
         static (int basePort, int count) GetPortRange()

@@ -8,12 +8,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data
 {
 
 
-    public class ApplicationSettings : ObservableSingleton<ApplicationSettings>
+    public class ApplicationSettings : ObservableObject
     {
         readonly Dictionary<string, string> mProviderSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -33,11 +34,8 @@ namespace EmoTracker.Data
             WriteSettings();
         }
 
-        double mInitialX = double.NaN;
-        double mInitialY = double.NaN;
         double mInitialWidth = -1.0;
         double mInitialHeight = -1.0;
-        bool mbInitialMaximized = false;
         double mNDIFrameRate = 30.0;
         int mNDIOutputScale = 1;
         bool mbEnableBackgroundNdi = true;
@@ -46,7 +44,6 @@ namespace EmoTracker.Data
         bool mbEnableDiscordRichPresence = false;
         bool mbEnableVoice = true;
         bool mbEnableNoteTaking = true;
-        bool mbEnableVariantSwitcher = false;
         bool mbPromptOnRefreshClose = false;
         string mbVoiceInputDeviceName;
 
@@ -62,7 +59,7 @@ namespace EmoTracker.Data
             set
             {
                 if (SetProperty(ref mbIgnoreAllLogic, value))
-                    LocationDatabase.Instance.RefeshAccessibility();
+                    TrackerSession.Current.Locations.RefeshAccessibility();
             }
         }
 
@@ -97,13 +94,6 @@ namespace EmoTracker.Data
             set { SetProperty(ref mbFastTooltips, value); }
         }
 
-        bool mbSupportLua53VersionChecks = false;
-        public bool SupportLua53VersionChecks
-        {
-            get { return mbSupportLua53VersionChecks; }
-            set { SetProperty(ref mbSupportLua53VersionChecks, value); }
-        }
-
         string mServiceBaseURL = "https://emotracker-community.github.io/EmoTracker-Service/service/";
         string mTwitchChannelName;
         string mLastActivePackage;
@@ -113,18 +103,6 @@ namespace EmoTracker.Data
         bool mNoAsyncImages;
 
         ObservableCollection<string> mPackageRepositories = new ObservableCollection<string>();
-
-        public double InitialX
-        {
-            get { return mInitialX; }
-            set { SetProperty(ref mInitialX, value); }
-        }
-
-        public double InitialY
-        {
-            get { return mInitialY; }
-            set { SetProperty(ref mInitialY, value); }
-        }
 
         public double InitialWidth
         {
@@ -136,12 +114,6 @@ namespace EmoTracker.Data
         {
             get { return mInitialHeight; }
             set { SetProperty(ref mInitialHeight, value); }
-        }
-
-        public bool InitialMaximized
-        {
-            get { return mbInitialMaximized; }
-            set { SetProperty(ref mbInitialMaximized, value); }
         }
 
         public bool AlwaysOnTop
@@ -160,12 +132,6 @@ namespace EmoTracker.Data
         {
             get { return mbEnableNoteTaking; }
             set { SetProperty(ref mbEnableNoteTaking, value); }
-        }
-
-        public bool EnableVariantSwitcher
-        {
-            get { return mbEnableVariantSwitcher; }
-            set { SetProperty(ref mbEnableVariantSwitcher, value); }
         }
 
         public string VoiceInputDeviceName
@@ -295,11 +261,8 @@ namespace EmoTracker.Data
                     {
                         JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
 
-                        InitialX = root.GetValue<double>("initial_x", double.NaN);
-                        InitialY = root.GetValue<double>("initial_y", double.NaN);
                         InitialWidth = root.GetValue<double>("initial_width", -1.0);
                         InitialHeight = root.GetValue<double>("initial_height", -1.0);
-                        InitialMaximized = root.GetValue<bool>("initial_maximized", false);
                         NdiFrameRate = root.GetValue<double>("ndi_frame_rate", 30.0);
                         NdiOutputScale = root.GetValue<int>("ndi_output_scale", 1);
                         EnableBackgroundNdi = root.GetValue<bool>("enable_background_ndi", true);
@@ -308,7 +271,6 @@ namespace EmoTracker.Data
                         EnableDiscordRichPresence = root.GetValue<bool>("discord_rich_presence", false);
                         EnableVoiceControl = root.GetValue<bool>("enable_voice_control", true);
                         EnableNoteTaking = root.GetValue<bool>("enable_note_taking", true);
-                        EnableVariantSwitcher = root.GetValue<bool>("enable_variant_switcher", false);
                         VoiceInputDeviceName = root.GetValue<string>("voice_input_device_name");
                         PromptOnRefreshClose = root.GetValue<bool>("prompt_on_refresh_close", false);
                         LastActivePackage = root.GetValue<string>("last_active_package");
@@ -323,7 +285,6 @@ namespace EmoTracker.Data
                         PinLocationsOnItemCapture = root.GetValue<bool>("tracking_pin_locations_on_item_capture", true);
 
                         FastToolTips = root.GetValue<bool>("assistance_fast_tool_tips", false);
-                        SupportLua53VersionChecks = root.GetValue<bool>("lua_support_53_version_checks", false);
 
                         JArray repositories = root.GetValue<JArray>("package_repositories");
                         if (repositories != null)
@@ -394,19 +355,11 @@ namespace EmoTracker.Data
 
                         JObject root = new JObject();
 
-                        if (!double.IsNaN(InitialX))
-                            root.Add("initial_x", JToken.FromObject(InitialX));
-
-                        if (!double.IsNaN(InitialY))
-                            root.Add("initial_y", JToken.FromObject(InitialY));
-
                         if (InitialWidth >= 0.0)
                             root.Add("initial_width", JToken.FromObject(InitialWidth));
 
                         if (InitialHeight >= 0.0)
                             root.Add("initial_height", JToken.FromObject(InitialHeight));
-
-                        root.Add("initial_maximized", JToken.FromObject(InitialMaximized));
 
                         if (NdiFrameRate > 1.0)
                             root.Add("ndi_frame_rate", JToken.FromObject(NdiFrameRate));
@@ -421,7 +374,6 @@ namespace EmoTracker.Data
                         root.Add("discord_rich_presence", JToken.FromObject(EnableDiscordRichPresence));
                         root.Add("enable_voice_control", JToken.FromObject(EnableVoiceControl));
                         root.Add("enable_note_taking", JToken.FromObject(EnableNoteTaking));
-                        root.Add("enable_variant_switcher", JToken.FromObject(EnableVariantSwitcher));
                         if (!string.IsNullOrWhiteSpace(VoiceInputDeviceName))
                             root.Add("voice_input_device_name", JToken.FromObject(VoiceInputDeviceName));
                         root.Add("prompt_on_refresh_close", JToken.FromObject(PromptOnRefreshClose));
@@ -445,7 +397,6 @@ namespace EmoTracker.Data
                         root.Add("tracking_pin_locations_on_item_capture", JToken.FromObject(PinLocationsOnItemCapture));
 
                         root.Add("assistance_fast_tool_tips", JToken.FromObject(FastToolTips));
-                        root.Add("lua_support_53_version_checks", JToken.FromObject(SupportLua53VersionChecks));
 
                         JArray reposVal = JArray.FromObject(AdditionalRepositories);
                         if (reposVal != null)

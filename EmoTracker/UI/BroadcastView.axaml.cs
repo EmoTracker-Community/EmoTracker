@@ -4,6 +4,7 @@ using EmoTracker.Data;
 using EmoTracker.Extensions;
 using EmoTracker.Extensions.NDI;
 using System.ComponentModel;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.UI
 {
@@ -23,7 +24,7 @@ namespace EmoTracker.UI
             //
             // NdiEnabled is read once in NdiSendContainer.OnAttachedToVisualTree,
             // so we set it BEFORE the window attaches to the visual tree.
-            NDIHost.NdiEnabled = !ApplicationSettings.Instance.EnableBackgroundNdi;
+            NDIHost.NdiEnabled = !TrackerSession.Current.Global.EnableBackgroundNdi;
 
             if (NDIHost.NdiEnabled)
             {

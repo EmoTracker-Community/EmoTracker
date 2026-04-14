@@ -1,8 +1,9 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Items
 {
@@ -100,7 +101,7 @@ namespace EmoTracker.Data.Items
 
         protected override void ParseDataInternal(JObject data, IGamePackage package)
         {
-            BaseItem = ItemDatabase.Instance.FindProvidingItemForCode(data.GetValue<string>("base_item"));
+            BaseItem = TrackerSession.Current.Items.FindProvidingItemForCode(data.GetValue<string>("base_item"));
             if (BaseItem != null)
                 BaseItem.PropertyChanged += BaseItem_PropertyChanged;
 

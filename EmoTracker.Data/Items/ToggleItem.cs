@@ -1,8 +1,9 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Items
 {
@@ -45,7 +46,7 @@ namespace EmoTracker.Data.Items
 
                 if (!string.IsNullOrWhiteSpace(mConsumedCode))
                 {
-                    ConsumableItem provider = ItemDatabase.Instance.FindProvidingItemForCode(mConsumedCode) as ConsumableItem;
+                    ConsumableItem provider = TrackerSession.Current.Items.FindProvidingItemForCode(mConsumedCode) as ConsumableItem;
                     if (provider != null)
                     {
                         if (!Active && value)

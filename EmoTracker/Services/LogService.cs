@@ -1,10 +1,11 @@
-﻿using EmoTracker.Core.Services.Backends;
+using EmoTracker.Core.Services.Backends;
 using EmoTracker.Data;
 using Serilog;
 using Serilog.Configuration;
 using Serilog.Core;
 using Serilog.Events;
 using System;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Services
 {
@@ -38,14 +39,14 @@ namespace EmoTracker.Services
                 case LogEventLevel.Information:
                     Core.Services.Dispatch.BeginInvoke(() =>
                     {
-                        ScriptManager.Instance.Output(message);
+                        TrackerSession.Current.Scripts.Output(message);
                     });
                     break;
 
                 case LogEventLevel.Warning:
                     Core.Services.Dispatch.BeginInvoke(() =>
                     {
-                        ScriptManager.Instance.OutputWarning(message);
+                        TrackerSession.Current.Scripts.OutputWarning(message);
                     });
                     break;
 
@@ -53,7 +54,7 @@ namespace EmoTracker.Services
                 case LogEventLevel.Fatal:
                     Core.Services.Dispatch.BeginInvoke(() =>
                     {
-                        ScriptManager.Instance.OutputError(message);
+                        TrackerSession.Current.Scripts.OutputError(message);
                     });
                     break;
             }
@@ -62,7 +63,7 @@ namespace EmoTracker.Services
             {
                 Core.Services.Dispatch.BeginInvoke(() =>
                 {
-                    ScriptManager.Instance.OutputException(logEvent.Exception);
+                    TrackerSession.Current.Scripts.OutputException(logEvent.Exception);
                 });
             }
         }

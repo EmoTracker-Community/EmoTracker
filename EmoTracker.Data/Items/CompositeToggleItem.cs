@@ -1,8 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Items
 {
@@ -73,8 +74,8 @@ namespace EmoTracker.Data.Items
 
             mProvidedCodes.AddCodes(data.GetValue<string>("codes"));
 
-            mItemA = ItemDatabase.Instance.FindProvidingItemForCode(data.GetValue<string>("item_left")) as ToggleItem;
-            mItemB = ItemDatabase.Instance.FindProvidingItemForCode(data.GetValue<string>("item_right")) as ToggleItem;
+            mItemA = TrackerSession.Current.Items.FindProvidingItemForCode(data.GetValue<string>("item_left")) as ToggleItem;
+            mItemB = TrackerSession.Current.Items.FindProvidingItemForCode(data.GetValue<string>("item_right")) as ToggleItem;
 
             if (mItemA != null)
                 mItemA.PropertyChanged += MonitoredItem_PropertyChanged;

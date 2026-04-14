@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:EmoTracker"
         xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+        xmlns:session="clr-namespace:EmoTracker.Data.Session;assembly=EmoTracker.Data"
         xmlns:packages="clr-namespace:EmoTracker.Data.Packages;assembly=EmoTracker.Data"
         xmlns:extensions="clr-namespace:EmoTracker.Extensions"
         xmlns:ui="clr-namespace:EmoTracker.UI"
@@ -18,7 +19,7 @@
         MinWidth="220" MinHeight="61"
         Width="1280" Height="960"
         Title="{Binding MainWindowTitle, Source={x:Static local:ApplicationModel.Instance}}"
-        Topmost="{Binding AlwaysOnTop, Source={x:Static data:ApplicationSettings.Instance}}">
+        Topmost="{Binding Global.AlwaysOnTop, Source={x:Static session:TrackerSession.Current}}">
 
 <Grid RowDefinitions="*,Auto">
 
@@ -37,7 +38,7 @@
 
             <!-- No-package placeholder: visible only when no package is active -->
             <Grid Background="#080808" IsHitTestVisible="False" Name="NoPackagePlaceholder"
-                  IsVisible="{Binding ActiveGamePackage, Source={x:Static data:Tracker.Instance}, Converter={x:Static converters:NullToTrueConverter.Instance}}">
+                  IsVisible="{Binding Tracker.ActiveGamePackage, Source={x:Static session:TrackerSession.Current}, Converter={x:Static converters:NullToTrueConverter.Instance}}">
                 <TextBlock Foreground="WhiteSmoke"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextWrapping="Wrap" Margin="15"
@@ -110,14 +111,14 @@
                             <MenuItem Header="Layout">
                                 <MenuItem Header="Always On Top"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding AlwaysOnTop, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.AlwaysOnTop, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <Separator />
                                 <MenuItem Header="Enable Map"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding MapEnabled, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
+                                          IsChecked="{Binding Tracker.MapEnabled, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <MenuItem Header="Swap Left/Right"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding SwapLeftRight, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
+                                          IsChecked="{Binding Tracker.SwapLeftRight, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <Separator />
                                 <MenuItem Header="Map DPI Awareness"
                                           ToggleType="CheckBox"
@@ -128,36 +129,33 @@
                             <MenuItem Header="Tracking">
                                 <MenuItem Header="Always Allow Chest Manipulation"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding AlwaysAllowClearing, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.AlwaysAllowClearing, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <MenuItem Header="Ignore All Logic"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding IgnoreAllLogic, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.IgnoreAllLogic, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <MenuItem Header="Prompt When Refreshing/Closing"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding PromptOnRefreshClose, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.PromptOnRefreshClose, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <MenuItem Header="Show All Locations" InputGesture="F11"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding DisplayAllLocations, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.DisplayAllLocations, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <Separator />
                                 <MenuItem Header="Pin Locations on Item Capture"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding PinLocationsOnItemCapture, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.PinLocationsOnItemCapture, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <MenuItem Header="Unpin Locations when Cleared"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding AutoUnpinLocationsOnClear, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.AutoUnpinLocationsOnClear, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <Separator />
                                 <MenuItem Header="Reload" Command="{Binding RefreshCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F5" />
                             </MenuItem>
                             <MenuItem Header="Extensions">
                                 <MenuItem Header="Voice Control"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding EnableVoiceControl, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.EnableVoiceControl, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 <MenuItem Header="Note Taking"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding EnableNoteTaking, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
-                                <MenuItem Header="Variant Switcher"
-                                          ToggleType="CheckBox"
-                                          IsChecked="{Binding EnableVariantSwitcher, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.EnableNoteTaking, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Assistance">
@@ -165,7 +163,7 @@
                                 <Separator />
                                 <MenuItem Header="Fast Tool Tips"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding FastToolTips, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding Global.FastToolTips, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Check for Updates…" Name="CheckForUpdatesMenuItem" />
@@ -251,7 +249,7 @@
                     Width="12" Height="12"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="0,0,2,1"
-                    IsVisible="{Binding AllowResize, Source={x:Static data:Tracker.Instance}}">
+                    IsVisible="{Binding Tracker.AllowResize, Source={x:Static session:TrackerSession.Current}}">
                 <!-- Three diagonal dot lines -->
                 <Line StartPoint="10,2" EndPoint="2,10" Stroke="#555555" StrokeThickness="1"/>
                 <Line StartPoint="10,5" EndPoint="5,10" Stroke="#555555" StrokeThickness="1"/>

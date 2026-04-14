@@ -4,6 +4,7 @@ using System;
 using System.Globalization;
 
 using Avalonia.Data.Converters;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.UI.Converters
 {
@@ -16,7 +17,7 @@ namespace EmoTracker.UI.Converters
                 try
                 {
                     string layoutName = value.ToString();
-                    return LayoutManager.Instance.FindLayout(layoutName);
+                    return TrackerSession.Current.Layouts.FindLayout(layoutName);
                 }
                 catch { }
             }
@@ -26,7 +27,7 @@ namespace EmoTracker.UI.Converters
                 try
                 {
                     string layoutName = parameter.ToString();
-                    return LayoutManager.Instance.FindLayout(layoutName);
+                    return TrackerSession.Current.Layouts.FindLayout(layoutName);
                 }
                 catch { }
             }

@@ -1,6 +1,7 @@
-﻿using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Media;
 using System.Collections.Generic;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Locations
 {
@@ -109,7 +110,7 @@ namespace EmoTracker.Data.Locations
                 {
                     if (SetTransactableProperty(value, (processedValue) =>
                     {
-                        LocationDatabase.Instance.RefeshAccessibility();
+                        TrackerSession.Current.Locations.RefeshAccessibility();
                     }))
                     {
                         if (mbCaptureBadge)
@@ -156,7 +157,7 @@ namespace EmoTracker.Data.Locations
             {
                 if (SetProperty(ref mGateCode, value))
                 {
-                    GateItem = ItemDatabase.Instance.FindProvidingItemForCode(mGateCode);
+                    GateItem = TrackerSession.Current.Items.FindProvidingItemForCode(mGateCode);
                 }
             }
         }
@@ -167,7 +168,7 @@ namespace EmoTracker.Data.Locations
             private set
             {
                 if (SetProperty(ref mGateItem, value))
-                    LocationDatabase.Instance.RefeshAccessibility();
+                    TrackerSession.Current.Locations.RefeshAccessibility();
             }
         }
 
@@ -181,7 +182,7 @@ namespace EmoTracker.Data.Locations
                 mHostedItemCode = value;
                 NotifyPropertyChanged();
 
-                HostedItem = ItemDatabase.Instance.FindProvidingItemForCode(mHostedItemCode);
+                HostedItem = TrackerSession.Current.Items.FindProvidingItemForCode(mHostedItemCode);
             }
         }
 
@@ -207,7 +208,7 @@ namespace EmoTracker.Data.Locations
 
                     if (SetTransactableProperty(value, (processedValue) =>
                     {
-                        LocationDatabase.Instance.RefeshAccessibility();
+                        TrackerSession.Current.Locations.RefeshAccessibility();
                     }))
                     {
                         //  Because relevant section data allows open transaction reads,
@@ -332,7 +333,7 @@ namespace EmoTracker.Data.Locations
             {
                 foreach (AccessibilityRule.CodeRule code in rule.Codes)
                 {
-                    Section dependentSection = Tracker.Instance.FindObjectForCode(code.mCode) as Section;
+                    Section dependentSection = TrackerSession.Current.Tracker.FindObjectForCode(code.mCode) as Section;
                     if (dependentSection != null)
                         dependentSection.ComputeGateDependencies(aggregateGateRequirements, false);
                 }
@@ -342,7 +343,7 @@ namespace EmoTracker.Data.Locations
             {
                 foreach (AccessibilityRule.CodeRule code in rule.Codes)
                 {
-                    Section dependentSection = Tracker.Instance.FindObjectForCode(code.mCode) as Section;
+                    Section dependentSection = TrackerSession.Current.Tracker.FindObjectForCode(code.mCode) as Section;
                     if (dependentSection != null)
                         dependentSection.ComputeGateDependencies(aggregateGateRequirements, false);
                 }
@@ -382,7 +383,7 @@ namespace EmoTracker.Data.Locations
                         count = aggregateGateRequirements[code];
 
                     AccessibilityLevel _unused;
-                    uint providedCount = ItemDatabase.Instance.ProviderCountForCode(code, out _unused);
+                    uint providedCount = TrackerSession.Current.Items.ProviderCountForCode(code, out _unused);
 
 #if true
                     AccessibilityLevel bypassLevel = (!GateBypassRules.Empty && providedCount >= (count - localCount)) ? GateBypassRules.AccessibilityWithoutModifiers : AccessibilityLevel.None;

@@ -1,4 +1,4 @@
-﻿using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Media;
 using EmoTracker.Data.Notes;
 using EmoTracker.Core;
@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Locations
 {
@@ -41,7 +42,7 @@ namespace EmoTracker.Data.Locations
                 int numClearedSections = 0;
                 foreach (Section s in Sections)
                 {
-                    if (AlwaysAllowChestManipulation || s.AccessibilityLevel >= AccessibilityLevel.Unlockable || ApplicationSettings.Instance.AlwaysAllowClearing)
+                    if (AlwaysAllowChestManipulation || s.AccessibilityLevel >= AccessibilityLevel.Unlockable || TrackerSession.Current.Global.AlwaysAllowClearing)
                     {
                         if (s.Visible)
                         {
@@ -208,9 +209,9 @@ namespace EmoTracker.Data.Locations
                 ForceSetTransactableProperty(value, (processedValue) =>
                 {
                     if (processedValue)
-                        LocationDatabase.Instance.PinLocation(this);
+                        TrackerSession.Current.Locations.PinLocation(this);
                     else
-                        LocationDatabase.Instance.UnpinLocation(this);
+                        TrackerSession.Current.Locations.UnpinLocation(this);
                 });
             }
         }
@@ -382,7 +383,7 @@ namespace EmoTracker.Data.Locations
                     foreach (var entry in aggregateGateRequirements)
                     {
                         AccessibilityLevel _unused;
-                        if (ItemDatabase.Instance.ProviderCountForCode(entry.Key, out _unused) < entry.Value)
+                        if (TrackerSession.Current.Items.ProviderCountForCode(entry.Key, out _unused) < entry.Value)
                         {
                             mCachedAccessibility = AccessibilityLevel.Partial;
                             break;
@@ -401,7 +402,7 @@ namespace EmoTracker.Data.Locations
                         Pinned = false;
 
                     if (mCachedBaseAccessibility != prevBaseAccessibility)
-                        LocationDatabase.Instance.LastClearedLocation = this;
+                        TrackerSession.Current.Locations.LastClearedLocation = this;
                 }
             }
             else
@@ -493,9 +494,8 @@ namespace EmoTracker.Data.Locations
         {
             try
             {
-                ImageReference badge = ImageReference.FromPackRelativePath(Tracker.Instance.ActiveGamePackage, imageRef, filterSpec);
-                if (badge == null) return null;
-                mBadges[DefaultBadgeKey] = new BadgeEntry(DefaultBadgeKey, badge);
+                ImageReference badge = ImageReference.FromPackRelativePath(TrackerSession.Current.Tracker.ActiveGamePackage, imageRef, filterSpec);
+                mBadges.Add(badge);
                 return badge;
             }
             catch

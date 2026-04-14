@@ -4,6 +4,7 @@
         xmlns:local="clr-namespace:EmoTracker.UI"
         xmlns:app="clr-namespace:EmoTracker"
         xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+        xmlns:session="clr-namespace:EmoTracker.Data.Session;assembly=EmoTracker.Data"
         xmlns:ndi="clr-namespace:EmoTracker.Extensions.NDI"
         DataContext="{Binding Path=BroadcastLayout, Source={x:Static app:ApplicationModel.Instance}}"
         Title="EmoTracker: Broadcast View"
@@ -15,8 +16,8 @@
         <ndi:NdiSendContainer Name="NDIHost"
                               NdiName="EmoTracker Broadcast View"
                               NdiDropShadow="{Binding Root.BroadcastShadow}"
-                              NdiIntegerScale="{Binding Path=NdiOutputScale, Source={x:Static data:ApplicationSettings.Instance}}"
-                              NdiFrameRateNumerator="{Binding Path=NdiFrameRate, Source={x:Static data:ApplicationSettings.Instance}}"
+                              NdiIntegerScale="{Binding Path=Global.NdiOutputScale, Source={x:Static session:TrackerSession.Current}}"
+                              NdiFrameRateNumerator="{Binding Path=Global.NdiFrameRate, Source={x:Static session:TrackerSession.Current}}"
                               NdiFrameRateDenominator="1">
             <local:LayoutControl x:Name="HostedLayout" DataContext="{Binding}" IsEnabled="False" />
         </ndi:NdiSendContainer>

@@ -6,10 +6,11 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Layout
 {
-    public class LayoutManager : ObservableSingleton<LayoutManager>
+    public class LayoutManager : ObservableObject
     {
         Dictionary<string, LayoutItem> mUidToLayoutItem = new Dictionary<string, LayoutItem>();
         Dictionary<string, Layout> mKeyToLayout = new Dictionary<string, Layout>();
@@ -46,7 +47,7 @@ namespace EmoTracker.Data.Layout
 
         public bool IncrementalLoad(string path, IGamePackage package)
         {
-            ScriptManager.Instance.Output("Loading Layouts: {0}", path);
+            TrackerSession.Current.Scripts.Output("Loading Layouts: {0}", path);
             using (new LoggingBlock())
             {
                 try
@@ -79,7 +80,7 @@ namespace EmoTracker.Data.Layout
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    TrackerSession.Current.Scripts.OutputException(e);
                     return false;
                 }
             }
@@ -89,7 +90,7 @@ namespace EmoTracker.Data.Layout
         {
             if(package == null) { return false; }
 
-            ScriptManager.Instance.OutputWarning("Loading legacy layout data");
+            TrackerSession.Current.Scripts.OutputWarning("Loading legacy layout data");
             using (new LoggingBlock())
             {
                 try
@@ -123,7 +124,7 @@ namespace EmoTracker.Data.Layout
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    TrackerSession.Current.Scripts.OutputException(e);
                     return false;
                 }
             }

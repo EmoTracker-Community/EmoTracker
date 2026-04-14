@@ -42,7 +42,7 @@ namespace EmoTracker.Data.Locations
         /// <summary>
         /// Resolve the provider count for a code, consulting the cache when
         /// enabled. The provider is supplied by the caller so the evaluator stays
-        /// independent of the singleton <c>Tracker.Instance</c> ladder; in practice
+        /// independent of any global singleton ladder; in practice
         /// callers pass the session's <c>Tracker</c>.
         /// </summary>
         public uint GetProviderCountForCode(ICodeProvider provider, string code, out AccessibilityLevel maxAccessibility)
