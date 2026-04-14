@@ -14,6 +14,29 @@ namespace EmoTracker.Data.Items
         {
         }
 
+        // Phase 3 of the TrackerSession refactor: items source their mutable property
+        // dictionary from the session-owned ItemStateStore rather than holding it on
+        // the instance. This puts every item's runtime state behind a single store
+        // that future Fork() can deep-clone, without having to recreate item objects
+        // (preserving XAML bindings on the originals).
+        //
+        // During very early construction (before the first session is built), and as
+        // a defensive fallback if no session is current, we fall back to the per-
+        // instance dictionary on the base class. In practice the session is always
+        // available by the time any pack is loaded.
+        protected override System.Collections.Generic.Dictionary<string, object> PropertyStore
+        {
+            get
+            {
+                var session = Session.TrackerSession.Current;
+                var states = session?.ItemStates;
+                if (states != null)
+                    return states.StateFor(this);
+
+                return base.PropertyStore;
+            }
+        }
+
         public string Name
         {
             get { return mName; }

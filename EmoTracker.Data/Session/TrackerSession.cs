@@ -1,5 +1,6 @@
 using EmoTracker.Core;
 using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Data.Items;
 using EmoTracker.Data.Layout;
 using System;
 
@@ -17,6 +18,22 @@ namespace EmoTracker.Data.Session
 
         public Tracker Tracker { get; }
         public ItemDatabase Items { get; }
+
+        /// <summary>
+        /// Read-only view of the loaded item set (Phase 3 of the refactor).
+        /// Forwards to <c>Items.Catalog</c> for convenience; conceptually the
+        /// shared/immutable half of the item state split.
+        /// </summary>
+        public ItemCatalog ItemCatalog => Items?.Catalog;
+
+        /// <summary>
+        /// Per-session mutable property store backing every item's transactable
+        /// properties (Phase 3). Future <c>Fork()</c> deep-copies this store to
+        /// give a forked session independent item state without recreating the
+        /// item objects.
+        /// </summary>
+        public ItemStateStore ItemStates => Items?.States;
+
         public LocationDatabase Locations { get; }
         public MapDatabase Maps { get; }
         public LayoutManager Layouts { get; }

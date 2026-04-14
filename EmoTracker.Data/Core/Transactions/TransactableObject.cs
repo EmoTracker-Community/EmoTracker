@@ -11,7 +11,17 @@ namespace EmoTracker.Data.Core.Transactions
         static Dictionary<Type, Dictionary<string, bool>> mGlobalReadFromOpenTransactionCache = new Dictionary<Type, Dictionary<string, bool>>();
 
         Dictionary<string, bool> mLocalReadFromOpenTransactionCache;
-        Dictionary<string, object> mPropertyStore = new Dictionary<string, object>();
+        readonly Dictionary<string, object> mOwnPropertyStore = new Dictionary<string, object>();
+
+        /// <summary>
+        /// Backing store for transactable property values. Defaults to a per-instance
+        /// dictionary; subclasses may override to source the dictionary from an
+        /// external session-owned store (see <see cref="EmoTracker.Data.Items.ItemBase"/>
+        /// → <see cref="EmoTracker.Data.Items.ItemStateStore"/>) so that the mutable
+        /// state of a logical object can be moved or cloned independently of the
+        /// object identity itself.
+        /// </summary>
+        protected virtual Dictionary<string, object> PropertyStore => mOwnPropertyStore;
 
         private bool ShouldReadFromOpenTransaction(System.Type hostType, string propertyName)
         {
@@ -43,7 +53,7 @@ namespace EmoTracker.Data.Core.Transactions
         private T GetCurrentTransactablePropertyValue<T>(string propertyName)
         {
             object abstractValue;
-            if (mPropertyStore.TryGetValue(propertyName, out abstractValue))
+            if (PropertyStore.TryGetValue(propertyName, out abstractValue))
             {
                 try
                 {
@@ -96,7 +106,7 @@ namespace EmoTracker.Data.Core.Transactions
                         T resultValue = transactionState.GetPropertyValue<T>(this, propertyName);
                         NotifyPropertyChanging(propertyName);
                             
-                        mPropertyStore[propertyName] = resultValue;
+                        PropertyStore[propertyName] = resultValue;
                         onTransactionProcessed?.Invoke(resultValue);
 
                         NotifyPropertyChanged(propertyName);
