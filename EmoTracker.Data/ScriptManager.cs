@@ -258,6 +258,19 @@ end
             }
         }
 
+        // Phase 7e infrastructure: cache pack script sources as we load them so
+        // a fork can rebuild its own Lua interpreter by replaying the same
+        // sources against a fresh NLua instance. Full fork-scoped interpreter
+        // rebuild is deferred (it requires moving LuaItem's LuaFunction binding
+        // locus from the shared item instance onto the per-session ScriptManager
+        // — too invasive for this pass). For v1, forks share their parent's
+        // Lua interpreter and the constraint "don't run parent Lua concurrently
+        // with a fork scope" is documented on TrackerSession.Fork().
+        private readonly List<(string path, byte[] source)> mLoadedScriptSources = new List<(string, byte[])>();
+
+        [NLua.LuaHide]
+        public IReadOnlyList<(string path, byte[] source)> LoadedScriptSources => mLoadedScriptSources;
+
         [NLua.LuaHide]
         private object[] LoadScript(IGamePackage package, string path)
         {
@@ -275,6 +288,7 @@ end
                             byte[] buffer = new byte[s.Length];
                             if (s.Read(buffer, 0, buffer.Length) == buffer.Length)
                             {
+                                mLoadedScriptSources.Add((path, buffer));
                                 result = mLua.DoString(buffer, path);
                             }
                         }
@@ -333,6 +347,7 @@ end
             {
                 //  Dispose our previous Lua instance
                 DisposeObjectAndDefault(ref mLua);
+                mLoadedScriptSources.Clear();
 
                 mLua = new Lua();
                 mLua.DebugHook += MLua_DebugHook;

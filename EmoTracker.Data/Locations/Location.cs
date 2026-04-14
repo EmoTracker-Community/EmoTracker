@@ -74,7 +74,6 @@ namespace EmoTracker.Data.Locations
         string mName;
         string mShortName;
         string mColor;
-        bool mModifiedByUser = false;
 
 #endregion
 
@@ -96,10 +95,12 @@ namespace EmoTracker.Data.Locations
             set { SetProperty(ref mShortName, value); }
         }
 
+        // Phase 7a: session-local so a fork's edits don't mark parent locations
+        // as user-modified.
         public bool ModifiedByUser
         {
-            get { return mModifiedByUser; }
-            set { SetProperty(ref mModifiedByUser, value); }
+            get { return GetSessionLocal<bool>(); }
+            set { SetSessionLocal(value); }
         }
 
         public AccessibilityRuleSet AccessibilityRules
