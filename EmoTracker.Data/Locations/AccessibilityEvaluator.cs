@@ -66,5 +66,19 @@ namespace EmoTracker.Data.Locations
             maxAccessibility = level;
             return count;
         }
+
+        /// <summary>
+        /// Clones the evaluator for fork isolation (Phase 7). The cache is
+        /// copied so the fork starts with warm results (valid because the
+        /// fork's item state equals parent's at the instant of fork). Cache
+        /// invalidation proceeds independently on each side thereafter.
+        /// </summary>
+        public AccessibilityEvaluator Clone()
+        {
+            var clone = new AccessibilityEvaluator { mbEnableCache = mbEnableCache };
+            foreach (var kv in mCache)
+                clone.mCache[kv.Key] = kv.Value;
+            return clone;
+        }
     }
 }

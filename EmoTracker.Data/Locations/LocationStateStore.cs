@@ -50,5 +50,20 @@ namespace EmoTracker.Data.Locations
 
         /// <summary>Diagnostic: number of owners currently tracked.</summary>
         public int OwnerCount => mStateByOwner.Count;
+
+        /// <summary>
+        /// Deep-clones the store for fork isolation (Phase 7). See notes in
+        /// <c>ItemStateStore.Clone</c> — same semantics: aliased Location /
+        /// Section keys, shallow-copied inner property dicts.
+        /// </summary>
+        public LocationStateStore Clone()
+        {
+            var clone = new LocationStateStore();
+            foreach (var kv in mStateByOwner)
+            {
+                clone.mStateByOwner[kv.Key] = new Dictionary<string, object>(kv.Value);
+            }
+            return clone;
+        }
     }
 }

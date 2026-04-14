@@ -29,9 +29,9 @@ namespace EmoTracker.Data.Locations
         private AccessibilityRuleSet mAccessibilityRules = new AccessibilityRuleSet();
         private AccessibilityRuleSet mVisibilityRules = new AccessibilityRuleSet();
         private ITrackableItem mGateItem;
-        private AccessibilityLevel mCachedAccessibility = AccessibilityLevel.None;
-        private AccessibilityLevel mCachedGateAccessibility = AccessibilityLevel.None;
-        private bool mbCachedVisibilty = true;
+        // Phase 7: cached accessibility + visibility live in session-local
+        // storage (PropertyStore → LocationStateStore) so fork and parent don't
+        // clobber each other on shared Section instances.
         private bool mbClearAsGroup = false;
         private bool mbCaptureItem = false;
         private bool mbCaptureBadge = false;
@@ -298,17 +298,30 @@ namespace EmoTracker.Data.Locations
 
         public AccessibilityLevel AccessibilityLevel
         {
-            get { return mCachedAccessibility; }
+            get { return GetSessionLocal<AccessibilityLevel>(); }
         }
 
         public AccessibilityLevel GateAccessibilityLevel
         {
-            get { return mCachedGateAccessibility; }
+            get { return GetSessionLocal<AccessibilityLevel>(); }
         }
 
         public bool Visible
         {
-            get { return mbCachedVisibilty; }
+            // Initial session-local default is false; for parity with the
+            // previous instance-field default, new Section owners get true on
+            // first read if the store has no prior value for Visible (i.e. the
+            // dict entry is missing). We special-case here rather than pre-
+            // populating the store on construction, because construction
+            // happens before the owning session's LocationStates entry for
+            // this section exists.
+            get
+            {
+                var store = PropertyStore;
+                if (store.TryGetValue("Visible", out var v) && v is bool b)
+                    return b;
+                return true;
+            }
         }
 
         public void ComputeGateDependencies(Dictionary<string, uint> aggregateGateRequirements, bool bIsRoot = true)
@@ -352,6 +365,11 @@ namespace EmoTracker.Data.Locations
 
         public void RefreshAccessibility()
         {
+            // Phase 7: work in locals, publish to session-local store at the
+            // end so fork and parent don't clobber each other on the shared
+            // Section instance.
+            AccessibilityLevel mCachedGateAccessibility = GetSessionLocal<AccessibilityLevel>("GateAccessibilityLevel");
+
             if (GateItem != null)
             {
                 mCachedGateAccessibility = Min(mOwner.BaseAccessibilityLevel, GateAccessibilityRules.AccessibilityWithoutModifiers);
@@ -360,6 +378,7 @@ namespace EmoTracker.Data.Locations
                     mCachedGateAccessibility = AccessibilityLevel.Normal;
             }
 
+            AccessibilityLevel mCachedAccessibility;
             if (CapturedItem != null)
                 mCachedAccessibility = Min(mOwner.BaseAccessibilityLevel, AccessibilityRules.AccessibilityWithoutModifiers);
             else
@@ -410,11 +429,14 @@ namespace EmoTracker.Data.Locations
                 }
             }
 
-            mbCachedVisibilty = (VisibilityRules.AccessibilityForVisibility >= AccessibilityLevel.Normal);
+            bool visible = (VisibilityRules.AccessibilityForVisibility >= AccessibilityLevel.Normal);
 
-            NotifyPropertyChanged("AccessibilityLevel");
-            NotifyPropertyChanged("GateAccessibilityLevel");
-            NotifyPropertyChanged("Visible");
+            // Publish computed values to session-local storage. SetSessionLocal
+            // only raises INPC on change, so explicit NotifyPropertyChanged is
+            // unnecessary for the three properties below.
+            SetSessionLocal(mCachedAccessibility, "AccessibilityLevel");
+            SetSessionLocal(mCachedGateAccessibility, "GateAccessibilityLevel");
+            SetSessionLocal(visible, "Visible");
         }
     }
 }

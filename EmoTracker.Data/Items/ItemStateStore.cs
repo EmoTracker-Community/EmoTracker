@@ -54,5 +54,23 @@ namespace EmoTracker.Data.Items
         /// Number of owners currently tracked (diagnostic).
         /// </summary>
         public int OwnerCount => mStateByOwner.Count;
+
+        /// <summary>
+        /// Deep-clones the store for fork isolation (Phase 7). Keys (owner
+        /// instances) are aliased — Items are shared between parent and fork.
+        /// Each inner property dict is shallow-copied; values in those dicts
+        /// are either value-typed (bool, uint, string, enum) or references to
+        /// aliased Item instances (e.g. a HostedItem / CapturedItem pointer),
+        /// so a shallow copy is sufficient for isolation.
+        /// </summary>
+        public ItemStateStore Clone()
+        {
+            var clone = new ItemStateStore();
+            foreach (var kv in mStateByOwner)
+            {
+                clone.mStateByOwner[kv.Key] = new Dictionary<string, object>(kv.Value);
+            }
+            return clone;
+        }
     }
 }

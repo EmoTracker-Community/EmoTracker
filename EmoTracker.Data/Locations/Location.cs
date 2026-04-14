@@ -71,8 +71,11 @@ namespace EmoTracker.Data.Locations
         ObservableDictionary<string, BadgeEntry> mBadges = new ObservableDictionary<string, BadgeEntry>();
         ObservableCollection<BadgeEntry> mBadgeItems = new ObservableCollection<BadgeEntry>();
         AccessibilityRuleSet mAccessibility = new AccessibilityRuleSet();
-        AccessibilityLevel mCachedAccessibility = AccessibilityLevel.None;
-        AccessibilityLevel mCachedBaseAccessibility = AccessibilityLevel.None;
+        // Phase 7: cached accessibility levels live in session-local storage
+        // (PropertyStore, routed via LocationStateStore) so a fork's
+        // RefreshAccessibility doesn't clobber parent caches on shared
+        // Location instances. Property names are stable so the session store
+        // keys are consistent across re-read.
         Location mParent;
         Group mGroup;
         ImageReference mThumbnail;
@@ -114,12 +117,12 @@ namespace EmoTracker.Data.Locations
 
         public AccessibilityLevel BaseAccessibilityLevel
         {
-            get { return mCachedBaseAccessibility; }
+            get { return GetSessionLocal<AccessibilityLevel>("BaseAccessibilityLevel"); }
         }
 
         public AccessibilityLevel AccessibilityLevel
         {
-            get { return mCachedAccessibility; }
+            get { return GetSessionLocal<AccessibilityLevel>("AccessibilityLevel"); }
         }
 
         public bool HasLocalItems
@@ -127,19 +130,16 @@ namespace EmoTracker.Data.Locations
             get { return mSections.Count > 0; }
         }
 
-        private bool mbHasAvailableItems = false;
-
         public bool HasAvailableItems
         {
-            get { return mbHasAvailableItems; }
-            set { mbHasAvailableItems = value; NotifyPropertyChanged(); }
+            get { return GetSessionLocal<bool>(); }
+            set { SetSessionLocal(value); }
         }
 
-        bool mbHasVisibleSections = false;
         public bool HasVisibleSections
         {
-            get { return mbHasVisibleSections; }
-            set { SetProperty(ref mbHasVisibleSections, value); }
+            get { return GetSessionLocal<bool>(); }
+            set { SetSessionLocal(value); }
         }
 
         public Location Parent
@@ -274,10 +274,9 @@ namespace EmoTracker.Data.Locations
 
         public void RefreshAccessibility()
         {
-            AccessibilityLevel prevBaseAccessibility = mCachedBaseAccessibility;
-            AccessibilityLevel prevAccessibility = mCachedAccessibility;
+            AccessibilityLevel prevBaseAccessibility = GetSessionLocal<AccessibilityLevel>("BaseAccessibilityLevel");
 
-            mCachedBaseAccessibility = AccessibilityRules.Accessibility;
+            AccessibilityLevel mCachedBaseAccessibility = AccessibilityRules.Accessibility;
             if (Parent != null)
                 mCachedBaseAccessibility = Min(mCachedBaseAccessibility, Parent.BaseAccessibilityLevel);
 
@@ -285,6 +284,8 @@ namespace EmoTracker.Data.Locations
             AccessibilityLevel localMinCompletableAccessibility = AccessibilityLevel.Normal;
             HasAvailableItems = false;
             HasVisibleSections = false;
+
+            AccessibilityLevel mCachedAccessibility = AccessibilityLevel.None;
 
             if (mSections.Count > 0)
             {
@@ -410,8 +411,10 @@ namespace EmoTracker.Data.Locations
                 mCachedAccessibility = mCachedBaseAccessibility;
             }
 
-            NotifyPropertyChanged("BaseAccessibilityLevel");
-            NotifyPropertyChanged("AccessibilityLevel");
+            // Commit computed caches into session-local storage so forks see
+            // their own values on shared Location instances.
+            SetSessionLocal(mCachedBaseAccessibility, "BaseAccessibilityLevel");
+            SetSessionLocal(mCachedAccessibility, "AccessibilityLevel");
 
             foreach (Location child in Children)
             {

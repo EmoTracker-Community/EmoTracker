@@ -25,14 +25,12 @@ namespace EmoTracker.Data
         List<ITrackableItem> mDynamicCodeItems = new List<ITrackableItem>();
         bool mCodeIndexBuilt = false;
 
-        // Phase 3 of the TrackerSession refactor: ItemDatabase now hosts both the
-        // immutable Catalog (item identities + lookup indices) and the mutable
-        // session-owned StateStore (per-item runtime property dictionaries that
-        // TransactableObject reads/writes through). The State store is what makes
-        // future Fork() cheap — clone it and you get an independent set of item
-        // values without touching the catalog or recreating the item objects.
+        // Phase 3: ItemDatabase exposes the immutable Catalog (item identities
+        // + lookup indices). Phase 7 hoisted mutable state ownership onto
+        // TrackerSession directly (TrackerSession.ItemStates), so a Fork()
+        // can swap stores without touching the database. Reset() clears the
+        // current session's store.
         readonly ItemCatalog mCatalog;
-        readonly ItemStateStore mStates = new ItemStateStore();
 
         public IEnumerable<ITrackableItem> Items
         {
@@ -46,12 +44,11 @@ namespace EmoTracker.Data
         public ItemCatalog Catalog => mCatalog;
 
         /// <summary>
-        /// Per-session mutable property store backing every item's transactable
-        /// properties. Owned by the database in Phase 3; will move to direct
-        /// session ownership in a later phase along with the rest of the per-
-        /// session state.
+        /// Compatibility shim for callers that predate Phase 7 (where state
+        /// storage was hoisted onto <see cref="TrackerSession.ItemStates"/>).
+        /// Routes through the current session so the fork-aware store is used.
         /// </summary>
-        public ItemStateStore States => mStates;
+        public ItemStateStore States => TrackerSession.Current?.ItemStates;
 
         public ItemDatabase()
         {
@@ -71,7 +68,7 @@ namespace EmoTracker.Data
             mCodeToProviders.Clear();
             mDynamicCodeItems.Clear();
             mCodeIndexBuilt = false;
-            mStates.Reset();
+            TrackerSession.Current?.ItemStates?.Reset();
         }
 
         /// <summary>
