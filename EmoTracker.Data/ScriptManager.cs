@@ -32,71 +32,86 @@ namespace EmoTracker.Data
         }
     }
 
-    class TrackerScriptInterface : Singleton<TrackerScriptInterface>
+    /// <summary>
+    /// Surface exposed to Lua scripts as the global <c>Tracker</c> object. Phase 3
+    /// of the TrackerSession refactor turns this into a session-injected facade
+    /// (was a Singleton): every method/property routes through the owning
+    /// <see cref="Session.TrackerSession"/> rather than reaching for global
+    /// singletons. One interface instance per session, constructed by
+    /// ScriptManager when the Lua interpreter is (re)created.
+    /// </summary>
+    class TrackerScriptInterface
     {
+        readonly Session.TrackerSession mSession;
+
+        public TrackerScriptInterface(Session.TrackerSession session)
+        {
+            mSession = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
         public void AddItems(string path)
         {
-            Tracker.Instance.AddItems(path);
+            mSession.Tracker.AddItems(path);
         }
 
         public void AddMaps(string path)
         {
-            Tracker.Instance.AddMaps(path);
+            mSession.Tracker.AddMaps(path);
         }
 
         public void AddLocations(string path)
         {
-            Tracker.Instance.AddLocations(path);
+            mSession.Tracker.AddLocations(path);
         }
 
         public void AddLayouts(string path)
         {
-            Tracker.Instance.AddLayouts(path);
+            mSession.Tracker.AddLayouts(path);
         }
 
         public object FindObjectForCode(string code)
         {
-            return Tracker.Instance.FindObjectForCode(code);
+            return mSession.Tracker.FindObjectForCode(code);
         }
 
         public uint ProviderCountForCode(string code, out AccessibilityLevel maxAccessibility)
         {
-            return Tracker.Instance.ProviderCountForCode(code, out maxAccessibility);
+            return mSession.Tracker.ProviderCountForCode(code, out maxAccessibility);
         }
 
         public string ActiveVariantUID
         {
-            get { return Tracker.Instance.ActiveVariantUID; }
+            get { return mSession.Tracker.ActiveVariantUID; }
         }
         public Location RootLocation
         {
-            get { return LocationDatabase.Instance.Root; }
+            get { return mSession.Locations.Root; }
         }
 
         #region -- Backwards Compatibility (Temp) --
 
         public bool DisplayAllLocations
         {
-            get { return ApplicationSettings.Instance.DisplayAllLocations; }
-            set { ApplicationSettings.Instance.DisplayAllLocations = value; }
+            get { return mSession.Settings.DisplayAllLocations; }
+            set { mSession.Settings.DisplayAllLocations = value; }
         }
 
         public bool AlwaysAllowClearing
         {
-            get { return ApplicationSettings.Instance.AlwaysAllowClearing; }
-            set { ApplicationSettings.Instance.AlwaysAllowClearing = value; }
+            get { return mSession.Settings.AlwaysAllowClearing; }
+            set { mSession.Settings.AlwaysAllowClearing = value; }
         }
 
         public bool PinLocationsOnItemCapture
         {
-            get { return ApplicationSettings.Instance.PinLocationsOnItemCapture; }
-            set { ApplicationSettings.Instance.PinLocationsOnItemCapture = value; }
+            get { return mSession.Settings.PinLocationsOnItemCapture; }
+            set { mSession.Settings.PinLocationsOnItemCapture = value; }
         }
 
         public bool AutoUnpinLocationsOnClear
         {
-            get { return ApplicationSettings.Instance.AutoUnpinLocationsOnClear; }
-            set { ApplicationSettings.Instance.AutoUnpinLocationsOnClear = value; }
+            get { return mSession.Settings.AutoUnpinLocationsOnClear; }
+            set { mSession.Settings.AutoUnpinLocationsOnClear = value; }
         }
 
         #endregion
@@ -193,6 +208,7 @@ end
 
         IGamePackage mPackage;
         Lua mLua;
+        TrackerScriptInterface mTrackerInterface;
 
         [NLua.LuaHide]
         public IEnumerable<LogLine> LogOutput
@@ -363,7 +379,12 @@ end
                     mLua["io"] = null;
                 }
 
-                mLua["Tracker"] = TrackerScriptInterface.Instance;
+                // Phase 3: TrackerScriptInterface is per-session, not a singleton —
+                // built fresh whenever the Lua interpreter is (re)created so that
+                // Lua's `Tracker` global resolves through the owning session
+                // rather than reaching for static .Instance accessors.
+                mTrackerInterface = new TrackerScriptInterface(Session.TrackerSession.Current);
+                mLua["Tracker"] = mTrackerInterface;
                 mLua["Layout"] = LayoutScriptInterface.Instance;
                 mLua["AccessibilityLevel"] = new AccessibilityLevel();
                 mLua["NotificationType"] = new NotificationType();
