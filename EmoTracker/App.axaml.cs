@@ -47,6 +47,10 @@ namespace EmoTracker
             //  Load application settings
             Data.ApplicationSettings.CreateInstance();
 
+            //  Construct the process-wide tracker session (Phase 1 passive
+            //  aggregator — holds references to existing singletons).
+            Data.Session.TrackerSession.CreateCurrent();
+
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
