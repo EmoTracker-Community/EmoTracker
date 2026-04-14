@@ -20,8 +20,9 @@ namespace EmoTracker
 
         public override void OnFrameworkInitializationCompleted()
         {
-            Data.Core.Transactions.TransactionProcessor.SetTransactionProcessor(
-                new Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo());
+#if WINDOWS
+            ConfigurePlatformDllPaths();
+#endif
 
             Core.Services.Backends.LogService.SetServiceBackend(new Services.LogService());
             Core.Services.Backends.DispatchService.SetServiceBackend(new Services.DispatchService());

@@ -15,14 +15,22 @@ namespace EmoTracker.Data
     {
         public class SuspendRefreshScope : IDisposable
         {
+            readonly LocationDatabase mDatabase;
+
             public SuspendRefreshScope()
+                : this(LocationDatabase.Instance)
             {
-                LocationDatabase.Instance.PushSuspendRefresh();
+            }
+
+            public SuspendRefreshScope(LocationDatabase database)
+            {
+                mDatabase = database;
+                mDatabase.PushSuspendRefresh();
             }
 
             public virtual void Dispose()
             {
-                LocationDatabase.Instance.PopSuspendRefresh();
+                mDatabase.PopSuspendRefresh();
             }
         }
 

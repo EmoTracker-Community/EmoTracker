@@ -126,7 +126,7 @@ namespace EmoTracker.Data.Core.Transactions.Processors
 
             public void Undo()
             {
-                using (new LocationDatabase.SuspendRefreshScope())
+                using (new LocationDatabase.SuspendRefreshScope(mProcessor.mLocationDatabase))
                 {
                     mReadSource = ReadSource.Original;
                     foreach (var entry in mValueStates)
@@ -137,10 +137,21 @@ namespace EmoTracker.Data.Core.Transactions.Processors
             }
         }
 
+        readonly LocationDatabase mLocationDatabase;
         List<Transaction> mUndoStack = new List<Transaction>();
         Transaction mOpenTransaction = null;
 
         static readonly int MaxUndoSteps = 250;
+
+        public LocalTransactionProcessorWithUndo()
+            : this(LocationDatabase.Instance)
+        {
+        }
+
+        public LocalTransactionProcessorWithUndo(LocationDatabase locationDatabase)
+        {
+            mLocationDatabase = locationDatabase ?? throw new ArgumentNullException(nameof(locationDatabase));
+        }
 
         public ITransactionScope OpenTransaction()
         {
