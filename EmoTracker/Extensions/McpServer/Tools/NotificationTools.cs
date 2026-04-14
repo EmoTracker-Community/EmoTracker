@@ -11,22 +11,25 @@ namespace EmoTracker.Extensions.McpServer.Tools
     [McpServerToolType]
     public class NotificationTools
     {
-        [McpServerTool(Name = "push_notification")]
-        [Description("Push a markdown notification to the tracker UI. Type must be one of: Message, Celebration, Warning, Error. Timeout is in milliseconds (-1 = 10s default, 0 = never expires).")]
-        public static async Task<string> PushNotification(
-            [Description("Notification type: Message, Celebration, Warning, or Error")] string type,
-            [Description("Markdown content for the notification")] string markdown,
-            [Description("Timeout in milliseconds (-1 for default 10 seconds, 0 for no expiry)")] int timeout = -1)
+        [McpServerTool(Name = "push_markdown_notification")]
+        [Description("Display a markdown-formatted notification in the tracker UI. The notification appears in the in-app notification list and can be dismissed by the user.")]
+        public static async Task<string> PushMarkdownNotification(
+            [Description("Markdown source to render inside the notification.")] string markdown,
+            [Description("Notification severity/style. One of: Message (default), Celebration, Warning, Error.")] string type = "Message",
+            [Description("Auto-dismiss timeout in milliseconds. Use -1 (default) for a sticky notification that the user must dismiss manually.")] int timeout = -1)
         {
+            if (string.IsNullOrWhiteSpace(markdown))
+                return JsonSerializer.Serialize(new { success = false, error = "markdown is required" });
+
+            if (!Enum.TryParse<NotificationType>(type, ignoreCase: true, out var parsedType))
+                return JsonSerializer.Serialize(new { success = false, error = $"Unknown notification type '{type}'. Expected one of: Message, Celebration, Warning, Error." });
+
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 try
                 {
-                    if (!Enum.TryParse<NotificationType>(type, ignoreCase: true, out var notifType))
-                        return JsonSerializer.Serialize(new { success = false, error = $"Invalid type '{type}'. Must be: Message, Celebration, Warning, or Error." });
-
-                    ApplicationModel.Instance.PushMarkdownNotification(notifType, markdown, timeout);
-                    return JsonSerializer.Serialize(new { success = true, type = notifType.ToString(), markdown });
+                    ApplicationModel.Instance.PushMarkdownNotification(parsedType, markdown, timeout);
+                    return JsonSerializer.Serialize(new { success = true, type = parsedType.ToString(), timeout });
                 }
                 catch (Exception ex)
                 {

@@ -1,4 +1,5 @@
 ﻿using EmoTracker.Core;
+using EmoTracker.Data.Session;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -8,6 +9,22 @@ namespace EmoTracker.Data.Core.Transactions
 {
     public class TransactableObject : ObservableObject
     {
+        /// <summary>
+        /// True when the current execution flow is inside a fork scope — i.e.
+        /// <see cref="TrackerSession.Current"/> is a fork of the root session.
+        /// Writes performed in this state must not raise INPC on this shared
+        /// instance: the UI thread's bindings live on the root session and
+        /// would otherwise observe fork-scope mutations and re-render against
+        /// fork state (see Phase 7 plan, open question 7g#1).
+        /// </summary>
+        private static bool IsForkScopeActive
+        {
+            get
+            {
+                var cur = TrackerSession.Current;
+                return cur != null && cur.IsFork;
+            }
+        }
         static Dictionary<Type, Dictionary<string, bool>> mGlobalReadFromOpenTransactionCache = new Dictionary<Type, Dictionary<string, bool>>();
 
         Dictionary<string, bool> mLocalReadFromOpenTransactionCache;
@@ -115,9 +132,10 @@ namespace EmoTracker.Data.Core.Transactions
         {
             if (EqualityComparer<T>.Default.Equals(GetCurrentTransactablePropertyValue<T>(propertyName), value))
                 return false;
-            NotifyPropertyChanging(propertyName);
+            bool suppressNotify = IsForkScopeActive;
+            if (!suppressNotify) NotifyPropertyChanging(propertyName);
             PropertyStore[propertyName] = value;
-            NotifyPropertyChanged(propertyName);
+            if (!suppressNotify) NotifyPropertyChanged(propertyName);
             return true;
         }
 
@@ -133,12 +151,13 @@ namespace EmoTracker.Data.Core.Transactions
                     try
                     {
                         T resultValue = transactionState.GetPropertyValue<T>(this, propertyName);
-                        NotifyPropertyChanging(propertyName);
-                            
+                        bool suppressNotify = IsForkScopeActive;
+                        if (!suppressNotify) NotifyPropertyChanging(propertyName);
+
                         PropertyStore[propertyName] = resultValue;
                         onTransactionProcessed?.Invoke(resultValue);
 
-                        NotifyPropertyChanged(propertyName);
+                        if (!suppressNotify) NotifyPropertyChanged(propertyName);
                     }
                     catch
                     {

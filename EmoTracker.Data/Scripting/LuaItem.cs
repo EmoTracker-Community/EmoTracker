@@ -38,7 +38,7 @@ namespace EmoTracker.Data.Scripting
                 if (!object.ReferenceEquals(prev, value))
                 {
                     bindings.ItemState = value;
-                    NotifyPropertyChanged();
+                    if (TrackerSession.Current?.IsFork != true) NotifyPropertyChanged();
                     DisposeObject(prev);
                 }
             }
@@ -47,49 +47,49 @@ namespace EmoTracker.Data.Scripting
         public LuaFunction OnLeftClickFunc
         {
             get { return B?.OnLeftClick; }
-            set { var b = B; if (b == null) return; var prev = b.OnLeftClick; if (!object.ReferenceEquals(prev, value)) { b.OnLeftClick = value; NotifyPropertyChanged(); DisposeObject(prev); } }
+            set { var b = B; if (b == null) return; var prev = b.OnLeftClick; if (!object.ReferenceEquals(prev, value)) { b.OnLeftClick = value; if (TrackerSession.Current?.IsFork != true) NotifyPropertyChanged();DisposeObject(prev); } }
         }
 
         public LuaFunction OnRightClickFunc
         {
             get { return B?.OnRightClick; }
-            set { var b = B; if (b == null) return; var prev = b.OnRightClick; if (!object.ReferenceEquals(prev, value)) { b.OnRightClick = value; NotifyPropertyChanged(); DisposeObject(prev); } }
+            set { var b = B; if (b == null) return; var prev = b.OnRightClick; if (!object.ReferenceEquals(prev, value)) { b.OnRightClick = value; if (TrackerSession.Current?.IsFork != true) NotifyPropertyChanged();DisposeObject(prev); } }
         }
 
         public LuaFunction ProvidesCodeFunc
         {
             get { return B?.ProvidesCode; }
-            set { var b = B; if (b == null) return; var prev = b.ProvidesCode; if (!object.ReferenceEquals(prev, value)) { b.ProvidesCode = value; NotifyPropertyChanged(); DisposeObject(prev); } }
+            set { var b = B; if (b == null) return; var prev = b.ProvidesCode; if (!object.ReferenceEquals(prev, value)) { b.ProvidesCode = value; if (TrackerSession.Current?.IsFork != true) NotifyPropertyChanged();DisposeObject(prev); } }
         }
 
         public LuaFunction CanProvideCodeFunc
         {
             get { return B?.CanProvideCode; }
-            set { var b = B; if (b == null) return; var prev = b.CanProvideCode; if (!object.ReferenceEquals(prev, value)) { b.CanProvideCode = value; NotifyPropertyChanged(); DisposeObject(prev); } }
+            set { var b = B; if (b == null) return; var prev = b.CanProvideCode; if (!object.ReferenceEquals(prev, value)) { b.CanProvideCode = value; if (TrackerSession.Current?.IsFork != true) NotifyPropertyChanged();DisposeObject(prev); } }
         }
 
         public LuaFunction AdvanceToCodeFunc
         {
             get { return B?.AdvanceToCode; }
-            set { var b = B; if (b == null) return; var prev = b.AdvanceToCode; if (!object.ReferenceEquals(prev, value)) { b.AdvanceToCode = value; NotifyPropertyChanged(); DisposeObject(prev); } }
+            set { var b = B; if (b == null) return; var prev = b.AdvanceToCode; if (!object.ReferenceEquals(prev, value)) { b.AdvanceToCode = value; if (TrackerSession.Current?.IsFork != true) NotifyPropertyChanged();DisposeObject(prev); } }
         }
 
         public LuaFunction SaveFunc
         {
             get { return B?.Save; }
-            set { var b = B; if (b == null) return; var prev = b.Save; if (!object.ReferenceEquals(prev, value)) { b.Save = value; NotifyPropertyChanged(); DisposeObject(prev); } }
+            set { var b = B; if (b == null) return; var prev = b.Save; if (!object.ReferenceEquals(prev, value)) { b.Save = value; if (TrackerSession.Current?.IsFork != true) NotifyPropertyChanged();DisposeObject(prev); } }
         }
 
         public LuaFunction LoadFunc
         {
             get { return B?.Load; }
-            set { var b = B; if (b == null) return; var prev = b.Load; if (!object.ReferenceEquals(prev, value)) { b.Load = value; NotifyPropertyChanged(); DisposeObject(prev); } }
+            set { var b = B; if (b == null) return; var prev = b.Load; if (!object.ReferenceEquals(prev, value)) { b.Load = value; if (TrackerSession.Current?.IsFork != true) NotifyPropertyChanged();DisposeObject(prev); } }
         }
 
         public LuaFunction PropertyChangedFunc
         {
             get { return B?.PropertyChanged; }
-            set { var b = B; if (b == null) return; var prev = b.PropertyChanged; if (!object.ReferenceEquals(prev, value)) { b.PropertyChanged = value; NotifyPropertyChanged(); DisposeObject(prev); } }
+            set { var b = B; if (b == null) return; var prev = b.PropertyChanged; if (!object.ReferenceEquals(prev, value)) { b.PropertyChanged = value; if (TrackerSession.Current?.IsFork != true) NotifyPropertyChanged();DisposeObject(prev); } }
         }
 
 
