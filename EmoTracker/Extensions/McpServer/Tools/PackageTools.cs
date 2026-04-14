@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using EmoTracker.Data;
+using EmoTracker.Data.Session;
 using ModelContextProtocol.Server;
 using System;
 using System.Collections.Generic;
@@ -20,7 +21,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var pack = Tracker.Instance.ActiveGamePackage;
+                var pack = TrackerSession.Current.Tracker.ActiveGamePackage;
                 if (pack == null)
                     return JsonSerializer.Serialize(new { error = "No pack loaded" });
 
@@ -47,7 +48,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var pack = Tracker.Instance.ActiveGamePackage;
+                    var pack = TrackerSession.Current.Tracker.ActiveGamePackage;
                     if (pack == null)
                         return JsonSerializer.Serialize(new { error = "No pack loaded" });
 
@@ -80,11 +81,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var pack = Tracker.Instance.ActiveGamePackage;
+                    var pack = TrackerSession.Current.Tracker.ActiveGamePackage;
                     if (pack == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No pack loaded" });
 
-                    Tracker.Instance.Reload();
+                    TrackerSession.Current.Tracker.Reload();
                     return JsonSerializer.Serialize(new { success = true, packName = pack.DisplayName });
                 }
                 catch (Exception ex)

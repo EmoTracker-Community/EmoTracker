@@ -1,6 +1,7 @@
 using Avalonia.Threading;
 using EmoTracker.Data;
 using EmoTracker.Data.Notes;
+using EmoTracker.Data.Session;
 using ModelContextProtocol.Server;
 using System;
 using System.Collections.Generic;
@@ -23,7 +24,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var loc = LocationDatabase.Instance.FindLocation(locationName);
+                    var loc = TrackerSession.Current.Locations.FindLocation(locationName);
                     if (loc == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{locationName}' not found" });
 
@@ -49,7 +50,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var loc = LocationDatabase.Instance.FindLocation(locationName);
+                var loc = TrackerSession.Current.Locations.FindLocation(locationName);
                 if (loc == null)
                     return JsonSerializer.Serialize(new { found = false, error = $"Location '{locationName}' not found" });
 
@@ -97,7 +98,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var loc = LocationDatabase.Instance.FindLocation(locationName);
+                    var loc = TrackerSession.Current.Locations.FindLocation(locationName);
                     if (loc == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{locationName}' not found" });
 

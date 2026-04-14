@@ -8,14 +8,47 @@ using System;
 namespace EmoTracker.Data.Session
 {
     /// <summary>
-    /// Aggregates all per-session tracker state. Phase 2: owns the transaction
-    /// processor and session-scoped settings; singletons still back the other
-    /// components (catalogs, databases) and will move to session ownership in
-    /// later phases.
+    /// Aggregates all per-session tracker state. Phases 1–4 of the refactor are
+    /// complete: the session owns the transaction processor, session-scoped
+    /// settings facade, item state store, location state store, and accessibility
+    /// evaluator. The catalog/database singletons (<c>Tracker</c>, <c>ItemDatabase</c>,
+    /// <c>LocationDatabase</c>, <c>MapDatabase</c>, <c>LayoutManager</c>,
+    /// <c>ScriptManager</c>) are still reachable as <c>.Instance</c> for back-compat,
+    /// but new code should reach them through <c>TrackerSession.Current</c>.
+    ///
+    /// Phase 5 introduces <see cref="DesignInstance"/> for XAML design-time
+    /// previews and converts the remaining script-interface bridge
+    /// (<c>LayoutScriptInterface</c>) to per-session injection. Full retirement
+    /// of the <c>.Instance</c> accessors is deferred — there are ~400 call sites
+    /// across plugins and Extensions, and a phased migration is safer than a
+    /// big-bang removal.
     /// </summary>
     public class TrackerSession : ObservableObject
     {
         public static TrackerSession Current { get; private set; }
+
+        /// <summary>
+        /// Design-time-only session handle for XAML previewers. Returns the
+        /// runtime <c>Current</c> if one exists; otherwise a freshly-built
+        /// session. The previewer never tears this down, so we simply leak it
+        /// for the lifetime of the design surface.
+        /// </summary>
+        public static TrackerSession DesignInstance
+        {
+            get
+            {
+                if (Current != null)
+                    return Current;
+
+                // Bootstrap a minimal session so XAML design-time bindings have
+                // something to resolve against. Only safe to call from the
+                // designer process; the runtime always has Current set early in
+                // App startup.
+                if (ApplicationSettings.Instance == null)
+                    ApplicationSettings.CreateInstance();
+                return CreateCurrent();
+            }
+        }
 
         public Tracker Tracker { get; }
         public ItemDatabase Items { get; }

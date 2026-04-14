@@ -1,6 +1,7 @@
 using Avalonia.Threading;
 using EmoTracker.Core;
 using EmoTracker.Data;
+using EmoTracker.Data.Session;
 using ModelContextProtocol.Server;
 using System;
 using System.Collections.Generic;
@@ -35,7 +36,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (!savePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                         savePath += ".json";
 
-                    bool result = Tracker.Instance.SaveProgress(savePath);
+                    bool result = TrackerSession.Current.Tracker.SaveProgress(savePath);
                     return JsonSerializer.Serialize(new { success = result, path = savePath });
                 }
                 catch (Exception ex)
@@ -63,7 +64,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (!File.Exists(loadPath))
                         return JsonSerializer.Serialize(new { success = false, error = $"File not found: {loadPath}" });
 
-                    bool result = Tracker.Instance.LoadProgress(loadPath);
+                    bool result = TrackerSession.Current.Tracker.LoadProgress(loadPath);
                     return JsonSerializer.Serialize(new { success = result, path = loadPath });
                 }
                 catch (Exception ex)
