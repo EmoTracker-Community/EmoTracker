@@ -5,50 +5,42 @@ namespace EmoTracker.Data.Locations
 {
     public class AccessibilityRule
     {
-        static bool sbEnableCache = true;
+        // Phase 4 of the TrackerSession refactor: the accessibility cache + enable
+        // flag moved off this class onto a per-session AccessibilityEvaluator
+        // (reachable via TrackerSession.Current.Evaluator). The static accessors
+        // below remain as compatibility forwarders so existing call sites compile;
+        // they route through the current session's evaluator. A standalone fallback
+        // evaluator covers the (vanishingly rare) early-startup case where no
+        // session is current yet.
+        static readonly AccessibilityEvaluator sFallbackEvaluator = new AccessibilityEvaluator();
+
+        static AccessibilityEvaluator CurrentEvaluator
+        {
+            get
+            {
+                var session = Session.TrackerSession.Current;
+                return session?.Evaluator ?? sFallbackEvaluator;
+            }
+        }
+
         public static bool EnableCache
         {
-            get { return sbEnableCache; }
-            set { sbEnableCache = value; ClearCaches(); }
+            get { return CurrentEvaluator.EnableCache; }
+            set { CurrentEvaluator.EnableCache = value; }
         }
-
-        private struct AccessibilityResult
-        {
-            public AccessibilityLevel Level;
-            public uint ProvidedCount;
-        }
-
-        static Dictionary<string, AccessibilityResult> mAccessiblityCache = new Dictionary<string, AccessibilityResult>();
 
         public static void ClearCaches()
         {
-            mAccessiblityCache.Clear();
+            CurrentEvaluator.ClearCaches();
         }
 
         static uint GetProviderCountForCode(string code, out AccessibilityLevel maxAccessibility)
         {
-            if (sbEnableCache)
-            {
-                AccessibilityResult cachedResult;
-                if (mAccessiblityCache.TryGetValue(code, out cachedResult))
-                {
-                    maxAccessibility = cachedResult.Level;
-                    return cachedResult.ProvidedCount;
-                }
-            }
-
-            ICodeProvider provider = Tracker.Instance;
-
-            AccessibilityLevel maxAccessibilityForCode;
-            uint count = provider.ProviderCountForCode(code, out maxAccessibilityForCode);
-
-            if (sbEnableCache)
-            {
-                mAccessiblityCache[code] = new AccessibilityResult() { Level = maxAccessibilityForCode, ProvidedCount = count };
-            }
-
-            maxAccessibility = maxAccessibilityForCode;
-            return count;
+            // Use the session's tracker as the code provider when available, so the
+            // evaluation is consistent with the session that owns the cache. Falls
+            // back to the singleton during early startup.
+            ICodeProvider provider = Session.TrackerSession.Current?.Tracker ?? Tracker.Instance;
+            return CurrentEvaluator.GetProviderCountForCode(provider, code, out maxAccessibility);
         }
 
         private static AccessibilityLevel Min(AccessibilityLevel a, AccessibilityLevel b)
