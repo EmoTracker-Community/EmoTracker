@@ -170,24 +170,30 @@ namespace EmoTracker.Data.Session
         }
 
         /// <summary>
-        /// Fork ctor: aliases the parent's pack catalogs and spawns fresh
-        /// mutable stores seeded from the parent's current state.
+        /// Fork ctor: aliases the parent's pack graph (items, locations, maps,
+        /// layouts, Tracker, Global) and spawns fresh mutable stores seeded
+        /// from the parent's current state. Also builds a fresh
+        /// <see cref="ScriptManager"/> with its own NLua.Lua interpreter,
+        /// populated by replaying the parent's cached pack script sources
+        /// inside a fork scope. Pack Lua re-executes against the fork's Lua,
+        /// re-binding every LuaItem's *Func properties into the fork's
+        /// per-session bindings dict; shared LuaItem identity is preserved
+        /// because <see cref="ScriptManager.CreateLuaItem"/> returns the
+        /// N'th shared instance during replay.
         /// </summary>
         private TrackerSession(TrackerSession parent)
         {
             if (parent == null) throw new ArgumentNullException(nameof(parent));
             Parent = parent;
 
-            // Aliased (shared by reference). The pack graph (items, locations,
-            // rules, maps, layouts, scripts, Tracker, global settings) is the
-            // immutable half — safe to share because mutations route through
-            // session-scoped stores, not through these object identities.
+            // Aliased (shared by reference). Safe to share because mutations
+            // route through session-scoped stores, not through these object
+            // identities. Scripts is NOT aliased — see below.
             Tracker = parent.Tracker;
             Items = parent.Items;
             Locations = parent.Locations;
             Maps = parent.Maps;
             Layouts = parent.Layouts;
-            Scripts = parent.Scripts;
             Global = parent.Global;
 
             // Cloned (deep). A fork sees its own mutable property bags seeded
@@ -202,6 +208,18 @@ namespace EmoTracker.Data.Session
             // fork; redo frames that referenced parent's transactions would be
             // unsafe to replay against a diverged state.
             Transactions = new Core.Transactions.Processors.LocalTransactionProcessorWithUndo(Locations);
+
+            // Fresh ScriptManager with its own NLua.Lua. Inherit the package
+            // reference, the cached script sources, and the shared LuaItem
+            // list from parent, then Rebuild() under this fork's scope so
+            // replay's side-effects (Tracker/Layout interface lookups, LuaItem
+            // *Func binding assignments) resolve against fork state.
+            Scripts = new ScriptManager();
+            Scripts.InheritFrom(parent.Scripts);
+            using (EnterScope())
+            {
+                Scripts.Rebuild();
+            }
         }
 
         /// <summary>
@@ -229,9 +247,11 @@ namespace EmoTracker.Data.Session
         ///
         /// Constraints (see Phase 7 plan):
         /// - No save/load on a fork.
-        /// - Lua interpreter is shared with parent; do not let parent run Lua
-        ///   concurrently with a fork scope.
         /// - Pack reload invalidates all outstanding forks.
+        /// - Fork construction replays every cached pack script against a new
+        ///   NLua.Lua, which costs single-to-double-digit ms per MB of pack
+        ///   Lua. Fork scopes are intended for short-lived simulation work,
+        ///   not UI latency paths.
         /// </summary>
         public TrackerSession Fork()
         {
