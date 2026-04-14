@@ -2,6 +2,7 @@ using EmoTracker.Core;
 using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Items;
 using EmoTracker.Data.Layout;
+using EmoTracker.Data.Locations;
 using System;
 
 namespace EmoTracker.Data.Session
@@ -35,6 +36,22 @@ namespace EmoTracker.Data.Session
         public ItemStateStore ItemStates => Items?.States;
 
         public LocationDatabase Locations { get; }
+
+        /// <summary>
+        /// Per-session mutable property store backing every Location and Section's
+        /// transactable properties (Phase 4). Future <c>Fork()</c> deep-copies this
+        /// store to give a forked session independent location/section state
+        /// without recreating Location or Section objects.
+        /// </summary>
+        public LocationStateStore LocationStates { get; }
+
+        /// <summary>
+        /// Per-session accessibility evaluator (Phase 4). Hosts what was a
+        /// process-wide static cache on <see cref="AccessibilityRule"/>; routed
+        /// through here so a forked session's evaluation doesn't poison the
+        /// parent's cache once item state diverges.
+        /// </summary>
+        public AccessibilityEvaluator Evaluator { get; }
         public MapDatabase Maps { get; }
         public LayoutManager Layouts { get; }
         public ScriptManager Scripts { get; }
@@ -50,9 +67,27 @@ namespace EmoTracker.Data.Session
 
         private TrackerSession()
         {
+            // Phase 4: publish ourselves as the Current session up front, before
+            // any singleton lazy-init below can construct objects whose
+            // transactable property access resolves through TrackerSession.Current
+            // (e.g. LocationDatabase.Instance creating the root Location, which
+            // inherits LocationVisualProperties.PropertyStore → LocationStates).
+            // Without this the first transactable writes would land in a per-
+            // instance dict that later reads (now routed to the session store)
+            // would never see.
+            Current = this;
+
             // Settings first; it drives persisted flag loading and has no
             // singleton dependencies.
             Global = ApplicationSettings.Instance;
+
+            // Phase 4: location-tree mutable state + accessibility cache must
+            // exist before LocationDatabase is touched (its lazy init constructs
+            // the root Location, which on first transactable-property access
+            // resolves through TrackerSession.Current.LocationStates — that's
+            // why we set Current before reading Instance below).
+            LocationStates = new LocationStateStore();
+            Evaluator = new AccessibilityEvaluator();
 
             // LocationDatabase must be constructed before the transaction
             // processor so the processor can inject it for Undo(); nothing in
@@ -83,8 +118,9 @@ namespace EmoTracker.Data.Session
             if (Current != null)
                 throw new InvalidOperationException("TrackerSession.Current is already constructed.");
 
-            Current = new TrackerSession();
-            return Current;
+            // The constructor sets Current = this internally (see comment in
+            // ctor). We just kick it off and return the handle.
+            return new TrackerSession();
         }
     }
 }
