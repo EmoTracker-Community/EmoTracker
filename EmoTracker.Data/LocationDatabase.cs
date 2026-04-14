@@ -315,7 +315,7 @@ namespace EmoTracker.Data
         bool mbInRefresh = false;
         uint mPendingRefreshCount = 0;
 
-        internal void RefeshAccessibility(bool bPendingOnly = false)
+        public void RefeshAccessibility(bool bPendingOnly = false)
         {
             if (mSuspendRefreshCount == 0)
             {
