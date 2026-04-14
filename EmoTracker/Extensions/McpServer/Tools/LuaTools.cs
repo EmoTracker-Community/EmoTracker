@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using EmoTracker.Data;
+using EmoTracker.Data.Session;
 using ModelContextProtocol.Server;
 using NLua;
 using System;
@@ -21,7 +22,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var logOutput = ScriptManager.Instance.LogOutput;
+                var logOutput = TrackerSession.Current.Scripts.LogOutput;
                 if (logOutput == null)
                     return JsonSerializer.Serialize(Array.Empty<object>());
 
@@ -48,10 +49,10 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    if (!ScriptManager.Instance.IsLuaLoaded)
+                    if (!TrackerSession.Current.Scripts.IsLuaLoaded)
                         return JsonSerializer.Serialize(new { error = "No Lua environment loaded (no pack active)" });
 
-                    var results = ScriptManager.Instance.ExecuteLuaString(code);
+                    var results = TrackerSession.Current.Scripts.ExecuteLuaString(code);
                     if (results == null || results.Length == 0)
                         return JsonSerializer.Serialize(new { results = Array.Empty<string>() });
 
@@ -74,10 +75,10 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    if (!ScriptManager.Instance.IsLuaLoaded)
+                    if (!TrackerSession.Current.Scripts.IsLuaLoaded)
                         return JsonSerializer.Serialize(new { error = "No Lua environment loaded (no pack active)" });
 
-                    var value = ScriptManager.Instance.GetLuaGlobal(name);
+                    var value = TrackerSession.Current.Scripts.GetLuaGlobal(name);
                     return JsonSerializer.Serialize(new
                     {
                         name,

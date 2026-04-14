@@ -3,6 +3,7 @@ using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Items;
 using EmoTracker.Data.Locations;
+using EmoTracker.Data.Session;
 using ModelContextProtocol.Server;
 using System;
 using System.Collections.Generic;
@@ -22,11 +23,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var pack = Tracker.Instance.ActiveGamePackage;
+                var pack = TrackerSession.Current.Tracker.ActiveGamePackage;
                 if (pack == null)
                     return JsonSerializer.Serialize(new { loaded = false });
 
-                var variant = Tracker.Instance.ActiveGamePackageVariant;
+                var variant = TrackerSession.Current.Tracker.ActiveGamePackageVariant;
                 var variants = pack.AvailableVariants?.Select(v => new
                 {
                     uniqueId = v.UniqueID,
@@ -59,7 +60,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var items = ItemDatabase.Instance.Items;
+                var items = TrackerSession.Current.Items.Items;
                 if (items == null)
                     return JsonSerializer.Serialize(Array.Empty<object>());
 
@@ -105,7 +106,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var locations = LocationDatabase.Instance.AllLocations;
+                var locations = TrackerSession.Current.Locations.AllLocations;
                 if (locations == null)
                     return JsonSerializer.Serialize(Array.Empty<object>());
 
@@ -148,7 +149,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var items = ItemDatabase.Instance.Items;
+                var items = TrackerSession.Current.Items.Items;
                 if (items == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -192,7 +193,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var item = ItemDatabase.Instance.FindObjectForCode(code) as ITrackableItem;
+                var item = TrackerSession.Current.Items.FindObjectForCode(code) as ITrackableItem;
                 if (item == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -206,7 +207,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var items = ItemDatabase.Instance.Items;
+                var items = TrackerSession.Current.Items.Items;
                 if (items == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -234,7 +235,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 try
                 {
                     ITrackableItem item = null;
-                    foreach (var i in ItemDatabase.Instance.Items)
+                    foreach (var i in TrackerSession.Current.Items.Items)
                     {
                         if (i?.Name != null && i.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                         {
@@ -298,7 +299,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         foreach (var name in nameList)
                         {
                             ITrackableItem found = null;
-                            foreach (var item in ItemDatabase.Instance.Items)
+                            foreach (var item in TrackerSession.Current.Items.Items)
                             {
                                 if (item?.Name != null && item.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                                 {

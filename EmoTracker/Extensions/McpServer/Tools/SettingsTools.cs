@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using EmoTracker.Data;
+using EmoTracker.Data.Session;
 using ModelContextProtocol.Server;
 using System;
 using System.Collections.Generic;
@@ -18,7 +19,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var s = ApplicationSettings.Instance;
+                var s = TrackerSession.Current.Global;
                 return JsonSerializer.Serialize(new
                 {
                     ignoreAllLogic = s.IgnoreAllLogic,
@@ -41,8 +42,8 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     initialHeight = s.InitialHeight,
                     lastActivePackage = s.LastActivePackage,
                     lastActivePackageVariant = s.LastActivePackageVariant,
-                    mapEnabled = Tracker.Instance.MapEnabled,
-                    swapLeftRight = Tracker.Instance.SwapLeftRight
+                    mapEnabled = TrackerSession.Current.Tracker.MapEnabled,
+                    swapLeftRight = TrackerSession.Current.Tracker.SwapLeftRight
                 });
             });
         }
@@ -57,7 +58,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var s = ApplicationSettings.Instance;
+                    var s = TrackerSession.Current.Global;
                     bool boolVal;
 
                     switch (key)
@@ -135,12 +136,12 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         case "mapEnabled":
                             if (!bool.TryParse(value, out boolVal))
                                 return JsonSerializer.Serialize(new { success = false, error = "Expected true/false" });
-                            Tracker.Instance.MapEnabled = boolVal;
+                            TrackerSession.Current.Tracker.MapEnabled = boolVal;
                             break;
                         case "swapLeftRight":
                             if (!bool.TryParse(value, out boolVal))
                                 return JsonSerializer.Serialize(new { success = false, error = "Expected true/false" });
-                            Tracker.Instance.SwapLeftRight = boolVal;
+                            TrackerSession.Current.Tracker.SwapLeftRight = boolVal;
                             break;
                         default:
                             return JsonSerializer.Serialize(new { success = false, error = $"Unknown setting key: {key}" });

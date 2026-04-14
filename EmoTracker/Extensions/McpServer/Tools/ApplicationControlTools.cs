@@ -8,6 +8,7 @@ using EmoTracker.Data.Core.Transactions.Processors;
 using EmoTracker.Data.Items;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Packages;
+using EmoTracker.Data.Session;
 using ModelContextProtocol.Server;
 using System;
 using System.Collections.Generic;
@@ -80,13 +81,13 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         var v = pack.FindVariant(variant);
                         if (v != null)
                         {
-                            Tracker.Instance.ActiveGamePackageVariant = v;
+                            TrackerSession.Current.Tracker.ActiveGamePackageVariant = v;
                             return JsonSerializer.Serialize(new { success = true, variant = v.DisplayName });
                         }
                         return JsonSerializer.Serialize(new { success = false, error = "Variant not found" });
                     }
 
-                    Tracker.Instance.ActiveGamePackage = pack;
+                    TrackerSession.Current.Tracker.ActiveGamePackage = pack;
                     return JsonSerializer.Serialize(new { success = true });
                 }
                 catch (Exception ex)
@@ -166,7 +167,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var locations = LocationDatabase.Instance.AllLocations;
+                    var locations = TrackerSession.Current.Locations.AllLocations;
                     if (locations == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No locations loaded" });
 
@@ -252,7 +253,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
 
         private static ITrackableItem FindItemByName(string name)
         {
-            foreach (var item in ItemDatabase.Instance.Items)
+            foreach (var item in TrackerSession.Current.Items.Items)
             {
                 if (item?.Name != null &&
                     item.Name.Equals(name, StringComparison.OrdinalIgnoreCase))

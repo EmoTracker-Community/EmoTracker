@@ -118,16 +118,30 @@ namespace EmoTracker.Data
 
     }
 
-    class LayoutScriptInterface : Singleton<LayoutScriptInterface>
+    /// <summary>
+    /// Surface exposed to Lua scripts as the global <c>Layout</c> object. Phase 5
+    /// of the TrackerSession refactor turns this into a session-injected facade
+    /// (was a Singleton): one instance per session, constructed by ScriptManager
+    /// when the Lua interpreter is (re)created. Mirrors the Phase 3 conversion
+    /// of <see cref="TrackerScriptInterface"/>.
+    /// </summary>
+    class LayoutScriptInterface
     {
+        readonly Session.TrackerSession mSession;
+
+        public LayoutScriptInterface(Session.TrackerSession session)
+        {
+            mSession = session ?? throw new ArgumentNullException(nameof(session));
+        }
+
         public Layout.Layout FindLayout(string key)
         {
-            return Layout.LayoutManager.Instance.FindLayout(key);
+            return mSession.Layouts.FindLayout(key);
         }
 
         public Layout.LayoutItem FindElement(string uid)
         {
-            return Layout.LayoutManager.Instance.FindElement(uid);
+            return mSession.Layouts.FindElement(uid);
         }
 
         public string GetColorForAccessibility(AccessibilityLevel accessibility)
@@ -209,6 +223,7 @@ end
         IGamePackage mPackage;
         Lua mLua;
         TrackerScriptInterface mTrackerInterface;
+        LayoutScriptInterface mLayoutInterface;
 
         [NLua.LuaHide]
         public IEnumerable<LogLine> LogOutput
@@ -385,7 +400,8 @@ end
                 // rather than reaching for static .Instance accessors.
                 mTrackerInterface = new TrackerScriptInterface(Session.TrackerSession.Current);
                 mLua["Tracker"] = mTrackerInterface;
-                mLua["Layout"] = LayoutScriptInterface.Instance;
+                mLayoutInterface = new LayoutScriptInterface(Session.TrackerSession.Current);
+                mLua["Layout"] = mLayoutInterface;
                 mLua["AccessibilityLevel"] = new AccessibilityLevel();
                 mLua["NotificationType"] = new NotificationType();
                 mLua["ScriptHost"] = this;
