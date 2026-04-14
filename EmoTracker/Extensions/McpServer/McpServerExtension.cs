@@ -118,6 +118,7 @@ namespace EmoTracker.Extensions.McpServer
                 .WithTools<Tools.PackageTools>()
                 .WithTools<Tools.ImageCacheTools>()
                 .WithTools<Tools.ProgressionTools>()
+                .WithTools<Tools.NotificationTools>()
                 .WithHttpTransport();
 
                 mApp = builder.Build();
