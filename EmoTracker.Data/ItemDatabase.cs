@@ -9,10 +9,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data
 {
-    public class ItemDatabase : Singleton<ItemDatabase>, ICodeProvider
+    public class ItemDatabase : ObservableObject, ICodeProvider
     {
         ObservableCollection<ITrackableItem> mItems = new ObservableCollection<ITrackableItem>();
         Dictionary<ITrackableItem, int> mItemIndex = new Dictionary<ITrackableItem, int>();
@@ -141,9 +142,9 @@ namespace EmoTracker.Data
             bool bSuccess = false;
 
             if (bLegacy)
-                ScriptManager.Instance.OutputWarning("Loading legacy items");
+                TrackerSession.Current.Scripts.OutputWarning("Loading legacy items");
             else
-                ScriptManager.Instance.Output("Loading Items: {0}", path);
+                TrackerSession.Current.Scripts.Output("Loading Items: {0}", path);
 
             using (new LoggingBlock())
             {
@@ -170,7 +171,7 @@ namespace EmoTracker.Data
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    TrackerSession.Current.Scripts.OutputException(e);
                 }
             }
 
@@ -333,7 +334,7 @@ namespace EmoTracker.Data
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    TrackerSession.Current.Scripts.OutputException(e);
                 }
             }
 
@@ -354,7 +355,7 @@ namespace EmoTracker.Data
                         item = ResolvePersistableItemReference(itemData.GetValue<string>("item_reference"), true);
                         if (item != null)
                         {
-                            ScriptManager.Instance.OutputWarning("Item index consistency issue found (and allowed) for reference \"{0}\" while loading a save. Ensure that items are loaded/created in a consistent order.", itemData.GetValue<string>("item_reference"));
+                            TrackerSession.Current.Scripts.OutputWarning("Item index consistency issue found (and allowed) for reference \"{0}\" while loading a save. Ensure that items are loaded/created in a consistent order.", itemData.GetValue<string>("item_reference"));
                         }
 
                         if (item == null)

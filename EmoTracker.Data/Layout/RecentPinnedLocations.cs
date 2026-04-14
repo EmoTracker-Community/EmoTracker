@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
@@ -6,6 +6,7 @@ using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Layout
 {
@@ -18,14 +19,14 @@ namespace EmoTracker.Data.Layout
 
         public RecentPinnedLocations()
         {
-            INotifyCollectionChanged ncc = LocationDatabase.Instance.PinnedLocations as INotifyCollectionChanged;
+            INotifyCollectionChanged ncc = TrackerSession.Current.Locations.PinnedLocations as INotifyCollectionChanged;
             if (ncc != null)
                 ncc.CollectionChanged += Ncc_CollectionChanged;
         }
 
         public override void Dispose()
         {
-            INotifyCollectionChanged ncc = LocationDatabase.Instance.PinnedLocations as INotifyCollectionChanged;
+            INotifyCollectionChanged ncc = TrackerSession.Current.Locations.PinnedLocations as INotifyCollectionChanged;
             if (ncc != null)
                 ncc.CollectionChanged -= Ncc_CollectionChanged;
 
@@ -59,7 +60,7 @@ namespace EmoTracker.Data.Layout
             mDisplayLocations.Clear();
 
             int idx = 0;
-            foreach (Location location in LocationDatabase.Instance.PinnedLocations)
+            foreach (Location location in TrackerSession.Current.Locations.PinnedLocations)
             {
                 mDisplayLocations.Add(location);
 

@@ -2,6 +2,7 @@ using EmoTracker.Core;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Media
 {
@@ -229,7 +230,7 @@ namespace EmoTracker.Data.Media
 
         public static ImageReference FromPackRelativePath(string path, string filter = null)
         {
-            return FromPackRelativePath(Tracker.Instance.ActiveGamePackage, path, filter);
+            return FromPackRelativePath(TrackerSession.Current.Tracker.ActiveGamePackage, path, filter);
         }
 
         public static ImageReference FromPackRelativePath(IGamePackage package, string path, string filter = null)

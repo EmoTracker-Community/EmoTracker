@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Extensions.AutoTracker
 {
@@ -40,8 +41,8 @@ namespace EmoTracker.Extensions.AutoTracker
 
         public void OnPackageLoaded()
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
-                ActivePlatform = Tracker.Instance.ActiveGamePackage.Platform;
+            if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
+                ActivePlatform = TrackerSession.Current.Tracker.ActiveGamePackage.Platform;
 
             NotifyPropertyChanged("Active");
         }
@@ -79,9 +80,9 @@ namespace EmoTracker.Extensions.AutoTracker
                 {
                     mApplicableProviders.Clear();
 
-                    if (Tracker.Instance.ActiveGamePackage != null)
+                    if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
                     {
-                        var providers = AutoTrackingProviderRegistry.Instance.GetProvidersForPack(Tracker.Instance.ActiveGamePackage);
+                        var providers = AutoTrackingProviderRegistry.Instance.GetProvidersForPack(TrackerSession.Current.Tracker.ActiveGamePackage);
                         foreach (var provider in providers)
                         {
                             mApplicableProviders.Add(provider);
@@ -186,8 +187,8 @@ namespace EmoTracker.Extensions.AutoTracker
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputError("Error occurred during raw byte read via AutoTracker");
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputError("Error occurred during raw byte read via AutoTracker");
+                TrackerSession.Current.Scripts.OutputException(e);
             }
 
             return defaultVal;
@@ -211,8 +212,8 @@ namespace EmoTracker.Extensions.AutoTracker
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputError("Error occurred during raw word read via AutoTracker");
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputError("Error occurred during raw word read via AutoTracker");
+                TrackerSession.Current.Scripts.OutputException(e);
             }
 
             return defaultVal;
@@ -306,7 +307,7 @@ namespace EmoTracker.Extensions.AutoTracker
             ActiveProvider = null;
 
             if (bWasActive)
-                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStopped);
+                TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStopped);
         }
 
         private bool CanStartAutoTracking(object obj = null)
@@ -331,7 +332,7 @@ namespace EmoTracker.Extensions.AutoTracker
                         await SelectedProvider.ConnectAsync();
                         ActiveProvider = SelectedProvider;
 
-                        ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStarted);
+                        TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStarted);
                     }
                     catch
                     {
@@ -354,8 +355,8 @@ namespace EmoTracker.Extensions.AutoTracker
 
         public void Start()
         {
-            ScriptManager.Instance.SetGlobalObject("AutoTracker", this);
-            ScriptManager.Instance.SetMemoryWatchService(this);
+            TrackerSession.Current.Scripts.SetGlobalObject("AutoTracker", this);
+            TrackerSession.Current.Scripts.SetMemoryWatchService(this);
 
             mUpdateTimer = new System.Timers.Timer(30);
             mUpdateTimer.Elapsed += (s, e) => UpdateMemoryHooks(s, e);
@@ -398,9 +399,9 @@ namespace EmoTracker.Extensions.AutoTracker
                 }
 
                 PackageManager.Game game = null;
-                if (Tracker.Instance.ActiveGamePackage != null)
+                if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
                 {
-                    PackageManager.Game gameInstance = PackageManager.Instance.FindGame(Tracker.Instance.ActiveGamePackage.Game);
+                    PackageManager.Game gameInstance = PackageManager.Instance.FindGame(TrackerSession.Current.Tracker.ActiveGamePackage.Game);
                     if (gameInstance != PackageManager.Instance.DefaultGame)
                         game = gameInstance;
                 }

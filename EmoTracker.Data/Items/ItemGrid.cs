@@ -1,8 +1,9 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Items
 {
@@ -83,7 +84,7 @@ namespace EmoTracker.Data.Items
                 ItemList row = new ItemList();
                 foreach (string code in rowData)
                 {
-                    row.Add(ItemDatabase.Instance.FindProvidingItemForCode(code));
+                    row.Add(TrackerSession.Current.Items.FindProvidingItemForCode(code));
                 }
 
                 AddRow(row);

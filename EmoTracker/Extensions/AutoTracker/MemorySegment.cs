@@ -5,6 +5,7 @@ using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
 using NLua;
 using System;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Extensions.AutoTracker
 {
@@ -120,7 +121,7 @@ namespace EmoTracker.Extensions.AutoTracker
                 }
                 catch
                 {
-                    ScriptManager.Instance.OutputError("Address 0x{0:x} is out of range of segment '{3}' = [0x{1:x}:0x{2:x}]", address, StartAddress, StartAddress + Length, Name);
+                    TrackerSession.Current.Scripts.OutputError("Address 0x{0:x} is out of range of segment '{3}' = [0x{1:x}:0x{2:x}]", address, StartAddress, StartAddress + Length, Name);
                 }
             }
 
@@ -148,7 +149,7 @@ namespace EmoTracker.Extensions.AutoTracker
                 }
                 catch
                 {
-                    ScriptManager.Instance.OutputError("Address 0x{0:x} is out of range of segment '{3}' = [0x{1:x}:0x{2:x}]", address, StartAddress, StartAddress + Length, Name);
+                    TrackerSession.Current.Scripts.OutputError("Address 0x{0:x} is out of range of segment '{3}' = [0x{1:x}:0x{2:x}]", address, StartAddress, StartAddress + Length, Name);
                 }
             }
 

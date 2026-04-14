@@ -10,6 +10,7 @@ using EmoTracker.Services.Updates;
 using System;
 using System.ComponentModel;
 using System.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker
 {
@@ -22,12 +23,12 @@ namespace EmoTracker
             ApplicationModel.Instance.Initialize();
             DataContext = ApplicationModel.Instance;
             ApplicationModel.Instance.PropertyChanged += Instance_PropertyChanged;
-            Tracker.Instance.PropertyChanged += Tracker_PropertyChanged;
+            TrackerSession.Current.Tracker.PropertyChanged += Tracker_PropertyChanged;
 
-            if (ApplicationSettings.Instance.InitialWidth >= 0.0)
-                Width = ApplicationSettings.Instance.InitialWidth;
-            if (ApplicationSettings.Instance.InitialHeight >= 0.0)
-                Height = ApplicationSettings.Instance.InitialHeight;
+            if (TrackerSession.Current.Global.InitialWidth >= 0.0)
+                Width = TrackerSession.Current.Global.InitialWidth;
+            if (TrackerSession.Current.Global.InitialHeight >= 0.0)
+                Height = TrackerSession.Current.Global.InitialHeight;
 
             this.Loaded += MainWindow_Loaded;
             // Use Tunnel routing to match WPF's PreviewKeyDown — the window
@@ -142,7 +143,7 @@ namespace EmoTracker
                 });
             }
 
-            if (Tracker.Instance.ActiveGamePackage == package)
+            if (TrackerSession.Current.Tracker.ActiveGamePackage == package)
             {
                 panel.Children.Add(new Border
                 {
@@ -169,7 +170,7 @@ namespace EmoTracker
             var panel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
             panel.Children.Add(new Avalonia.Controls.TextBlock { Text = variant.DisplayName, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
 
-            if (Tracker.Instance.ActiveGamePackageVariant == variant)
+            if (TrackerSession.Current.Tracker.ActiveGamePackageVariant == variant)
             {
                 panel.Children.Add(new Border
                 {
@@ -234,7 +235,7 @@ namespace EmoTracker
             }
             else if (e.Key == Key.F11)
             {
-                ApplicationSettings.Instance.DisplayAllLocations = !ApplicationSettings.Instance.DisplayAllLocations;
+                TrackerSession.Current.Global.DisplayAllLocations = !TrackerSession.Current.Global.DisplayAllLocations;
                 e.Handled = true;
                 return;
             }
@@ -285,7 +286,7 @@ namespace EmoTracker
 
         protected override void OnClosing(WindowClosingEventArgs e)
         {
-            if (ApplicationSettings.Instance.PromptOnRefreshClose)
+            if (TrackerSession.Current.Global.PromptOnRefreshClose)
             {
                 // For Phase 6 just close — async dialog in Phase 7
             }
@@ -313,7 +314,7 @@ namespace EmoTracker
 
         private void UpdateResizeMode()
         {
-            if (!Tracker.Instance.AllowResize)
+            if (!TrackerSession.Current.Tracker.AllowResize)
             {
                 CanResize = false;
                 SizeToContent = SizeToContent.WidthAndHeight;

@@ -1,8 +1,9 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Layout
 {
@@ -56,7 +57,7 @@ namespace EmoTracker.Data.Layout
         {
             Style = data.GetEnumValue<ButtonStyle>("style", ButtonStyle.Settings);
             Image = ImageReference.FromPackRelativePath(package, data.GetValue<string>("image"), data.GetValue<string>("image_filter"));
-            Layout = LayoutManager.Instance.FindLayout(data.GetValue<string>("layout"));
+            Layout = TrackerSession.Current.Layouts.FindLayout(data.GetValue<string>("layout"));
             PopupBackground = data.GetValue<string>("popup_background", "#ff212121");
             MaskInput = data.GetValue<bool>("mask_input", false);
             return true;

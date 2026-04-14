@@ -4,6 +4,7 @@ using System.Windows.Input;
 using Avalonia.Controls;
 using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.UI
 {
@@ -74,7 +75,7 @@ namespace EmoTracker.UI
                         Data.ITrackableItem? item = parameter as Data.ITrackableItem;
                         section.CapturedItem = item;
 
-                        if (item != null && ApplicationSettings.Instance.PinLocationsOnItemCapture)
+                        if (item != null && TrackerSession.Current.Global.PinLocationsOnItemCapture)
                             section.Owner.Pinned = true;
 
                         mHost.PopupInstance.IsOpen = false;

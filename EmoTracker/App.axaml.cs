@@ -9,6 +9,7 @@ using Serilog.Events;
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker
 {
@@ -46,11 +47,9 @@ namespace EmoTracker
             {
             }
 
-            //  Load application settings
-            Data.ApplicationSettings.CreateInstance();
-
-            //  Construct the process-wide tracker session (Phase 1 passive
-            //  aggregator — holds references to existing singletons).
+            //  Construct the process-wide tracker session. Its ctor loads
+            //  ApplicationSettings, builds the state stores, and constructs the
+            //  owned tracker subsystems in the correct dependency order.
             Data.Session.TrackerSession.CreateCurrent();
 
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -70,7 +69,7 @@ namespace EmoTracker
                             Extensions.ExtensionManager.Instance.OnApplicationClosing();
 
 #if WINDOWS
-                        if (Data.ApplicationSettings.Instance.EnableDiscordRichPresence)
+                        if (Data.Session.TrackerSession.Current.Global.EnableDiscordRichPresence)
                         {
                             try { DiscordRpc.ClearPresence(); DiscordRpc.Shutdown(); }
                             catch { }

@@ -10,6 +10,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Providers.SNI
 {
@@ -93,7 +94,7 @@ namespace EmoTracker.Providers.SNI
 
         string GetAddress()
         {
-            return ApplicationSettings.Instance.GetProviderSetting(SettingKey, DefaultAddress);
+            return TrackerSession.Current.Global.GetProviderSetting(SettingKey, DefaultAddress);
         }
 
         GrpcChannel EnsureChannel()

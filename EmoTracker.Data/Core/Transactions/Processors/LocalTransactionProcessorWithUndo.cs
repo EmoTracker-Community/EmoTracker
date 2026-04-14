@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Core.Transactions.Processors
 {
@@ -144,7 +145,7 @@ namespace EmoTracker.Data.Core.Transactions.Processors
         static readonly int MaxUndoSteps = 250;
 
         public LocalTransactionProcessorWithUndo()
-            : this(LocationDatabase.Instance)
+            : this(TrackerSession.Current.Locations)
         {
         }
 

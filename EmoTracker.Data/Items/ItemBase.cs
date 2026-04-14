@@ -62,7 +62,7 @@ namespace EmoTracker.Data.Items
                 if (mDisabledImageFilterSpec != null)
                     return mDisabledImageFilterSpec;
 
-                return Tracker.Instance.DisabledImageFilterSpec;
+                return Session.TrackerSession.Current.Tracker.DisabledImageFilterSpec;
             }
             set { SetProperty(ref mDisabledImageFilterSpec, value); }
         }
@@ -98,7 +98,7 @@ namespace EmoTracker.Data.Items
             set
             {
                 if (SetProperty(ref mCurrentIcon, value))
-                    LocationDatabase.Instance.RefeshAccessibility();
+                    Session.TrackerSession.Current.Locations.RefeshAccessibility();
             }
         }
 
@@ -120,7 +120,7 @@ namespace EmoTracker.Data.Items
 
         public void InvalidateAccessibility()
         {
-            LocationDatabase.Instance.RefeshAccessibility();
+            Session.TrackerSession.Current.Locations.RefeshAccessibility();
         }
 
         public abstract void OnLeftClick();

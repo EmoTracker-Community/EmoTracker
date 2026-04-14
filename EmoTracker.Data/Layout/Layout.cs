@@ -1,9 +1,10 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Layout
 {
@@ -35,7 +36,7 @@ namespace EmoTracker.Data.Layout
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                TrackerSession.Current.Scripts.OutputException(e);
             }
 
             return false;

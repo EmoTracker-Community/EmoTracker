@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Packages
 {
@@ -42,7 +43,7 @@ namespace EmoTracker.Data.Packages
 
             public bool IsActive
             {
-                get { return Tracker.Instance.ActiveGamePackageVariant == this; }
+                get { return TrackerSession.Current.Tracker.ActiveGamePackageVariant == this; }
             }
 
             public string UniqueID
@@ -116,7 +117,7 @@ namespace EmoTracker.Data.Packages
 
         public bool IsActive
         {
-            get { return Tracker.Instance.ActiveGamePackage == this; }
+            get { return TrackerSession.Current.Tracker.ActiveGamePackage == this; }
         }
 
         public string Name { get { return mName; } }

@@ -3,6 +3,7 @@ using EmoTracker.Data.Media;
 
 using Avalonia.Media;
 using SkiaSharp;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.UI.Media.Resolvers
 {
@@ -27,10 +28,10 @@ namespace EmoTracker.UI.Media.Resolvers
             // chain entirely in SKBitmap space, then convert back once.
             SKBitmap baseSK = Utility.IconUtility.ToSkBitmapForFilter(baseImg);
             if (baseSK == null)
-                return Utility.IconUtility.ApplyFilterSpecToImage(Tracker.Instance.ActiveGamePackage, baseImg, concreteRef.Filter);
+                return Utility.IconUtility.ApplyFilterSpecToImage(TrackerSession.Current.Tracker.ActiveGamePackage, baseImg, concreteRef.Filter);
 
             baseSK = Utility.IconUtility.ApplyFilterSpecToSKBitmap(
-                Tracker.Instance.ActiveGamePackage, baseSK, concreteRef.Filter);
+                TrackerSession.Current.Tracker.ActiveGamePackage, baseSK, concreteRef.Filter);
 
             return Utility.IconUtility.FinalizeToAvalonia(baseSK);
         }

@@ -2,7 +2,8 @@
              xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             xmlns:session="clr-namespace:EmoTracker.Data.Session;assembly=EmoTracker.Data"
              xmlns:ui="clr-namespace:EmoTracker.UI"
-             IsVisible="{Binding EnableNoteTaking, Source={x:Static data:ApplicationSettings.Instance}}">
+             IsVisible="{Binding Global.EnableNoteTaking, Source={x:Static session:TrackerSession.Current}}">
     <ui:NoteTakingIconPopup EmptyForeground="#717171" />
 </UserControl>

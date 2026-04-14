@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.UI
 {
@@ -111,9 +112,9 @@ namespace EmoTracker.UI
         {
             mFileRecords = new List<FileRecord>();
 
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (TrackerSession.Current.Tracker.ActiveGamePackage != null)
             {
-                foreach (string file in Tracker.Instance.ActiveGamePackage.Source.Files)
+                foreach (string file in TrackerSession.Current.Tracker.ActiveGamePackage.Source.Files)
                 {
                     mFileRecords.Add(new FileRecord(file));
                 }
@@ -130,7 +131,7 @@ namespace EmoTracker.UI
 
         private async Task LoadFileIconsAsync()
         {
-            var package = Tracker.Instance.ActiveGamePackage;
+            var package = TrackerSession.Current.Tracker.ActiveGamePackage;
             if (package == null) return;
 
             foreach (var record in mFileRecords)
@@ -191,7 +192,7 @@ namespace EmoTracker.UI
             {
                 if (record.ExportOverride)
                 {
-                    Tracker.Instance.ActiveGamePackage?.ExportUserOverride(record.Path);
+                    TrackerSession.Current.Tracker.ActiveGamePackage?.ExportUserOverride(record.Path);
                     Close();
                 }
             }

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Locations
 {
@@ -26,7 +27,7 @@ namespace EmoTracker.Data.Locations
         {
             get
             {
-                if (ApplicationSettings.Instance.IgnoreAllLogic)
+                if (TrackerSession.Current.Global.IgnoreAllLogic)
                     return AccessibilityLevel.Normal;
 
                 if (mRules.Count == 0)
@@ -47,7 +48,7 @@ namespace EmoTracker.Data.Locations
         {
             get
             {
-                if (ApplicationSettings.Instance.IgnoreAllLogic)
+                if (TrackerSession.Current.Global.IgnoreAllLogic)
                     return AccessibilityLevel.Normal;
 
                 if (mRules.Count == 0)

@@ -36,10 +36,10 @@ namespace EmoTracker.Data.Locations
 
         static uint GetProviderCountForCode(string code, out AccessibilityLevel maxAccessibility)
         {
-            // Use the session's tracker as the code provider when available, so the
-            // evaluation is consistent with the session that owns the cache. Falls
-            // back to the singleton during early startup.
-            ICodeProvider provider = Session.TrackerSession.Current?.Tracker ?? Tracker.Instance;
+            // Use the session's tracker as the code provider. Session is always
+            // constructed before any rule evaluation; if Current is null we have
+            // no meaningful state to evaluate against.
+            ICodeProvider provider = Session.TrackerSession.Current?.Tracker;
             return CurrentEvaluator.GetProviderCountForCode(provider, code, out maxAccessibility);
         }
 

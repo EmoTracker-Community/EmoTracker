@@ -6,6 +6,7 @@
              xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             xmlns:session="clr-namespace:EmoTracker.Data.Session;assembly=EmoTracker.Data"
              xmlns:locations="clr-namespace:EmoTracker.Data.Locations;assembly=EmoTracker.Data"
              xmlns:settings="clr-namespace:EmoTracker.Data.Settings;assembly=EmoTracker.Data">
     <UserControl.Resources>
@@ -97,7 +98,7 @@
                                                     <Binding Path="Location.HasAvailableItems" />
                                                     <Binding Path="Location.Badges.Count" />
                                                     <Binding Path="Location.NoteTakingSite.Empty" />
-                                                    <Binding Path="DisplayAllLocations" Source="{x:Static data:ApplicationSettings.Instance}" />
+                                                    <Binding Path="Global.DisplayAllLocations" Source="{x:Static session:TrackerSession.Current}" />
                                                     <Binding Path="IsShiftPressed" RelativeSource="{RelativeSource AncestorType=local:LocationMapControl}" />
                                                 </MultiBinding>
                                             </Grid.IsVisible>

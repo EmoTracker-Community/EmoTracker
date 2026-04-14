@@ -9,17 +9,18 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data
 {
-    public class LocationDatabase : ObservableSingleton<LocationDatabase>, ICodeProvider
+    public class LocationDatabase : ObservableObject, ICodeProvider
     {
         public class SuspendRefreshScope : IDisposable
         {
             readonly LocationDatabase mDatabase;
 
             public SuspendRefreshScope()
-                : this(LocationDatabase.Instance)
+                : this(TrackerSession.Current.Locations)
             {
             }
 
@@ -66,7 +67,7 @@ namespace EmoTracker.Data
         {
             if (mSuspendRefreshCount <= 0)
             {
-                ScriptManager.Instance.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
+                TrackerSession.Current.Scripts.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
                 System.Diagnostics.Debug.Fail("PopSuspendRefresh: underflow — more Pops than Pushes");
                 return;
             }
@@ -164,9 +165,9 @@ namespace EmoTracker.Data
         internal bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false)
         {
             if (bLegacy)
-                ScriptManager.Instance.OutputWarning("Loading legacy locations");
+                TrackerSession.Current.Scripts.OutputWarning("Loading legacy locations");
             else
-                ScriptManager.Instance.Output("Loading Locations: {0}", path);
+                TrackerSession.Current.Scripts.Output("Loading Locations: {0}", path);
 
             using (new LoggingBlock())
             {
@@ -191,13 +192,13 @@ namespace EmoTracker.Data
                         }
                         else
                         {
-                            ScriptManager.Instance.Output("File not found");
+                            TrackerSession.Current.Scripts.Output("File not found");
                         }
                     }
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    TrackerSession.Current.Scripts.OutputException(e);
                 }
                 finally
                 {
@@ -337,14 +338,14 @@ namespace EmoTracker.Data
                                 bRefreshedAccessibility = true;
 
                                 AccessibilityRule.ClearCaches();
-                                ScriptManager.Instance.ClearExpressionCache();
+                                TrackerSession.Current.Scripts.ClearExpressionCache();
 
-                                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
+                                TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
 
                                 if (mRoot != null)
                                     mRoot.RefreshAccessibility();
 
-                                MapDatabase.Instance.MarkVisibilityDirty();
+                                TrackerSession.Current.Maps.MarkVisibilityDirty();
                             }
                         } // queued PropertyChanged notifications fire here, before AccessibilityUpdated
                     }
@@ -357,11 +358,11 @@ namespace EmoTracker.Data
                         // any rule evaluations triggered by that callback benefit from the cache.
                         // Clearing here negated all caching, reproducing the slow-update symptom
                         // that enable_accessibility_rule_caching was introduced to fix.
-                        MapDatabase.Instance.UpdateVisibilityIfNecessary();
+                        TrackerSession.Current.Maps.UpdateVisibilityIfNecessary();
 
                         if (bRefreshedAccessibility)
                         {
-                            ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdated);
+                            TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdated);
                         }
                     }
                 }
@@ -500,7 +501,7 @@ namespace EmoTracker.Data
                     foreach (JObject entry in mapEntries)
                     {
                         //  TODO: We need to improve referencing to support late binding
-                        Map map = MapDatabase.Instance.FindMap(entry.GetValue<string>("map"));
+                        Map map = TrackerSession.Current.Maps.FindMap(entry.GetValue<string>("map"));
                         if (map != null)
                         {
                             double x = entry.GetValue<double>("x");
@@ -590,7 +591,7 @@ namespace EmoTracker.Data
                             sectionData["available_chest_count"] = section.AvailableChestCount;
 
                             if (section.CapturedItem != null)
-                                sectionData["captured_item"] = ItemDatabase.Instance.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
+                                sectionData["captured_item"] = TrackerSession.Current.Items.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
 
                             sectionDataArray.Add(sectionData);
                         }
@@ -664,7 +665,7 @@ namespace EmoTracker.Data
 
                         string capturedItemRef = sectionData.GetValue<string>("captured_item");
                         {
-                            ITrackableItem captureItem = ItemDatabase.Instance.ResolvePersistableItemReference(capturedItemRef);
+                            ITrackableItem captureItem = TrackerSession.Current.Items.ResolvePersistableItemReference(capturedItemRef);
 
                             if (!string.IsNullOrWhiteSpace(capturedItemRef) && captureItem == null)
                                 return false;

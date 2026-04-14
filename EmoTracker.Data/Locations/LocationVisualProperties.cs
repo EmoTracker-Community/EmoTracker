@@ -79,7 +79,7 @@ namespace EmoTracker.Data.Locations
                 if (mVisualParent != null)
                     return mVisualParent.AutoUnpinOnClear;
 
-                return ApplicationSettings.Instance.AutoUnpinLocationsOnClear;
+                return Session.TrackerSession.Current.Global.AutoUnpinLocationsOnClear;
             }
             set
             {

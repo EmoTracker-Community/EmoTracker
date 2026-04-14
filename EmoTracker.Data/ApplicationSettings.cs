@@ -8,12 +8,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data
 {
 
 
-    public class ApplicationSettings : ObservableSingleton<ApplicationSettings>
+    public class ApplicationSettings : ObservableObject
     {
         readonly Dictionary<string, string> mProviderSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -58,7 +59,7 @@ namespace EmoTracker.Data
             set
             {
                 if (SetProperty(ref mbIgnoreAllLogic, value))
-                    LocationDatabase.Instance.RefeshAccessibility();
+                    TrackerSession.Current.Locations.RefeshAccessibility();
             }
         }
 

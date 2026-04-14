@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using Newtonsoft.Json.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Items
 {
@@ -34,7 +35,7 @@ namespace EmoTracker.Data.Items
 
         public SectionChestsProxyItem()
         {
-            Tracker.Instance.PropertyChanged += Tracker_PropertyChanged;
+            TrackerSession.Current.Tracker.PropertyChanged += Tracker_PropertyChanged;
         }
 
         private void Tracker_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -65,7 +66,7 @@ namespace EmoTracker.Data.Items
             {
                 if (Section != null && Section.Visible)
                 {
-                    if (ApplicationSettings.Instance.AlwaysAllowClearing || Section.AccessibilityLevel != AccessibilityLevel.None)
+                    if (TrackerSession.Current.Global.AlwaysAllowClearing || Section.AccessibilityLevel != AccessibilityLevel.None)
                         return true;
                 }   
 
@@ -124,7 +125,7 @@ namespace EmoTracker.Data.Items
         protected override void ParseDataInternal(JObject data, IGamePackage package)
         {
             mCodeProvider.AddCodes(data.GetValue<string>("codes"));
-            Section = Tracker.Instance.FindObjectForCode(data.GetValue<string>("section")) as Section;
+            Section = TrackerSession.Current.Tracker.FindObjectForCode(data.GetValue<string>("section")) as Section;
         }       
     }
 }

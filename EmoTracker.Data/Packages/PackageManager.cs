@@ -1,4 +1,4 @@
-﻿#pragma warning disable SYSLIB0014 // WebClient is obsolete
+#pragma warning disable SYSLIB0014 // WebClient is obsolete
 using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
@@ -10,6 +10,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Net;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Packages
 {
@@ -21,7 +22,7 @@ namespace EmoTracker.Data.Packages
 
         public static Uri BuildServiceUri(string path)
         {
-            return new Uri(string.Format("{0}{1}", ApplicationSettings.Instance.ServiceBaseURL, path.TrimStart('/')));
+            return new Uri(string.Format("{0}{1}", TrackerSession.Current.Global.ServiceBaseURL, path.TrimStart('/')));
         }
 
         WebClient mGameListWebClient;
@@ -293,7 +294,7 @@ namespace EmoTracker.Data.Packages
                     {
                         if (entry != null && entry.Status == PackageRepositoryEntry.PackageStatus.UpdateAvailable)
                         {
-                            if (entry.ExistingPackage == Tracker.Instance.ActiveGamePackage)
+                            if (entry.ExistingPackage == TrackerSession.Current.Tracker.ActiveGamePackage)
                                 return true;
                         }
                     }
@@ -358,7 +359,7 @@ namespace EmoTracker.Data.Packages
             Directory.CreateDirectory(PackInstallPath);
             ScanForInstalledPackages();
 
-            foreach (string url in ApplicationSettings.Instance.AdditionalRepositories)
+            foreach (string url in TrackerSession.Current.Global.AdditionalRepositories)
             {
                 AddRepository(new PackageRepository(url));
             }
@@ -559,7 +560,7 @@ namespace EmoTracker.Data.Packages
                     RemoveRepository(repository);
                 }
 
-                foreach (string url in ApplicationSettings.Instance.AdditionalRepositories)
+                foreach (string url in TrackerSession.Current.Global.AdditionalRepositories)
                 {
                     AddRepository(new PackageRepository(url));
                 }

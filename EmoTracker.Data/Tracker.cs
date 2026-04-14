@@ -11,10 +11,11 @@ using NLua;
 using System;
 using System.IO;
 using System.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data
 {
-    public class Tracker : ObservableSingleton<Tracker>, ICodeProvider
+    public class Tracker : ObservableObject, ICodeProvider
     {
         public event EventHandler<EventArgs> OnPackageLoadStarting;
         public event EventHandler<EventArgs> OnPackageLoadComplete;
@@ -48,9 +49,9 @@ namespace EmoTracker.Data
 #if False
             if (package != null && package.FlaggedAsUnsafe)
             {
-                if (ScriptManager.Instance.NotificationService != null)
+                if (TrackerSession.Current.Scripts.NotificationService != null)
                 {
-                    ScriptManager.Instance.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Warning,
+                    TrackerSession.Current.Scripts.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Warning,
 @"### Potentially Unsafe Package Loaded
 
 The active game package uses potentially unsafe scripting functionality, which allows it to access your filesystem, can expose user information, and more.
@@ -75,7 +76,7 @@ The active game package uses potentially unsafe scripting functionality, which a
 
                     if (mActiveGamePackage != null)
                     {
-                        ApplicationSettings.Instance.LastActivePackage = mActiveGamePackage.UniqueID;
+                        TrackerSession.Current.Global.LastActivePackage = mActiveGamePackage.UniqueID;
 
                         if (!ActiveGamePackage.AvailableVariants.Contains(ActiveGamePackageVariant))
                             ActiveGamePackageVariant = null;
@@ -100,11 +101,11 @@ The active game package uses potentially unsafe scripting functionality, which a
                     {
                         ActiveGamePackage = mActiveGamePackageVariant.Package;
                         ActiveGamePackage.ActiveVariant = mActiveGamePackageVariant;
-                        ApplicationSettings.Instance.LastActivePackageVariant = mActiveGamePackageVariant.UniqueID;
+                        TrackerSession.Current.Global.LastActivePackageVariant = mActiveGamePackageVariant.UniqueID;
                     }
                     else
                     {
-                        ApplicationSettings.Instance.LastActivePackageVariant = null;
+                        TrackerSession.Current.Global.LastActivePackageVariant = null;
                     }
 
                     PackageManager.Instance.RefreshActiveState();
@@ -171,14 +172,14 @@ The active game package uses potentially unsafe scripting functionality, which a
 
                 root["package_version"] = ActiveGamePackage.Version.ToString();
                 root["creation_time"] = DateTime.Now.ToString();
-                root["ignore_all_logic"] = ApplicationSettings.Instance.IgnoreAllLogic;
-                root["display_all_locations"] = ApplicationSettings.Instance.DisplayAllLocations;
-                root["always_allow_chest_manipulation"] = ApplicationSettings.Instance.AlwaysAllowClearing;
-                root["auto_unpin_locations_on_clear"] = ApplicationSettings.Instance.AutoUnpinLocationsOnClear;
-                root["pin_locations_on_item_capture"] = ApplicationSettings.Instance.PinLocationsOnItemCapture;
+                root["ignore_all_logic"] = TrackerSession.Current.Global.IgnoreAllLogic;
+                root["display_all_locations"] = TrackerSession.Current.Global.DisplayAllLocations;
+                root["always_allow_chest_manipulation"] = TrackerSession.Current.Global.AlwaysAllowClearing;
+                root["auto_unpin_locations_on_clear"] = TrackerSession.Current.Global.AutoUnpinLocationsOnClear;
+                root["pin_locations_on_item_capture"] = TrackerSession.Current.Global.PinLocationsOnItemCapture;
 
-                ItemDatabase.Instance.Save(root);
-                LocationDatabase.Instance.Save(root);
+                TrackerSession.Current.Items.Save(root);
+                TrackerSession.Current.Locations.Save(root);
 
                 if (dataAction != null)
                     dataAction(root);
@@ -198,9 +199,9 @@ The active game package uses potentially unsafe scripting functionality, which a
                 }
                 catch
                 {
-                    if (ScriptManager.Instance.NotificationService != null)
+                    if (TrackerSession.Current.Scripts.NotificationService != null)
                     {
-                        ScriptManager.Instance.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Error,
+                        TrackerSession.Current.Scripts.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Error,
 @"### Couldn't Save Progress
 
 An error occurred while saving. This may be due to anti-virus/malware software protecting your chosen save directory over-aggressively.
@@ -219,8 +220,8 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
             try
             {
-                ScriptManager.Instance.Output("Loading save game \"{0}\"", path);
-                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.StartLoadingSaveFile);
+                TrackerSession.Current.Scripts.Output("Loading save game \"{0}\"", path);
+                TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.StartLoadingSaveFile);
 
                 using (StreamReader reader = new StreamReader(path))
                 {
@@ -251,17 +252,17 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                     else
                         ActiveGamePackage = package;
 
-                    if (!ItemDatabase.Instance.Load(root))
+                    if (!TrackerSession.Current.Items.Load(root))
                         return false;
 
-                    if (!LocationDatabase.Instance.Load(root))
+                    if (!TrackerSession.Current.Locations.Load(root))
                         return false;
 
-                    ApplicationSettings.Instance.IgnoreAllLogic = root.GetValue<bool>("ignore_all_logic", false);
-                    ApplicationSettings.Instance.DisplayAllLocations = root.GetValue<bool>("display_all_locations", false);
-                    ApplicationSettings.Instance.AlwaysAllowClearing = root.GetValue<bool>("always_allow_chest_manipulation", false);
-                    ApplicationSettings.Instance.AutoUnpinLocationsOnClear = root.GetValue<bool>("auto_unpin_locations_on_clear", true);
-                    ApplicationSettings.Instance.PinLocationsOnItemCapture = root.GetValue<bool>("pin_locations_on_item_capture", true);
+                    TrackerSession.Current.Global.IgnoreAllLogic = root.GetValue<bool>("ignore_all_logic", false);
+                    TrackerSession.Current.Global.DisplayAllLocations = root.GetValue<bool>("display_all_locations", false);
+                    TrackerSession.Current.Global.AlwaysAllowClearing = root.GetValue<bool>("always_allow_chest_manipulation", false);
+                    TrackerSession.Current.Global.AutoUnpinLocationsOnClear = root.GetValue<bool>("auto_unpin_locations_on_clear", true);
+                    TrackerSession.Current.Global.PinLocationsOnItemCapture = root.GetValue<bool>("pin_locations_on_item_capture", true);
 
                     //  Invoke any external data action
                     if (dataAction != null)
@@ -272,15 +273,15 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             }
             catch (Exception ex)
             {
-                ScriptManager.Instance.OutputError("Error encountered while loading save game");
-                ScriptManager.Instance.OutputException(ex);
+                TrackerSession.Current.Scripts.OutputError("Error encountered while loading save game");
+                TrackerSession.Current.Scripts.OutputException(ex);
             }
             finally
             {
-                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.FinishLoadingSaveFile);
-                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.PackReady);
+                TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.FinishLoadingSaveFile);
+                TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.PackReady);
 
-                ScriptManager.Instance.Output("Finished loading save game \"{0}\"", path);
+                TrackerSession.Current.Scripts.Output("Finished loading save game \"{0}\"", path);
 
                 SuspendPackReadyEvent = false;
             }
@@ -295,17 +296,17 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
         private void GetFilteredCodeAndProvider(ref string code, out ICodeProvider provider)
         {
-            provider = ItemDatabase.Instance;
+            provider = TrackerSession.Current.Items;
 
             if (code.StartsWith("@"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = LocationDatabase.Instance;
+                provider = TrackerSession.Current.Locations;
             }
             else if (code.StartsWith("$"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = ScriptManager.Instance;
+                provider = TrackerSession.Current.Scripts;
             }
         }
 
@@ -331,38 +332,38 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
         public (bool, string) LoadDefaultPackage()
         {
-            string loadpack = string.IsNullOrEmpty(ApplicationSettings.Instance.CommandLinePackage) ? ApplicationSettings.Instance.LastActivePackage : ApplicationSettings.Instance.CommandLinePackage;
-            string loadvar = string.IsNullOrEmpty(ApplicationSettings.Instance.CommandLinePackageVariant) ? ApplicationSettings.Instance.LastActivePackageVariant : ApplicationSettings.Instance.CommandLinePackageVariant;
+            string loadpack = string.IsNullOrEmpty(TrackerSession.Current.Global.CommandLinePackage) ? TrackerSession.Current.Global.LastActivePackage : TrackerSession.Current.Global.CommandLinePackage;
+            string loadvar = string.IsNullOrEmpty(TrackerSession.Current.Global.CommandLinePackageVariant) ? TrackerSession.Current.Global.LastActivePackageVariant : TrackerSession.Current.Global.CommandLinePackageVariant;
 
-            Instance.ActiveGamePackage = PackageManager.Instance.FindInstalledPackage(loadpack);
+            this.ActiveGamePackage = PackageManager.Instance.FindInstalledPackage(loadpack);
 
-            if (Tracker.Instance.ActiveGamePackage != null && Tracker.Instance.ActiveGamePackage.AvailableVariants != null)
+            if (TrackerSession.Current.Tracker.ActiveGamePackage != null && TrackerSession.Current.Tracker.ActiveGamePackage.AvailableVariants != null)
             {
                 bool found = false;
 
                 if (!string.IsNullOrWhiteSpace(loadvar))
                 {
-                    foreach (IGamePackageVariant variant in Tracker.Instance.ActiveGamePackage.AvailableVariants)
+                    foreach (IGamePackageVariant variant in TrackerSession.Current.Tracker.ActiveGamePackage.AvailableVariants)
                     {
                         if (string.Equals(variant.UniqueID, loadvar, StringComparison.Ordinal))
                         {
-                            Tracker.Instance.ActiveGamePackageVariant = variant;
+                            TrackerSession.Current.Tracker.ActiveGamePackageVariant = variant;
                             found = true;
                             break;
                         }
                     }
                 }
 
-                if (Tracker.Instance.ActiveGamePackageVariant == null && Tracker.Instance.ActiveGamePackage.AvailableVariants != null)
+                if (TrackerSession.Current.Tracker.ActiveGamePackageVariant == null && TrackerSession.Current.Tracker.ActiveGamePackage.AvailableVariants != null)
                 {
-                    Tracker.Instance.ActiveGamePackageVariant = Tracker.Instance.ActiveGamePackage.AvailableVariants.FirstOrDefault();
+                    TrackerSession.Current.Tracker.ActiveGamePackageVariant = TrackerSession.Current.Tracker.ActiveGamePackage.AvailableVariants.FirstOrDefault();
                 }
 
                 if (!found)
                 {
-                    if (Tracker.Instance.ActiveGamePackageVariant != null)
+                    if (TrackerSession.Current.Tracker.ActiveGamePackageVariant != null)
                     {
-                        string activeVariant = Tracker.Instance.ActiveGamePackageVariant.UniqueID;
+                        string activeVariant = TrackerSession.Current.Tracker.ActiveGamePackageVariant.UniqueID;
                         return (false, $"### Package Variant {loadvar} not found, loading default variant `{activeVariant}` for {loadpack}");
                     }
                     else
@@ -389,7 +390,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                 {
                     if (s != null)
                     {
-                        ScriptManager.Instance.Output("Loading package settings");
+                        TrackerSession.Current.Scripts.Output("Loading package settings");
                         using (new LoggingBlock())
                         {
                             try
@@ -403,7 +404,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                                     if (spec != null)
                                         DisabledImageFilterSpec = spec;
 
-                                    LocationDatabase.Instance.ParseLocationVisualProperties(root, LocationDatabase.Instance.Root, mActiveGamePackage);
+                                    TrackerSession.Current.Locations.ParseLocationVisualProperties(root, TrackerSession.Current.Locations.Root, mActiveGamePackage);
 
                                     AccessibilityRule.EnableCache = root.GetValue<bool>("enable_accessibility_rule_caching", true);
 
@@ -412,7 +413,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                             }
                             catch (Exception e)
                             {
-                                ScriptManager.Instance.OutputException(e);
+                                TrackerSession.Current.Scripts.OutputException(e);
                             }
                         }
                     } 
@@ -420,7 +421,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
                 if (!bLoadedSettings)
                 {
-                    ScriptManager.Instance.OutputWarning("Loading legacy package settings from tracker_layout.json");
+                    TrackerSession.Current.Scripts.OutputWarning("Loading legacy package settings from tracker_layout.json");
                     using (new LoggingBlock())
                     {
                         try
@@ -434,12 +435,12 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                                 if (spec != null)
                                     DisabledImageFilterSpec = spec;
 
-                                LocationDatabase.Instance.ParseLocationVisualProperties(root, LocationDatabase.Instance.Root, mActiveGamePackage);
+                                TrackerSession.Current.Locations.ParseLocationVisualProperties(root, TrackerSession.Current.Locations.Root, mActiveGamePackage);
                             }
                         }
                         catch (Exception e)
                         {
-                            ScriptManager.Instance.OutputException(e);
+                            TrackerSession.Current.Scripts.OutputException(e);
                         }
                     }
                 }
@@ -463,34 +464,34 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
                     ResetPackageSettings();
 
-                    LayoutManager.Instance.Clear();
-                    MapDatabase.Instance.Reset();
-                    LocationDatabase.Instance.Reset();
-                    ItemDatabase.Instance.Reset();
-                    ScriptManager.Instance.Reset();
+                    TrackerSession.Current.Layouts.Clear();
+                    TrackerSession.Current.Maps.Reset();
+                    TrackerSession.Current.Locations.Reset();
+                    TrackerSession.Current.Items.Reset();
+                    TrackerSession.Current.Scripts.Reset();
 
                     // Reload application colors customization data
                     ApplicationColors.Instance.LoadColors();
 
                     if (mActiveGamePackage != null)
                     {
-                        ScriptManager.Instance.Output("Beginning Package Load");
+                        TrackerSession.Current.Scripts.Output("Beginning Package Load");
                         using (new LoggingBlock())
                         {
-                            ScriptManager.Instance.Output(string.Format("Package: {0}", ActiveGamePackage.UniqueID));
+                            TrackerSession.Current.Scripts.Output(string.Format("Package: {0}", ActiveGamePackage.UniqueID));
                             if (ActiveGamePackageVariant != null)
-                                ScriptManager.Instance.Output(string.Format("Variant: {0}", ActiveGamePackageVariant.UniqueID));
+                                TrackerSession.Current.Scripts.Output(string.Format("Variant: {0}", ActiveGamePackageVariant.UniqueID));
 
                             LoadPackageSettings();
 
-                            ScriptManager.Instance.Load(mActiveGamePackage);
+                            TrackerSession.Current.Scripts.Load(mActiveGamePackage);
 
                             //  Legacy loads - should this be contingent on a flag in the manifest
-                            ItemDatabase.Instance.LegacyLoad(mActiveGamePackage);
-                            MapDatabase.Instance.LegacyLoad(mActiveGamePackage);
-                            LocationDatabase.Instance.LegacyLoad(mActiveGamePackage);
+                            TrackerSession.Current.Items.LegacyLoad(mActiveGamePackage);
+                            TrackerSession.Current.Maps.LegacyLoad(mActiveGamePackage);
+                            TrackerSession.Current.Locations.LegacyLoad(mActiveGamePackage);
                         }
-                        ScriptManager.Instance.Output("Package Load Finished");
+                        TrackerSession.Current.Scripts.Output("Package Load Finished");
                     }
                 }
                 finally
@@ -499,13 +500,13 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
                     mbReloadInProgress = false;
 
-                    ItemDatabase.Instance.BuildCodeIndex();
+                    TrackerSession.Current.Items.BuildCodeIndex();
 
                     if (OnPackageLoadComplete != null)
                         OnPackageLoadComplete(this, EventArgs.Empty);
 
                     if (!SuspendPackReadyEvent)
-                        ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.PackReady);
+                        TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.PackReady);
                 }
             }
         }
@@ -517,25 +518,25 @@ An error occurred while saving. This may be due to anti-virus/malware software p
         public void AddItems(string path)
         {
             if (ActiveGamePackage != null)
-                ItemDatabase.Instance.IncrementalLoad(path, ActiveGamePackage);
+                TrackerSession.Current.Items.IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddMaps(string path)
         {
             if (ActiveGamePackage != null)
-                MapDatabase.Instance.IncrementalLoad(path, ActiveGamePackage);
+                TrackerSession.Current.Maps.IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddLocations(string path)
         {
             if (ActiveGamePackage != null)
-                LocationDatabase.Instance.IncrementalLoad(path, ActiveGamePackage);
+                TrackerSession.Current.Locations.IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddLayouts(string path)
         {
             if (ActiveGamePackage != null)
-                LayoutManager.Instance.IncrementalLoad(path, ActiveGamePackage);
+                TrackerSession.Current.Layouts.IncrementalLoad(path, ActiveGamePackage);
         }
 
         #endregion

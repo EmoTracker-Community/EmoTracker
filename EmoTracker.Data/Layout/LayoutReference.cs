@@ -1,7 +1,8 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Layout
 {
@@ -25,7 +26,7 @@ namespace EmoTracker.Data.Layout
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
             mKey = data.GetValue<string>("key");
-            Layout = LayoutManager.Instance.FindLayout(mKey);
+            Layout = TrackerSession.Current.Layouts.FindLayout(mKey);
             return true;
         }
     }

@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.Data.Items
 {
@@ -50,7 +51,7 @@ namespace EmoTracker.Data.Items
                 SetTransactableProperty(filteredValue, (processedValue) =>
                 {
                     UpdateBadgeAndIcon();
-                    LocationDatabase.Instance.RefeshAccessibility();
+                    TrackerSession.Current.Locations.RefeshAccessibility();
                 });
             }
         }
@@ -65,7 +66,7 @@ namespace EmoTracker.Data.Items
                 SetTransactableProperty(filteredValue, (processedValue) =>
                 {
                     UpdateBadgeAndIcon();
-                    LocationDatabase.Instance.RefeshAccessibility();
+                    TrackerSession.Current.Locations.RefeshAccessibility();
                 });
             }
         }

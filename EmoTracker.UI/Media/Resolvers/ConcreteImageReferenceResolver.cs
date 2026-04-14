@@ -6,6 +6,7 @@ using System.IO;
 
 using Avalonia.Media;
 using SkiaSharp;
+using EmoTracker.Data.Session;
 
 namespace EmoTracker.UI.Media.Resolvers
 {
@@ -50,7 +51,7 @@ namespace EmoTracker.UI.Media.Resolvers
 
             if (concreteRef.URI.Scheme.Equals("gamepackage", StringComparison.OrdinalIgnoreCase))
             {
-                if (Tracker.Instance.ActiveGamePackage == null)
+                if (TrackerSession.Current.Tracker.ActiveGamePackage == null)
                     return null;
 
                 string filePath = string.Format("{0}{1}",
@@ -61,7 +62,7 @@ namespace EmoTracker.UI.Media.Resolvers
                 SKBitmap baseSK = GetCachedSource(filePath);
                 if (baseSK == null)
                 {
-                    using (Stream s = Tracker.Instance.ActiveGamePackage.Open(filePath))
+                    using (Stream s = TrackerSession.Current.Tracker.ActiveGamePackage.Open(filePath))
                     {
                         if (s == null)
                             return null;
@@ -80,7 +81,7 @@ namespace EmoTracker.UI.Media.Resolvers
                 // space (no intermediate PNG round-trips).
                 SKBitmap working = baseSK.Copy();
                 working = Utility.IconUtility.ApplyFilterSpecToSKBitmap(
-                    Tracker.Instance.ActiveGamePackage, working, concreteRef.Filter);
+                    TrackerSession.Current.Tracker.ActiveGamePackage, working, concreteRef.Filter);
 
                 // Convert to Avalonia IImage once at the end, computing the
                 // alpha mask for InputMaskingImage hit-testing.
