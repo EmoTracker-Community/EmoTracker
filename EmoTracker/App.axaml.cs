@@ -25,9 +25,6 @@ namespace EmoTracker
             ConfigurePlatformDllPaths();
 #endif
 
-            Data.Core.Transactions.TransactionProcessor.SetTransactionProcessor(
-                new Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo());
-
             Core.Services.Backends.LogService.SetServiceBackend(new Services.LogService());
             Core.Services.Backends.DispatchService.SetServiceBackend(new Services.DispatchService());
 
