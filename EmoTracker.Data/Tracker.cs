@@ -517,24 +517,31 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
         public void AddItems(string path)
         {
+            // Phase 7d: during fork-scoped Lua replay the pack graph is
+            // aliased (already populated by parent load); skip incremental
+            // database loads so we don't duplicate entries.
+            if (TrackerSession.Current.Scripts.IsReplayMode) return;
             if (ActiveGamePackage != null)
                 TrackerSession.Current.Items.IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddMaps(string path)
         {
+            if (TrackerSession.Current.Scripts.IsReplayMode) return;
             if (ActiveGamePackage != null)
                 TrackerSession.Current.Maps.IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddLocations(string path)
         {
+            if (TrackerSession.Current.Scripts.IsReplayMode) return;
             if (ActiveGamePackage != null)
                 TrackerSession.Current.Locations.IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddLayouts(string path)
         {
+            if (TrackerSession.Current.Scripts.IsReplayMode) return;
             if (ActiveGamePackage != null)
                 TrackerSession.Current.Layouts.IncrementalLoad(path, ActiveGamePackage);
         }

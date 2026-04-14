@@ -14,116 +14,82 @@ namespace EmoTracker.Data.Scripting
     [JsonTypeTags("lua"), DisallowCreationFromTag]
     public class LuaItem : ItemBase
     {
-        LuaTable mItemState;
-
-        LuaFunction mOnLeftClick;
-        LuaFunction mOnRightClick;
-        LuaFunction mProvidesCode;
-        LuaFunction mCanProvideCode;
-        LuaFunction mAdvanceToCode;
-
-        LuaFunction mSave;
-        LuaFunction mLoad;
-
-        LuaFunction mPropertyChanged;
+        // Phase 7d: LuaItem's LuaFunction/LuaTable fields are bound to a
+        // specific NLua.Lua interpreter. On fork, the fork's ScriptManager
+        // holds its own fresh interpreter (and is a new ScriptManager
+        // instance), so those refs must live on the per-session ScriptManager
+        // rather than on this (shared) LuaItem instance. Every accessor here
+        // routes through TrackerSession.Current.Scripts.GetLuaItemBindings(this).
+        //
+        // Consequence: LuaItem properties silently follow the active fork
+        // scope, which is exactly what we want — Lua code executed against
+        // the fork's interpreter sees the fork's rebound functions; parent
+        // code sees parent's.
+        private LuaItemBindings B => TrackerSession.Current.Scripts.GetLuaItemBindings(this);
 
         public LuaTable ItemState
         {
-            get { return mItemState; }
+            get { return B?.ItemState; }
             set
             {
-                LuaTable prevValue = mItemState;
-                if (SetProperty(ref mItemState, value))
-                    DisposeObject(prevValue);
+                var bindings = B;
+                if (bindings == null) return;
+                LuaTable prev = bindings.ItemState;
+                if (!object.ReferenceEquals(prev, value))
+                {
+                    bindings.ItemState = value;
+                    NotifyPropertyChanged();
+                    DisposeObject(prev);
+                }
             }
         }
 
         public LuaFunction OnLeftClickFunc
         {
-            get { return mOnLeftClick; }
-            set
-            {
-                LuaFunction prevValue = mOnLeftClick;
-                if (SetProperty(ref mOnLeftClick, value))
-                    DisposeObject(prevValue);
-            }
+            get { return B?.OnLeftClick; }
+            set { var b = B; if (b == null) return; var prev = b.OnLeftClick; if (!object.ReferenceEquals(prev, value)) { b.OnLeftClick = value; NotifyPropertyChanged(); DisposeObject(prev); } }
         }
 
         public LuaFunction OnRightClickFunc
         {
-            get { return mOnRightClick; }
-            set
-            {
-                LuaFunction prevValue = mOnRightClick;
-                if (SetProperty(ref mOnRightClick, value))
-                    DisposeObject(prevValue);
-            }
+            get { return B?.OnRightClick; }
+            set { var b = B; if (b == null) return; var prev = b.OnRightClick; if (!object.ReferenceEquals(prev, value)) { b.OnRightClick = value; NotifyPropertyChanged(); DisposeObject(prev); } }
         }
 
         public LuaFunction ProvidesCodeFunc
         {
-            get { return mProvidesCode; }
-            set
-            {
-                LuaFunction prevValue = mProvidesCode;
-                if (SetProperty(ref mProvidesCode, value))
-                    DisposeObject(prevValue);
-            }
+            get { return B?.ProvidesCode; }
+            set { var b = B; if (b == null) return; var prev = b.ProvidesCode; if (!object.ReferenceEquals(prev, value)) { b.ProvidesCode = value; NotifyPropertyChanged(); DisposeObject(prev); } }
         }
 
         public LuaFunction CanProvideCodeFunc
         {
-            get { return mCanProvideCode; }
-            set
-            {
-                LuaFunction prevValue = mCanProvideCode;
-                if (SetProperty(ref mCanProvideCode, value))
-                    DisposeObject(prevValue);
-            }
+            get { return B?.CanProvideCode; }
+            set { var b = B; if (b == null) return; var prev = b.CanProvideCode; if (!object.ReferenceEquals(prev, value)) { b.CanProvideCode = value; NotifyPropertyChanged(); DisposeObject(prev); } }
         }
 
         public LuaFunction AdvanceToCodeFunc
         {
-            get { return mAdvanceToCode; }
-            set
-            {
-                LuaFunction prevValue = mAdvanceToCode;
-                if (SetProperty(ref mAdvanceToCode, value))
-                    DisposeObject(prevValue);
-            }
+            get { return B?.AdvanceToCode; }
+            set { var b = B; if (b == null) return; var prev = b.AdvanceToCode; if (!object.ReferenceEquals(prev, value)) { b.AdvanceToCode = value; NotifyPropertyChanged(); DisposeObject(prev); } }
         }
 
         public LuaFunction SaveFunc
         {
-            get { return mSave; }
-            set
-            {
-                LuaFunction prevValue = mSave;
-                if (SetProperty(ref mSave, value))
-                    DisposeObject(prevValue);
-            }
+            get { return B?.Save; }
+            set { var b = B; if (b == null) return; var prev = b.Save; if (!object.ReferenceEquals(prev, value)) { b.Save = value; NotifyPropertyChanged(); DisposeObject(prev); } }
         }
 
         public LuaFunction LoadFunc
         {
-            get { return mLoad; }
-            set
-            {
-                LuaFunction prevValue = mLoad;
-                if (SetProperty(ref mLoad, value))
-                    DisposeObject(prevValue);
-            }
+            get { return B?.Load; }
+            set { var b = B; if (b == null) return; var prev = b.Load; if (!object.ReferenceEquals(prev, value)) { b.Load = value; NotifyPropertyChanged(); DisposeObject(prev); } }
         }
 
         public LuaFunction PropertyChangedFunc
         {
-            get { return mPropertyChanged; }
-            set
-            {
-                LuaFunction prevValue = mPropertyChanged;
-                if (SetProperty(ref mPropertyChanged, value))
-                    DisposeObject(prevValue);
-            }
+            get { return B?.PropertyChanged; }
+            set { var b = B; if (b == null) return; var prev = b.PropertyChanged; if (!object.ReferenceEquals(prev, value)) { b.PropertyChanged = value; NotifyPropertyChanged(); DisposeObject(prev); } }
         }
 
 
@@ -133,15 +99,22 @@ namespace EmoTracker.Data.Scripting
 
         public override void Dispose()
         {
-            DisposeObjectAndDefault(ref mItemState);
-            DisposeObjectAndDefault(ref mOnLeftClick);
-            DisposeObjectAndDefault(ref mOnRightClick);
-            DisposeObjectAndDefault(ref mProvidesCode);
-            DisposeObjectAndDefault(ref mCanProvideCode);
-            DisposeObjectAndDefault(ref mAdvanceToCode);
-            DisposeObjectAndDefault(ref mSave);
-            DisposeObjectAndDefault(ref mLoad);
-            DisposeObjectAndDefault(ref mPropertyChanged);
+            // Only dispose this session's bindings. Other sessions (e.g. a
+            // parent if this is invoked from a fork tear-down, or vice versa)
+            // manage their own via ScriptManager disposal.
+            var b = B;
+            if (b != null)
+            {
+                DisposeObjectAndDefault(ref b.ItemState);
+                DisposeObjectAndDefault(ref b.OnLeftClick);
+                DisposeObjectAndDefault(ref b.OnRightClick);
+                DisposeObjectAndDefault(ref b.ProvidesCode);
+                DisposeObjectAndDefault(ref b.CanProvideCode);
+                DisposeObjectAndDefault(ref b.AdvanceToCode);
+                DisposeObjectAndDefault(ref b.Save);
+                DisposeObjectAndDefault(ref b.Load);
+                DisposeObjectAndDefault(ref b.PropertyChanged);
+            }
 
             base.Dispose();
         }

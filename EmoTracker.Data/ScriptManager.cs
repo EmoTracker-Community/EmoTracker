@@ -163,6 +163,26 @@ namespace EmoTracker.Data
         }
     }
 
+    /// <summary>
+    /// Per-session bindings for a shared <see cref="Scripting.LuaItem"/>. The
+    /// LuaFunction / LuaTable references stored here are bound to a specific
+    /// NLua.Lua interpreter — which means they must live on the per-session
+    /// <see cref="ScriptManager"/>, not on the (shared) LuaItem instance, so a
+    /// forked session's Lua can hold its own rebound copies.
+    /// </summary>
+    public sealed class LuaItemBindings
+    {
+        public LuaTable ItemState;
+        public LuaFunction OnLeftClick;
+        public LuaFunction OnRightClick;
+        public LuaFunction ProvidesCode;
+        public LuaFunction CanProvideCode;
+        public LuaFunction AdvanceToCode;
+        public LuaFunction Save;
+        public LuaFunction Load;
+        public LuaFunction PropertyChanged;
+    }
+
     public class ScriptManager : ObservableObject, ICodeProvider
     {
         public class LogLine
@@ -258,18 +278,54 @@ end
             }
         }
 
-        // Phase 7e infrastructure: cache pack script sources as we load them so
-        // a fork can rebuild its own Lua interpreter by replaying the same
-        // sources against a fresh NLua instance. Full fork-scoped interpreter
-        // rebuild is deferred (it requires moving LuaItem's LuaFunction binding
-        // locus from the shared item instance onto the per-session ScriptManager
-        // — too invasive for this pass). For v1, forks share their parent's
-        // Lua interpreter and the constraint "don't run parent Lua concurrently
-        // with a fork scope" is documented on TrackerSession.Fork().
+        // Phase 7e: cache pack script sources as we load them so a fork can
+        // rebuild its own Lua interpreter by replaying the same sources
+        // against a fresh NLua instance. On fork replay, Tracker.AddItems /
+        // AddLocations / AddMaps / AddLayouts become no-ops (pack graph is
+        // aliased so it's already populated) and ScriptHost:CreateLuaItem
+        // returns the N'th shared LuaItem rather than creating a new one.
+        // The replay's side-effect is to re-bind every LuaItem's LuaFunction
+        // fields — mBindings — against the fork's fresh NLua instance.
         private readonly List<(string path, byte[] source)> mLoadedScriptSources = new List<(string, byte[])>();
 
         [NLua.LuaHide]
         public IReadOnlyList<(string path, byte[] source)> LoadedScriptSources => mLoadedScriptSources;
+
+        // Shared LuaItem instances in creation order. During fork replay, each
+        // ScriptHost:CreateLuaItem call returns mLuaItems[mReplayIndex++]
+        // instead of constructing a new LuaItem — so shared identity is
+        // preserved while the fork's Lua gets a chance to rebind the
+        // *Func properties.
+        private readonly List<Scripting.LuaItem> mLuaItems = new List<Scripting.LuaItem>();
+
+        [NLua.LuaHide]
+        public IReadOnlyList<Scripting.LuaItem> LuaItems => mLuaItems;
+
+        // Per-session LuaItem bindings. Keyed by the shared LuaItem instance;
+        // values are fresh on each session so forks hold their own fork-Lua-
+        // bound LuaFunctions.
+        private readonly Dictionary<Scripting.LuaItem, LuaItemBindings> mBindings = new Dictionary<Scripting.LuaItem, LuaItemBindings>();
+
+        [NLua.LuaHide]
+        public LuaItemBindings GetLuaItemBindings(Scripting.LuaItem item)
+        {
+            if (item == null) return null;
+            if (!mBindings.TryGetValue(item, out var b))
+            {
+                b = new LuaItemBindings();
+                mBindings[item] = b;
+            }
+            return b;
+        }
+
+        // Replay-mode plumbing: used by Rebuild() to re-execute cached pack
+        // script sources against a fresh Lua without double-populating the
+        // aliased pack graph.
+        private bool mInReplayMode;
+        private int mReplayLuaItemIndex;
+
+        [NLua.LuaHide]
+        public bool IsReplayMode => mInReplayMode;
 
         [NLua.LuaHide]
         private object[] LoadScript(IGamePackage package, string path)
@@ -288,7 +344,15 @@ end
                             byte[] buffer = new byte[s.Length];
                             if (s.Read(buffer, 0, buffer.Length) == buffer.Length)
                             {
-                                mLoadedScriptSources.Add((path, buffer));
+                                // Only cache on initial (non-replay) load.
+                                // Replay re-enters LoadScript transitively when
+                                // pack Lua calls ScriptHost:LoadScript from
+                                // inside init.lua; we must still execute those
+                                // nested scripts so the caller's globals line
+                                // up, but re-caching would corrupt the source
+                                // list we're iterating.
+                                if (!mInReplayMode)
+                                    mLoadedScriptSources.Add((path, buffer));
                                 result = mLua.DoString(buffer, path);
                             }
                         }
@@ -348,6 +412,8 @@ end
                 //  Dispose our previous Lua instance
                 DisposeObjectAndDefault(ref mLua);
                 mLoadedScriptSources.Clear();
+                mLuaItems.Clear();
+                mBindings.Clear();
 
                 mLua = new Lua();
                 mLua.DebugHook += MLua_DebugHook;
@@ -823,10 +889,150 @@ end
 
         public LuaItem CreateLuaItem()
         {
+            if (mInReplayMode)
+            {
+                // Fork replay: return the N'th shared LuaItem. The fork's Lua
+                // then assigns OnLeftClickFunc / ProvidesCodeFunc / ... on it,
+                // which lands in *this* ScriptManager's bindings dict
+                // (fork-Lua-bound), leaving the parent's bindings untouched.
+                if (mReplayLuaItemIndex < mLuaItems.Count)
+                {
+                    return mLuaItems[mReplayLuaItemIndex++];
+                }
+
+                // Pack nondeterminism: more CreateLuaItem calls in replay than
+                // original. Log and fall through to construct a new one so we
+                // don't crash the simulation outright.
+                OutputWarning("CreateLuaItem: replay count exceeded original; constructing new item (pack nondeterminism).");
+            }
+
             LuaItem item = new LuaItem();
             TrackerSession.Current.Items.RegisterItem(item);
+            mLuaItems.Add(item);
+            if (mInReplayMode)
+                mReplayLuaItemIndex = mLuaItems.Count;
 
             return item;
+        }
+
+        /// <summary>
+        /// Fork-scoped Lua rebuild (Phase 7d/7e). Constructs a fresh NLua.Lua
+        /// bound to the current session (expected to be the fork's session:
+        /// caller invokes this inside <c>fork.EnterScope()</c>), wires the
+        /// standard globals, and replays every cached pack script source
+        /// against it. Pack scripts re-execute and re-assign every LuaItem's
+        /// *Func / ItemState properties — those assignments now land in the
+        /// fork's <see cref="mBindings"/> dict with fresh fork-Lua-bound
+        /// LuaFunction/LuaTable refs.
+        ///
+        /// Prerequisites: this ScriptManager is a fresh instance on a fork
+        /// session; it has inherited the parent's package + cached script
+        /// sources + LuaItem instance list via <see cref="InheritFrom"/>.
+        /// </summary>
+        [NLua.LuaHide]
+        public void Rebuild()
+        {
+            if (mPackage == null)
+                throw new InvalidOperationException("ScriptManager.Rebuild() requires an inherited package; call InheritFrom() first.");
+
+            DisposeObjectAndDefault(ref mLua);
+            mBindings.Clear();
+            mExpressionCache.Clear();
+
+            mLua = new Lua();
+            mLua.DebugHook += MLua_DebugHook;
+            mLua.HookException += MLua_HookException;
+            mLua.RegisterFunction("_output", this, this.GetType().GetMethod("OutputRaw"));
+
+            try
+            {
+                using (LuaTable os = (LuaTable)mLua["os"])
+                {
+                    os["execute"] = null;
+                    os["exit"] = null;
+                    os["setlocale"] = null;
+                }
+            }
+            catch { }
+
+            if (!mPackage.FlaggedAsUnsafe)
+            {
+                try
+                {
+                    using (LuaTable os = (LuaTable)mLua["os"])
+                    {
+                        os["tmpname"] = null;
+                        os["rename"] = null;
+                        os["getenv"] = null;
+                        os["remove"] = null;
+                    }
+                }
+                catch { mLua["os"] = null; }
+
+                mLua["io"] = null;
+            }
+
+            mTrackerInterface = new TrackerScriptInterface();
+            mLua["Tracker"] = mTrackerInterface;
+            mLayoutInterface = new LayoutScriptInterface();
+            mLua["Layout"] = mLayoutInterface;
+            mLua["AccessibilityLevel"] = new AccessibilityLevel();
+            mLua["NotificationType"] = new NotificationType();
+            mLua["ScriptHost"] = this;
+            mLua["ImageReference"] = new ImageReferenceProvider();
+
+            foreach (var entry in mGlobals)
+                mLua[entry.Key] = entry.Value;
+
+            mLua.DoString(SystemLua);
+
+            // Replay cached pack sources. During replay, Tracker.AddX no-ops
+            // and CreateLuaItem returns shared instances.
+            //
+            // We only invoke the FIRST cached source (pack's init.lua entry
+            // point). Any transitive ScriptHost:LoadScript calls inside
+            // init.lua still resolve via LoadScript() and execute against our
+            // fresh Lua — so globals are defined in their original order
+            // relative to init.lua's control flow. The outer loop avoids
+            // double-executing by only ever replaying the entry point.
+            mInReplayMode = true;
+            mReplayLuaItemIndex = 0;
+            try
+            {
+                if (mLoadedScriptSources.Count > 0)
+                {
+                    var (path, bytes) = mLoadedScriptSources[0];
+                    try
+                    {
+                        mLua.DoString(bytes, path);
+                    }
+                    catch (Exception e)
+                    {
+                        Output(string.Format("Exception replaying script '{0}' on fork: {1}", path, e.Message));
+                    }
+                }
+            }
+            finally
+            {
+                mInReplayMode = false;
+            }
+        }
+
+        /// <summary>
+        /// Copies package reference, cached script sources, and the list of
+        /// shared LuaItem instances from a parent ScriptManager onto this
+        /// (fork) ScriptManager. Does not copy bindings — those are
+        /// regenerated by <see cref="Rebuild"/>.
+        /// </summary>
+        [NLua.LuaHide]
+        public void InheritFrom(ScriptManager parent)
+        {
+            if (parent == null) throw new ArgumentNullException(nameof(parent));
+            mPackage = parent.mPackage;
+            mLoadedScriptSources.Clear();
+            mLoadedScriptSources.AddRange(parent.mLoadedScriptSources);
+            mLuaItems.Clear();
+            mLuaItems.AddRange(parent.mLuaItems);
         }
     }
 }
