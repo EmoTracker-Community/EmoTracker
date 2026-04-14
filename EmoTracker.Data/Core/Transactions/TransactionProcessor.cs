@@ -55,20 +55,26 @@ namespace EmoTracker.Data.Core.Transactions
 
     public static class TransactionProcessor
     {
+        // Phase 7: Current now resolves via the AsyncLocal-scoped TrackerSession
+        // so fork scopes get their own transaction processor automatically.
+        // The mProcessor fallback covers the narrow window during application
+        // startup before CreateCurrent() publishes Default, and design-time
+        // previewers that call SetTransactionProcessor explicitly.
         static ITransactionProcessor mProcessor;
 
         public static ITransactionProcessor Current
         {
-            get { return mProcessor; }
+            get
+            {
+                var session = Session.TrackerSession.Current;
+                if (session?.Transactions != null)
+                    return session.Transactions;
+                return mProcessor;
+            }
         }
 
         public static void SetTransactionProcessor(ITransactionProcessor processor)
         {
-            if (Current != null)
-            {
-                //  Do error checking; e.g. check for open transaction scopes, etc.
-            }
-
             mProcessor = processor;
         }
     }

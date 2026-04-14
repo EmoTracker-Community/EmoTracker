@@ -92,6 +92,35 @@ namespace EmoTracker.Data.Core.Transactions
         }
 
 
+        /// <summary>
+        /// Reads a session-local ephemeral value from the same
+        /// <see cref="PropertyStore"/> backing <see cref="SetTransactableProperty{T}"/>
+        /// — but bypasses the transaction processor. Intended for derived /
+        /// cached values that must not appear in the undo stack yet still need
+        /// to be session-local so a fork can hold independent results
+        /// (e.g. cached accessibility levels recomputed by
+        /// <c>Location.RefreshAccessibility</c>).
+        /// </summary>
+        protected T GetSessionLocal<T>([CallerMemberName] string propertyName = null)
+        {
+            return GetCurrentTransactablePropertyValue<T>(propertyName);
+        }
+
+        /// <summary>
+        /// Writes a session-local ephemeral value into <see cref="PropertyStore"/>
+        /// without opening a transaction. Fires INPC on change. See
+        /// <see cref="GetSessionLocal{T}"/>.
+        /// </summary>
+        protected bool SetSessionLocal<T>(T value, [CallerMemberName] string propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(GetCurrentTransactablePropertyValue<T>(propertyName), value))
+                return false;
+            NotifyPropertyChanging(propertyName);
+            PropertyStore[propertyName] = value;
+            NotifyPropertyChanged(propertyName);
+            return true;
+        }
+
         protected bool SetTransactableProperty<T>(T value, Action<T> onTransactionProcessed = null, [CallerMemberName] string propertyName = null)
         {
             if (EqualityComparer<T>.Default.Equals(GetTransactableProperty<T>(propertyName), value))

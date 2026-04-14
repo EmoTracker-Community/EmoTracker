@@ -34,85 +34,64 @@ namespace EmoTracker.Data
     }
 
     /// <summary>
-    /// Surface exposed to Lua scripts as the global <c>Tracker</c> object. Phase 3
-    /// of the TrackerSession refactor turns this into a session-injected facade
-    /// (was a Singleton): every method/property routes through the owning
-    /// <see cref="Session.TrackerSession"/> rather than reaching for global
-    /// singletons. One interface instance per session, constructed by
-    /// ScriptManager when the Lua interpreter is (re)created.
+    /// Surface exposed to Lua scripts as the global <c>Tracker</c> object.
+    /// Phase 3 turned this into a session-injected facade (was a Singleton).
+    /// Phase 7 re-routed every method/property through
+    /// <see cref="Session.TrackerSession.Current"/> rather than a captured
+    /// session reference, so Lua calls executed inside a fork scope see the
+    /// fork's state even though the interpreter (and this interface instance)
+    /// were constructed against the parent.
     /// </summary>
     class TrackerScriptInterface
     {
-        readonly Session.TrackerSession mSession;
-
-        public TrackerScriptInterface(Session.TrackerSession session)
+        public TrackerScriptInterface()
         {
-            mSession = session ?? throw new ArgumentNullException(nameof(session));
         }
 
-        public void AddItems(string path)
-        {
-            mSession.Tracker.AddItems(path);
-        }
+        static Session.TrackerSession S => Session.TrackerSession.Current;
 
-        public void AddMaps(string path)
-        {
-            mSession.Tracker.AddMaps(path);
-        }
-
-        public void AddLocations(string path)
-        {
-            mSession.Tracker.AddLocations(path);
-        }
-
-        public void AddLayouts(string path)
-        {
-            mSession.Tracker.AddLayouts(path);
-        }
+        public void AddItems(string path) { S.Tracker.AddItems(path); }
+        public void AddMaps(string path) { S.Tracker.AddMaps(path); }
+        public void AddLocations(string path) { S.Tracker.AddLocations(path); }
+        public void AddLayouts(string path) { S.Tracker.AddLayouts(path); }
 
         public object FindObjectForCode(string code)
         {
-            return mSession.Tracker.FindObjectForCode(code);
+            return S.Tracker.FindObjectForCode(code);
         }
 
         public uint ProviderCountForCode(string code, out AccessibilityLevel maxAccessibility)
         {
-            return mSession.Tracker.ProviderCountForCode(code, out maxAccessibility);
+            return S.Tracker.ProviderCountForCode(code, out maxAccessibility);
         }
 
-        public string ActiveVariantUID
-        {
-            get { return mSession.Tracker.ActiveVariantUID; }
-        }
-        public Location RootLocation
-        {
-            get { return mSession.Locations.Root; }
-        }
+        public string ActiveVariantUID => S.Tracker.ActiveVariantUID;
+        public Location RootLocation => S.Locations.Root;
 
         #region -- Backwards Compatibility (Temp) --
 
         public bool DisplayAllLocations
         {
-            get { return mSession.Settings.DisplayAllLocations; }
-            set { mSession.Settings.DisplayAllLocations = value; }
+            get => S.Settings.DisplayAllLocations;
+            set => S.Settings.DisplayAllLocations = value;
         }
 
         public bool AlwaysAllowClearing
         {
-            get { return mSession.Settings.AlwaysAllowClearing; }
-            set { mSession.Settings.AlwaysAllowClearing = value; }
+            get => S.Settings.AlwaysAllowClearing;
+            set => S.Settings.AlwaysAllowClearing = value;
         }
 
         public bool PinLocationsOnItemCapture
         {
-            get { return mSession.Settings.PinLocationsOnItemCapture; }
-            set { mSession.Settings.PinLocationsOnItemCapture = value; }
+            get => S.Settings.PinLocationsOnItemCapture;
+            set => S.Settings.PinLocationsOnItemCapture = value;
         }
 
         public bool AutoUnpinLocationsOnClear
         {
-            get { return mSession.Settings.AutoUnpinLocationsOnClear; }
-            set { mSession.Settings.AutoUnpinLocationsOnClear = value; }
+            get => S.Settings.AutoUnpinLocationsOnClear;
+            set => S.Settings.AutoUnpinLocationsOnClear = value;
         }
 
         #endregion
@@ -128,21 +107,20 @@ namespace EmoTracker.Data
     /// </summary>
     class LayoutScriptInterface
     {
-        readonly Session.TrackerSession mSession;
-
-        public LayoutScriptInterface(Session.TrackerSession session)
+        public LayoutScriptInterface()
         {
-            mSession = session ?? throw new ArgumentNullException(nameof(session));
         }
+
+        static Session.TrackerSession S => Session.TrackerSession.Current;
 
         public Layout.Layout FindLayout(string key)
         {
-            return mSession.Layouts.FindLayout(key);
+            return S.Layouts.FindLayout(key);
         }
 
         public Layout.LayoutItem FindElement(string uid)
         {
-            return mSession.Layouts.FindElement(uid);
+            return S.Layouts.FindElement(uid);
         }
 
         public string GetColorForAccessibility(AccessibilityLevel accessibility)
@@ -399,9 +377,12 @@ end
                 // built fresh whenever the Lua interpreter is (re)created so that
                 // Lua's `Tracker` global resolves through the owning session
                 // rather than reaching for static .Instance accessors.
-                mTrackerInterface = new TrackerScriptInterface(Session.TrackerSession.Current);
+                // Phase 7: the script interfaces are stateless w.r.t. the owning
+                // session — they resolve via TrackerSession.Current on each call
+                // so Lua invoked inside a fork scope sees the fork's state.
+                mTrackerInterface = new TrackerScriptInterface();
                 mLua["Tracker"] = mTrackerInterface;
-                mLayoutInterface = new LayoutScriptInterface(Session.TrackerSession.Current);
+                mLayoutInterface = new LayoutScriptInterface();
                 mLua["Layout"] = mLayoutInterface;
                 mLua["AccessibilityLevel"] = new AccessibilityLevel();
                 mLua["NotificationType"] = new NotificationType();
