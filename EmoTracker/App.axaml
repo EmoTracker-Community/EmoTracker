@@ -9,47 +9,28 @@
         <!-- WPF layout containers don't clip children by default. Pack makers rely on negative
              margins to intentionally overflow elements (e.g. close buttons positioned outside
              their containing box). Override ClipToBounds on every possible panel/control type
-             to match WPF behaviour throughout the layout tree. -->
-        <Style Selector="Panel">
+             to match WPF behaviour throughout the layout tree.
+             
+             NOTE: Avalonia's TemplatedControl sets ClipToBounds=True via OverrideDefaultValue
+             in its static constructor. Plain type selectors (e.g. "ContentControl") only match
+             the exact type, NOT derived types. Using ":is()" selectors to match the base type
+             and all subclasses so that UserControl, custom controls, etc. are all covered. -->
+        <Style Selector=":is(Panel)">
             <Setter Property="ClipToBounds" Value="False"/>
         </Style>
-        <Style Selector="Grid">
+        <Style Selector=":is(TemplatedControl)">
             <Setter Property="ClipToBounds" Value="False"/>
         </Style>
-        <Style Selector="StackPanel">
+        <Style Selector=":is(ContentPresenter)">
             <Setter Property="ClipToBounds" Value="False"/>
         </Style>
-        <Style Selector="WrapPanel">
+        <Style Selector=":is(Decorator)">
             <Setter Property="ClipToBounds" Value="False"/>
         </Style>
-        <Style Selector="DockPanel">
+        <Style Selector=":is(Viewbox)">
             <Setter Property="ClipToBounds" Value="False"/>
         </Style>
-        <Style Selector="ItemsControl">
-            <Setter Property="ClipToBounds" Value="False"/>
-        </Style>
-        <Style Selector="ContentControl">
-            <Setter Property="ClipToBounds" Value="False"/>
-        </Style>
-        <Style Selector="ContentPresenter">
-            <Setter Property="ClipToBounds" Value="False"/>
-        </Style>
-        <Style Selector="LayoutTransformControl">
-            <Setter Property="ClipToBounds" Value="False"/>
-        </Style>
-        <Style Selector="Border">
-            <Setter Property="ClipToBounds" Value="False"/>
-        </Style>
-        <Style Selector="Decorator">
-            <Setter Property="ClipToBounds" Value="False"/>
-        </Style>
-        <Style Selector="Viewbox">
-            <Setter Property="ClipToBounds" Value="False"/>
-        </Style>
-        <Style Selector="ScrollContentPresenter">
-            <Setter Property="ClipToBounds" Value="False"/>
-        </Style>
-        <Style Selector="ItemsPresenter">
+        <Style Selector=":is(ItemsPresenter)">
             <Setter Property="ClipToBounds" Value="False"/>
         </Style>
     </Application.Styles>
