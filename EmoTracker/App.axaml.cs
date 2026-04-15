@@ -8,7 +8,6 @@ using Serilog;
 using Serilog.Events;
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 
 namespace EmoTracker
 {
@@ -21,10 +20,6 @@ namespace EmoTracker
 
         public override void OnFrameworkInitializationCompleted()
         {
-#if WINDOWS
-            ConfigurePlatformDllPaths();
-#endif
-
             Data.Core.Transactions.TransactionProcessor.SetTransactionProcessor(
                 new Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo());
 
@@ -67,14 +62,6 @@ namespace EmoTracker
 
                         if (e.ApplicationExitCode == 0)
                             Extensions.ExtensionManager.Instance.OnApplicationClosing();
-
-#if WINDOWS
-                        if (Data.ApplicationSettings.Instance.EnableDiscordRichPresence)
-                        {
-                            try { DiscordRpc.ClearPresence(); DiscordRpc.Shutdown(); }
-                            catch { }
-                        }
-#endif
                     }
                     catch { }
                     finally
@@ -87,26 +74,5 @@ namespace EmoTracker
             base.OnFrameworkInitializationCompleted();
         }
 
-#if WINDOWS
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool SetDllDirectory(string lpPathName);
-
-        private static void ConfigurePlatformDllPaths()
-        {
-            try
-            {
-                string processorAssemblyPath = Environment.Is64BitProcess ? "x64" : "x86";
-                string privateBinPath = Path.Combine(
-                    AppDomain.CurrentDomain.SetupInformation.ApplicationBase,
-                    processorAssemblyPath + "\\");
-                SetDllDirectory(privateBinPath);
-            }
-            catch
-            {
-                throw new InvalidOperationException("Failed to set platform DLL search directory.");
-            }
-        }
-#endif
     }
 }
