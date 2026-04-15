@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "emotracker-mcp": {
+      "type": "http",
+      "url": "http://localhost:27125/"
+    }
+  }
+}
