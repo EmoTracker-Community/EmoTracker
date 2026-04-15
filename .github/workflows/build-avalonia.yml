@@ -24,6 +24,7 @@ jobs:
     env:
       # Allow restoring the net8.0-windows target on non-Windows (skips WPF-specific build)
       EnableWindowsTargeting: true
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v4
@@ -84,6 +85,7 @@ jobs:
 
     env:
       EnableWindowsTargeting: true
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v4
