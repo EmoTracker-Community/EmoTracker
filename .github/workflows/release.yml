@@ -33,6 +33,13 @@ jobs:
       - name: Publish win-x64
         run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime win-x64 --self-contained --output publish/win-x64
 
+      - name: Bundle PortAudio for Windows
+        shell: bash
+        run: |
+          mkdir -p publish/win-x64/x64
+          curl -fsSL "https://github.com/spatialaudio/portaudio-binaries/raw/master/libportaudio64bit.dll" \
+            -o "publish/win-x64/x64/portaudio.dll"
+
       - name: Publish osx-x64
         run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime osx-x64 --self-contained --output publish/osx-x64
 

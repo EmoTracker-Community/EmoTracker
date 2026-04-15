@@ -58,6 +58,14 @@ jobs:
           name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
           path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.xz
 
+      - name: Bundle PortAudio (Windows only)
+        if: startsWith(matrix.rid, 'win')
+        shell: bash
+        run: |
+          mkdir -p publish/raw/x64
+          curl -fsSL "https://github.com/spatialaudio/portaudio-binaries/raw/master/libportaudio64bit.dll" \
+            -o "publish/raw/x64/portaudio.dll"
+
       - name: Stage Windows output
         if: startsWith(matrix.rid, 'win')
         run: |

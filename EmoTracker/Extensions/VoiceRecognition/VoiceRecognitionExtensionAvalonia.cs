@@ -83,12 +83,27 @@ namespace EmoTracker.Extensions.VoiceRecognition
             }
         }
 
+        private bool _audioLibrariesAvailable = true;
+        public bool AudioLibrariesAvailable
+        {
+            get => _audioLibrariesAvailable;
+            private set => SetProperty(ref _audioLibrariesAvailable, value);
+        }
+
         public object StatusBarControl { get; }
 
         public VoiceRecognitionExtension()
         {
             StatusBarControl = new VoiceRecognitionStatusIndicator { DataContext = this };
-            Vosk.Vosk.SetLogLevel(-1);
+            try
+            {
+                Vosk.Vosk.SetLogLevel(-1);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "[Voice] Vosk native library not available");
+                AudioLibrariesAvailable = false;
+            }
             RefreshAudioDevices();
         }
 
@@ -130,6 +145,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
             catch (Exception ex)
             {
                 Serilog.Log.Warning(ex, "[Voice] Failed to enumerate audio devices");
+                AudioLibrariesAvailable = false;
             }
         }
 
