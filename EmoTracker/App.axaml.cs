@@ -98,7 +98,7 @@ namespace EmoTracker
             {
                 string processorAssemblyPath = Environment.Is64BitProcess ? "x64" : "x86";
                 string privateBinPath = Path.Combine(
-                    AppDomain.CurrentDomain.SetupInformation.ApplicationBase,
+                    AppContext.BaseDirectory,
                     processorAssemblyPath + "\\");
                 SetDllDirectory(privateBinPath);
             }
