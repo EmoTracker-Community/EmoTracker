@@ -27,7 +27,10 @@ namespace EmoTracker.Services.Updates
     ///
     /// Windows: a .bat file that polls tasklist until our PID disappears, then
     ///          uses xcopy to overwrite the install directory in-place.
-    /// macOS / Linux: a .sh file; no file-locking concern so a brief sleep suffices.
+    /// macOS:   a .sh file that replaces the entire .app bundle and relaunches via
+    ///          `open`, which is required for proper bundle context and Gatekeeper.
+    /// Linux:   a .sh file that copies flat staging files over the install directory
+    ///          and relaunches the binary directly.
     /// </summary>
     public static class ZipInstallAndRelaunch
     {
@@ -78,8 +81,10 @@ namespace EmoTracker.Services.Updates
 
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                     LaunchWindowsSwapScript(installDir, stagingDir, exeName);
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                    LaunchMacOSSwapScript(installDir, stagingDir);
                 else
-                    LaunchUnixSwapScript(installDir, stagingDir, exeName);
+                    LaunchLinuxSwapScript(installDir, stagingDir, exeName);
 
                 Log.Information("[Update] Swap script launched — exiting for update.");
                 Environment.Exit(0);
@@ -178,12 +183,50 @@ namespace EmoTracker.Services.Updates
         }
 
         // -----------------------------------------------------------------------
-        // macOS / Linux shell swap script
+        // macOS shell swap script
         // -----------------------------------------------------------------------
 
-        private static void LaunchUnixSwapScript(
+        private static void LaunchMacOSSwapScript(string installDir, string stagingDir)
+        {
+            // The release archive contains EmoTracker.app/ at its root, so staging looks like:
+            //   stagingDir/EmoTracker.app/Contents/MacOS/...
+            //
+            // installDir = .../EmoTracker.app/Contents/MacOS  (AppContext.BaseDirectory)
+            // appBundle  = .../EmoTracker.app
+            // appParent  = .../ (directory that contains the .app)
+            string appBundle = Path.GetDirectoryName(Path.GetDirectoryName(installDir)!)!;
+            string appParent = Path.GetDirectoryName(appBundle)!;
+            string appName   = Path.GetFileName(appBundle)!; // "EmoTracker.app"
+
+            string script = $"""
+                #!/bin/sh
+                sleep 1
+                rm -rf "{appBundle}"
+                cp -R "{stagingDir}/{appName}" "{appParent}/"
+                rm -rf "{stagingDir}"
+                xattr -r -d com.apple.quarantine "{appBundle}" 2>/dev/null || true
+                open "{appBundle}"
+                """;
+
+            string scriptPath = Path.Combine(Path.GetTempPath(), "emotracker_update.sh");
+            File.WriteAllText(scriptPath, script);
+
+            RunProcessAsync("chmod", $"+x \"{scriptPath}\"", CancellationToken.None).GetAwaiter().GetResult();
+
+            Process.Start(new ProcessStartInfo("/bin/sh", $"\"{scriptPath}\"")
+            {
+                UseShellExecute = false,
+            });
+        }
+
+        // -----------------------------------------------------------------------
+        // Linux shell swap script
+        // -----------------------------------------------------------------------
+
+        private static void LaunchLinuxSwapScript(
             string installDir, string stagingDir, string exeName)
         {
+            // The Linux archive contains flat files, so staging mirrors installDir.
             string exePath = Path.Combine(installDir, exeName);
 
             string script = $"""
@@ -198,12 +241,11 @@ namespace EmoTracker.Services.Updates
             string scriptPath = Path.Combine(Path.GetTempPath(), "emotracker_update.sh");
             File.WriteAllText(scriptPath, script);
 
-            // Make executable
             RunProcessAsync("chmod", $"+x \"{scriptPath}\"", CancellationToken.None).GetAwaiter().GetResult();
 
             Process.Start(new ProcessStartInfo("/bin/sh", $"\"{scriptPath}\"")
             {
-                UseShellExecute = true,
+                UseShellExecute = false,
             });
         }
     }
