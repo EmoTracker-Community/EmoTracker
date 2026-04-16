@@ -13,8 +13,11 @@ namespace EmoTracker.Services.Updates
     /// Handles the apply-and-relaunch step for zip/tar archive update packages.
     ///
     /// Strategy (all platforms):
-    ///   1. Extract the downloaded archive into a .staging directory next to the
-    ///      current install directory.
+    ///   1. Extract the downloaded archive into a staging directory under
+    ///      LocalApplicationData (e.g. %LOCALAPPDATA%\EmoTracker\.update-staging on
+    ///      Windows). Keeping staging outside the install directory avoids
+    ///      Controlled Folder Access blocks and OneDrive sync lock contention when
+    ///      the app is installed in Desktop or Documents.
     ///   2. Write a platform-specific swap script that waits for this process to
     ///      exit, copies the staging files over the install directory, deletes
     ///      staging, and relaunches EmoTracker.
@@ -31,10 +34,19 @@ namespace EmoTracker.Services.Updates
             try
             {
                 string installDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
-                string stagingDir = Path.Combine(installDir, ".update-staging");
+
+                // Stage outside the install directory so that:
+                //   - Windows Defender Controlled Folder Access cannot block writes
+                //     (Desktop and Documents are protected; LocalApplicationData is not)
+                //   - OneDrive / known-folder-move sync cannot lock files mid-copy
+                string stagingBase = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "EmoTracker");
+                string stagingDir = Path.Combine(stagingBase, ".update-staging");
 
                 Log.Information("[Update] Extracting update archive to staging dir: {Dir}", stagingDir);
 
+                Directory.CreateDirectory(stagingBase);
                 if (Directory.Exists(stagingDir))
                     Directory.Delete(stagingDir, recursive: true);
                 Directory.CreateDirectory(stagingDir);
