@@ -1,3 +1,5 @@
+using Avalonia.Threading;
+using EmoTracker.UI;
 using Serilog;
 using System;
 using System.Diagnostics;
@@ -34,6 +36,24 @@ namespace EmoTracker.Services.Updates
             try
             {
                 string installDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+
+                // Pre-flight: if Windows Defender Controlled Folder Access is enabled and
+                // the install directory is inside a default protected folder (Desktop,
+                // Documents, etc.), xcopy in the swap script will be silently blocked.
+                // Show an actionable warning and abort before touching anything.
+                if (WindowsCfaChecker.IsBlockingPath(installDir))
+                {
+                    Log.Warning("[Update] Controlled Folder Access will block the update in: {Dir}", installDir);
+                    var tcs = new TaskCompletionSource<bool>();
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        var warn = new CfaWarningWindow(installDir);
+                        warn.Show();
+                        warn.Closed += (_, _) => tcs.TrySetResult(true);
+                    });
+                    await tcs.Task;
+                    return;
+                }
 
                 // Stage outside the install directory so that:
                 //   - Windows Defender Controlled Folder Access cannot block writes

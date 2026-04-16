@@ -1,0 +1,72 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EmoTracker.UI.CfaWarningWindow"
+        Title="Software Update"
+        Width="500" Height="290"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#212121">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#252030" Padding="20,16,20,16">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Update cannot be applied"
+                           Foreground="WhiteSmoke"
+                           FontSize="15"
+                           FontWeight="SemiBold"/>
+                <TextBlock x:Name="SubtitleText"
+                           Foreground="#888888"
+                           FontSize="12"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Body -->
+        <Border Grid.Row="1" Background="#1a1a1a" Padding="20,16">
+            <StackPanel Spacing="12">
+                <TextBlock Foreground="#c8c8c8"
+                           FontSize="12"
+                           TextWrapping="Wrap">
+                    Windows Defender Controlled Folder Access is protecting this location and will
+                    block the update from writing new files here.
+                </TextBlock>
+                <TextBlock Foreground="#c8c8c8"
+                           FontSize="12"
+                           TextWrapping="Wrap">
+                    To apply updates, choose one of the following:
+                </TextBlock>
+                <StackPanel Spacing="6" Margin="10,0,0,0">
+                    <TextBlock Foreground="#888888"
+                               FontSize="11"
+                               TextWrapping="Wrap">
+                        • Move EmoTracker to a folder outside Desktop or Documents (e.g. C:\Tools\EmoTracker).
+                    </TextBlock>
+                    <TextBlock Foreground="#888888"
+                               FontSize="11"
+                               TextWrapping="Wrap">
+                        • Add an exception in Windows Security → Virus &amp; threat protection →
+                          Ransomware protection → Allow an app through Controlled folder access.
+                    </TextBlock>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Footer -->
+        <Border Grid.Row="2" Background="#252030" Padding="16,12">
+            <Button x:Name="OkButton"
+                    HorizontalAlignment="Right"
+                    Content="OK"
+                    Padding="24,7"
+                    MinWidth="80"
+                    CornerRadius="6"
+                    Background="#35e0b5"
+                    Foreground="#111111"
+                    FontWeight="SemiBold"
+                    BorderThickness="0"
+                    Click="OkButton_Click"/>
+        </Border>
+
+    </Grid>
+</Window>
