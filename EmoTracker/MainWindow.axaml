@@ -51,15 +51,26 @@
                           Margin="20" VerticalAlignment="Top">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Background="#d8212121" BorderThickness="8,0,0,0"
-                                BorderBrush="#41a054" Margin="0,0,0,10">
-                            <Grid Background="Transparent">
+                        <Button Command="{Binding ForceExpireCommand}"
+                                Padding="0" Background="Transparent" BorderThickness="0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <Button.Styles>
+                                <Style Selector="Button:pointerover /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                                <Style Selector="Button:pressed /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                            </Button.Styles>
+                            <Border Background="#d8212121" BorderThickness="8,0,0,0"
+                                    BorderBrush="{Binding Type, Converter={x:Static converters:NotificationTypeToBrushConverter.Instance}}"
+                                    Margin="0,0,0,10">
+                                <Border.Effect>
+                                    <DropShadowDirectionEffect BlurRadius="15" ShadowDepth="0" Opacity="0.8" Color="Black"/>
+                                </Border.Effect>
                                 <controls:MarkdownViewer Markdown="{Binding Markdown}" Margin="10,7"/>
-                                <Button Background="Transparent" BorderThickness="0"
-                                        Command="{Binding ForceExpireCommand}"
-                                        Opacity="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
-                            </Grid>
-                        </Border>
+                            </Border>
+                        </Button>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

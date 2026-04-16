@@ -1,6 +1,7 @@
 #nullable enable annotations
 using EmoTracker.Core;
 using EmoTracker.Data.Locations;
+using EmoTracker.Data.Scripting;
 using EmoTracker.Data.Settings;
 using System;
 using System.Collections.Generic;
@@ -93,6 +94,32 @@ namespace EmoTracker.UI.Converters
 
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             => value is true ? (object)s_effect : null;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Converts a <see cref="NotificationType"/> to its matching accent <see cref="IBrush"/>
+    /// for the notification left-border stripe. Colors are resolved live from
+    /// <see cref="ApplicationColors.Instance"/> so user configuration is respected.
+    /// </summary>
+    public class NotificationTypeToBrushConverter : Singleton<NotificationTypeToBrushConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            var c = ApplicationColors.Instance;
+            string colorStr = value is NotificationType t ? t switch
+            {
+                NotificationType.Celebration => c.Notification_Celebration,
+                NotificationType.Warning     => c.Notification_Warning,
+                NotificationType.Error       => c.Notification_Error,
+                _                            => c.Notification_Message,
+            } : c.Notification_Message;
+
+            try { return Brush.Parse(colorStr); }
+            catch { return Brush.Parse(c.Notification_Message); }
+        }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();

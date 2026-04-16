@@ -98,6 +98,36 @@ namespace EmoTracker.Data.Settings
 
         #endregion
 
+        #region -- Notification Colors --
+
+        string mNotification_Message = "#41a054";
+        string mNotification_Celebration = "CornflowerBlue";
+        string mNotification_Warning = "#c09d35";
+        string mNotification_Error = "#c03535";
+
+        public string Notification_Message
+        {
+            get { return mNotification_Message; }
+            set { SetProperty(ref mNotification_Message, value); }
+        }
+        public string Notification_Celebration
+        {
+            get { return mNotification_Celebration; }
+            set { SetProperty(ref mNotification_Celebration, value); }
+        }
+        public string Notification_Warning
+        {
+            get { return mNotification_Warning; }
+            set { SetProperty(ref mNotification_Warning, value); }
+        }
+        public string Notification_Error
+        {
+            get { return mNotification_Error; }
+            set { SetProperty(ref mNotification_Error, value); }
+        }
+
+        #endregion
+
         #region -- Miscellaneous --
 
         string mMap_LocationNoteBadgeBackground = "#35e0b5";
@@ -132,6 +162,11 @@ namespace EmoTracker.Data.Settings
             Status_Generic_Active = "#35e0b5";
 
             Map_LocationNoteBadgeBackground = "#35e0b5";
+
+            Notification_Message     = "#41a054";
+            Notification_Celebration = "CornflowerBlue";
+            Notification_Warning     = "#c09d35";
+            Notification_Error       = "#c03535";
         }
 
         public void LoadColors()
@@ -161,6 +196,11 @@ namespace EmoTracker.Data.Settings
                         Status_Generic_Error = root.GetValue<string>("status_generic_error", Status_Generic_Error);
 
                         Map_LocationNoteBadgeBackground = root.GetValue<string>("map_location_has_note_badge_background", Map_LocationNoteBadgeBackground);
+
+                        Notification_Message     = root.GetValue<string>("notification_message",     Notification_Message);
+                        Notification_Celebration = root.GetValue<string>("notification_celebration", Notification_Celebration);
+                        Notification_Warning     = root.GetValue<string>("notification_warning",     Notification_Warning);
+                        Notification_Error       = root.GetValue<string>("notification_error",       Notification_Error);
                     }
                 }
                 catch
