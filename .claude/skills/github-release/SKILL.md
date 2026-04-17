@@ -1,25 +1,26 @@
 ---
 name: github-release
-description: Use this skill when the user asks to create a GitHub release, publish a release, cut a release, or make a new release of EmoTracker. Handles version bumping, committing, waiting for CI, and publishing a release with build artifacts.
+description: Use this skill when the user asks to create a GitHub release, publish a release, cut a release, or make a new release of EmoTracker. Handles version bumping, committing, and triggering the release workflow via a git tag.
 ---
 
 # GitHub Release
 
-Use this skill to publish a new GitHub release of EmoTracker. Follow every step in order — do NOT skip steps or assume defaults.
+Use this skill to publish a new GitHub release of EmoTracker. The `.github/workflows/release.yml` workflow handles building, packaging, and publishing — this skill bumps the version, commits, and pushes the tag that triggers it.
+
+Follow every step in order — do NOT skip steps or assume defaults.
 
 ## Step 1: Interview the user
 
-Before doing anything else, ask the user for the following information (use the AskUserQuestion tool if available, otherwise ask directly):
+Before doing anything else, ask the user for the following (use the AskUserQuestion tool if available, otherwise ask directly):
 
-1. **Branch** — Which branch should the release be built from? (e.g. `avalonia`, `main`)
-2. **Version number** — The new version number in `Major.Minor.Build.Revision` form (e.g. `3.0.2.0`).
-3. **Prerelease** — Is this a prerelease? (yes/no)
+1. **Version number** — The new version in `Major.Minor.Build.Revision` form (e.g. `3.0.2.0`).
+2. **Prerelease** — Is this a prerelease? (yes/no)
 
-Do not proceed until you have all three answers.
+Do not proceed until you have both answers.
 
 ## Step 2: Update assembly versions
 
-Update `AssemblyVersion` and `AssemblyFileVersion` to the user-specified version in ALL of these files:
+Update `AssemblyVersion` and `AssemblyFileVersion` to the new version in ALL of these files:
 
 - `EmoTracker/Properties/AssemblyInfo.cs`
 - `EmoTracker.UI/Properties/AssemblyInfo.cs`
@@ -32,80 +33,84 @@ Both attributes in each file should be updated:
 [assembly: AssemblyFileVersion("X.Y.Z.W")]
 ```
 
-After editing, build the solution to confirm it's clean:
+After editing, build to confirm it's clean:
 ```
 dotnet build EmoTracker/EmoTracker.csproj
 ```
 Abort and report the error if the build is not clean (0 errors).
 
-## Step 3: Commit and push
+## Step 3: Commit, push, and tag
 
-Make sure you're on (or pushing to) the branch the user specified.
-
-Commit the assembly version changes with a message like:
+Commit the version changes with:
 ```
 Bump assembly versions to X.Y.Z.W
 ```
+Include the standard `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>` trailer. Always use a HEREDOC for the commit message.
 
-Include the standard `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>` trailer.
-
-Push to the remote branch the user specified:
+Push the commit to the current branch:
+```bash
+git push origin HEAD
 ```
-git push origin HEAD:<branch>
-```
 
-Note the commit SHA — you'll need it in Step 4.
-
-## Step 4: Wait for CI build to pass
-
-EmoTracker uses GitHub Actions to produce build artifacts. After the push, poll for the workflow run that corresponds to the commit you just pushed, and wait for it to complete successfully.
-
-Use `gh run list` to find the run and `gh run view <run-id>` to check status. Use `gh run watch <run-id>` if available to block until completion.
+Then create and push the release tag. The tag format determines whether the release workflow triggers:
+- Stable release: `vX.Y.Z.W`
+- Prerelease: `vX.Y.Z.W-preview`
 
 ```bash
-# Find the run for the commit
-gh run list --branch <branch> --limit 5
-# Watch the run until it completes
+git tag vX.Y.Z.W          # or vX.Y.Z.W-preview
+git push origin vX.Y.Z.W  # or vX.Y.Z.W-preview
+```
+
+## Step 4: Wait for the release workflow
+
+Poll for the workflow run triggered by the tag push. Look for a run on the **Release** workflow (not Build):
+
+```bash
+gh run list --limit 10
 gh run watch <run-id>
 ```
 
-If the run fails, report the failure to the user and stop. Do not proceed to create a release on a failed build.
+If the run fails, report the failure to the user and stop. Do not proceed on a failed run.
 
-## Step 5: Create the release
+## Step 5: Update release notes and mark prerelease
 
-Once the build has succeeded:
+The release workflow creates the GitHub release with placeholder notes. After the workflow completes, replace them with a meaningful summary:
 
-1. **Determine the tag name**: `X.Y.Z.W` for a stable release, or `X.Y.Z.W-preview` for a prerelease.
-2. **Download all artifacts** from the successful workflow run:
+1. Find the previous release tag:
    ```bash
-   gh run download <run-id> --dir ./release-artifacts
+   gh release list --limit 5
    ```
-3. **Gather release notes content**:
-   - Use `gh release view --json tagName` (or `gh release list`) to find the last release's tag.
-   - Get the commit log between the last release tag and the current commit:
-     ```bash
-     git log <last-tag>..HEAD --oneline
-     ```
-   - Summarize the changes into a concise description of what's new in this release.
-4. **Create the release** targeting the commit on the specified branch, uploading all downloaded artifacts, and using GitHub's auto-generated notes plus your summary:
-   ```bash
-   gh release create <tag> \
-     --target <branch> \
-     --title "<tag>" \
-     --generate-notes \
-     --notes "<your summary of changes since the last release>" \
-     [--prerelease] \
-     ./release-artifacts/**/*
-   ```
-   - Add `--prerelease` ONLY if the user said this is a prerelease.
-   - `--generate-notes` gets GitHub's automatic "what's changed" section; combine with `--notes` to prepend your own summary. If both can't be combined in a single invocation, create the release with `--generate-notes` first, then edit it with `gh release edit <tag> --notes "<combined notes>"`.
 
-5. **Verify** the release was created successfully and report the release URL to the user.
+2. Get the commit log since the previous release (excluding the version bump commit itself):
+   ```bash
+   git log <previous-tag>..HEAD --oneline
+   ```
+
+3. Write a concise, human-readable summary of the changes. Group related commits together and omit noise (version bumps, CI tweaks) unless they're notable. Use bullet points.
+
+4. Update the release notes:
+   ```bash
+   gh release edit <tag> --notes "<your summary>"
+   ```
+
+5. If this is a prerelease, also mark it:
+   ```bash
+   gh release edit <tag> --prerelease
+   ```
+
+Steps 4 and 5 can be combined into a single `gh release edit` call.
+
+## Step 6: Report the release URL
+
+```bash
+gh release view vX.Y.Z.W[-preview] --json url --jq .url
+```
+
+Report the URL to the user.
 
 ## Important notes
 
-- Never skip the interview step — always confirm branch, version, and prerelease status before acting.
-- Never create a release from a failed or in-progress build.
-- Never force-push or bypass branch protection. If the branch is protected and direct push fails, report to the user and stop.
-- Always use a HEREDOC for commit messages to preserve formatting.
-- The existing repo has commits like `6f8fc1e Bump assembly versions to 3.0.1.0` — match that commit message style.
+- Never skip the interview step.
+- Never push the tag before confirming the commit was pushed successfully.
+- Never proceed past a failed build (step 2) or a failed workflow run (step 4).
+- Match the existing commit style: `Bump assembly versions to 3.0.1.0`.
