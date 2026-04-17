@@ -58,6 +58,25 @@ namespace EmoTracker.Services.Updates
                     return;
                 }
 
+                // Pre-flight: if the app is running under macOS App Translocation (a
+                // randomized read-only mount Gatekeeper uses for quarantined apps
+                // launched directly from Downloads), our rm/cp would target the
+                // translocated clone and fail silently — the real bundle never gets
+                // updated. Warn the user and abort.
+                if (OperatingSystem.IsMacOS() && IsAppTranslocated(installDir))
+                {
+                    Log.Warning("[Update] App is running under macOS App Translocation: {Dir}", installDir);
+                    var tcs = new TaskCompletionSource<bool>();
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        var warn = new AppTranslocationWarningWindow(installDir);
+                        warn.Show();
+                        warn.Closed += (_, _) => tcs.TrySetResult(true);
+                    });
+                    await tcs.Task;
+                    return;
+                }
+
                 // Stage outside the install directory so that:
                 //   - Windows Defender Controlled Folder Access cannot block writes
                 //     (Desktop and Documents are protected; LocalApplicationData is not)
@@ -270,6 +289,12 @@ namespace EmoTracker.Services.Updates
                 UseShellExecute = false,
             });
         }
+
+        // Gatekeeper App Translocation mounts quarantined apps at a randomized
+        // read-only location so they can't modify themselves or neighboring files.
+        // Detected via the path prefix macOS uses for the translocation mount.
+        private static bool IsAppTranslocated(string path)
+            => path.Contains("/AppTranslocation/", StringComparison.Ordinal);
 
         [System.Runtime.Versioning.SupportedOSPlatform("macos")]
         [System.Runtime.Versioning.SupportedOSPlatform("linux")]

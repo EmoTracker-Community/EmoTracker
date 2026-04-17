@@ -1,0 +1,77 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EmoTracker.UI.AppTranslocationWarningWindow"
+        Title="Software Update"
+        Width="520" Height="320"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#212121">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#252030" Padding="20,16,20,16">
+            <StackPanel Spacing="4">
+                <TextBlock Text="Update cannot be applied"
+                           Foreground="WhiteSmoke"
+                           FontSize="15"
+                           FontWeight="SemiBold"/>
+                <TextBlock x:Name="SubtitleText"
+                           Foreground="#888888"
+                           FontSize="12"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Body -->
+        <Border Grid.Row="1" Background="#1a1a1a" Padding="20,16">
+            <StackPanel Spacing="12">
+                <TextBlock Foreground="#c8c8c8"
+                           FontSize="12"
+                           TextWrapping="Wrap">
+                    macOS is running EmoTracker from a read-only temporary location (App Translocation)
+                    because it was launched directly from Downloads while still in quarantine. Updates
+                    cannot be written back to the real app bundle from this location.
+                </TextBlock>
+                <TextBlock Foreground="#c8c8c8"
+                           FontSize="12"
+                           TextWrapping="Wrap">
+                    To apply updates:
+                </TextBlock>
+                <StackPanel Spacing="6" Margin="10,0,0,0">
+                    <TextBlock Foreground="#888888"
+                               FontSize="11"
+                               TextWrapping="Wrap">
+                        1. Quit EmoTracker.
+                    </TextBlock>
+                    <TextBlock Foreground="#888888"
+                               FontSize="11"
+                               TextWrapping="Wrap">
+                        2. Move EmoTracker.app out of Downloads (e.g. to Applications or ~/Applications).
+                    </TextBlock>
+                    <TextBlock Foreground="#888888"
+                               FontSize="11"
+                               TextWrapping="Wrap">
+                        3. Launch it from the new location, then run the update again.
+                    </TextBlock>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Footer -->
+        <Border Grid.Row="2" Background="#252030" Padding="16,12">
+            <Button x:Name="OkButton"
+                    HorizontalAlignment="Right"
+                    Content="OK"
+                    Padding="24,7"
+                    MinWidth="80"
+                    CornerRadius="6"
+                    Background="#35e0b5"
+                    Foreground="#111111"
+                    FontWeight="SemiBold"
+                    BorderThickness="0"
+                    Click="OkButton_Click"/>
+        </Border>
+
+    </Grid>
+</Window>
