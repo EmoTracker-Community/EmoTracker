@@ -197,10 +197,16 @@ namespace EmoTracker.Services.Updates
             string appBundle = Path.GetDirectoryName(Path.GetDirectoryName(installDir)!)!;
             string appParent = Path.GetDirectoryName(appBundle)!;
             string appName   = Path.GetFileName(appBundle)!; // "EmoTracker.app"
+            int    pid       = Environment.ProcessId;
 
+            // Poll for the parent PID to exit (mirrors the Windows tasklist loop) so that
+            // the rm/cp never races a still-exiting EmoTracker instance. Without this,
+            // 'open' can activate the dying original process instead of launching the new one.
             string script = $"""
                 #!/bin/sh
-                sleep 1
+                while kill -0 {pid} 2>/dev/null; do
+                    sleep 0.5
+                done
                 rm -rf "{appBundle}"
                 cp -R "{stagingDir}/{appName}" "{appParent}/"
                 rm -rf "{stagingDir}"
@@ -213,7 +219,11 @@ namespace EmoTracker.Services.Updates
 
             RunProcessAsync("chmod", $"+x \"{scriptPath}\"", CancellationToken.None).GetAwaiter().GetResult();
 
-            Process.Start(new ProcessStartInfo("/bin/sh", $"\"{scriptPath}\"")
+            // Launch via a detached subshell (nohup + &) so the script survives this
+            // process exiting. Without nohup the script can receive SIGHUP and be killed
+            // when the parent App bundle terminates.
+            Process.Start(new ProcessStartInfo(
+                "/bin/sh", $"-c \"nohup /bin/sh '{scriptPath}' </dev/null >/dev/null 2>&1 &\"")
             {
                 UseShellExecute = false,
             });
