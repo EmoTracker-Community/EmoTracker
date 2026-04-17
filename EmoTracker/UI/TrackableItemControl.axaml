@@ -1,0 +1,81 @@
+<UserControl x:Class="EmoTracker.UI.TrackableItemControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI">
+    <Grid ToolTip.Tip="{Binding Name}"
+          ToolTip.ShowDelay="{Binding FastToolTips, Source={x:Static data:ApplicationSettings.Instance}, Converter={x:Static local:TrackableItemControl.FastToolTipsToDelayConverter}}"
+          Opacity="{Binding Converter={x:Static local:TrackableItemControl.NullToZeroOpacityConverter}}"
+          PointerReleased="Grid_PointerReleased">
+        <Button Command="{Binding OnLeftClickCommand, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
+                CommandParameter="{Binding}"
+                Focusable="False"
+                Background="{x:Null}"
+                Padding="0"
+                BorderThickness="0"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Grid Background="{x:Null}">
+                        <Image
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            IsVisible="{Binding MaskInput, Converter={x:Static converters:BoolInverseConverter.Instance}, FallbackValue=True}"
+                            Source="{Binding Icon.ResolvedImage, FallbackValue={x:Null}}">
+                            <Image.Width>
+                                <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Width">
+                                    <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="IconHeight" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
+                                </MultiBinding>
+                            </Image.Width>
+                            <Image.Height>
+                                <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Height">
+                                    <Binding Path="IconHeight" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
+                                </MultiBinding>
+                            </Image.Height>
+                        </Image>
+                        <controls:InputMaskingImage
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            IsVisible="{Binding MaskInput, FallbackValue=False}"
+                            Source="{Binding Icon.ResolvedImage, FallbackValue={x:Null}}">
+                            <controls:InputMaskingImage.Width>
+                                <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Width">
+                                    <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="IconHeight" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
+                                </MultiBinding>
+                            </controls:InputMaskingImage.Width>
+                            <controls:InputMaskingImage.Height>
+                                <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Height">
+                                    <Binding Path="IconHeight" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
+                                    <Binding Path="Source" RelativeSource="{RelativeSource Self}" />
+                                </MultiBinding>
+                            </controls:InputMaskingImage.Height>
+                        </controls:InputMaskingImage>
+                        <Grid VerticalAlignment="Bottom"
+                              HorizontalAlignment="Right"
+                              MaxWidth="{Binding IconWidth, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
+                              IsVisible="{Binding BadgeText, Converter={x:Static converters:NonEmptyStringToBoolConverter.Instance}, FallbackValue=False}">
+                            <TextBlock Text="{Binding BadgeText}"
+                                       Background="Black"
+                                       FontWeight="Bold"
+                                       FontSize="{Binding (local:TrackableItemControl.BadgeFontSize), RelativeSource={RelativeSource Self}}"
+                                       Foreground="{Binding BadgeTextColor}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Padding="4,1" />
+                        </Grid>
+                    </Grid>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+    </Grid>
+</UserControl>

@@ -154,6 +154,11 @@ namespace EmoTracker.Data.Layout
             get { return mScale > 0.0; }
         }
 
+        public double EffectiveScale
+        {
+            get { return OverrideScale ? mScale : 1.0; }
+        }
+
         public bool OverrideCanvasX
         {
             get { return mCanvasX > 0.0; }
@@ -190,7 +195,7 @@ namespace EmoTracker.Data.Layout
         public double Scale
         {
             get { return mScale; }
-            protected set { SetProperty(ref mScale, value); NotifyPropertyChanged("OverrideScale"); }
+            protected set { SetProperty(ref mScale, value); NotifyPropertyChanged("OverrideScale"); NotifyPropertyChanged("EffectiveScale"); }
         }
 
         public double Width

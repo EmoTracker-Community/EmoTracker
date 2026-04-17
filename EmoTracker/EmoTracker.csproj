@@ -5,75 +5,73 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>EmoTracker</RootNamespace>
     <AssemblyName>EmoTracker</AssemblyName>
-    <TargetFramework>net472</TargetFramework>
-    <UseWpf>true</UseWpf>
+    <TargetFramework>net8.0</TargetFramework>
     <ApplicationIcon>emohead_icon_transparent_7h3_icon.ico</ApplicationIcon>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
 
+  <!-- MCP dev server: only included in Debug builds -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <!-- PluginManager.cs is intentionally excluded from compilation -->
+  <!-- MCP server extension is excluded from Release builds -->
   <ItemGroup>
     <Compile Remove="PluginManager.cs" />
+    <Compile Remove="Extensions\McpServer\**\*" Condition="'$(Configuration)' != 'Debug'" />
+    <AvaloniaXaml Remove="Extensions\McpServer\**\*" Condition="'$(Configuration)' != 'Debug'" />
+    <AvaloniaResource Remove="Extensions\McpServer\**\*" Condition="'$(Configuration)' != 'Debug'" />
   </ItemGroup>
 
-  <!-- Binary resources embedded in the assembly -->
+  <!-- Avalonia resource items — accessible via avares://EmoTracker/... -->
   <ItemGroup>
-    <Resource Include="emohead_icon_transparent_7h3_icon.ico" />
-    <Resource Include="emotracker_icon.ico" />
-    <Resource Include="release_notes.txt" />
-    <Resource Include="Resources\**\*" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="ConnectorLib">
-      <HintPath>..\External\ConnectorLib\ConnectorLib.dll</HintPath>
-      <SpecificVersion>False</SpecificVersion>
-    </Reference>
-    <Reference Include="ConnectorLib.sd2snes">
-      <HintPath>..\External\ConnectorLib\ConnectorLib.sd2snes.dll</HintPath>
-      <SpecificVersion>False</SpecificVersion>
-    </Reference>
-    <Reference Include="PresentationFramework.Aero" />
-    <Reference Include="System.ComponentModel.Composition" />
-    <Reference Include="System.Speech" />
+    <AvaloniaResource Include="emohead_icon_transparent_7h3_icon.ico" />
+    <AvaloniaResource Include="emotracker_icon.ico" />
+    <AvaloniaResource Include="release_notes.txt" />
+    <AvaloniaResource Include="Resources\**\*" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\EmoTracker.Core\EmoTracker.Core.csproj" />
     <ProjectReference Include="..\EmoTracker.Data\EmoTracker.Data.csproj" />
     <ProjectReference Include="..\EmoTracker.UI\EmoTracker.UI.csproj" />
-    <ProjectReference Include="..\External\NDI\NDILibDotNet2\NDILibDotNet2.csproj" />
   </ItemGroup>
 
+  <!-- Avalonia packages -->
   <ItemGroup>
-    <PackageReference Include="Markdig.Wpf" Version="0.5.0.1" />
+    <PackageReference Include="Avalonia" Version="11.3.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.3" />
+    <PackageReference Include="Avalonia.Xaml.Behaviors" Version="11.3.0.6" />
+    <PackageReference Include="MsBox.Avalonia" Version="3.0.0-rc2" />
+    <!-- NDI cross-platform P/Invoke wrapper -->
+    <PackageReference Include="NDILibDotNetCoreBase" Version="2024.7.22.1" />
+    <PackageReference Include="NetSparkleUpdater.SparkleUpdater" Version="3.0.4" />
+    <PackageReference Include="NetSparkleUpdater.UI.Avalonia" Version="3.0.4" />
+    <PackageReference Include="Markdig" Version="0.38.0" />
+    <PackageReference Include="Vosk" Version="0.3.38" />
+    <PackageReference Include="PortAudioSharp" Version="0.3.0" />
+  </ItemGroup>
+
+  <!-- Shared packages -->
+  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="ModelContextProtocol" Version="1.2.0" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.2.0" Condition="'$(Configuration)' == 'Debug'" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="TwitchLib" Version="3.5.3" />
-    <PackageReference Include="WebSocketSharp" Version="1.0.3-rc11" />
-    <PackageReference Include="WpfScreenHelper" Version="2.1.1" />
+    <PackageReference Include="WebSocketSharp" Version="1.0.3-rc11" NoWarn="NU1701" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.67.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+    <PackageReference Include="Grpc.Tools" Version="2.69.0" PrivateAssets="All" />
   </ItemGroup>
 
-  <Target Name="CopyNativeDependencies" AfterTargets="Build">
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyHook32*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyHook64*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyLoad32*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\EasyLoad64*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\Connectors\bizhawk\*.*&quot; &quot;$(TargetDir)Connectors\bizhawk\&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\Connectors\snes9x\*.*&quot; &quot;$(TargetDir)Connectors\snes9x\&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\Connectors\common\*.*&quot; &quot;$(TargetDir)Connectors\bizhawk\&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\ConnectorLib\Connectors\common\*.*&quot; &quot;$(TargetDir)Connectors\snes9x\&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\Discord\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\NDI\distrib\x86\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-    <Exec Command="xcopy /s /y &quot;$(SolutionDir)External\NDI\distrib\x64\*.*&quot; &quot;$(TargetDir)&quot;" ContinueOnError="true" />
-  </Target>
-
-  <Target Name="GenerateInstaller" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
-    <Exec Command="&quot;C:\Program Files (x86)\Inno Setup 5\ISCC.exe&quot; &quot;$(SolutionDir)Installer\emotracker_setup.iss&quot;" ContinueOnError="true" />
-  </Target>
+  <!-- gRPC proto compilation for SNI provider -->
+  <ItemGroup>
+    <Protobuf Include="Providers\SNI\Protos\sni.proto" GrpcServices="Client" ProtoRoot="Providers\SNI\Protos" />
+  </ItemGroup>
 
 </Project>

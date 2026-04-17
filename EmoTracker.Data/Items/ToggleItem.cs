@@ -2,6 +2,7 @@
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 namespace EmoTracker.Data.Items
 {
@@ -105,6 +106,8 @@ namespace EmoTracker.Data.Items
         {
             return mCodeProvider.ProvidesCode(code);
         }
+
+        public override IEnumerable<string> GetAllProvidedCodes() => mCodeProvider.ProvidedCodes;
 
         public override void AdvanceToCode(string code = null)
         {

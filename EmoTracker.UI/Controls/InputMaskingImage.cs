@@ -1,37 +1,52 @@
-﻿using System;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia.Controls;
+using Avalonia.Rendering;
+using EmoTracker.UI.Media.Utility;
 
 namespace EmoTracker.UI.Controls
 {
-    public class InputMaskingImage : Image
+    // Avalonia version: per-pixel hit testing via ICustomHitTest so transparent pixels
+    // are excluded from Avalonia's visual hit-test walk.  This prevents transparent
+    // areas from blocking pointer events on elements below in z-order.
+    public class InputMaskingImage : Image, ICustomHitTest
     {
-        protected override HitTestResult HitTestCore(PointHitTestParameters hitTestParameters)
+        public bool HitTest(Avalonia.Point point)
+        {
+            return HitTestAlphaMask(point);
+        }
+
+        private bool HitTestAlphaMask(Avalonia.Point point)
         {
             try
             {
-                var source = (BitmapSource)Source;
+                if (Source == null) return false;
 
-                // Get the pixel of the source that was hit
-                var x = Math.Min((int)(hitTestParameters.HitPoint.X / ActualWidth * source.PixelWidth), source.PixelWidth - 1);
-                var y = Math.Min((int)(hitTestParameters.HitPoint.Y / ActualHeight * source.PixelHeight), source.PixelHeight - 1);
+                // When ClipToBounds is false on ancestor controls (e.g. LayoutTransformControl,
+                // Viewbox), Avalonia's hit-test walk can deliver points that are outside this
+                // Image's arranged bounds.  Without this early-out the Math.Min clamp below
+                // would map them to an edge pixel of the alpha mask, producing false positives
+                // that steal clicks from neighbouring layout elements.
+                if (point.X < 0 || point.Y < 0 ||
+                    point.X >= Bounds.Width || point.Y >= Bounds.Height)
+                    return false;
 
-                // Copy the single pixel into a new byte array representing RGBA
-                var pixel = new byte[4];
-                source.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
+                var maskEntry = IconUtility.GetAlphaMask(Source);
+                // No mask → treat as fully transparent (click-through).
+                // This is critical for the async image pipeline: placeholder images
+                // don't have alpha masks, and returning true here would make them
+                // block ALL input until the real image loads.
+                if (maskEntry == null) return false;
 
-                // Check the alpha (transparency) of the pixel
-                // - threshold can be adjusted from 0 to 255
-                if (pixel[3] < 10)
-                    return null;
+                var (mask, maskW, maskH) = maskEntry.Value;
 
-                return new PointHitTestResult(this, hitTestParameters.HitPoint);
+                int px = System.Math.Min((int)(point.X / Bounds.Width  * maskW), maskW - 1);
+                int py = System.Math.Min((int)(point.Y / Bounds.Height * maskH), maskH - 1);
+
+                if (px < 0 || py < 0) return false;
+                return mask[py * maskW + px];
             }
             catch
             {
-                return null;
+                return false;
             }
         }
     }

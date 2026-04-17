@@ -18,6 +18,22 @@
             }
         },
         {
+            "label": "build Avalonia (Debug)",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/EmoTracker/EmoTracker.csproj",
+                "--framework",
+                "net8.0",
+                "--configuration",
+                "Debug",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
             "label": "build Release",
             "command": "dotnet",
             "type": "process",

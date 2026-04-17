@@ -5,9 +5,9 @@
     <OutputType>Library</OutputType>
     <RootNamespace>EmoTracker.UI</RootNamespace>
     <AssemblyName>EmoTracker.UI</AssemblyName>
-    <TargetFramework>net472</TargetFramework>
-    <UseWpf>true</UseWpf>
+    <TargetFramework>net8.0</TargetFramework>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,8 +15,20 @@
     <ProjectReference Include="..\EmoTracker.Data\EmoTracker.Data.csproj" />
   </ItemGroup>
 
+  <!-- Avalonia packages -->
   <ItemGroup>
-    <PackageReference Include="Markdig.Wpf" Version="0.5.0.1" />
+    <PackageReference Include="Avalonia" Version="11.3.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.3" />
+    <PackageReference Include="Avalonia.Xaml.Behaviors" Version="11.3.0.6" />
+    <PackageReference Include="Markdig" Version="0.38.0" />
+    <PackageReference Include="Avalonia.HtmlRenderer" Version="11.2.0" />
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+  </ItemGroup>
+
+  <!-- Exclude WPF-only file; Avalonia implementation is Controls/MarkdownViewer.cs -->
+  <ItemGroup>
+    <Compile Remove="Properties\Settings.Designer.cs" />
   </ItemGroup>
 
 </Project>

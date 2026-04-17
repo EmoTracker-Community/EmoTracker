@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Data;
+
+using Avalonia.Data.Converters;
 
 namespace EmoTracker.UI.Converters
 {
@@ -23,9 +20,7 @@ namespace EmoTracker.UI.Converters
                         return true;
                 }
             }
-            catch
-            {
-            }
+            catch { }
 
             return false;
         }

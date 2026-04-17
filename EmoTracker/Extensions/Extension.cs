@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows;
 
 namespace EmoTracker.Extensions
 {
@@ -24,7 +23,9 @@ namespace EmoTracker.Extensions
 
         void OnPackageLoaded();
 
-        FrameworkElement StatusBarControl { get; }
+        // Typed as object so this interface has no UI framework dependency.
+        // Implementations return a platform-specific control (WPF FrameworkElement or Avalonia Control).
+        object StatusBarControl { get; }
 
         JToken SerializeToJson();
 

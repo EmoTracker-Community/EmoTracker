@@ -1,12 +1,13 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows.Controls;
+
+using Avalonia.Controls;
 
 namespace EmoTracker.UI.Controls
 {
-    public class ObservableUserControl : UserControl, INotifyPropertyChanged
+    public class ObservableUserControl : UserControl
     {
-        public event PropertyChangedEventHandler PropertyChanged;
+        public new event PropertyChangedEventHandler PropertyChanged;
         protected void NotifyPropertyChanged([CallerMemberName] string propertyName = null)
         {
             if (PropertyChanged != null)
@@ -20,7 +21,6 @@ namespace EmoTracker.UI.Controls
                 NotifyPropertyChanged(propertyName);
                 return true;
             }
-
             return false;
         }
     }

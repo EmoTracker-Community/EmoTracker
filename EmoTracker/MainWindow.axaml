@@ -1,0 +1,257 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:EmoTracker"
+        xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+        xmlns:packages="clr-namespace:EmoTracker.Data.Packages;assembly=EmoTracker.Data"
+        xmlns:extensions="clr-namespace:EmoTracker.Extensions"
+        xmlns:ui="clr-namespace:EmoTracker.UI"
+        xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+        xmlns:media_utility="clr-namespace:EmoTracker.UI.Media.Utility;assembly=EmoTracker.UI"
+        xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
+        xmlns:settings="clr-namespace:EmoTracker.Data.Settings;assembly=EmoTracker.Data"
+        x:Class="EmoTracker.MainWindow"
+        mc:Ignorable="d"
+        Name="HostWindow"
+        Background="#111111"
+        MinWidth="220" MinHeight="61"
+        Width="1280" Height="960"
+        Title="{Binding MainWindowTitle, Source={x:Static local:ApplicationModel.Instance}}"
+        Topmost="{Binding AlwaysOnTop, Source={x:Static data:ApplicationSettings.Instance}}">
+
+<Grid RowDefinitions="*,Auto">
+
+        <!-- Main content -->
+        <Grid Grid.Row="0">
+            <!-- LayoutTransformControl participates in the layout pass (unlike RenderTransform),
+                 so Ctrl+scroll zoom correctly resizes the allocated layout space. -->
+            <LayoutTransformControl Name="TrackerScaleGrid">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform
+                        ScaleX="{Binding MainLayoutScaleFactor, Source={x:Static local:ApplicationModel.Instance}}"
+                        ScaleY="{Binding MainLayoutScaleFactor, Source={x:Static local:ApplicationModel.Instance}}"/>
+                </LayoutTransformControl.LayoutTransform>
+                <ui:LayoutControl x:Name="TrackerLayout" />
+            </LayoutTransformControl>
+
+            <!-- No-package placeholder: visible only when no package is active -->
+            <Grid Background="#080808" IsHitTestVisible="False" Name="NoPackagePlaceholder"
+                  IsVisible="{Binding ActiveGamePackage, Source={x:Static data:Tracker.Instance}, Converter={x:Static converters:NullToTrueConverter.Instance}}">
+                <TextBlock Foreground="WhiteSmoke"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextWrapping="Wrap" Margin="15"
+                           Text="No package loaded. Install packages using the Package Manager (arrow icon in the title bar)."/>
+            </Grid>
+
+            <!-- Notifications overlay -->
+            <ItemsControl Name="NotificationsHost"
+                          ItemsSource="{Binding Notifications, Source={x:Static local:ApplicationModel.Instance}}"
+                          MaxWidth="350" HorizontalAlignment="Left"
+                          Margin="20" VerticalAlignment="Top">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Command="{Binding ForceExpireCommand}"
+                                Padding="0" Background="Transparent" BorderThickness="0"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <Button.Styles>
+                                <Style Selector="Button:pointerover /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                                <Style Selector="Button:pressed /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                            </Button.Styles>
+                            <Border Background="#d8212121" BorderThickness="8,0,0,0"
+                                    BorderBrush="{Binding Type, Converter={x:Static converters:NotificationTypeToBrushConverter.Instance}}"
+                                    Margin="0,0,0,10">
+                                <Border.Effect>
+                                    <DropShadowDirectionEffect BlurRadius="15" ShadowDepth="0" Opacity="0.8" Color="Black"/>
+                                </Border.Effect>
+                                <controls:MarkdownViewer Markdown="{Binding Markdown}" Margin="10,7"/>
+                            </Border>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Grid>
+
+        <!-- Status bar -->
+        <Grid Grid.Row="1">
+            <Grid.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Color="#111111" Offset="0"/>
+                    <GradientStop Color="#242424" Offset="0.2"/>
+                    <GradientStop Color="#111111" Offset="0.75"/>
+                </LinearGradientBrush>
+            </Grid.Background>
+
+            <!-- App buttons (left) -->
+            <StackPanel HorizontalAlignment="Left" Orientation="Horizontal"
+                        VerticalAlignment="Center" Margin="5,2">
+                <Button Name="SettingsButton" Width="24" Background="Transparent"
+                        BorderThickness="0" Padding="0" VerticalContentAlignment="Center"
+                        ToolTip.Tip="Settings">
+                    <Button.ContextMenu>
+                        <ContextMenu Placement="Top">
+                            <MenuItem Name="InstalledPackagesMenu" Header="Installed Packages" />
+                            <Separator />
+                            <MenuItem Header="Application">
+                                <MenuItem Header="File">
+                                    <MenuItem Header="Open" Command="{Binding OpenCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+O" />
+                                    <Separator />
+                                    <MenuItem Header="Save" Command="{Binding SaveCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+S" />
+                                    <MenuItem Header="Save As..." Command="{Binding SaveAsCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+Shift+S" />
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem Header="Broadcast View" Command="{Binding ShowBroadcastViewCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F2" />
+                                <MenuItem Header="Manage Packages" Command="{Binding ShowPackageManagerCommand, Source={x:Static local:ApplicationModel.Instance}}" />
+                            </MenuItem>
+                            <MenuItem Header="Layout">
+                                <MenuItem Header="Always On Top"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding AlwaysOnTop, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <Separator />
+                                <MenuItem Header="Enable Map"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding MapEnabled, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
+                                <MenuItem Header="Swap Left/Right"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding SwapLeftRight, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
+                                <Separator />
+                                <MenuItem Header="Map DPI Awareness"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding EnableDpiConversion, Mode=TwoWay, Source={x:Static media_utility:IconUtility.Instance}}" />
+                                <Separator />
+                                <MenuItem Header="Reset Layout Scale" Command="{Binding ResetLayoutScaleCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+D0" />
+                            </MenuItem>
+                            <MenuItem Header="Tracking">
+                                <MenuItem Header="Always Allow Chest Manipulation"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding AlwaysAllowClearing, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Ignore All Logic"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding IgnoreAllLogic, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Prompt When Refreshing/Closing"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding PromptOnRefreshClose, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Show All Locations" InputGesture="F11"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding DisplayAllLocations, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <Separator />
+                                <MenuItem Header="Pin Locations on Item Capture"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding PinLocationsOnItemCapture, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Unpin Locations when Cleared"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding AutoUnpinLocationsOnClear, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <Separator />
+                                <MenuItem Header="Reload" Command="{Binding RefreshCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F5" />
+                            </MenuItem>
+                            <MenuItem Header="Extensions">
+                                <MenuItem Header="Voice Control"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding EnableVoiceControl, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Note Taking"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding EnableNoteTaking, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Variant Switcher"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding EnableVariantSwitcher, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="Assistance">
+                                <MenuItem Header="Package Documentation" Command="{Binding OpenPackageDocumentationCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F1" />
+                                <Separator />
+                                <MenuItem Header="Fast Tool Tips"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding FastToolTips, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="Check for Updates…" Name="CheckForUpdatesMenuItem" />
+                            <Separator />
+                            <MenuItem Header="Advanced">
+                                <MenuItem Header="Export Overrides" Command="{Binding ExportPackageOverrideCommand, Source={x:Static local:ApplicationModel.Instance}}" />
+                                <Separator />
+                                <MenuItem Header="Open Override Folder" Command="{Binding OpenPackOverrideFolderCommand, Source={x:Static local:ApplicationModel.Instance}}" />
+                                <MenuItem Header="Clear Overrides" Command="{Binding ResetUserDataCommand, Source={x:Static local:ApplicationModel.Instance}}" />
+                                <Separator />
+                                <MenuItem Header="Developer Console" Command="{Binding ShowDeveloperConsoleCommand, Source={x:Static local:ApplicationModel.Instance}}" />
+                            </MenuItem>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                    <TextBlock Text="&#xf013;" Foreground="#717171"
+                               FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
+                <Button Name="PackageManagerButton" Width="24" Background="Transparent"
+                        BorderThickness="0" Padding="0" VerticalContentAlignment="Center"
+                        Command="{Binding ShowPackageManagerCommand, Source={x:Static local:ApplicationModel.Instance}}">
+                    <Button.Tag>
+                        <MultiBinding Converter="{x:Static converters:PackageManagerTooltipConverter.Instance}">
+                            <Binding Path="UpdatesAvailable" Source="{x:Static packages:PackageManager.Instance}" />
+                            <Binding Path="CurrentPackageHasUpdateAvailable" Source="{x:Static packages:PackageManager.Instance}" />
+                            <Binding Path="AnyPackagesInstalled" Source="{x:Static packages:PackageManager.Instance}" />
+                        </MultiBinding>
+                    </Button.Tag>
+                    <ToolTip.Tip>
+                        <MultiBinding Converter="{x:Static converters:PackageManagerTooltipConverter.Instance}">
+                            <Binding Path="UpdatesAvailable" Source="{x:Static packages:PackageManager.Instance}" />
+                            <Binding Path="CurrentPackageHasUpdateAvailable" Source="{x:Static packages:PackageManager.Instance}" />
+                            <Binding Path="AnyPackagesInstalled" Source="{x:Static packages:PackageManager.Instance}" />
+                        </MultiBinding>
+                    </ToolTip.Tip>
+                    <TextBlock Text="&#xf381;"
+                               FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                               VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock.Foreground>
+                            <MultiBinding Converter="{x:Static converters:PackageManagerForegroundConverter.Instance}">
+                                <Binding Path="UpdatesAvailable" Source="{x:Static packages:PackageManager.Instance}" />
+                                <Binding Path="CurrentPackageHasUpdateAvailable" Source="{x:Static packages:PackageManager.Instance}" />
+                                <Binding Path="AnyPackagesInstalled" Source="{x:Static packages:PackageManager.Instance}" />
+                            </MultiBinding>
+                        </TextBlock.Foreground>
+                    </TextBlock>
+                </Button>
+                <Button Width="24" Background="Transparent" BorderThickness="0"
+                        Padding="0" VerticalContentAlignment="Center"
+                        Command="{Binding RefreshCommand, Source={x:Static local:ApplicationModel.Instance}}"
+                        ToolTip.Tip="Reset the tracker to its default state">
+                    <TextBlock Text="&#xf021;" Foreground="#717171"
+                               FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                </Button>
+            </StackPanel>
+
+            <!-- Extension indicators (right) -->
+            <ItemsControl HorizontalAlignment="Right"
+                          ItemsSource="{Binding Extensions, Source={x:Static extensions:ExtensionManager.Instance}}"
+                          VerticalAlignment="Center" Margin="0,2,20,2">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <ContentControl Content="{Binding StatusBarControl}"
+                                        VerticalAlignment="Center" Margin="3,2" MaxHeight="18"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Resize grip (bottom-right) -->
+            <Canvas Name="ResizeGrip"
+                    Width="12" Height="12"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    Margin="0,0,2,1"
+                    IsVisible="{Binding AllowResize, Source={x:Static data:Tracker.Instance}}">
+                <!-- Three diagonal dot lines -->
+                <Line StartPoint="10,2" EndPoint="2,10" Stroke="#555555" StrokeThickness="1"/>
+                <Line StartPoint="10,5" EndPoint="5,10" Stroke="#555555" StrokeThickness="1"/>
+                <Line StartPoint="10,8" EndPoint="8,10" Stroke="#555555" StrokeThickness="1"/>
+            </Canvas>
+        </Grid>
+
+    </Grid>
+</Window>

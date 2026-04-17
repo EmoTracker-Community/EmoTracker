@@ -1,0 +1,14 @@
+<UserControl x:Class="EmoTracker.Extensions.McpServer.McpStatusIndicator"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ToolTip.Tip>
+        <TextBlock Text="{Binding StatusText, StringFormat='MCP: {0}'}" />
+    </ToolTip.Tip>
+    <Ellipse Width="10" Height="10" StrokeThickness="0">
+        <Ellipse.Styles>
+            <Style Selector="Ellipse">
+                <Setter Property="Fill" Value="#888888" />
+            </Style>
+        </Ellipse.Styles>
+    </Ellipse>
+</UserControl>

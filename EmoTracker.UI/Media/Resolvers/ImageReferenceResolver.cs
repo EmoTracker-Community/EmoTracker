@@ -1,5 +1,6 @@
-﻿using EmoTracker.Data.Media;
-using System.Windows.Media;
+using EmoTracker.Data.Media;
+
+using Avalonia.Media;
 
 namespace EmoTracker.UI.Media.Resolvers
 {
@@ -7,6 +8,6 @@ namespace EmoTracker.UI.Media.Resolvers
     {
         public abstract bool CanResolveReference(ImageReference imageRef);
 
-        public abstract ImageSource ResolveReference(ImageReference imageRef);
+        public abstract IImage ResolveReference(ImageReference imageRef);
     }
 }

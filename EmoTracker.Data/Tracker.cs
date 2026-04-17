@@ -2,6 +2,7 @@
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Layout;
 using EmoTracker.Data.Locations;
+using EmoTracker.Data.Media;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Settings;
 using Newtonsoft.Json;
@@ -497,6 +498,8 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                     AccessibilityRule.ClearCaches();
 
                     mbReloadInProgress = false;
+
+                    ItemDatabase.Instance.BuildCodeIndex();
 
                     if (OnPackageLoadComplete != null)
                         OnPackageLoadComplete(this, EventArgs.Empty);

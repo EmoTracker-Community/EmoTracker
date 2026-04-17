@@ -1,0 +1,93 @@
+<UserControl x:Class="EmoTracker.UI.CapturableItemControl"
+             x:Name="CapturableItemRoot"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
+             xmlns:data="clr-namespace:EmoTracker.Data"
+             Background="Transparent"
+             Width="32" Height="32">
+    <UserControl.Resources>
+        <ItemsPanelTemplate x:Key="VerticalItemsPanel">
+            <WrapPanel Orientation="Vertical" />
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="HorizontalItemsPanel">
+            <WrapPanel Orientation="Horizontal" />
+        </ItemsPanelTemplate>
+        <DataTemplate x:Key="ItemTemplate">
+            <!--
+                WPF used a Button with separate left/right click via InputBindings.
+                In Avalonia, pointer event routing is used instead.
+                The Button here handles left-click via Command; right-click is handled
+                via the PointerPressed event in code-behind of any parent or via a
+                behaviour. For now the same Command pattern is preserved.
+            -->
+            <Button Content="{Binding}"
+                    Command="{Binding #CapturableItemRoot.SelectItemCommand}"
+                    CommandParameter="{Binding}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent" Margin="1,2">
+                            <ContentPresenter />
+                        </Grid>
+                    </ControlTemplate>
+                </Button.Template>
+                <Button.ContentTemplate>
+                    <DataTemplate>
+                        <Image Source="{Binding PotentialIcon.ResolvedImage, FallbackValue={x:Null}}"
+                               Width="32" Height="32"/>
+                    </DataTemplate>
+                </Button.ContentTemplate>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+    <Grid>
+        <ToggleButton Name="SettingsToggle">
+            <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Grid Width="32" Height="32">
+                        <Image Source="{Binding CapturedItem.PotentialIcon.ResolvedImage, FallbackValue={x:Null}}"
+                               Width="32" Height="32"/>
+                        <Grid Name="UnknownControl"
+                              IsVisible="{Binding CapturedItem, Converter={x:Static converters:NullToTrueConverter.Instance}}">
+                            <Rectangle RadiusX="4" RadiusY="4"
+                                       Stroke="WhiteSmoke" StrokeThickness="2"
+                                       StrokeDashArray="2,3"
+                                       Fill="Transparent"/>
+                        </Grid>
+                    </Grid>
+                </ControlTemplate>
+            </ToggleButton.Template>
+        </ToggleButton>
+        <!--
+            Avalonia's Popup does not have StaysOpen / PopupAnimation / AllowsTransparency
+            in the same way as WPF.  IsOpen is bound TwoWay to SettingsToggle.IsChecked.
+            The shadow effect (DropShadowEffect) is not available; use BoxShadow on the
+            Border instead (set in Styles if needed).
+        -->
+        <Popup Name="PopupInstance"
+               IsOpen="{Binding IsChecked, ElementName=SettingsToggle, Mode=TwoWay}"
+               Placement="Pointer"
+               HorizontalOffset="16"
+               VerticalOffset="16"
+               PlacementTarget="{Binding ElementName=SettingsToggle}">
+            <Border Name="PopupRegion"
+                    BorderBrush="DarkGray" BorderThickness="3"
+                    Background="#FF212121" CornerRadius="5"
+                    Margin="20"
+                    BoxShadow="3 3 20 0 #CC000000">
+                <StackPanel>
+                    <local:LayoutControl x:Name="CaptureLayoutControl"
+                                         DataContext="{Binding ItemCaptureLayout, Converter={x:Static converters:LayoutReferenceConverter.Instance}, ConverterParameter=tracker_capture_item}"
+                                         local:TrackableItemControl.DisplayPotentialIcon="true"
+                                         local:TrackableItemControl.DisplayCapturableOnly="true" />
+                    <Grid HorizontalAlignment="Stretch" Margin="5,5,5,0" Height="1" Background="White" />
+                    <Button Content="Clear"
+                            Command="{Binding #CapturableItemRoot.SelectItemCommand}"
+                            CommandParameter="{x:Null}"
+                            Margin="5" />
+                </StackPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

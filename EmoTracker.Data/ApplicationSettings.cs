@@ -11,25 +11,41 @@ using System.Linq;
 
 namespace EmoTracker.Data
 {
-    public enum MultiworldNotificationLevel
-    {
-        None = 0,
-        Normal = 1,
-        Verbose = 2
-    }
+
 
     public class ApplicationSettings : ObservableSingleton<ApplicationSettings>
     {
+        readonly Dictionary<string, string> mProviderSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        public string GetProviderSetting(string key, string defaultValue = null)
+        {
+            if (mProviderSettings.TryGetValue(key, out var value))
+                return value;
+            return defaultValue;
+        }
+
+        public void SetProviderSetting(string key, string value)
+        {
+            if (value == null)
+                mProviderSettings.Remove(key);
+            else
+                mProviderSettings[key] = value;
+            WriteSettings();
+        }
+
         double mInitialWidth = -1.0;
         double mInitialHeight = -1.0;
         double mNDIFrameRate = 30.0;
         int mNDIOutputScale = 1;
+        bool mbEnableBackgroundNdi = true;
+        bool mbEnableAutoUpdateCheck = true;
         bool mbAlwaysOnTop = false;
         bool mbEnableDiscordRichPresence = false;
         bool mbEnableVoice = true;
-        bool mbEnableBontaMultiWorld = false;
-        bool mbIgnoreBontaMultiWorldRomCheck = false;
+        bool mbEnableNoteTaking = true;
+        bool mbEnableVariantSwitcher = false;
         bool mbPromptOnRefreshClose = false;
+        string mbVoiceInputDeviceName;
 
         private bool mbDisplayAllLocations = false;
         private bool mbIgnoreAllLogic = false;
@@ -84,15 +100,9 @@ namespace EmoTracker.Data
         string mLastActivePackageVariant;
         string mCommandLinePackage;
         string mCommandLinePackageVariant;
+        bool mNoAsyncImages;
 
         ObservableCollection<string> mPackageRepositories = new ObservableCollection<string>();
-
-        MultiworldNotificationLevel mMultiworldNotificationLevel = MultiworldNotificationLevel.Normal;
-        public MultiworldNotificationLevel MultiworldNotificationLevel
-        {
-            get { return mMultiworldNotificationLevel; }
-            set { SetProperty(ref mMultiworldNotificationLevel, value); }
-        }
 
         public double InitialWidth
         {
@@ -118,16 +128,22 @@ namespace EmoTracker.Data
             set { SetProperty(ref mbEnableVoice, value); }
         }
 
-        public bool EnableBontaMultiWorld
+        public bool EnableNoteTaking
         {
-            get { return mbEnableBontaMultiWorld; }
-            set { SetProperty(ref mbEnableBontaMultiWorld, value); }
+            get { return mbEnableNoteTaking; }
+            set { SetProperty(ref mbEnableNoteTaking, value); }
         }
 
-        public bool IgnoreBontaMultiWorldRomCheck
+        public bool EnableVariantSwitcher
         {
-            get { return mbIgnoreBontaMultiWorldRomCheck; }
-            set { SetProperty(ref mbIgnoreBontaMultiWorldRomCheck, value); }
+            get { return mbEnableVariantSwitcher; }
+            set { SetProperty(ref mbEnableVariantSwitcher, value); }
+        }
+
+        public string VoiceInputDeviceName
+        {
+            get { return mbVoiceInputDeviceName; }
+            set { SetProperty(ref mbVoiceInputDeviceName, value); }
         }
 
         public bool PromptOnRefreshClose
@@ -172,6 +188,17 @@ namespace EmoTracker.Data
             set { SetProperty(ref mCommandLinePackageVariant, value); }
         }
 
+        /// <summary>
+        /// When true, disables async background image pre-caching and forces
+        /// synchronous image resolution on the UI thread (the pre-refactor
+        /// behavior).  Set via the <c>--no-async-images</c> command-line flag.
+        /// </summary>
+        public bool NoAsyncImages
+        {
+            get { return mNoAsyncImages; }
+            set { SetProperty(ref mNoAsyncImages, value); }
+        }
+
         public string TwitchChannelName
         {
             get { return mTwitchChannelName; }
@@ -186,6 +213,25 @@ namespace EmoTracker.Data
         {
             get { return mNDIOutputScale; }
             set { SetProperty(ref mNDIOutputScale, Math.Max(value, 1)); }
+        }
+
+        /// <summary>
+        /// When enabled (default), the broadcast view renders to a hidden off-screen
+        /// window so the NDI source is advertised on the network and frames flow to
+        /// receivers whether or not the user has opened the visible broadcast view.
+        /// When disabled, NDI is only broadcast while the visible broadcast view
+        /// window is open (legacy behaviour).
+        /// </summary>
+        public bool EnableBackgroundNdi
+        {
+            get { return mbEnableBackgroundNdi; }
+            set { SetProperty(ref mbEnableBackgroundNdi, value); }
+        }
+
+        public bool EnableAutoUpdateCheck
+        {
+            get { return mbEnableAutoUpdateCheck; }
+            set { SetProperty(ref mbEnableAutoUpdateCheck, value); }
         }
 
         public IEnumerable<string> AdditionalRepositories
@@ -225,12 +271,14 @@ namespace EmoTracker.Data
                         InitialHeight = root.GetValue<double>("initial_height", -1.0);
                         NdiFrameRate = root.GetValue<double>("ndi_frame_rate", 30.0);
                         NdiOutputScale = root.GetValue<int>("ndi_output_scale", 1);
+                        EnableBackgroundNdi = root.GetValue<bool>("enable_background_ndi", true);
+                        EnableAutoUpdateCheck = root.GetValue<bool>("enable_auto_update_check", true);
                         AlwaysOnTop = root.GetValue<bool>("always_on_top", false);
                         EnableDiscordRichPresence = root.GetValue<bool>("discord_rich_presence", false);
                         EnableVoiceControl = root.GetValue<bool>("enable_voice_control", true);
-                        EnableBontaMultiWorld = root.GetValue<bool>("enable_bonta_alttpr_multiworld", false);
-                        IgnoreBontaMultiWorldRomCheck = root.GetValue<bool>("ignore_bonta_alttpr_multiworld_rom_check", false);
-                        MultiworldNotificationLevel = root.GetEnumValue<MultiworldNotificationLevel>("multiworld_notification_level", MultiworldNotificationLevel.Normal);
+                        EnableNoteTaking = root.GetValue<bool>("enable_note_taking", true);
+                        EnableVariantSwitcher = root.GetValue<bool>("enable_variant_switcher", false);
+                        VoiceInputDeviceName = root.GetValue<string>("voice_input_device_name");
                         PromptOnRefreshClose = root.GetValue<bool>("prompt_on_refresh_close", false);
                         LastActivePackage = root.GetValue<string>("last_active_package");
                         LastActivePackageVariant = root.GetValue<string>("last_active_package_variant");
@@ -252,6 +300,16 @@ namespace EmoTracker.Data
                             {
                                 if (!string.IsNullOrWhiteSpace(url) && !mPackageRepositories.Contains(url, StringComparer.OrdinalIgnoreCase))
                                     mPackageRepositories.Add(url);
+                            }
+                        }
+
+                        JObject providerSettings = root.GetValue<JObject>("provider_settings");
+                        if (providerSettings != null)
+                        {
+                            foreach (var kvp in providerSettings)
+                            {
+                                if (kvp.Value != null && kvp.Value.Type == JTokenType.String)
+                                    mProviderSettings[kvp.Key] = kvp.Value.Value<string>();
                             }
                         }
                     }
@@ -277,6 +335,11 @@ namespace EmoTracker.Data
 
                         CommandLinePackageVariant = cargs[n];
 
+                    }
+
+                    if (String.Equals(cargs[n], "--no-async-images"))
+                    {
+                        NoAsyncImages = true;
                     }
 
                 }
@@ -311,12 +374,17 @@ namespace EmoTracker.Data
                         if (NdiOutputScale > 1)
                             root.Add("ndi_output_scale", JToken.FromObject(NdiOutputScale));
 
+                        root.Add("enable_background_ndi", JToken.FromObject(EnableBackgroundNdi));
+                        root.Add("enable_auto_update_check", JToken.FromObject(EnableAutoUpdateCheck));
+
                         root.Add("always_on_top", JToken.FromObject(AlwaysOnTop));
                         root.Add("discord_rich_presence", JToken.FromObject(EnableDiscordRichPresence));
                         root.Add("enable_voice_control", JToken.FromObject(EnableVoiceControl));
+                        root.Add("enable_note_taking", JToken.FromObject(EnableNoteTaking));
+                        root.Add("enable_variant_switcher", JToken.FromObject(EnableVariantSwitcher));
+                        if (!string.IsNullOrWhiteSpace(VoiceInputDeviceName))
+                            root.Add("voice_input_device_name", JToken.FromObject(VoiceInputDeviceName));
                         root.Add("prompt_on_refresh_close", JToken.FromObject(PromptOnRefreshClose));
-                        root.Add("ignore_bonta_alttpr_multiworld_rom_check", JToken.FromObject(IgnoreBontaMultiWorldRomCheck));
-                        root.Add("multiworld_notification_level", JToken.FromObject(MultiworldNotificationLevel));
 
                         if (!string.IsNullOrWhiteSpace(ServiceBaseURL))
                             root.Add("service_base_url", JToken.FromObject(ServiceBaseURL));
@@ -341,6 +409,14 @@ namespace EmoTracker.Data
                         JArray reposVal = JArray.FromObject(AdditionalRepositories);
                         if (reposVal != null)
                             root.Add("package_repositories", reposVal);
+
+                        if (mProviderSettings.Count > 0)
+                        {
+                            var providerObj = new JObject();
+                            foreach (var kvp in mProviderSettings)
+                                providerObj.Add(kvp.Key, JToken.FromObject(kvp.Value));
+                            root.Add("provider_settings", providerObj);
+                        }
 
                         jsonWriter.WriteToken(root.CreateReader());
                     }

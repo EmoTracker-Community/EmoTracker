@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+﻿#pragma warning disable SYSLIB0014 // WebClient is obsolete
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json;
@@ -7,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Net;
 
 namespace EmoTracker.Data.Packages
@@ -268,11 +270,11 @@ namespace EmoTracker.Data.Packages
         {
             get
             {
-                foreach (PackageRepository repository in Repositories)
+                foreach (PackageRepository repository in Repositories.ToList())
                 {
-                    foreach (PackageRepositoryEntry entry in repository.Packages)
+                    foreach (PackageRepositoryEntry entry in repository.Packages.ToList())
                     {
-                        if (entry.Status == PackageRepositoryEntry.PackageStatus.UpdateAvailable)
+                        if (entry != null && entry.Status == PackageRepositoryEntry.PackageStatus.UpdateAvailable)
                             return true;
                     }
                 }
@@ -285,11 +287,11 @@ namespace EmoTracker.Data.Packages
         {
             get
             {
-                foreach (PackageRepository repository in Repositories)
+                foreach (PackageRepository repository in Repositories.ToList())
                 {
-                    foreach (PackageRepositoryEntry entry in repository.Packages)
+                    foreach (PackageRepositoryEntry entry in repository.Packages.ToList())
                     {
-                        if (entry.Status == PackageRepositoryEntry.PackageStatus.UpdateAvailable)
+                        if (entry != null && entry.Status == PackageRepositoryEntry.PackageStatus.UpdateAvailable)
                         {
                             if (entry.ExistingPackage == Tracker.Instance.ActiveGamePackage)
                                 return true;

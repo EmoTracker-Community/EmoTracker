@@ -1,8 +1,9 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.Packages;
 using System;
 using System.Globalization;
-using System.Windows.Data;
+
+using Avalonia.Data.Converters;
 
 namespace EmoTracker.UI.Converters
 {
@@ -37,7 +38,7 @@ namespace EmoTracker.UI.Converters
 
             var game = PackageManager.Instance.FindGame(name);
             if (game != null)
-                return Media.ImageReferenceService.Instance.ResolveImageReference(game.Image);
+                return Media.ImageReferenceService.Instance.RequestImage(game.Image);
 
             return null;
         }

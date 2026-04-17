@@ -1,0 +1,56 @@
+<UserControl x:Class="EmoTracker.UI.ChestListControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             Background="Transparent">
+    <UserControl.Resources>
+        <!--
+            CompactTemplate and FullTemplate cannot use Style.Triggers / DataTrigger in Avalonia.
+            Image source switching based on Accessible/Available is handled in code-behind
+            by binding to a computed property on the control. For now the templates display
+            a static binding to ClosedChest as a placeholder; callers should migrate to a
+            view-model that exposes the correct image.
+        -->
+        <DataTemplate x:Key="CompactTemplate">
+            <Grid>
+                <!-- CurrentCompactImage is pre-computed in code-behind based on Available×Accessible -->
+                <Image Width="32" Height="32"
+                       Source="{Binding CurrentCompactImage, RelativeSource={RelativeSource AncestorType=local:ChestListControl}}" />
+                <Grid VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                      Background="Black" MaxHeight="16">
+                    <TextBlock Text="{Binding Available, RelativeSource={RelativeSource AncestorType=local:ChestListControl}}"
+                               FontWeight="Bold" FontSize="16" Foreground="WhiteSmoke"
+                               VerticalAlignment="Center" HorizontalAlignment="Center"
+                               Margin="4,1"/>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate x:Key="FullTemplate">
+            <!-- Chests is IEnumerable<IImage?> — each item IS the pre-resolved image for that slot -->
+            <ItemsControl ItemsSource="{Binding RelativeSource={RelativeSource AncestorType=local:ChestListControl}, Path=Chests}"
+                          Height="32" Padding="4,0,4,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Image Width="32" Height="32" Margin="0,0,-4,0"
+                               Source="{Binding}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+    </UserControl.Resources>
+    <Grid>
+        <!--
+            WPF used a ContentPresenter with a DataTrigger to switch between CompactTemplate
+            and FullTemplate based on the Compact property. Avalonia does not support
+            DataTrigger in styles. The code-behind exposes a CurrentTemplate property
+            (computed from Compact) that the ContentPresenter binds to.
+        -->
+        <ContentPresenter Content="{Binding}"
+                          ContentTemplate="{Binding CurrentTemplate, RelativeSource={RelativeSource AncestorType=local:ChestListControl}}" />
+    </Grid>
+</UserControl>

@@ -3,6 +3,8 @@ using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace EmoTracker.Data.Items
 {
@@ -60,6 +62,12 @@ namespace EmoTracker.Data.Items
             set { SetProperty(ref mbIgnoreUserInput, value); }
         }
 
+        public string[] PhoneticSubstitutes
+        {
+            get { return mPhoneticSubstitutes; }
+            set { SetProperty(ref mPhoneticSubstitutes, value); }
+        }
+
         [DependentProperty("PotentialIcon")]
         public ImageReference Icon
         {
@@ -99,6 +107,13 @@ namespace EmoTracker.Data.Items
         public abstract bool CanProvideCode(string code);
         public abstract void AdvanceToCode(string code = null);
 
+        /// <summary>
+        /// Returns the set of all codes this item can potentially provide, for indexing purposes.
+        /// Returns null if the item's codes are dynamic and cannot be statically enumerated
+        /// (e.g. LuaItem with a Lua callback).
+        /// </summary>
+        public virtual IEnumerable<string> GetAllProvidedCodes() => null;
+
 
         #region -- Static Methods ---
 
@@ -113,6 +128,10 @@ namespace EmoTracker.Data.Items
                 instance.MaskInput = data.GetValue<bool>("mask_input", false);
                 instance.IgnoreUserInput = data.GetValue<bool>("ignore_user_input", false);
                 instance.DisabledImageFilterSpec = data.GetValue<string>("disabled_image_filter", null);
+
+                var phonetics = data["phonetic_substitutes"] as Newtonsoft.Json.Linq.JArray;
+                if (phonetics != null)
+                    instance.PhoneticSubstitutes = phonetics.Values<string>().Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
 
                 instance.ParseDataInternal(data, package);
             }
@@ -156,6 +175,7 @@ namespace EmoTracker.Data.Items
         string mDisabledImageFilterSpec;
         string mBadgeText;
         string mBadgeTextColor = "WhiteSmoke";
+        string[] mPhoneticSubstitutes;
         bool mbCapturable = true;
         bool mbMaskInput = false;
         bool mbIgnoreUserInput = false;

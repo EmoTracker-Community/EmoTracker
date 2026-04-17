@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+﻿#pragma warning disable SYSLIB0014 // WebClient is obsolete
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -502,13 +503,18 @@ namespace EmoTracker.Data.Packages
         {
             if (e.Error != null || e.Result == null || e.Result.Length <= 0)
             {
-                DownloadStatus = DownloadStatus.Error;
+                EmoTracker.Core.Services.Dispatch.BeginInvoke(() => DownloadStatus = DownloadStatus.Error);
                 return;
             }
 
+            // Parse on the background thread so the UI thread isn't blocked.
+            List<PackageRepositoryEntry> parsed = null;
+            string parsedName = null;
+            bool parseSucceeded = false;
+
             try
             {
-                mPackages.Clear();
+                parsed = new List<PackageRepositoryEntry>();
 
                 using (Stream s = new MemoryStream(e.Result))
                 {
@@ -518,7 +524,7 @@ namespace EmoTracker.Data.Packages
                         JObject root = (JObject)JToken.ReadFrom(jsonReader);
                         if (root != null)
                         {
-                            Name = root.GetValue<string>("name", Name);
+                            parsedName = root.GetValue<string>("name", Name);
 
                             JArray packages = root.GetValue<JArray>("packages");
                             if (packages != null)
@@ -566,9 +572,7 @@ namespace EmoTracker.Data.Packages
                                             !string.IsNullOrWhiteSpace(instance.UID) &&
                                             !string.IsNullOrWhiteSpace(instance.URL))
                                         {
-                                            mPackages.Add(instance);
-                                            PackageManager.Instance.ForceRefreshProperty("UpdatesAvailable");
-                                            PackageManager.Instance.ForceRefreshProperty("CurrentPackageHasUpdateAvailable");
+                                            parsed.Add(instance);
                                         }
                                     }
                                 }
@@ -577,14 +581,38 @@ namespace EmoTracker.Data.Packages
                     }
                 }
 
-                DownloadStatus = DownloadStatus.Complete;
+                parseSucceeded = true;
             }
             catch
             {
-                DownloadStatus = DownloadStatus.Error;
+                // Fall through; parseSucceeded remains false.
             }
 
-            PackageManager.Instance.NotifyRepositoryUpdated(this);
+            // Commit results on the UI thread so ObservableCollection mutations and their
+            // CollectionChanged notifications always fire on the correct thread.
+            var capturedParsed = parsed;
+            var capturedName = parsedName;
+            EmoTracker.Core.Services.Dispatch.BeginInvoke(() =>
+            {
+                if (!parseSucceeded)
+                {
+                    DownloadStatus = DownloadStatus.Error;
+                    PackageManager.Instance.NotifyRepositoryUpdated(this);
+                    return;
+                }
+
+                if (capturedName != null)
+                    Name = capturedName;
+
+                mPackages.Clear();
+                foreach (var entry in capturedParsed)
+                    mPackages.Add(entry);
+
+                DownloadStatus = DownloadStatus.Complete;
+                PackageManager.Instance.ForceRefreshProperty("UpdatesAvailable");
+                PackageManager.Instance.ForceRefreshProperty("CurrentPackageHasUpdateAvailable");
+                PackageManager.Instance.NotifyRepositoryUpdated(this);
+            });
         }
     }
 }

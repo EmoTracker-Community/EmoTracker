@@ -1,0 +1,20 @@
+<UserControl x:Class="EmoTracker.Extensions.VoiceRecognition.VoiceRecognitionStatusIndicator"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             IsVisible="{Binding EnableVoiceControl, Source={x:Static data:ApplicationSettings.Instance}}">
+    <Grid Name="StatusGrid" Background="Transparent" ToolTip.Tip="Voice Recognition">
+        <Grid.ContextMenu>
+            <ContextMenu Opened="ContextMenu_Opened">
+                <MenuItem Header="Active" Name="ActiveMenuItem" ToggleType="CheckBox" IsChecked="{Binding Active, Mode=TwoWay}"/>
+                <Separator/>
+                <MenuItem Header="Input Device" Name="DeviceSubMenu"/>
+            </ContextMenu>
+        </Grid.ContextMenu>
+        <TextBlock Name="StatusIcon"
+                   FontFamily="{StaticResource FontAwesome5Free}"
+                   Text="&#xf131;"
+                   Foreground="#717171"
+                   VerticalAlignment="Center"/>
+    </Grid>
+</UserControl>

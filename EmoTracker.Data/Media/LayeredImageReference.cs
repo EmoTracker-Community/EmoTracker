@@ -1,10 +1,6 @@
-﻿using EmoTracker.Core;
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EmoTracker.Data.Media
 {
@@ -15,6 +11,18 @@ namespace EmoTracker.Data.Media
         public IList<ImageReference> Layers
         {
             get { return mLayers; }
+        }
+
+        public override bool Equals(object obj)
+            => obj is LayeredImageReference other
+               && mLayers.SequenceEqual(other.mLayers);
+
+        public override int GetHashCode()
+        {
+            var hc = new System.HashCode();
+            foreach (var layer in mLayers)
+                hc.Add(layer);
+            return hc.ToHashCode();
         }
     }
 }

@@ -1,0 +1,211 @@
+name: Build Avalonia (Cross-Platform)
+
+on:
+  push:
+    branches: [avalonia]
+  pull_request:
+    branches: [avalonia]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            artifact: EmoTracker-win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact: EmoTracker-linux-x64
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      # Allow restoring the net8.0-windows target on non-Windows (skips WPF-specific build)
+      EnableWindowsTargeting: true
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime ${{ matrix.rid }} --self-contained --output publish/raw
+
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          VER=$(sed -n 's/.*AssemblyFileVersion("\([^"]*\)").*/\1/p' EmoTracker/Properties/AssemblyInfo.cs)
+          echo "app_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VER"
+
+      - name: Create Linux tar.xz
+        if: startsWith(matrix.rid, 'linux')
+        run: |
+          chmod +x publish/raw/EmoTracker
+          cd publish/raw
+          tar cJf ../EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.xz .
+
+      - name: Upload Linux artifact
+        if: startsWith(matrix.rid, 'linux')
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}.tar.xz
+
+      - name: Bundle PortAudio (Windows only)
+        if: startsWith(matrix.rid, 'win')
+        shell: bash
+        run: |
+          curl -fsSL "https://github.com/spatialaudio/portaudio-binaries/raw/master/libportaudio64bit.dll" \
+            -o "publish/raw/portaudio.dll"
+
+      - name: Stage Windows output
+        if: startsWith(matrix.rid, 'win')
+        run: |
+          mkdir -p "publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}"
+          cp -R publish/raw/* "publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}/"
+
+      - name: Upload Windows artifact
+        if: startsWith(matrix.rid, 'win')
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-${{ matrix.rid }}
+
+  build-macos:
+    runs-on: macos-latest
+
+    env:
+      EnableWindowsTargeting: true
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish x64
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime osx-x64 --self-contained --output publish/x64
+
+      - name: Publish arm64
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime osx-arm64 --self-contained --output publish/arm64
+
+      - name: Extract version
+        id: version
+        run: |
+          VER=$(sed -n 's/.*AssemblyFileVersion("\([^"]*\)").*/\1/p' EmoTracker/Properties/AssemblyInfo.cs)
+          echo "app_version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VER"
+
+      - name: Create universal binary
+        run: |
+          mkdir -p publish/universal
+
+          # Copy arm64 as the base (all managed DLLs are identical between architectures)
+          cp -R publish/arm64/* publish/universal/
+
+          # Find all Mach-O binaries and create universal versions with lipo
+          cd publish
+          find arm64 -type f | while read arm64_file; do
+            rel="${arm64_file#arm64/}"
+            x64_file="x64/$rel"
+            universal_file="universal/$rel"
+
+            if [ ! -f "$x64_file" ]; then
+              continue
+            fi
+
+            # Check if the file is a Mach-O binary
+            if file "$arm64_file" | grep -q "Mach-O"; then
+              # Get architectures of each file
+              arm64_archs=$(lipo -archs "$arm64_file" 2>/dev/null || true)
+              x64_archs=$(lipo -archs "$x64_file" 2>/dev/null || true)
+
+              if [ "$arm64_archs" = "$x64_archs" ]; then
+                echo "Skipping $rel (both are $arm64_archs, already identical)"
+              else
+                echo "Creating universal binary: $rel ($arm64_archs + $x64_archs)"
+                lipo -create "$arm64_file" "$x64_file" -output "$universal_file"
+              fi
+            fi
+          done
+
+      - name: Create macOS app bundle
+        run: |
+          APP="publish/EmoTracker-osx-universal/EmoTracker.app"
+          mkdir -p "$APP/Contents/MacOS"
+          mkdir -p "$APP/Contents/Resources"
+
+          # Copy universal output into the bundle
+          cp -R publish/universal/* "$APP/Contents/MacOS/"
+          cp EmoTracker/macOS/Info.plist "$APP/Contents/"
+          chmod +x "$APP/Contents/MacOS/EmoTracker"
+
+          # Convert .ico to .icns for the app icon
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install --quiet Pillow
+          python3 -c "
+          from PIL import Image, ImageDraw
+          import os
+
+          ico = Image.open('EmoTracker/emohead_icon_transparent_7h3_icon.ico')
+
+          # Extract the largest frame from the ICO
+          best = None
+          for size in sorted(ico.info.get('sizes', [(ico.width, ico.height)]), reverse=True):
+              ico.size = size
+              candidate = ico.copy().convert('RGBA')
+              if best is None or candidate.width > best.width:
+                  best = candidate
+          src = best
+
+          iconset = 'EmoTracker.iconset'
+          os.makedirs(iconset, exist_ok=True)
+
+          def make_icon(src, s):
+              # Create black rounded-rect background, composite icon on top
+              bg = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+              draw = ImageDraw.Draw(bg)
+              r = max(s // 5, 4)
+              draw.rounded_rectangle([0, 0, s - 1, s - 1], radius=r, fill=(0, 0, 0, 255))
+              resized = src.resize((s, s), Image.LANCZOS)
+              bg.paste(resized, (0, 0), resized)
+              return bg
+
+          sizes = [16, 32, 64, 128, 256, 512]
+          for s in sizes:
+              icon = make_icon(src, s)
+              icon.save(os.path.join(iconset, f'icon_{s}x{s}.png'))
+              if s >= 32:
+                  half = s // 2
+                  icon.save(os.path.join(iconset, f'icon_{half}x{half}@2x.png'))
+
+          icon = make_icon(src, 1024)
+          icon.save(os.path.join(iconset, 'icon_512x512@2x.png'))
+          "
+          iconutil -c icns EmoTracker.iconset -o "$APP/Contents/Resources/EmoTracker.icns"
+
+          # Ad-hoc code sign so macOS doesn't report the bundle as damaged
+          codesign --force --deep -s - "$APP"
+
+      - name: Create macOS tar.gz
+        run: |
+          cd publish/EmoTracker-osx-universal
+          tar czf ../EmoTracker-${{ steps.version.outputs.app_version }}-osx-universal.tar.gz EmoTracker.app
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EmoTracker-${{ steps.version.outputs.app_version }}-osx-universal
+          path: publish/EmoTracker-${{ steps.version.outputs.app_version }}-osx-universal.tar.gz

@@ -1,0 +1,51 @@
+<Window x:Class="EmoTracker.UI.DeveloperConsole"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+        mc:Ignorable="d"
+        Title="Developer Console"
+        Height="450"
+        Width="800">
+    <Grid Background="#212121">
+        <Grid.RowDefinitions>
+            <RowDefinition/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Name="ConsoleScrollViewer"
+                      Grid.Row="0"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <ListBox Name="ConsoleOutput"
+                     ItemsSource="{Binding LogOutput, Source={x:Static data:ScriptManager.Instance}}"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Margin="5,10"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock FontFamily="Consolas"
+                                   FontSize="12"
+                                   Text="{Binding Text}"
+                                   TextWrapping="Wrap"
+                                   Foreground="{Binding Color}"
+                                   Margin="5,2"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                    </Style>
+                </ListBox.Styles>
+            </ListBox>
+        </ScrollViewer>
+
+        <Grid Grid.Row="1" Background="#212121">
+            <Button Content="Clear"
+                    Command="{Binding ClearLogCommand, Source={x:Static data:ScriptManager.Instance}}"/>
+        </Grid>
+    </Grid>
+</Window>

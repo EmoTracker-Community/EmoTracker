@@ -1,9 +1,5 @@
 ﻿using EmoTracker.Core;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EmoTracker.Data.Media
 {
@@ -22,5 +18,13 @@ namespace EmoTracker.Data.Media
             get { return mFilter; }
             set { SetProperty(ref mFilter, value); }
         }
+
+        public override bool Equals(object obj)
+            => obj is ConcreteImageReference other
+               && Equals(mURI, other.mURI)
+               && mFilter == other.mFilter;
+
+        public override int GetHashCode()
+            => HashCode.Combine(mURI, mFilter);
     }
 }

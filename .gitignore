@@ -42,6 +42,14 @@ ScaffoldingReadMe.txt
 *~
 CodeCoverage/
 
+# Visual Studio user-specific files
+*.user
+*.suo
+.vs/
+
+# Claude Code local settings
+.claude/*.local.*
+
 # MSBuild Binary and Structured Log
 *.binlog
 

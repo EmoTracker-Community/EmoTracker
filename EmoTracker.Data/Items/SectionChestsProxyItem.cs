@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
@@ -80,6 +81,8 @@ namespace EmoTracker.Data.Items
         {
             return mCodeProvider.ProvidesCode(code);
         }
+
+        public override IEnumerable<string> GetAllProvidedCodes() => mCodeProvider.ProvidedCodes;
 
         public override void OnLeftClick()
         {

@@ -150,7 +150,7 @@ namespace EmoTracker.Data.Scripting
             try
             {
                 if (AdvanceToCodeFunc != null)
-                    AdvanceToCodeFunc.Call(this, code);
+                    ScriptManager.Instance.SafeCall(AdvanceToCodeFunc, this, code);
             }
             catch (Exception e)
             {
@@ -164,7 +164,7 @@ namespace EmoTracker.Data.Scripting
             {
                 if (CanProvideCodeFunc != null)
                 {
-                    object[] result = CanProvideCodeFunc.Call(this, code);
+                    object[] result = ScriptManager.Instance.SafeCall(CanProvideCodeFunc, this, code);
                     if (result != null && result.Length > 0)
                         return Convert.ToBoolean(result.First());
                 }
@@ -182,7 +182,12 @@ namespace EmoTracker.Data.Scripting
             try
             {
                 if (OnLeftClickFunc != null)
-                    OnLeftClickFunc.Call(this);
+                {
+                    using (new LocationDatabase.SuspendRefreshScope())
+                    {
+                        ScriptManager.Instance.SafeCall(OnLeftClickFunc, this);
+                    }
+                }
             }
             catch (Exception e)
             {
@@ -195,7 +200,12 @@ namespace EmoTracker.Data.Scripting
             try
             {
                 if (OnRightClickFunc != null)
-                OnRightClickFunc.Call(this);
+                {
+                    using (new LocationDatabase.SuspendRefreshScope())
+                    {
+                        ScriptManager.Instance.SafeCall(OnRightClickFunc, this);
+                    }
+                }
             }
             catch (Exception e)
             {
@@ -209,7 +219,7 @@ namespace EmoTracker.Data.Scripting
             {
                 if (ProvidesCodeFunc != null)
                 {
-                    object[] result = ProvidesCodeFunc.Call(this, code);
+                    object[] result = ScriptManager.Instance.SafeCall(ProvidesCodeFunc, this, code);
                     if (result != null && result.Length > 0)
                         return Convert.ToUInt32(result.First());
                 }
@@ -232,7 +242,7 @@ namespace EmoTracker.Data.Scripting
             {
                 if (SaveFunc != null)
                 {
-                    object[] results = SaveFunc.Call(this);
+                    object[] results = ScriptManager.Instance.SafeCall(SaveFunc, this);
                     if (results != null && results.Length > 0)
                     {
                         LuaTable saveData = results.First() as LuaTable;
@@ -294,7 +304,7 @@ namespace EmoTracker.Data.Scripting
                         }
                     }
 
-                    object[] results = LoadFunc.Call(this, dataMap);
+                    object[] results = ScriptManager.Instance.SafeCall(LoadFunc, this, dataMap);
                     if (results != null && results.Length > 0)
                         return Convert.ToBoolean(results.First());
 
@@ -316,7 +326,7 @@ namespace EmoTracker.Data.Scripting
                 try
                 {
                     if (PropertyChangedFunc != null)
-                        PropertyChangedFunc.Call(this, key, v);
+                        ScriptManager.Instance.SafeCall(PropertyChangedFunc, this, key, v);
                 }
                 catch (Exception e)
                 {

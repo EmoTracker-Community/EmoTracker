@@ -1,0 +1,665 @@
+<UserControl x:Class="EmoTracker.UI.LayoutControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:app="clr-namespace:EmoTracker"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             xmlns:layout="clr-namespace:EmoTracker.Data.Layout;assembly=EmoTracker.Data"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             FontSize="12">
+    <UserControl.Resources>
+        <!-- In WPF, ContentPresenter.HorizontalContentAlignment defaults to Stretch.
+             In Avalonia it defaults to Left, so item container ContentPresenters size
+             DataTemplate content to its desired size rather than filling available space.
+             This theme restores the WPF default for all layout-hosting ItemsControls. -->
+        <ControlTheme x:Key="StretchItemContainer" TargetType="ContentPresenter">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </ControlTheme>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <!-- LayoutTransformControl overrides ClipToBounds to true in its static constructor.
+             Application.Styles is too far from the element for that override to be beaten
+             reliably; a UserControl-scoped style wins via proximity. All other element types
+             are covered by the global Application.Styles in App.axaml. -->
+        <Style Selector="LayoutTransformControl">
+            <Setter Property="ClipToBounds" Value="False"/>
+        </Style>
+    </UserControl.Styles>
+    <UserControl.DataTemplates>
+
+        <!-- Each DataTemplate wraps its content in a LayoutTransformControl so that the
+             per-element "scale" JSON field (LayoutItem.EffectiveScale) participates in the
+             layout pass — equivalent to WPF's LayoutItemStyle LayoutTransform DataTrigger.
+             Margin / HorizontalAlignment / VerticalAlignment go on the LTC (outside the
+             transform); Width / Height / Min* / Max* / Effect stay on the inner Grid. -->
+
+        <DataTemplate DataType="layout:LayoutReference">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <ContentControl Content="{Binding Layout.Root}" />
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <!-- RecentPinnedLocations MUST be declared before ArrayPanel because it extends
+             ArrayPanel — Avalonia picks the first DataType match, so the derived type wins. -->
+        <DataTemplate DataType="layout:RecentPinnedLocations">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <ItemsControl ItemsSource="{Binding Locations}">
+                        <ItemsControl.ItemsPanel>
+                            <!-- RecentPinnedLocations inherits Style/Orientation from ArrayPanel.
+                                 Style=Stack → StackPanel (stretches items), Style=Wrap → WrapPanel. -->
+                            <MultiBinding Converter="{x:Static converters:PanelStyleToTemplateConverter.Instance}">
+                                <Binding Path="Style" />
+                                <Binding Path="Orientation" />
+                            </MultiBinding>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <local:LocationControl Margin="2"
+                                                       Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                       PreserveDimension="{Binding DataContext.Orientation, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={x:Static converters:OrientationToPreserveDimensionConverter.Instance}}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:ArrayPanel">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <ItemsControl ItemsSource="{Binding Children}"
+                                  ItemContainerTheme="{StaticResource StretchItemContainer}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <!-- The StackPanel inherits DataContext from the ItemsControl (the
+                                     ArrayPanel model), so we can bind Orientation directly without
+                                     RelativeSource.  RelativeSource AncestorType bindings inside
+                                     ItemsPanelTemplate are unreliable in Avalonia because the panel
+                                     is not yet in the visual tree when the binding is first evaluated,
+                                     causing the orientation to silently default to Vertical for all
+                                     arrays and collapsing horizontal layouts into a single column. -->
+                                <StackPanel Orientation="{Binding Orientation, Converter={x:Static converters:TrivialEnumConverter.Instance}}" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:DockPanel">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <ItemsControl ItemsSource="{Binding Children}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <DockPanel LastChildFill="True" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerTheme>
+                            <ControlTheme TargetType="ContentPresenter">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                                <Setter Property="(DockPanel.Dock)"
+                                        Value="{Binding DockLocation, Converter={x:Static converters:StringToDockConverter.Instance}}" />
+                            </ControlTheme>
+                        </ItemsControl.ItemContainerTheme>
+                    </ItemsControl>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:CanvasPanel">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <ItemsControl ItemsSource="{Binding Children}" ClipToBounds="True">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Canvas />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerTheme>
+                            <ControlTheme TargetType="ContentPresenter">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                                <Setter Property="(Canvas.Left)"
+                                        Value="{Binding CanvasX, Converter={x:Static converters:CanvasPositionConverter.Instance}}" />
+                                <Setter Property="(Canvas.Top)"
+                                        Value="{Binding CanvasY, Converter={x:Static converters:CanvasPositionConverter.Instance}}" />
+                                <Setter Property="(Canvas.ZIndex)"
+                                        Value="{Binding CanvasDepth, Converter={x:Static converters:CanvasZIndexConverter.Instance}}" />
+                            </ControlTheme>
+                        </ItemsControl.ItemContainerTheme>
+                    </ItemsControl>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:ViewBox">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <!-- Items are positioned in the map's natural pixel coordinate space using
+                         4-value margin (left,top,right,bottom) as absolute edge offsets within
+                         the single-cell Grid ItemsPanel. The outer Viewbox scales everything
+                         proportionally as the container resizes. -->
+                    <Viewbox>
+                        <ItemsControl ItemsSource="{Binding Items}"
+                                        ItemContainerTheme="{StaticResource StretchItemContainer}" ClipToBounds="false">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Grid />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </Viewbox>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:TabPanel">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <TabControl ItemsSource="{Binding Tabs}"
+                                Background="Transparent"
+                                SelectedItem="{Binding CurrentTab, Mode=TwoWay}"
+                                Padding="0">
+                        <!-- Set Template directly (local value, highest priority) so the tab-header
+                             strip always renders items in their source/definition order.  Using a
+                             Style Selector="TabControl" override inside TabControl.Styles instead
+                             can lose ordering because style setters are evaluated after the Fluent
+                             theme template has already been applied. -->
+                        <TabControl.Template>
+                            <ControlTemplate>
+                                <Grid RowDefinitions="Auto,*">
+                                    <ItemsPresenter Name="PART_ItemsPresenter"
+                                                    Grid.Row="0"
+                                                    HorizontalAlignment="Center"
+                                                    Margin="0,3">
+                                        <ItemsPresenter.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsPresenter.ItemsPanel>
+                                    </ItemsPresenter>
+                                    <ContentPresenter Name="PART_SelectedContentHost" Grid.Row="1"
+                                                      Content="{TemplateBinding SelectedContent}"
+                                                      ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+                                </Grid>
+                            </ControlTemplate>
+                        </TabControl.Template>
+                        <TabControl.Styles>
+                            <!-- Custom TabItem template to fully control all visual states -->
+                            <Style Selector="TabItem">
+                                <Setter Property="FontSize" Value="12" />
+                                <Setter Property="Foreground" Value="WhiteSmoke" />
+                                <Setter Property="Margin" Value="2,0" />
+                                <Setter Property="MinHeight" Value="20" />
+                                <Setter Property="Template">
+                                    <ControlTemplate>
+                                        <Border Name="PART_TabBorder"
+                                                Background="#77212121"
+                                                CornerRadius="7"
+                                                Padding="8,3">
+                                            <ContentPresenter Name="PART_ContentPresenter"
+                                                              Content="{TemplateBinding Header}"
+                                                              ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter>
+                            </Style>
+                            <Style Selector="TabItem:selected /template/ Border#PART_TabBorder">
+                                <Setter Property="Background" Value="#212121" />
+                                <Setter Property="BorderBrush" Value="#aaaaaa" />
+                                <Setter Property="BorderThickness" Value="1.5" />
+                            </Style>
+                            <Style Selector="TabItem:pointerover /template/ Border#PART_TabBorder">
+                                <Setter Property="Background" Value="#212121" />
+                            </Style>
+                            <Style Selector="TabItem:selected:pointerover /template/ Border#PART_TabBorder">
+                                <Setter Property="BorderBrush" Value="#cccccc" />
+                            </Style>
+                        </TabControl.Styles>
+                        <TabControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="0">
+                                    <Image Source="{Binding Icon.ResolvedImage, FallbackValue={x:Null}}"
+                                           MaxHeight="16" VerticalAlignment="Center"
+                                           IsVisible="{Binding Icon, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                    <Grid Width="8"
+                                          IsVisible="{Binding Icon, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center"
+                                               IsVisible="{Binding Title, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </TabControl.ItemTemplate>
+                        <TabControl.ContentTemplate>
+                            <DataTemplate>
+                                <ContentControl Content="{Binding Content}"
+                                                HorizontalContentAlignment="Stretch"
+                                                VerticalContentAlignment="Stretch" />
+                            </DataTemplate>
+                        </TabControl.ContentTemplate>
+                    </TabControl>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:MapPanel">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <local:LocationMapControl />
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <!-- GroupBox MUST be declared before Container because GroupBox inherits Container —
+             Avalonia picks the first DataType match (inheritance-based), so the more-derived
+             type's template must come first. -->
+        <DataTemplate DataType="layout:GroupBox">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      ClipToBounds="True"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <!-- Header bar -->
+                    <Grid Grid.Row="0"
+                          Background="{Binding HeaderBackground, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#212121}">
+                        <Grid Margin="10,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding Header}" FontWeight="Bold" FontSize="12"
+                                       Foreground="WhiteSmoke" VerticalAlignment="Center" />
+                            <ContentControl Grid.Column="2" Content="{Binding HeaderContent}" Margin="10,0,0,0"
+                                            IsVisible="{Binding HeaderContent, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                        </Grid>
+                    </Grid>
+                    <!-- Content area -->
+                    <Grid Grid.Row="1"
+                          Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}, TargetNullValue=#66212121, FallbackValue=#66212121}">
+                        <!-- Use a single-cell Grid panel (not StackPanel) so children
+                             receive the GroupBox content area's finite height constraint.
+                             StackPanel measures children at infinite height in the stacking
+                             direction, which breaks Viewbox-based content (like map overlays)
+                             that needs a finite height to scale proportionally. GroupBox
+                             content is typically a single layout element that fills the
+                             content area, so Grid is the correct panel here. -->
+                        <ItemsControl ItemsSource="{Binding Items}" Margin="5"
+                                      ItemContainerTheme="{StaticResource StretchItemContainer}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Grid />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </Grid>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <!-- NOTE: ScrollPanel must be declared before Container because ScrollPanel
+             derives from Container and Avalonia's DataTemplate matching picks the
+             first template whose DataType is assignable from the item. Placing
+             Container first would shadow ScrollPanel (and any other Container
+             subclass defined after it). -->
+        <DataTemplate DataType="layout:ScrollPanel">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <ScrollViewer HorizontalScrollBarVisibility="{Binding HorizontalScrollBarVisibility, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                  VerticalScrollBarVisibility="{Binding VerticalScrollBarVisibility, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                        <!-- Use a Grid panel (not the default StackPanel) so the single content
+                             child is stretched to fill the ItemsControl's full arranged height.
+                             MinHeight ties that height to the ScrollViewer's visible viewport so
+                             DockPanel LastChildFill receives a finite height and allocates the
+                             remaining space to the last child (e.g. the Pinned Locations GroupBox).
+                             Content taller than the viewport still overflows and scrolls normally. -->
+                        <ItemsControl ItemsSource="{Binding Items}"
+                                      MinHeight="{Binding $parent[ScrollViewer].Bounds.Height}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Grid />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:Container">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <!-- Container/"grid" maps to a single-cell Grid in WPF.
+                         The default StackPanel panel gives children infinite height,
+                         breaking DockPanel LastChildFill downstream. Grid passes finite
+                         constraints so layout fills available space correctly. -->
+                    <ItemsControl ItemsSource="{Binding Items}"
+                                  ItemContainerTheme="{StaticResource StretchItemContainer}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <Grid />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:ItemGrid">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}"
+                      ClipToBounds="False">
+                    <local:ItemGridControl DataContext="{Binding Data}" ClipToBounds="False" />
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:Item">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <local:TrackableItemControl DataContext="{Binding Data}"
+                                                IconWidth="{Binding DataContext.Width, RelativeSource={RelativeSource AncestorType=Grid}, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                                                IconHeight="{Binding DataContext.Height, RelativeSource={RelativeSource AncestorType=Grid}, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}" />
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:Image">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <Image Source="{Binding Content.ResolvedImage, FallbackValue={x:Null}}" />
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:TextBlock">
+            <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
+                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
+                <LayoutTransformControl.LayoutTransform>
+                    <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                </LayoutTransformControl.LayoutTransform>
+                <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                      IsHitTestVisible="{Binding HitTestVisible}"
+                      MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                      MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                      Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                    <TextBlock Text="{Binding Text}"
+                               FontSize="{Binding FontSize, Converter={x:Static converters:NegativeToUnsetConverter.Instance}}" />
+                </Grid>
+            </LayoutTransformControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:LastClearedLocation">
+            <ContentControl Content="{Binding Location}">
+                <ContentControl.ContentTemplate>
+                    <DataTemplate>
+                        <local:LocationControl DataContext="{Binding LastClearedLocation, Source={x:Static data:LocationDatabase.Instance}}"
+                                               Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource Self}}" />
+                    </DataTemplate>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
+        </DataTemplate>
+
+        <DataTemplate DataType="layout:ButtonPopup">
+            <!-- Outer Grid mirrors WPF structure: Popup is a sibling of the
+                 LayoutTransformControl so its content is NOT affected by the
+                 ButtonPopup's EffectiveScale. -->
+            <Grid>
+                <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}">
+                    <LayoutTransformControl.LayoutTransform>
+                        <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
+                    </LayoutTransformControl.LayoutTransform>
+                    <Grid Width="{Binding Width, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                          Height="{Binding Height, Converter={x:Static converters:NegativeToNaNDoubleConverter.Instance}}"
+                          IsHitTestVisible="{Binding HitTestVisible}"
+                          MinWidth="{Binding MinWidth, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                          MinHeight="{Binding MinHeight, Converter={x:Static converters:NegativeToZeroDoubleConverter.Instance}}"
+                          MaxWidth="{Binding MaxWidth, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                          MaxHeight="{Binding MaxHeight, Converter={x:Static converters:NegativeToInfinityDoubleConverter.Instance}}"
+                          Effect="{Binding DropShadow, Converter={x:Static converters:BoolToDropShadowEffectConverter.Instance}}">
+                        <!-- Toggle button: visual appearance changes based on ButtonPopup.Style -->
+                        <controls:MouseOnlyToggleButton Name="OpenSettingsButton"
+                                                         Background="Transparent"
+                                                         BorderThickness="0"
+                                                         Padding="0">
+                            <Panel>
+                                <!-- Settings gear icon -->
+                                <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
+                                           Text="&#xf013;" Foreground="WhiteSmoke"
+                                           VerticalAlignment="Center"
+                                           ToolTip.Tip="Settings"
+                                           IsVisible="{Binding Style, Converter={x:Static converters:ObjectEqualsConverter.Instance}, ConverterParameter=Settings}" />
+                                <!-- Image mode -->
+                                <Panel IsVisible="{Binding Style, Converter={x:Static converters:ObjectEqualsConverter.Instance}, ConverterParameter=Image}">
+                                    <Image Source="{Binding Image.ResolvedImage, FallbackValue={x:Null}}"
+                                           IsVisible="{Binding MaskInput, Converter={x:Static converters:BoolInverseConverter.Instance}}" />
+                                    <controls:InputMaskingImage Source="{Binding Image.ResolvedImage, FallbackValue={x:Null}}"
+                                                                IsVisible="{Binding MaskInput}" />
+                                </Panel>
+                                <!-- Solid mode: transparent background, no visible content -->
+                            </Panel>
+                        </controls:MouseOnlyToggleButton>
+                    </Grid>
+                </LayoutTransformControl>
+
+                <!-- Popup shown when toggle button is checked.
+                     Placed outside LayoutTransformControl (matching WPF layout) so popup
+                     content renders at natural size, unaffected by the button's EffectiveScale. -->
+                <Popup Name="SettingsPopup"
+                       IsOpen="{Binding #OpenSettingsButton.IsChecked, Mode=TwoWay}"
+                       IsLightDismissEnabled="True"
+                       Placement="Top"
+                       PlacementTarget="{Binding #OpenSettingsButton}">
+                    <Border BorderBrush="DarkGray" BorderThickness="3"
+                            Background="{Binding PopupBackground, Converter={x:Static converters:StringToBrushConverter.Instance}, FallbackValue=#ff212121}"
+                            CornerRadius="5" Margin="20">
+                        <Border.Effect>
+                            <DropShadowDirectionEffect Opacity="0.8" BlurRadius="20" ShadowDepth="3" />
+                        </Border.Effect>
+                        <Grid Margin="0">
+                            <ContentControl Content="{Binding Layout.Root}" />
+                        </Grid>
+                    </Border>
+                </Popup>
+            </Grid>
+        </DataTemplate>
+
+    </UserControl.DataTemplates>
+
+    <Grid>
+        <Grid DataContext="{Binding Root}">
+            <ContentControl Content="{Binding}"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch" />
+        </Grid>
+    </Grid>
+</UserControl>

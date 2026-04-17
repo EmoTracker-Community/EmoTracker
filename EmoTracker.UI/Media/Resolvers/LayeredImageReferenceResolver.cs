@@ -1,10 +1,7 @@
-﻿using EmoTracker.Data.Media;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Media;
+using EmoTracker.Data.Media;
+
+using Avalonia.Media;
+using SkiaSharp;
 
 namespace EmoTracker.UI.Media.Resolvers
 {
@@ -15,7 +12,7 @@ namespace EmoTracker.UI.Media.Resolvers
             return imageRef as LayeredImageReference != null;
         }
 
-        public override ImageSource ResolveReference(ImageReference imageRef)
+        public override IImage ResolveReference(ImageReference imageRef)
         {
             LayeredImageReference concreteRef = imageRef as LayeredImageReference;
             if (concreteRef == null)
@@ -24,17 +21,38 @@ namespace EmoTracker.UI.Media.Resolvers
             if (concreteRef.Layers.Count == 0)
                 return null;
 
-            ImageSource img = null;
+            // Composite all layers in SKBitmap space — one PNG conversion at the end
+            // instead of N round-trips through PNG encode→decode per layer.
+            SKBitmap composite = null;
             foreach (ImageReference layerRef in concreteRef.Layers)
             {
-                ImageSource layerImg = ImageReferenceService.Instance.ResolveImageReference(layerRef);
-                img = Utility.IconUtility.ApplyOverlayImage(img, layerImg);
+                var layerImg = ImageReferenceService.Instance.ResolveImageReference(layerRef);
+                if (layerImg == null)
+                    continue;
+
+                SKBitmap layerSK = Utility.IconUtility.ToSkBitmapForFilter(layerImg);
+                if (layerSK == null)
+                    continue;
+
+                if (composite == null)
+                {
+                    composite = layerSK;
+                }
+                else
+                {
+                    var prev = composite;
+                    composite = Utility.IconUtility.ApplyOverlaySK(composite, layerSK);
+                    // ApplyOverlaySK disposes overlay (layerSK) and may return a new
+                    // bitmap; dispose the old composite if it changed.
+                    if (composite != prev)
+                        prev.Dispose();
+                }
             }
 
-            if (img != null)
-                img.Freeze();
+            if (composite == null)
+                return null;
 
-            return img;
+            return Utility.IconUtility.FinalizeToAvalonia(composite);
         }
     }
 }

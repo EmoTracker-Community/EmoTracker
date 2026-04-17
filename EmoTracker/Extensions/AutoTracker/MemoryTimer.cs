@@ -1,22 +1,14 @@
-﻿using ConnectorLib;
-using EmoTracker.Core;
-using EmoTracker.Data;
+using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Packages;
-using EmoTracker.Data.Scripting;
 using NLua;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
 
 namespace EmoTracker.Extensions.AutoTracker
 {
     public class MemoryTimer : IUpdateWithConnector, IDisposable
     {
         string mName;
-        Func<IAddressableConnector, PackageManager.Game, bool> mCallback;
+        Func<IAutoTrackingProvider, PackageManager.Game, bool> mCallback;
         DateTime mLastUpdate;
         int mPeriod = 500;
 
@@ -30,7 +22,7 @@ namespace EmoTracker.Extensions.AutoTracker
             get { return mPeriod; }
         }
 
-        public MemoryTimer(string name, Func<IAddressableConnector, PackageManager.Game, bool> callback, int period = 500)
+        public MemoryTimer(string name, Func<IAutoTrackingProvider, PackageManager.Game, bool> callback, int period = 500)
         {
             mName = name;
             mCallback = callback;
@@ -53,7 +45,7 @@ namespace EmoTracker.Extensions.AutoTracker
         }
 
         [LuaHide]
-        public MemoryUpdateResult UpdateWithConnector(IAddressableConnector connector, PackageManager.Game game)
+        public MemoryUpdateResult UpdateWithConnector(IAutoTrackingProvider provider, PackageManager.Game game)
         {
             try
             {
@@ -63,7 +55,7 @@ namespace EmoTracker.Extensions.AutoTracker
                 }
 
                 if (mCallback != null)
-                    return mCallback(connector, game) ? MemoryUpdateResult.Success : MemoryUpdateResult.Error;
+                    return mCallback(provider, game) ? MemoryUpdateResult.Success : MemoryUpdateResult.Error;
             }
             catch
             {

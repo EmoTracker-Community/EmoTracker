@@ -1,0 +1,56 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EmoTracker.UI.UpdateDownloadWindow"
+        Title="Downloading Update"
+        Width="380" Height="150"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#212121"
+        SystemDecorations="BorderOnly">
+
+    <Grid RowDefinitions="*,Auto" Margin="24,20,24,16">
+
+        <!-- Download state -->
+        <StackPanel Grid.Row="0" VerticalAlignment="Center" Spacing="12">
+            <TextBlock Name="StatusText"
+                       Foreground="WhiteSmoke"
+                       FontSize="13"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"/>
+            <ProgressBar Name="DownloadProgress"
+                         Value="0" Maximum="100"
+                         IsIndeterminate="False"
+                         Height="4"
+                         Foreground="#35e0b5"
+                         Background="#333339"
+                         CornerRadius="2"/>
+        </StackPanel>
+
+        <!-- Button row -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto,8,Auto">
+            <Button Grid.Column="1"
+                    Name="ActionButton"
+                    Content="Install and Relaunch"
+                    IsVisible="False"
+                    HorizontalAlignment="Right"
+                    Padding="14,6"
+                    CornerRadius="6"
+                    Background="#35e0b5"
+                    Foreground="#111111"
+                    BorderThickness="0"
+                    Click="ActionButton_Click"/>
+            <Button Grid.Column="3"
+                    Name="CancelButton"
+                    Content="Cancel"
+                    HorizontalAlignment="Right"
+                    Padding="14,6"
+                    CornerRadius="6"
+                    Background="#333339"
+                    Foreground="WhiteSmoke"
+                    BorderThickness="1"
+                    BorderBrush="#444444"
+                    Click="CancelButton_Click"/>
+        </Grid>
+    </Grid>
+</Window>

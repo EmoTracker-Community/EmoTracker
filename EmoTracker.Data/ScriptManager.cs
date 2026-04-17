@@ -4,6 +4,7 @@ using EmoTracker.Data.Media;
 using EmoTracker.Data.Scripting;
 using Newtonsoft.Json;
 using NLua;
+using NLua.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -179,6 +180,15 @@ function print(...)
         _output(printResult)
     end
  end
+
+-- Safe-call wrapper: invokes a function via xpcall so that debug.traceback
+-- captures the Lua call stack at the point of failure.  Returns:
+--   true, result1, result2, ...   on success
+--   false, errorMessageWithTraceback   on failure
+function _safe_call(fn, ...)
+    local args = table.pack(...)
+    return xpcall(function() return fn(table.unpack(args, 1, args.n)) end, debug.traceback)
+end
  ";
 
         IGamePackage mPackage;
@@ -255,7 +265,7 @@ function print(...)
                             byte[] buffer = new byte[s.Length];
                             if (s.Read(buffer, 0, buffer.Length) == buffer.Length)
                             {
-                                result = mLua.DoString(buffer);
+                                result = mLua.DoString(buffer, path);
                             }
                         }
                         else
@@ -410,6 +420,7 @@ function print(...)
         public void OutputException(Exception e)
         {
             JsonReaderException jsonException = e as JsonReaderException;
+            LuaException luaException = e as LuaException;
             if (jsonException != null)
             {
                 ScriptManager.Instance.OutputError("JSON Parse Error");
@@ -419,6 +430,14 @@ function print(...)
 
                     if (!string.IsNullOrWhiteSpace(jsonException.HelpLink))
                         OutputError("  For more information, see: {0}", jsonException.HelpLink);
+                }
+            }
+            else if (luaException != null)
+            {
+                ScriptManager.Instance.OutputError("Lua Execution Error");
+                using (new LoggingBlock())
+                {
+                    ScriptManager.Instance.OutputError(luaException.Message);
                 }
             }
             else
@@ -483,6 +502,71 @@ function print(...)
             ClearLogOutput();
         }
 
+        /// <summary>
+        /// Invokes a LuaFunction via xpcall with debug.traceback as the error handler.
+        /// On success, returns the function's results. On failure, throws a LuaException
+        /// whose message includes the full Lua call stack at the point of failure.
+        /// </summary>
+        [NLua.LuaHide]
+        public object[] SafeCall(LuaFunction func, params object[] args)
+        {
+            if (mLua == null)
+                throw new InvalidOperationException("No Lua environment is loaded");
+
+            using (LuaFunction safeCall = mLua["_safe_call"] as LuaFunction)
+            {
+                if (safeCall == null)
+                    return func.Call(args);  // Fallback if _safe_call not available
+
+                // Build argument array: _safe_call(func, arg1, arg2, ...)
+                object[] callArgs = new object[args.Length + 1];
+                callArgs[0] = func;
+                Array.Copy(args, 0, callArgs, 1, args.Length);
+
+                object[] result = safeCall.Call(callArgs);
+
+                if (result == null || result.Length == 0)
+                    return null;
+
+                bool ok = Convert.ToBoolean(result[0]);
+                if (!ok)
+                {
+                    string errorMsg = result.Length > 1 ? result[1]?.ToString() : "Unknown Lua error";
+                    throw new LuaException(errorMsg);
+                }
+
+                // Strip the leading 'true' status from the results
+                if (result.Length <= 1)
+                    return null;
+
+                object[] actualResults = new object[result.Length - 1];
+                Array.Copy(result, 1, actualResults, 0, actualResults.Length);
+                return actualResults;
+            }
+        }
+
+        [NLua.LuaHide]
+        public object[] ExecuteLuaString(string luaCode)
+        {
+            if (mLua == null)
+                throw new InvalidOperationException("No Lua environment is loaded");
+            return mLua.DoString(luaCode);
+        }
+
+        [NLua.LuaHide]
+        public object GetLuaGlobal(string name)
+        {
+            if (mLua == null)
+                throw new InvalidOperationException("No Lua environment is loaded");
+            return mLua[name];
+        }
+
+        [NLua.LuaHide]
+        public bool IsLuaLoaded
+        {
+            get { return mLua != null; }
+        }
+
         [NLua.LuaHide]
         public object FindObjectForCode(string code)
         {
@@ -528,11 +612,11 @@ function print(...)
                         IEnumerable<string> args = tokens.Skip(1);
                         if (args != null && args.Any())
                         {
-                            result = func.Call(args.ToArray<object>());
+                            result = SafeCall(func, args.ToArray<object>());
                         }
                         else
                         {
-                            result = func.Call();
+                            result = SafeCall(func);
                         }
 
                         if (result == null)
@@ -633,7 +717,7 @@ function print(...)
                         using (LuaFunction func = mLua[functionName] as LuaFunction)
                         {
                             if (func != null)
-                                func.Call();
+                                SafeCall(func);
                         }
                     }
                 }
@@ -659,11 +743,9 @@ function print(...)
                     {
                         using (new LocationDatabase.SuspendRefreshScope())
                         {
-                            LocationDatabase.Instance.SuspendRefresh = true;
-
                             if (callback != null)
                             {
-                                object[] results = callback.Call(segment);
+                                object[] results = SafeCall(callback, segment);
 
                                 if (results != null && results.Length > 0)
                                     return Convert.ToBoolean(results.First());

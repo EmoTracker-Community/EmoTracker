@@ -1,0 +1,438 @@
+<Window x:Class="EmoTracker.UI.PackageManagerWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:app="clr-namespace:EmoTracker"
+        xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
+        xmlns:packages="clr-namespace:EmoTracker.Data.Packages;assembly=EmoTracker.Data"
+        xmlns:local="clr-namespace:EmoTracker.UI"
+        mc:Ignorable="d"
+        Name="PackageManagerHost"
+        Title="Package Manager"
+        SizeToContent="Width"
+        CanResize="True"
+        Background="#212121"
+        MinWidth="800"
+        Height="600"
+        FontSize="12"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Resources>
+        <converters:FlagsEnumToBoolConverter x:Key="FlagsConverter"/>
+    </Window.Resources>
+
+    <Window.Styles>
+        <!-- Sidebar filter button base style -->
+        <Style Selector="Button.SideBarButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="#717171"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.SideBarButton:pointerover">
+            <Setter Property="Foreground" Value="WhiteSmoke"/>
+        </Style>
+        <Style Selector="Button.SideBarButton.active">
+            <Setter Property="Foreground" Value="#35e0b5"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Search bar header -->
+        <Grid Grid.Row="0" Grid.ColumnSpan="2" Background="#252030">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Foreground="WhiteSmoke"
+                       Text="Search Packages"
+                       VerticalAlignment="Center"
+                       Margin="15,5,10,5"/>
+            <Grid Grid.Column="1" Margin="5,5,10,5">
+                <TextBox Name="SearchTextBox"
+                         Padding="8,4,24,4"
+                         CornerRadius="10"
+                         FontSize="10"
+                         VerticalAlignment="Center"
+                         VerticalContentAlignment="Center"/>
+                <Button Name="SearchClearButton"
+                        FontSize="12"
+                        Foreground="#888888"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,0"
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Right"
+                        Cursor="Hand"
+                        IsVisible="False">
+                    <PathIcon Data="M12,2C17.53,2 22,6.47 22,12C22,17.53 17.53,22 12,22C6.47,22 2,17.53 2,12C2,6.47 6.47,2 12,2M15.59,7L12,10.59L8.41,7L7,8.41L10.59,12L7,15.59L8.41,17L12,13.41L15.59,17L17,15.59L13.41,12L17,8.41L15.59,7Z"
+                              Width="12" Height="12"
+                              Foreground="#888888"/>
+                </Button>
+            </Grid>
+        </Grid>
+
+        <!-- Sidebar filter buttons -->
+        <Grid Grid.Column="0" Grid.Row="1" Width="48">
+            <StackPanel Orientation="Vertical" Margin="5"
+                        HorizontalAlignment="Center">
+                <!-- All Packages -->
+                <Button Name="FilterAllButton"
+                        Classes="SideBarButton"
+                        ToolTip.Tip="All Packages"
+                        CommandParameter="All"
+                        Command="{Binding SetAvailablePackageViewFilterCommand,
+                            Source={x:Static app:ApplicationModel.Instance}}"
+                        Width="24"
+                        HorizontalAlignment="Center"
+                        FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                        Content="&#xf57d;"
+                        Margin="0,5"/>
+                <!-- Installed Packages -->
+                <Button Name="FilterInstalledButton"
+                        Classes="SideBarButton"
+                        ToolTip.Tip="Installed Packages"
+                        CommandParameter="Installed"
+                        Command="{Binding SetAvailablePackageViewFilterCommand,
+                            Source={x:Static app:ApplicationModel.Instance}}"
+                        Width="24"
+                        HorizontalAlignment="Center"
+                        FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                        Content="&#xf0c7;"
+                        Margin="0,5"/>
+                <!-- Installed With Updates -->
+                <Button Name="FilterUpdateButton"
+                        Classes="SideBarButton"
+                        ToolTip.Tip="Installed Packages With Updates"
+                        CommandParameter="InstalledAndHasUpdate"
+                        Command="{Binding SetAvailablePackageViewFilterCommand,
+                            Source={x:Static app:ApplicationModel.Instance}}"
+                        Width="24"
+                        HorizontalAlignment="Center"
+                        FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                        Content="&#xf381;"
+                        Margin="0,5"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Package list -->
+        <ScrollViewer Grid.Row="1" Grid.Column="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Grid TextElement.Foreground="WhiteSmoke" Grid.IsSharedSizeScope="True" MinHeight="50">
+
+                <!-- Empty state message -->
+                <TextBlock Name="NoRepositoriesText"
+                           Text="No package repositories are available"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Margin="10"
+                           IsVisible="False"/>
+
+                <!-- Package groups list -->
+                <ItemsControl ItemsSource="{Binding AvailablePackagesGroupedView,
+                                  Source={x:Static app:ApplicationModel.Instance}}"
+                              Margin="0,10,10,5">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderBrush="#444444"
+                                    BorderThickness="2"
+                                    CornerRadius="3"
+                                    Background="#333339"
+                                    Margin="0,0,0,10">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0" Margin="10,5">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="1"/>
+                                            <RowDefinition/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Game header row -->
+                                        <Grid Grid.Row="0" Margin="0,5">
+                                            <Image HorizontalAlignment="Left"
+                                                   VerticalAlignment="Center"
+                                                   MaxHeight="60"
+                                                   Source="{Binding Game.Image.ResolvedImage, FallbackValue={x:Null}}"/>
+                                            <TextBlock Grid.Row="0"
+                                                       FontSize="14"
+                                                       Text="{Binding Name}"
+                                                       FontWeight="Bold"
+                                                       HorizontalAlignment="Right"
+                                                       VerticalAlignment="Center"
+                                                       Margin="20"/>
+                                        </Grid>
+
+                                        <!-- Divider -->
+                                        <Grid Grid.Row="1" Background="WhiteSmoke"/>
+
+                                        <!-- Package entries -->
+                                        <ItemsControl Grid.Row="2"
+                                                      ItemsSource="{Binding Items}"
+                                                      Margin="0,10,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,5">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PackageName"/>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PackageAuthor"/>
+                                                            <ColumnDefinition MinWidth="20" Width="*"/>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PackageStatus"/>
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="PackageAction"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- Column 0: Name + flag icons -->
+                                                        <Grid Grid.Column="0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                           Text="&#xf005;"
+                                                                           Foreground="Goldenrod"
+                                                                           VerticalAlignment="Center"
+                                                                           Margin="0,0,2,0"
+                                                                           ToolTip.Tip="Official EmoTracker Package"
+                                                                           IsVisible="{Binding Flags,
+                                                                               Converter={StaticResource FlagsConverter},
+                                                                               ConverterParameter=Official}"/>
+                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                           Text="&#xf004;"
+                                                                           Foreground="Goldenrod"
+                                                                           VerticalAlignment="Center"
+                                                                           Margin="5,0,2,0"
+                                                                           ToolTip.Tip="Featured Package"
+                                                                           IsVisible="{Binding Flags,
+                                                                               Converter={StaticResource FlagsConverter},
+                                                                               ConverterParameter=Featured}"/>
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Column="1"
+                                                                       Text="{Binding Name}"
+                                                                       Margin="5,0"
+                                                                       VerticalAlignment="Center"/>
+                                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                           Text="&#xF279;"
+                                                                           Foreground="#8cd98c"
+                                                                           Margin="5,0,0,0"
+                                                                           ToolTip.Tip="Maps"
+                                                                           IsVisible="{Binding Flags,
+                                                                               Converter={StaticResource FlagsConverter},
+                                                                               ConverterParameter=Map}"/>
+                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                           Text="&#xf276;"
+                                                                           Foreground="#ff5050"
+                                                                           Margin="5,0,0,0"
+                                                                           ToolTip.Tip="Pinned Locations"
+                                                                           IsVisible="{Binding Flags,
+                                                                               Converter={StaticResource FlagsConverter},
+                                                                               ConverterParameter=Pins}"/>
+                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                           Text="&#xf4ad;"
+                                                                           Foreground="#9a7fcc"
+                                                                           Margin="5,0,0,0"
+                                                                           ToolTip.Tip="ChatHUD Optimized"
+                                                                           IsVisible="{Binding Flags,
+                                                                               Converter={StaticResource FlagsConverter},
+                                                                               ConverterParameter=ChatHUD}"/>
+                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                           Text="&#xf544;"
+                                                                           Foreground="#35e0b5"
+                                                                           Margin="5,0,0,0"
+                                                                           ToolTip.Tip="Auto-Tracker Support"
+                                                                           IsVisible="{Binding Flags,
+                                                                               Converter={StaticResource FlagsConverter},
+                                                                               ConverterParameter=AutoTracker}"/>
+                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                           Text="&#xf071;"
+                                                                           Foreground="#ebd534"
+                                                                           Margin="5,0,0,0"
+                                                                           ToolTip.Tip="This package makes use of potentially unsafe scripting functions. Proceed at your own risk."
+                                                                           IsVisible="{Binding Flags,
+                                                                               Converter={StaticResource FlagsConverter},
+                                                                               ConverterParameter=Unsafe}"/>
+                                                            </StackPanel>
+                                                        </Grid>
+
+                                                        <!-- Column 1: Author -->
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Author}"
+                                                                   Margin="5,0"
+                                                                   VerticalAlignment="Center"
+                                                                   HorizontalAlignment="Center"
+                                                                   FontStyle="Italic"/>
+
+                                                        <!-- Column 2: Download progress bar -->
+                                                        <ProgressBar Grid.Column="2"
+                                                                     Height="5"
+                                                                     MinWidth="0"
+                                                                     IsEnabled="False"
+                                                                     Margin="5,0"
+                                                                     Value="{Binding DownloadProgress}"/>
+
+                                                        <!-- Column 3: Status label -->
+                                                        <TextBlock Grid.Column="3"
+                                                                   Margin="5,0"
+                                                                   VerticalAlignment="Center"
+                                                                   Text="{Binding Status,
+                                                                       Converter={x:Static local:PackageManagerWindow.PackageStatusToTextConverter}}"
+                                                                   Foreground="{Binding Status,
+                                                                       Converter={x:Static local:PackageManagerWindow.PackageStatusToColorConverter}}"/>
+
+                                                        <!-- Column 4: Action button -->
+                                                        <!-- Note: button content/command vary with Status and IsShiftHeld.
+                                                             The shift-held "Reinstall/Uninstall" swap requires code-behind
+                                                             event handling. Base bindings cover the primary states. -->
+                                                        <Button Grid.Column="4"
+                                                                Margin="5,0"
+                                                                MinWidth="60"
+                                                                Foreground="Black"
+                                                                Padding="3,2"
+                                                                HorizontalContentAlignment="Center"
+                                                                Content="{Binding Status,
+                                                                    Converter={x:Static local:PackageManagerWindow.PackageStatusToButtonTextConverter}}"
+                                                                Command="{Binding Status,
+                                                                    Converter={x:Static local:PackageManagerWindow.PackageStatusToCommandConverter}}"
+                                                                CommandParameter="{Binding}"
+                                                                IsVisible="{Binding Status,
+                                                                    Converter={x:Static local:PackageManagerWindow.PackageStatusToButtonVisibleConverter}}"
+                                                                IsEnabled="{Binding DownloadNotInProgress,
+                                                                    Source={x:Static packages:PackageManager.Instance}}"/>
+
+                                                        <!-- Row 1: Variants sub-list -->
+                                                        <Grid Grid.Row="1" Grid.ColumnSpan="5"
+                                                              Margin="0,5,0,0"
+                                                              IsVisible="{Binding Variants.Count,
+                                                                  Converter={x:Static local:PackageManagerWindow.CountGreaterThanZeroConverter}}">
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto"/>
+                                                                <RowDefinition/>
+                                                            </Grid.RowDefinitions>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Grid Grid.Row="0" Grid.ColumnSpan="2"
+                                                                  Height="1"
+                                                                  Background="#888888"
+                                                                  Margin="0,0,0,10"/>
+                                                            <Grid Grid.Row="1" Grid.Column="0" Width="10">
+                                                                <Grid.Background>
+                                                                    <LinearGradientBrush>
+                                                                        <GradientStop Color="#BF666666"/>
+                                                                        <GradientStop Color="#00666666" Offset="1"/>
+                                                                    </LinearGradientBrush>
+                                                                </Grid.Background>
+                                                            </Grid>
+                                                            <ItemsControl Grid.Row="1" Grid.Column="1"
+                                                                          ItemsSource="{Binding Variants}"
+                                                                          Margin="0,0,0,5">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Grid Margin="5">
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                <ColumnDefinition Width="Auto"/>
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                                           Text="&#xf005;"
+                                                                                           Foreground="Goldenrod"
+                                                                                           VerticalAlignment="Center"
+                                                                                           Margin="5,0,2,0"
+                                                                                           ToolTip.Tip="Official EmoTracker Package"
+                                                                                           IsVisible="{Binding Flags,
+                                                                                               Converter={StaticResource FlagsConverter},
+                                                                                               ConverterParameter=Official}"/>
+                                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                                           Text="&#xf004;"
+                                                                                           Foreground="Goldenrod"
+                                                                                           VerticalAlignment="Center"
+                                                                                           Margin="5,0,2,0"
+                                                                                           ToolTip.Tip="Featured Package"
+                                                                                           IsVisible="{Binding Flags,
+                                                                                               Converter={StaticResource FlagsConverter},
+                                                                                               ConverterParameter=Featured}"/>
+                                                                            </StackPanel>
+                                                                            <TextBlock Grid.Column="1"
+                                                                                       Text="{Binding Name}"
+                                                                                       Margin="5,0"
+                                                                                       VerticalAlignment="Center"/>
+                                                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                                           Text="&#xF279;"
+                                                                                           Foreground="#8cd98c"
+                                                                                           Margin="5,0,0,0"
+                                                                                           ToolTip.Tip="Maps"
+                                                                                           IsVisible="{Binding Flags,
+                                                                                               Converter={StaticResource FlagsConverter},
+                                                                                               ConverterParameter=Map}"/>
+                                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                                           Text="&#xf276;"
+                                                                                           Foreground="#ff5050"
+                                                                                           Margin="5,0,0,0"
+                                                                                           ToolTip.Tip="Pinned Locations"
+                                                                                           IsVisible="{Binding Flags,
+                                                                                               Converter={StaticResource FlagsConverter},
+                                                                                               ConverterParameter=Pins}"/>
+                                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                                           Text="&#xf4ad;"
+                                                                                           Foreground="#9a7fcc"
+                                                                                           Margin="5,0,0,0"
+                                                                                           ToolTip.Tip="ChatHUD Optimized"
+                                                                                           IsVisible="{Binding Flags,
+                                                                                               Converter={StaticResource FlagsConverter},
+                                                                                               ConverterParameter=ChatHUD}"/>
+                                                                                <TextBlock FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                                                                                           Text="&#xf544;"
+                                                                                           Foreground="#35e0b5"
+                                                                                           Margin="5,0,0,0"
+                                                                                           ToolTip.Tip="Auto-Tracker Support"
+                                                                                           IsVisible="{Binding Flags,
+                                                                                               Converter={StaticResource FlagsConverter},
+                                                                                               ConverterParameter=AutoTracker}"/>
+                                                                            </StackPanel>
+                                                                        </Grid>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </Grid>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Window>

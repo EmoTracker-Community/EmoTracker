@@ -1,0 +1,176 @@
+<UserControl x:Class="EmoTracker.UI.NoteTakingSiteView"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             xmlns:notesui="clr-namespace:EmoTracker.UI.Notes">
+    <Grid>
+        <Grid Margin="5">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <ScrollViewer Grid.Row="0"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <ItemsControl Name="NotesItemsControl"
+                              MinWidth="100"
+                              ItemsSource="{Binding Notes}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid MinHeight="10" Margin="3,5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Avatar / delete column -->
+                                <Grid Grid.Column="0" Margin="0,0,5,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0" Width="24" Height="24"
+                                          Background="Transparent"
+                                          ToolTip.Tip="No user profile selected">
+                                        <Border CornerRadius="3" Background="Black" />
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   Text="&#xf007;"
+                                                   FontFamily="{StaticResource FontAwesome5Free}"
+                                                   Foreground="DarkGray" />
+                                        <Border CornerRadius="3"
+                                                Background="Transparent"
+                                                BorderBrush="DarkGray"
+                                                BorderThickness="2" />
+                                    </Grid>
+
+                                    <!-- Delete button -->
+                                    <Button Grid.Row="1"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            Margin="5,7,5,0"
+                                            Click="DeleteNoteButton_Click"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Padding="0">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="Transparent" Padding="4">
+                                                    <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
+                                                               FontSize="13"
+                                                               Text="&#xf2ed;"
+                                                               ToolTip.Tip="Delete this note"
+                                                               VerticalAlignment="Center"
+                                                               HorizontalAlignment="Center"
+                                                               Foreground="#666666"
+                                                               Name="DeleteIcon" />
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </Grid>
+
+                                <!-- Markdown text note -->
+                                <notesui:MarkdownTextNoteControl Grid.Column="1"
+                                                                  VerticalAlignment="Stretch"
+                                                                  Margin="5,0"
+                                                                  MaxWidth="300" />
+
+                                <!-- Item collection column (visible only when Items is non-null) -->
+                                <Grid Grid.Column="2"
+                                      IsVisible="{Binding Items, Converter={x:Static local:NoteTakingSiteView.NullToFalseConverter}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <ItemsControl Grid.Column="0"
+                                                  ItemsSource="{Binding Items}"
+                                                  VerticalAlignment="Top">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal"
+                                                           FlowDirection="LeftToRight"
+                                                           MaxWidth="120"
+                                                           Margin="5,0,0,0" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Click="RemoveNoteItemButton_Click"
+                                                        Background="Transparent"
+                                                        BorderThickness="0"
+                                                        Padding="0">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Panel Name="ItemHost">
+                                                                <local:TrackableItemControl
+                                                                    local:TrackableItemControl.DisplayPotentialIcon="True"
+                                                                    Margin="3"
+                                                                    IsEnabled="False" />
+                                                                <!-- Hover overlay showing remove icon is handled in code-behind
+                                                                     or via Avalonia interaction triggers if needed -->
+                                                            </Panel>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <local:CapturableItemControl Grid.Column="1"
+                                                                  Width="32"
+                                                                  Height="32"
+                                                                  VerticalAlignment="Top"
+                                                                  Margin="3" />
+                                </Grid>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Add note button -->
+            <Grid Grid.Row="1">
+                <Button VerticalAlignment="Center"
+                        HorizontalAlignment="Stretch"
+                        Margin="3,8,3,5"
+                        ToolTip.Tip="Add a new note"
+                        Click="AddNoteButton_Click"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border CornerRadius="4"
+                                    Background="#333339"
+                                    BorderBrush="#444444"
+                                    BorderThickness="1"
+                                    Name="AddBorder">
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            Spacing="6"
+                                            Margin="10,5">
+                                    <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
+                                               FontSize="12"
+                                               Text="&#xf0fe;"
+                                               Foreground="WhiteSmoke"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="Add note"
+                                               Foreground="WhiteSmoke"
+                                               FontSize="12"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

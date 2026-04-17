@@ -111,6 +111,17 @@ namespace EmoTracker.Data.Items
             return false;
         }
 
+        public override IEnumerable<string> GetAllProvidedCodes()
+        {
+            var codes = new HashSet<string>();
+            foreach (Stage stage in StagesInternal)
+            {
+                foreach (string code in stage.ProvidedCodes)
+                    codes.Add(code);
+            }
+            return codes;
+        }
+
         public override uint ProvidesCode(string code)
         {
             if (CurrentStageInstance != null)

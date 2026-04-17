@@ -1,11 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
 
 namespace EmoTracker.Extensions.VariantSwitcher
 {
@@ -23,7 +17,7 @@ namespace EmoTracker.Extensions.VariantSwitcher
 
         public int Priority { get { return -200; } }
 
-        public FrameworkElement StatusBarControl
+        public object StatusBarControl
         {
             get; set;
         }

@@ -7,6 +7,7 @@ namespace EmoTracker.Data.Packages
     public class ZipPackageSource : IGamePackageSource
     {
         private ZipArchive mArchive;
+        private readonly object mArchiveLock = new object();
         private string mPath;
 
         public string ArchivePath
@@ -22,10 +23,13 @@ namespace EmoTracker.Data.Packages
 
                 if (mArchive != null)
                 {
-                    foreach (ZipArchiveEntry entry in mArchive.Entries)
+                    lock (mArchiveLock)
                     {
-                        if (!string.IsNullOrWhiteSpace(entry.FullName) && !entry.FullName.EndsWith("/"))
-                            files.Add(entry.FullName);
+                        foreach (ZipArchiveEntry entry in mArchive.Entries)
+                        {
+                            if (!string.IsNullOrWhiteSpace(entry.FullName) && !entry.FullName.EndsWith("/"))
+                                files.Add(entry.FullName);
+                        }
                     }
 
                     files.Sort(FileListSort);
@@ -61,15 +65,22 @@ namespace EmoTracker.Data.Packages
         {
             if (mArchive != null && !string.IsNullOrWhiteSpace(path))
             {
-                ZipArchiveEntry entry = mArchive.GetEntry(path);
-                if (entry != null)
+                // ZipArchive is NOT thread-safe for concurrent reads.  The async
+                // image pre-cache worker resolves images on a background thread
+                // while the UI thread may also open streams (e.g. PopulateDimensions
+                // during pack load).  Serialize all access to prevent corruption.
+                lock (mArchiveLock)
                 {
-                    using (Stream src = entry.Open())
+                    ZipArchiveEntry entry = mArchive.GetEntry(path);
+                    if (entry != null)
                     {
-                        MemoryStream stream = new MemoryStream();
-                        src.CopyTo(stream);
-                        stream.Seek(0, SeekOrigin.Begin);
-                        return stream;
+                        using (Stream src = entry.Open())
+                        {
+                            MemoryStream stream = new MemoryStream();
+                            src.CopyTo(stream);
+                            stream.Seek(0, SeekOrigin.Begin);
+                            return stream;
+                        }
                     }
                 }
             }

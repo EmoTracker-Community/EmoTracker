@@ -1,0 +1,187 @@
+<controls:ObservableUserControl x:Class="EmoTracker.UI.LocationControl"
+                             xmlns="https://github.com/avaloniaui"
+                             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                             xmlns:app="clr-namespace:EmoTracker"
+                             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
+                             xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
+                             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+                             xmlns:local="clr-namespace:EmoTracker.UI"
+                             xmlns:settings="clr-namespace:EmoTracker.Data.Settings;assembly=EmoTracker.Data">
+    <UserControl.Resources>
+        <!-- PushPin ControlTheme: replaces WPF ControlTemplate "PushPinCheckBox".
+             Unchecked (not pinned) → icon rotated 90°.  Disabled → hidden. -->
+        <ControlTheme x:Key="PushPinCheckBox" TargetType="CheckBox">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <LayoutTransformControl x:Name="pinTransform">
+                        <Grid x:Name="pin" Width="16" Height="16" Background="Transparent">
+                            <TextBlock FontFamily="{StaticResource FontAwesome5Free}"
+                                       Text="&#xf08d;"
+                                       Foreground="WhiteSmoke"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       FontSize="9" />
+                        </Grid>
+                    </LayoutTransformControl>
+                </ControlTemplate>
+            </Setter>
+            <!-- Hidden when the control is disabled -->
+            <Style Selector="^:disabled /template/ Grid#pin">
+                <Setter Property="IsVisible" Value="False" />
+            </Style>
+            <!-- Rotated 90° when unchecked (not pinned) via LayoutTransformControl
+                 so the layout box adjusts correctly (matching WPF's LayoutTransform on Grid). -->
+            <Style Selector="^:not(:checked) /template/ LayoutTransformControl#pinTransform">
+                <Setter Property="LayoutTransform">
+                    <RotateTransform Angle="90" />
+                </Setter>
+            </Style>
+        </ControlTheme>
+    </UserControl.Resources>
+
+    <Grid VerticalAlignment="Top"
+          MinWidth="100"
+          MaxWidth="{Binding ComputedMaxWidth, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
+          MaxHeight="{Binding ComputedMaxHeight, RelativeSource={RelativeSource AncestorType=local:LocationControl}}">
+        <Border Name="RectArea"
+                CornerRadius="0"
+                ZIndex="-1">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="#FF292929"/>
+                    <GradientStop Color="#FF3E3E3E" Offset="0.462"/>
+                    <GradientStop Color="#FF323232" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition />
+            </Grid.ColumnDefinitions>
+            <Grid Grid.Column="0" Background="{Binding Color, FallbackValue=Gray}" ClipToBounds="True"/>
+            <Grid Grid.Column="1" Margin="5">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="2"/>
+                    <RowDefinition Height="1" />
+                    <RowDefinition Height="2"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Row 0: Name + pin -->
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition />
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               TextTrimming="CharacterEllipsis"
+                               FontSize="11"
+                               Foreground="WhiteSmoke"
+                               FontWeight="DemiBold"
+                               Text="{Binding TitleText, RelativeSource={RelativeSource AncestorType=local:LocationControl}}" />
+                    <local:NoteTakingIconPopup Grid.Column="1"
+                                              Margin="10,-2,0,0"
+                                              DataContext="{Binding NoteTakingSite}"
+                                              VerticalAlignment="Center"
+                                              FontSize="9"/>
+                    <CheckBox Grid.Column="2"
+                              IsChecked="{Binding Pinned}"
+                              Margin="0"
+                              Theme="{StaticResource PushPinCheckBox}"/>
+                </Grid>
+
+                <!-- Row 2: separator -->
+                <Grid Grid.Row="2" Background="WhiteSmoke"/>
+
+                <!-- Row 4: sections -->
+                <Grid Grid.Row="4">
+                    <ItemsControl ItemsSource="{Binding Sections}"
+                                  ItemsPanel="{Binding SectionsItemsPanel, RelativeSource={RelativeSource AncestorType=local:LocationControl}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
+                                      Margin="{Binding SectionItemMargin, RelativeSource={RelativeSource AncestorType=local:LocationControl}}">
+                                    <Grid.IsVisible>
+                                        <Binding Path="Visible" />
+                                    </Grid.IsVisible>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MaxWidth="64" />
+                                        <ColumnDefinition />
+                                    </Grid.ColumnDefinitions>
+                                    <Image Grid.Column="0"
+                                           Source="{Binding Thumbnail.ResolvedImage, FallbackValue={x:Null}}"
+                                           Width="48"
+                                           Height="48"
+                                           Margin="0,0,5,0"
+                                           IsVisible="{Binding Thumbnail, Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                    <Grid Grid.Column="1">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0"
+                                                   FontSize="10"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
+                                                   Text="{Binding Name}"
+                                                   Foreground="{Binding AccessibilityLevel, Converter={x:Static converters:AccessibilityLevelToBrushConverter.Instance}}" />
+                                        <Grid Grid.Row="1" HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <local:TrackableItemControl Grid.Column="0"
+                                                                        DataContext="{Binding GateItem}"
+                                                                        Margin="0,2,4,2"
+                                                                        IsVisible="{Binding Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                            <local:CapturableItemControl Grid.Column="1"
+                                                                         Width="32" Height="32"
+                                                                         Margin="0,0,5,0"
+                                                                         IsVisible="{Binding CaptureItem}" />
+                                            <local:ChestListControl Grid.Column="2"
+                                                                    Margin="0,2"
+                                                                    Count="{Binding ChestCount}"
+                                                                    Available="{Binding AvailableChestCount}"
+                                                                    ClearAsGroup="{Binding ClearAsGroup}"
+                                                                    Compact="{Binding Compact, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
+                                                                    HorizontalAlignment="{Binding SectionHorizontalAlignment, RelativeSource={RelativeSource AncestorType=local:LocationControl}}"
+                                                                    OpenChest="{Binding OpenChestImage.ResolvedImage, FallbackValue={x:Null}}"
+                                                                    ClosedChest="{Binding ClosedChestImage.ResolvedImage, FallbackValue={x:Null}}"
+                                                                    UnavailableOpenChest="{Binding UnavailableOpenChestImage.ResolvedImage, FallbackValue={x:Null}}"
+                                                                    UnavailableClosedChest="{Binding UnavailableClosedChestImage.ResolvedImage, FallbackValue={x:Null}}"
+                                                                    IsVisible="{Binding ChestCount, Converter={x:Static converters:NonZeroToBoolConverter.Instance}}">
+                                                <local:ChestListControl.Accessible>
+                                                    <MultiBinding Converter="{x:Static converters:ChestAccessibleConverter.Instance}">
+                                                        <Binding Path="AccessibilityLevel" />
+                                                        <Binding Path="AlwaysAllowChestManipulation" />
+                                                        <Binding Path="AlwaysAllowClearing" Source="{x:Static data:ApplicationSettings.Instance}" />
+                                                    </MultiBinding>
+                                                </local:ChestListControl.Accessible>
+                                                <local:ChestListControl.IsEnabled>
+                                                    <MultiBinding Converter="{x:Static converters:ChestAccessibleConverter.Instance}">
+                                                        <Binding Path="AccessibilityLevel" />
+                                                        <Binding Path="AlwaysAllowChestManipulation" />
+                                                        <Binding Path="AlwaysAllowClearing" Source="{x:Static data:ApplicationSettings.Instance}" />
+                                                    </MultiBinding>
+                                                </local:ChestListControl.IsEnabled>
+                                            </local:ChestListControl>
+                                            <local:TrackableItemControl Grid.Column="3"
+                                                                        DataContext="{Binding HostedItem}"
+                                                                        Margin="4,2,0,2"
+                                                                        IsVisible="{Binding Converter={x:Static converters:NullToFalseConverter.Instance}}" />
+                                        </Grid>
+                                    </Grid>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</controls:ObservableUserControl>

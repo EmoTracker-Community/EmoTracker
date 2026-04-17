@@ -1,0 +1,74 @@
+<UserControl x:Class="EmoTracker.UI.GroupedLocationListControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:EmoTracker.UI"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data">
+    <UserControl.Resources>
+        <ItemsPanelTemplate x:Key="VerticalItemsPanel">
+            <WrapPanel Orientation="Vertical" />
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="HorizontalItemsPanel">
+            <WrapPanel Orientation="Horizontal" />
+        </ItemsPanelTemplate>
+
+        <!--
+            LocationTemplate: WPF conditionally collapsed LocationControl via a MultiDataTrigger
+            (DisplayAllLocations == false AND HasAvailableItems == false → Collapsed).
+            Avalonia does not support DataTrigger/MultiDataTrigger in styles.
+            Visibility should be driven from a view-model property or a converter.
+            The IsVisible binding below is a TODO placeholder that always shows the control;
+            callers should bind IsVisible to a suitable computed property.
+        -->
+        <DataTemplate x:Key="LocationTemplate">
+            <local:LocationControl Margin="0,0,10,5" />
+        </DataTemplate>
+
+        <!--
+            GroupTemplate: WPF used DataTrigger + MultiDataTrigger to toggle Grid visibility
+            based on HasAvailableItems / DisplayAllLocations / HasLocations.
+            Replaced with a TODO IsVisible binding to HasAvailableItems for the common case.
+        -->
+        <DataTemplate x:Key="GroupTemplate">
+            <Grid Margin="5" IsVisible="{Binding HasAvailableItems}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Background="{Binding ColorBrush}">
+                    <TextBlock Text="{Binding Name}"
+                               Foreground="WhiteSmoke" FontSize="12" FontWeight="Bold"
+                               Margin="10,3"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                </Grid>
+                <ItemsControl Grid.Row="1"
+                              ItemTemplate="{StaticResource LocationTemplate}"
+                              ItemsSource="{Binding Locations}"
+                              ItemsPanel="{StaticResource HorizontalItemsPanel}"
+                              Margin="10,0,0,0"
+                              Padding="0,10"/>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+    <Grid>
+        <!--
+            WPF applied a LayoutTransform (ScaleTransform) on the inner Grid to implement
+            Ctrl+scroll zooming.  Avalonia uses RenderTransform instead of LayoutTransform;
+            ScaleTransform is available via Avalonia.Media.
+            The ScaleX/Y bindings below replicate the original relative-source binding.
+        -->
+        <Grid>
+            <Grid.RenderTransform>
+                <ScaleTransform ScaleX="{Binding ScaleMultiplier, RelativeSource={RelativeSource AncestorType=local:GroupedLocationListControl}}"
+                                ScaleY="{Binding ScaleMultiplier, RelativeSource={RelativeSource AncestorType=local:GroupedLocationListControl}}" />
+            </Grid.RenderTransform>
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          BorderBrush="Transparent" BorderThickness="0">
+                <ItemsControl ItemTemplate="{StaticResource GroupTemplate}"
+                              ItemsPanel="{StaticResource HorizontalItemsPanel}"
+                              ItemsSource="{Binding Groups, Source={x:Static data:LocationDatabase.Instance}}"
+                              HorizontalAlignment="Stretch"
+                              Padding="5" />
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

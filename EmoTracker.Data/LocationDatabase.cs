@@ -16,17 +16,14 @@ namespace EmoTracker.Data
     {
         public class SuspendRefreshScope : IDisposable
         {
-            bool mbSuspend;
-
             public SuspendRefreshScope()
             {
-                mbSuspend = LocationDatabase.Instance.SuspendRefresh;
-                LocationDatabase.Instance.SuspendRefresh = true;
+                LocationDatabase.Instance.PushSuspendRefresh();
             }
 
             public virtual void Dispose()
             {
-                LocationDatabase.Instance.SuspendRefresh = mbSuspend;
+                LocationDatabase.Instance.PopSuspendRefresh();
             }
         }
 
@@ -34,18 +31,43 @@ namespace EmoTracker.Data
         Location mLastClearedLocation;
 
         ObservableCollection<Location> mAllLocations = new ObservableCollection<Location>();
+        Dictionary<Location, int> mLocationIndex = new Dictionary<Location, int>();
         ObservableCollection<Location> mPinnedLocations = new ObservableCollection<Location>();
         ObservableCollection<Location> mVisibleLocations = new ObservableCollection<Location>();
 
         public bool SuspendRefresh
         {
-            get { return mbSuspendRefresh; }
+            get { return mSuspendRefreshCount > 0; }
             set
             {
-                if (SetProperty(ref mbSuspendRefresh, value) && !mbSuspendRefresh)
-                {
-                    RefeshAccessibility(bPendingOnly: true);
-                }
+                // Legacy compatibility: direct assignment is discouraged.
+                // Prefer SuspendRefreshScope for reentrant-safe scoping.
+                if (value)
+                    PushSuspendRefresh();
+                else
+                    PopSuspendRefresh();
+            }
+        }
+
+        internal void PushSuspendRefresh()
+        {
+            ++mSuspendRefreshCount;
+        }
+
+        internal void PopSuspendRefresh()
+        {
+            if (mSuspendRefreshCount <= 0)
+            {
+                ScriptManager.Instance.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
+                System.Diagnostics.Debug.Fail("PopSuspendRefresh: underflow — more Pops than Pushes");
+                return;
+            }
+
+            --mSuspendRefreshCount;
+
+            if (mSuspendRefreshCount == 0)
+            {
+                RefeshAccessibility(bPendingOnly: true);
             }
         }
 
@@ -84,6 +106,7 @@ namespace EmoTracker.Data
         {
             LastClearedLocation = null;
             mAllLocations.Clear();
+            mLocationIndex.Clear();
             mPinnedLocations.Clear();
             mVisibleLocations.Clear();
             mRoot = new Location()
@@ -141,7 +164,7 @@ namespace EmoTracker.Data
             {
                 try
                 {
-                    mbSuspendRefresh = true;
+                    PushSuspendRefresh();
 
                     using (Stream s = package.Open(path))
                     {
@@ -170,7 +193,7 @@ namespace EmoTracker.Data
                 }
                 finally
                 {
-                    mbSuspendRefresh = false;
+                    PopSuspendRefresh();
                 }
 
                 RefeshAccessibility();
@@ -279,13 +302,13 @@ namespace EmoTracker.Data
             mPinnedLocations.Remove(location);
         }
 
-        bool mbSuspendRefresh = false;
+        int mSuspendRefreshCount = 0;
         bool mbInRefresh = false;
         uint mPendingRefreshCount = 0;
 
         internal void RefeshAccessibility(bool bPendingOnly = false)
         {
-            if (!mbSuspendRefresh)
+            if (mSuspendRefreshCount == 0)
             {
                 if (!bPendingOnly)
                     ++mPendingRefreshCount;
@@ -298,27 +321,34 @@ namespace EmoTracker.Data
                     {
                         mbInRefresh = true;
 
-                        while (mPendingRefreshCount > 0)
+                        using (ObservableObject.SuspendNotifications())
                         {
-                            mPendingRefreshCount = 0;
-                            bRefreshedAccessibility = true;
+                            while (mPendingRefreshCount > 0)
+                            {
+                                mPendingRefreshCount = 0;
+                                bRefreshedAccessibility = true;
 
-                            AccessibilityRule.ClearCaches();
-                            ScriptManager.Instance.ClearExpressionCache();
+                                AccessibilityRule.ClearCaches();
+                                ScriptManager.Instance.ClearExpressionCache();
 
-                            ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
+                                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
 
-                            if (mRoot != null)
-                                mRoot.RefreshAccessibility();
+                                if (mRoot != null)
+                                    mRoot.RefreshAccessibility();
 
-                            MapDatabase.Instance.MarkVisibilityDirty();
-                        }
+                                MapDatabase.Instance.MarkVisibilityDirty();
+                            }
+                        } // queued PropertyChanged notifications fire here, before AccessibilityUpdated
                     }
                     finally
                     {
                         mbInRefresh = false;
 
-                        AccessibilityRule.ClearCaches();
+                        // Do NOT clear caches here — they were built during RefreshAccessibility()
+                        // above and must survive into the AccessibilityUpdated callback so that
+                        // any rule evaluations triggered by that callback benefit from the cache.
+                        // Clearing here negated all caching, reproducing the slow-update symptom
+                        // that enable_accessibility_rule_caching was introduced to fix.
                         MapDatabase.Instance.UpdateVisibilityIfNecessary();
 
                         if (bRefreshedAccessibility)
@@ -518,6 +548,7 @@ namespace EmoTracker.Data
                 }
             }
 
+            mLocationIndex[instance] = mAllLocations.Count;
             mAllLocations.Add(instance);
 
             var children = data.GetValue<JArray>("children");
@@ -588,10 +619,9 @@ namespace EmoTracker.Data
 
         internal bool Load(JObject root)
         {
+            PushSuspendRefresh();
             try
             {
-                SuspendRefresh = true;
-
                 JObject locationDatabaseData = root.GetValue<JObject>("location_database");
                 if (locationDatabaseData == null)
                     return true;
@@ -658,15 +688,13 @@ namespace EmoTracker.Data
             }
             finally
             {
-                SuspendRefresh = false;
+                PopSuspendRefresh();
             }
         }
 
         public string GetPersistableLocationReference(Location location)
         {
-            int idx = mAllLocations.IndexOf(location);
-
-            if (idx < 0)
+            if (!mLocationIndex.TryGetValue(location, out int idx))
                 throw new InvalidOperationException("Cannot generate persistable reference for location that is not in the LocationDatabase");
 
             if (!string.IsNullOrWhiteSpace(location.Name))

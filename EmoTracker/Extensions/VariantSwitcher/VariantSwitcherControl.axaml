@@ -1,0 +1,24 @@
+<UserControl x:Class="EmoTracker.Extensions.VariantSwitcher.VariantSwitcherControl"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+             mc:Ignorable="d"
+             IsVisible="{Binding EnableVariantSwitcher, Source={x:Static data:ApplicationSettings.Instance}}">
+    <Grid Name="RootGrid"
+          ToolTip.Tip="Click to switch variants for the current pack"
+          Background="Transparent"
+          MinWidth="14"
+          MinHeight="14"
+          PointerPressed="OnPointerPressed">
+        <Grid.ContextMenu>
+            <ContextMenu Name="VariantsMenu"/>
+        </Grid.ContextMenu>
+        <TextBlock Name="FolderIcon"
+                   FontFamily="avares://EmoTracker/Resources/Fonts#Font Awesome 5 Free Solid"
+                   Text="&#xf07c;"
+                   Foreground="#717171"
+                   VerticalAlignment="Center"/>
+    </Grid>
+</UserControl>

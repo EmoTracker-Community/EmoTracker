@@ -1,10 +1,6 @@
-﻿using EmoTracker.Core.Services.Backends;
+using EmoTracker.Core.Services.Backends;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
+using Avalonia.Threading;
 
 namespace EmoTracker.Services
 {
@@ -12,12 +8,12 @@ namespace EmoTracker.Services
     {
         public void BeginInvoke(Action action)
         {
-            Application.Current.Dispatcher.BeginInvoke(action);
+            Dispatcher.UIThread.Post(action);
         }
 
         public void Invoke(Action action)
         {
-            Application.Current.Dispatcher.Invoke(action);
+            Dispatcher.UIThread.InvokeAsync(action).GetAwaiter().GetResult();
         }
     }
 }

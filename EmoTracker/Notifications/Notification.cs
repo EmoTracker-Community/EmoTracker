@@ -1,8 +1,6 @@
 ﻿using EmoTracker.Core;
 using EmoTracker.Data.Scripting;
 using System;
-using System.Windows;
-using System.Windows.Threading;
 
 namespace EmoTracker.Notifications
 {
@@ -46,9 +44,13 @@ namespace EmoTracker.Notifications
 
             mForceExpireCommand = new DelegateCommand(ForceExpireNotification);
         }
+        public event EventHandler ForceExpired;
+
         private void ForceExpireNotification(object obj)
         {
+            ExpirationTime = DateTime.Now;
             Expired = true;
+            ForceExpired?.Invoke(this, EventArgs.Empty);
         }
     }
 }

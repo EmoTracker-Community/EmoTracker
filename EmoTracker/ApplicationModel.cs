@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+#nullable enable annotations
+using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Core.Transactions.Processors;
@@ -9,6 +10,7 @@ using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
 using EmoTracker.Extensions;
 using EmoTracker.Notifications;
+using EmoTracker.Services;
 using EmoTracker.UI;
 using EmoTracker.UI.Media;
 using Newtonsoft.Json.Linq;
@@ -20,11 +22,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Windows;
-using System.Windows.Controls.Primitives;
-using System.Windows.Data;
-using System.Windows.Input;
-using System.Windows.Threading;
 
 namespace EmoTracker
 {
@@ -36,7 +33,6 @@ namespace EmoTracker
         public DelegateCommand ActivatePackCommand { get; private set; }
         public DelegateCommand ShowPackageManagerCommand { get; private set; }
         public DelegateCommand ExportPackageOverrideCommand { get; private set; }
-        public DelegateCommand CheckForUpdateCommand { get; private set; }
         public DelegateCommand ShowBroadcastViewCommand { get; private set; }
         public DelegateCommand ShowDeveloperConsoleCommand { get; private set; }
 
@@ -62,11 +58,7 @@ namespace EmoTracker
         {
             get
             {
-#if BETA
-                string title = string.Format("EmoTracker BETA {0}", AppUpdate.Instance.CurrentVersion);
-#else
                 string title = string.Format("EmoTracker {0}", ApplicationVersion.Current);
-#endif
 
                 if (Tracker.Instance.ActiveGamePackage != null && Tracker.Instance.ActiveGamePackageVariant != null)
                 {
@@ -130,14 +122,11 @@ namespace EmoTracker
         {
             InitializeNotifications();
 
-            if (Application.Current is App)
-            {
                 //  Force initialize core managers
                 PackageManager.CreateInstance();
                 PackageManager.Instance.Initialize();
 
                 InitializePackageManagerViews();
-            }
 
             Tracker.Instance.OnPackageLoadStarting += Tracker_OnPackageLoadStarting;
             Tracker.Instance.OnPackageLoadComplete += Tracker_OnPackageLoadComplete;
@@ -148,8 +137,6 @@ namespace EmoTracker
             ActivatePackCommand = new DelegateCommand(ActivatePackHandler);
             ShowPackageManagerCommand = new DelegateCommand(ShowPackManagerHandler);
             ExportPackageOverrideCommand = new DelegateCommand(ExportPackageOverrideHandler);
-            CheckForUpdateCommand = new DelegateCommand(CheckForUpdateHandler);
-
             SaveCommand = new DelegateCommand(SaveHandler, CanSave);
             SaveAsCommand = new DelegateCommand(SaveAsHandler, CanSave);
             OpenCommand = new DelegateCommand(OpenHandler);
@@ -163,10 +150,48 @@ namespace EmoTracker
             InstallPackageCommand = new DelegateCommand(InstallPackage);
             UninstallPackageCommand = new DelegateCommand(UninstallPackage, CanUninstallPackage);
 
+            // When HTTP game images finish downloading, refresh the package list once.
+            // Multiple images often load near-simultaneously, so we coalesce the refreshes:
+            // the first completion schedules a single Background-priority update; subsequent
+            // completions that arrive before it runs are folded into that one refresh.
+            EmoTracker.UI.Media.Utility.IconUtility.HttpImageLoaded += OnHttpImageLoaded;
+        }
+
+        private bool _httpRefreshScheduled = false;
+
+        private void OnHttpImageLoaded(object? sender, EventArgs e)
+        {
+            // Coalesce multiple near-simultaneous completions into one Background-priority refresh.
+            if (_httpRefreshScheduled) return;
+            _httpRefreshScheduled = true;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                _httpRefreshScheduled = false;
+
+                // Resolve game banner images into ResolvedImage so that
+                // bindings ({Binding Game.Image.ResolvedImage}) update.
+                // HTTP images bypass the ImageReferenceService pipeline
+                // (they download asynchronously into IconUtility.sHttpCache),
+                // so we bridge the two systems here.
+                foreach (var game in PackageManager.Instance.AvailableGames)
+                {
+                    if (game.Image != null && game.Image.ResolvedImage == null)
+                    {
+                        var resolved = EmoTracker.UI.Media.ImageReferenceService.Instance.ResolveImageReference(game.Image);
+                        if (resolved != null)
+                            game.Image.ResolvedImage = resolved;
+                    }
+                }
+            }, Avalonia.Threading.DispatcherPriority.Background);
         }
 
         public void Initialize()
         {
+            //  Start the image resolution service.  When --no-async-images is
+            //  set, resolution falls back to synchronous on-demand behaviour.
+            ImageReferenceService.Instance.SyncMode = Data.ApplicationSettings.Instance.NoAsyncImages;
+            ImageReferenceService.Instance.Start();
+
             //  Load and start extensions
             Extensions.ExtensionManager.CreateInstance();
             Extensions.ExtensionManager.Instance.Start();
@@ -187,19 +212,33 @@ namespace EmoTracker
 
         private void ShowBroadcastView(object obj)
         {
-            MainWindow appWindow = Application.Current.MainWindow as MainWindow;
-            if (appWindow != null)
-                appWindow.ShowBroadcastView();
+            if (mBroadcastView == null)
+            {
+                mBroadcastView = new BroadcastView();
+                mBroadcastView.Closing += (_, _) => mBroadcastView = null;
+
+                // Show without an owner so the broadcast view is an independent
+                // top-level window.  Passing the main window as owner causes the
+                // OS to force the broadcast view above the main window at all times.
+                mBroadcastView.Show();
+            }
+            else
+            {
+                mBroadcastView.Activate();
+            }
         }
+
+        public BroadcastView BroadcastView => mBroadcastView;
+        private BroadcastView mBroadcastView;
 
         private void ShowDevleoperConsole(object obj)
         {
-            MainWindow appWindow = Application.Current.MainWindow as MainWindow;
-            if (appWindow != null)
-                appWindow.ShowDeveloperConsole();
+            var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime
+                as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainWindow;
+            mainWindow?.ShowDeveloperConsole();
         }
 
-        private void InstallPackage(object obj)
+        private async void InstallPackage(object obj)
         {
             var package = (PackageRepositoryEntry)obj;
 
@@ -211,17 +250,17 @@ namespace EmoTracker
                 {
                     string msg = $"You have user overrides in place for {package.Name} which may cause issues after updating. Do you want to backup and disable your overrides prior to updating?";
                     string caption = "Uninstall Package";
-                    MessageBoxResult res = MessageBox.Show(msg, caption, MessageBoxButton.YesNoCancel, MessageBoxImage.Exclamation);
+                    bool? res = await DialogService.Instance.ShowYesNoCancelAsync(caption, msg);
 
                     switch (res)
                     {
-                        case MessageBoxResult.Cancel:
+                        case null:
                             return;
 
-                        case MessageBoxResult.No:
+                        case false:
                             break;
 
-                        case MessageBoxResult.Yes:
+                        case true:
                             BackupOverrideResult bores = package.BackupOverride();
 
                             switch (bores)
@@ -229,7 +268,7 @@ namespace EmoTracker
                                 case BackupOverrideResult.Failed:
                                     msg = $"Unable to backup {package.Name} overrides. Check to make sure that no other application is using the folder or you do not have a backup instance already. Canceling update";
                                     caption = "Backup Failed";
-                                    MessageBox.Show(msg, caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                                    await DialogService.Instance.ShowOKAsync(caption, msg);
                                     return;
 
                                 case BackupOverrideResult.Success:
@@ -244,15 +283,15 @@ namespace EmoTracker
             package.Install();
         }
 
-        private void UninstallPackage(object obj)
+        private async void UninstallPackage(object obj)
         {
             var package = (PackageRepositoryEntry)obj;
 
             string msg = $"You are about to uninstall \"{package.Name}\". This will remove all the files associated with the package as well as the overrides. Do you wish to continue?";
             string caption = "Uninstall Package";
-            MessageBoxResult res = MessageBox.Show(msg, caption, MessageBoxButton.YesNo, MessageBoxImage.Exclamation);
+            bool res = await DialogService.Instance.ShowYesNoAsync(caption, msg);
 
-            if(res == MessageBoxResult.No) { return; }
+            if(!res) { return; }
 
             UninstallResult ures = package.Uninstall();
             switch(ures)
@@ -262,12 +301,12 @@ namespace EmoTracker
                 case UninstallResult.FailedUninstall:
                     msg = $"Failed to uninstall \"{package.Name}\"! Please ensure no other applications are using the file and try again.";
                     caption = "Failed to Uninstall";
-                    MessageBox.Show(msg, caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    await DialogService.Instance.ShowOKAsync(caption, msg);
                     break;
                 case UninstallResult.FailedOverrides:
                     msg = $"Failed to remove \"{package.Name}\" overrides folder. You will need to remove it manually";
                     caption = "Failed to Remove Overrides";
-                    MessageBox.Show(msg, caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    await DialogService.Instance.ShowOKAsync(caption, msg);
                     break;
             }
         }
@@ -292,7 +331,7 @@ namespace EmoTracker
                 catch { };
 
                 if (Directory.Exists(Tracker.Instance.ActiveGamePackage.OverridePath))
-                    System.Diagnostics.Process.Start("explorer.exe", Tracker.Instance.ActiveGamePackage.OverridePath);
+                    WindowService.Instance.OpenFolder(Tracker.Instance.ActiveGamePackage.OverridePath);
                 else
                     PushMarkdownNotification(NotificationType.Error, string.Format(
 @"### Cannot open override folder
@@ -319,52 +358,45 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
                 }
                 else
                 {
-                    OverrideExportDialog dialog = new OverrideExportDialog()
-                    {
-                        Owner = Application.Current.MainWindow
-                    };
-                    dialog.ShowDialog();
+                    OverrideExportDialog dialog = new OverrideExportDialog();
+                    _ = dialog.ShowDialog(
+                        (Avalonia.Application.Current?.ApplicationLifetime as
+                            Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow);
                 }
             }
         }
 
         private void ShowPackManagerHandler(object obj)
         {
-            UI.PackageManagerWindow window = new UI.PackageManagerWindow() { Owner = Application.Current.MainWindow };
-            window.ShowDialog();
+            UI.PackageManagerWindow window = new UI.PackageManagerWindow();
+            _ = window.ShowDialog(
+                (Avalonia.Application.Current?.ApplicationLifetime as
+                    Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow);
 
-            Keyboard.Focus(Application.Current.MainWindow);
+            WindowService.Instance.FocusMainWindow();
         }
 
-        private void CheckForUpdateHandler(object obj)
-        {
-            UI.AppUpdateWindow window = new UI.AppUpdateWindow(false) { Owner = Application.Current.MainWindow };
-            window.ShowDialog();
-
-            Keyboard.Focus(Application.Current.MainWindow);
-        }
-
-        private void RefreshHandler(object param)
+        private async void RefreshHandler(object param)
         {
             if (ApplicationSettings.Instance.PromptOnRefreshClose)
             {
-                MessageBoxResult result = MessageBox.Show(Application.Current.MainWindow, "Refreshing will cause you to lose all unsaved progress. Are you sure you want to refresh?", "Warning!", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-                if (result != MessageBoxResult.Yes)
+                bool result = await DialogService.Instance.ShowYesNoAsync("Warning!", "Refreshing will cause you to lose all unsaved progress. Are you sure you want to refresh?", defaultYes: false);
+                if (!result)
                     return;
             }
 
             Reload();
-            Keyboard.Focus(Application.Current.MainWindow);
+            WindowService.Instance.FocusMainWindow();
         }
 
-        private void ResetUserDataHandler(object param)
+        private async void ResetUserDataHandler(object param)
         {
             if (Tracker.Instance.ActiveGamePackage != null)
             {
                 if (ApplicationSettings.Instance.PromptOnRefreshClose)
                 {
-                    MessageBoxResult result = MessageBox.Show("Clearing overrides will cause you to lose all unsaved progress. Are you sure you want to continue?", "Warning!", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-                    if (result != MessageBoxResult.Yes)
+                    bool result = await DialogService.Instance.ShowYesNoAsync("Warning!", "Clearing overrides will cause you to lose all unsaved progress. Are you sure you want to continue?", defaultYes: false);
+                    if (!result)
                         return;
                 }
 
@@ -372,12 +404,12 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
                 Reload();
             }
 
-            Keyboard.Focus(Application.Current.MainWindow);
+            WindowService.Instance.FocusMainWindow();
         }
 
         private void ActivatePackHandler(object obj)
         {
-            Application.Current.Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            Core.Services.Dispatch.BeginInvoke(() =>
             {
                 IGamePackage package = obj as IGamePackage;
                 IGamePackageVariant variant = obj as IGamePackageVariant;
@@ -386,12 +418,12 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
                 {
                     Tracker.Instance.ActiveGamePackageVariant = null;
                     Tracker.Instance.ActiveGamePackage = package;
-                }            
+                }
                 else if (variant != null)
                 {
                     Tracker.Instance.ActiveGamePackageVariant = variant;
                 }
-            }));
+            });
         }
 
         #region -- Visual Adjustments --
@@ -429,32 +461,28 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
         string mCurrentSavePath;
 
-        private void OpenHandler(object obj)
+        private async void OpenHandler(object obj)
         {
             string defaultSaveDataPath = Path.Combine(UserDirectory.Path, "saves");
 
-            Microsoft.Win32.OpenFileDialog dialog = new Microsoft.Win32.OpenFileDialog();
-            dialog.Filter = "EmoTracker Save File (*.json)|*.json";
-            dialog.InitialDirectory = defaultSaveDataPath;
-
-            if (dialog.ShowDialog() == true)
+            string filename = await DialogService.Instance.OpenFileAsync("EmoTracker Save File (*.json)|*.json", defaultSaveDataPath);
+            if (filename != null)
             {
-                if (!LoadProgress(dialog.FileName))
+                if (!LoadProgress(filename))
                 {
                     Reload();
 
-                    MessageBox.Show(Application.Current.MainWindow,
+                    await DialogService.Instance.ShowOKAsync("Failed to load save data...",
                         "Failed to load the requested save file. Possible reasons include:\n\n" +
                         "• The original pack or variant no longer exists\n" +
                         "• The save data has been corruped\n" +
                         "• The pack version is different from the version used to save\n" +
                         "• The pack contents do not match the save data.\n\n" +
-                        "Note that certain types of user overrides can affect this, if added/changed since saving.",
-                        "Failed to load save data...", MessageBoxButton.OK, MessageBoxImage.Error );
+                        "Note that certain types of user overrides can affect this, if added/changed since saving.");
                 }
                 else
                 {
-                    mCurrentSavePath = dialog.FileName;
+                    mCurrentSavePath = filename;
                 }
             }
         }
@@ -476,7 +504,7 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
             }
         }
 
-        private void SaveAsHandler(object obj)
+        private async void SaveAsHandler(object obj)
         {
             string defaultSaveDataPath = Path.Combine(UserDirectory.Path, "saves");
 
@@ -495,16 +523,11 @@ defaultSaveDataPath)
 );
             }
 
-            Microsoft.Win32.SaveFileDialog dialog = new Microsoft.Win32.SaveFileDialog();
-            dialog.AddExtension = true;
-            dialog.CheckPathExists = true;
-            dialog.Filter = "EmoTracker Save File (*.json)|*.json";
-            dialog.InitialDirectory = defaultSaveDataPath;
-
-            if (dialog.ShowDialog() == true)
+            string filename = await DialogService.Instance.SaveFileAsync("EmoTracker Save File (*.json)|*.json", defaultSaveDataPath);
+            if (filename != null)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(dialog.FileName));
-                SaveProgress(dialog.FileName);
+                Directory.CreateDirectory(Path.GetDirectoryName(filename));
+                SaveProgress(filename);
             }
         }
 
@@ -517,8 +540,8 @@ defaultSaveDataPath)
             {
                 bool bResult = Tracker.Instance.SaveProgress(path, (JObject root) =>
                 {
-                    root["main_window_width"] = Application.Current.MainWindow.Width;
-                    root["main_window_height"] = Application.Current.MainWindow.Height;
+                    root["main_window_width"] = WindowService.Instance.MainWindowWidth;
+                    root["main_window_height"] = WindowService.Instance.MainWindowHeight;
 
                     JObject extensionData = new JObject();
                     bool bAddedAny = false;
@@ -567,8 +590,8 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         {
             if (Tracker.Instance.LoadProgress(path, (JObject root) =>
             {
-                Application.Current.MainWindow.Width = root.GetValue<double>("main_window_width", Application.Current.MainWindow.Width);
-                Application.Current.MainWindow.Height = root.GetValue<double>("main_window_height", Application.Current.MainWindow.Height);
+                WindowService.Instance.MainWindowWidth = root.GetValue<double>("main_window_width", WindowService.Instance.MainWindowWidth);
+                WindowService.Instance.MainWindowHeight = root.GetValue<double>("main_window_height", WindowService.Instance.MainWindowHeight);
 
                 JObject extensionData = root.GetValue<JObject>("extensions");
                 if (extensionData != null)
@@ -612,7 +635,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             {
                 PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(Tracker.Instance.ActiveGamePackage.UniqueID);
                 if (entry != null && !string.IsNullOrWhiteSpace(entry.DocumentationURL))
-                    System.Diagnostics.Process.Start(entry.DocumentationURL);
+                    WindowService.Instance.OpenUrl(entry.DocumentationURL);
             }
         }
 
@@ -693,7 +716,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
 
-            Keyboard.Focus(Application.Current.MainWindow);
+            WindowService.Instance.FocusMainWindow();
         }
         public void AcquireLayouts()
         {
@@ -762,7 +785,9 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             set
             {
                 if (SetProperty(ref mAvailablePackagesViewFilter, value))
-                    AvailablePackagesView.Refresh();
+                {
+                    NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
+                }
             }
         }
 
@@ -787,16 +812,157 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             }
         }
 
-        ListCollectionView mAvailablePackagesView;
-        ListCollectionView mInstalledPackagesView;
+        /// <summary>
+        /// Groups available packages by game name for display in the Avalonia package manager.
+        /// Each entry has a <c>Name</c> (game name) and <c>Items</c> (packages in that group).
+        /// Uses the same sorting logic as WPF's RepoEntryGameNameSort and resolves
+        /// game display names via PackageManager.FindGame.
+        /// </summary>
+        public IEnumerable<PackageGroup> AvailablePackagesGroupedView
+        {
+            get
+            {
+                var entries = (PackageManager.Instance.AvailablePackages ?? Enumerable.Empty<PackageRepositoryEntry>())
+                    .Where(e => PackageFilter(e))
+                    .ToList();
 
-        public CollectionView AvailablePackagesView
-        {
-            get { return mAvailablePackagesView; }
+                // Sort using the same logic as WPF's RepoEntryGameNameSort
+                entries.Sort((a, b) =>
+                {
+                    var x = PackageManager.Instance.FindGame(a.Game);
+                    var y = PackageManager.Instance.FindGame(b.Game);
+
+                    if (x != null && x.Key.Equals("Other", StringComparison.OrdinalIgnoreCase))
+                        return 1;
+                    if (y != null && y.Key.Equals("Other", StringComparison.OrdinalIgnoreCase))
+                        return -1;
+
+                    int result;
+
+                    result = (x?.SeriesPriority ?? 0).CompareTo(y?.SeriesPriority ?? 0);
+                    if (result != 0) return result;
+
+                    result = CompareStringOrdinal(x?.Series, y?.Series);
+                    if (result != 0) return result;
+
+                    result = (x?.Priority ?? 0).CompareTo(y?.Priority ?? 0);
+                    if (result != 0) return result;
+
+                    result = CompareStringOrdinal(x?.Name, y?.Name);
+                    if (result != 0) return result;
+
+                    result = ComparePreferBool(
+                        a.Flags.HasFlag(PackageFlags.Official),
+                        b.Flags.HasFlag(PackageFlags.Official));
+                    if (result != 0) return result;
+
+                    result = ComparePreferBool(
+                        a.Flags.HasFlag(PackageFlags.Featured),
+                        b.Flags.HasFlag(PackageFlags.Featured));
+                    if (result != 0) return result;
+
+                    return CompareStringOrdinal(a.Author, b.Author);
+                });
+
+                // Group by resolved game display name (matches WPF's GroupDescription
+                // which uses GameNameToActualGameNameConverter)
+                return entries
+                    .GroupBy(e =>
+                    {
+                        var game = PackageManager.Instance.FindGame(e.Game);
+                        return game?.Name ?? e.Game;
+                    })
+                    .Select(g =>
+                    {
+                        var game = PackageManager.Instance.FindGame(g.Key);
+                        return new PackageGroup(g.Key, g, game);
+                    });
+            }
         }
-        public CollectionView InstalledPackagesView
+
+        private static int CompareStringOrdinal(string x, string y)
         {
-            get { return mInstalledPackagesView; }
+            if (!string.IsNullOrWhiteSpace(x) && string.IsNullOrWhiteSpace(y)) return -1;
+            if (string.IsNullOrWhiteSpace(x) && !string.IsNullOrWhiteSpace(y)) return 1;
+            return string.CompareOrdinal(x, y);
+        }
+
+        private static int ComparePreferBool(bool x, bool y)
+        {
+            if (x && !y) return -1;
+            if (!x && y) return 1;
+            return 0;
+        }
+
+        public IEnumerable<IGamePackage> InstalledPackagesView =>
+            PackageManager.Instance.InstalledPackages ?? Enumerable.Empty<IGamePackage>();
+
+        /// <summary>
+        /// Groups installed packages by game name for display in the Avalonia settings menu.
+        /// </summary>
+        public IEnumerable<InstalledPackageGroup> InstalledPackagesGroupedView
+        {
+            get
+            {
+                var packages = (PackageManager.Instance.InstalledPackages ?? Enumerable.Empty<IGamePackage>()).ToList();
+
+                packages.Sort((a, b) =>
+                {
+                    var x = PackageManager.Instance.FindGame(a.Game);
+                    var y = PackageManager.Instance.FindGame(b.Game);
+
+                    if (x != null && x.Key.Equals("Other", StringComparison.OrdinalIgnoreCase))
+                        return 1;
+                    if (y != null && y.Key.Equals("Other", StringComparison.OrdinalIgnoreCase))
+                        return -1;
+
+                    int result = CompareStringOrdinal(x?.Series, y?.Series);
+                    if (result != 0) return result;
+
+                    result = (x?.SeriesPriority ?? 0).CompareTo(y?.SeriesPriority ?? 0);
+                    if (result != 0) return result;
+
+                    result = (x?.Priority ?? 0).CompareTo(y?.Priority ?? 0);
+                    if (result != 0) return result;
+
+                    result = CompareStringOrdinal(x?.Name, y?.Name);
+                    if (result != 0) return result;
+
+                    return CompareStringOrdinal(a.Author, b.Author);
+                });
+
+                return packages
+                    .GroupBy(p =>
+                    {
+                        var game = PackageManager.Instance.FindGame(p.Game);
+                        return game?.Name ?? p.Game;
+                    })
+                    .Select(g => new InstalledPackageGroup(g.Key, g));
+            }
+        }
+
+        public class InstalledPackageGroup
+        {
+            public string Name { get; }
+            public IEnumerable<IGamePackage> Items { get; }
+            public InstalledPackageGroup(string name, IEnumerable<IGamePackage> items)
+            {
+                Name = name;
+                Items = items;
+            }
+        }
+
+        public class PackageGroup
+        {
+            public string Name { get; }
+            public IEnumerable<PackageRepositoryEntry> Items { get; }
+            public PackageManager.Game Game { get; }
+            public PackageGroup(string name, IEnumerable<PackageRepositoryEntry> items, PackageManager.Game game = null)
+            {
+                Name = name;
+                Items = items;
+                Game = game;
+            }
         }
 
         void InitializePackageManagerViews()
@@ -805,22 +971,11 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             PackageManager.Instance.OnGameListDownloaded += PackageManager_OnGameListDownloaded;
 
-            mAvailablePackagesView = new ListCollectionView(PackageManager.Instance.AvailablePackages as IList);
-            mAvailablePackagesView.CustomSort = new RepoEntryGameNameSort();
-            mAvailablePackagesView.Filter = new Predicate<object>(PackageFilter);            
-            mAvailablePackagesView.GroupDescriptions.Add(new PropertyGroupDescription("Game", UI.Converters.GameNameToActualGameNameConverter.Instance));
-
-            mInstalledPackagesView = new ListCollectionView(PackageManager.Instance.InstalledPackages as IList);
-            mInstalledPackagesView.CustomSort = new GameNameSort();
-            mInstalledPackagesView.GroupDescriptions.Add(new PropertyGroupDescription("Game", UI.Converters.GameNameToActualGameNameConverter.Instance));
-
-            AvailablePackagesView.Refresh();
-            InstalledPackagesView.Refresh();
 
             //  Configure auto-refresh for the package manager
-            DispatcherTimer timer = new DispatcherTimer();
-            timer.Interval = TimeSpan.FromMinutes(30);
-            timer.Tick += OnRefreshPackageRepositoriesTimer;
+            System.Timers.Timer timer = new System.Timers.Timer(TimeSpan.FromMinutes(30).TotalMilliseconds);
+            timer.Elapsed += (s, e) => OnRefreshPackageRepositoriesTimer(s, e);
+            timer.AutoReset = true;
             timer.Start();
 
             PackageManager.Instance.OnRepositoryUpdated += PackageManager_OnRepositoryUpdated;
@@ -838,8 +993,8 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void PackageManager_OnGameListDownloaded(object sender, EventArgs e)
         {
-            AvailablePackagesView.Refresh();
-            InstalledPackagesView.Refresh();
+            NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
+            NotifyPropertyChanged(nameof(InstalledPackagesView));
         }
 
         private string mPackFilterText;
@@ -857,7 +1012,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void RefreshPackageCollectionView()
         {
-            mAvailablePackagesView.Refresh();
+            NotifyPropertyChanged(nameof(AvailablePackagesGroupedView));
         }
 
         private bool PackageFilter(object obj)
@@ -1079,12 +1234,15 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             get { return mNotifications.Count > 0; }
         }
 
-        DispatcherTimer mNotificationUpdateTimer;
+        System.Timers.Timer mNotificationUpdateTimer;
 
 
         void InitializeNotifications()
         {
-            mNotificationUpdateTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Normal, NotificationExpirationTimer_Tick, Application.Current.Dispatcher);
+            mNotificationUpdateTimer = new System.Timers.Timer(500);
+            mNotificationUpdateTimer.Elapsed += (s, e) => Core.Services.Dispatch.BeginInvoke(() => NotificationExpirationTimer_Tick(s, e));
+            mNotificationUpdateTimer.AutoReset = true;
+            mNotificationUpdateTimer.Start();
             mNotifications.CollectionChanged += Notifications_CollectionChanged;
 
             ScriptManager.Instance.SetNotificationService(this);
@@ -1105,22 +1263,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             foreach (Notification n in mNotifications)
             {
-                FrameworkElement container = null;
-                {
-                    MainWindow appWindow = Application.Current.MainWindow as MainWindow;
-                    if (appWindow != null)
-                    {
-                        //  This is bit lame, but WPF has some unfortunate limitations with respect to
-                        //  handling completed events for animations triggered from DataTriggers
-                        container = appWindow.NotificationsHost.ItemContainerGenerator.ContainerFromItem(n) as FrameworkElement;
-                    }
-                }
-
-                if (container != null && container.IsMouseOver)
-                {
-                    n.ExpirationTime = now;
-                    continue;
-                }
 
                 if (n.ExpirationTime <= now || n.Expired)
                 {
@@ -1130,16 +1272,20 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                     {
                         toRemove.Add(n);
                     }
-                    else if (container != null)
-                    {
-                        if (container.RenderSize.Height == 0)
-                            toRemove.Add(n);
-                    }
                 }
             }
 
             foreach (Notification n in toRemove)
             {
+                mNotifications.Remove(n);
+            }
+        }
+
+        private void OnNotificationForceExpired(object sender, EventArgs e)
+        {
+            if (sender is Notification n)
+            {
+                n.ForceExpired -= OnNotificationForceExpired;
                 mNotifications.Remove(n);
             }
         }
@@ -1155,7 +1301,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             {
                 //  Use the dispatcher here to make sure we're not eating up expiry time during long blocking operations
                 //  this call may be nested within.
-                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                Core.Services.Dispatch.BeginInvoke(() =>
                 {
                     MarkdownNotification notification = new MarkdownNotification(timeout)
                     {
@@ -1168,9 +1314,10 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                         mPreviousNotifications.RemoveAt(9);
                     }
 
+                    notification.ForceExpired += OnNotificationForceExpired;
                     mPreviousNotifications.Insert(0, notification);
                     mNotifications.Insert(0, notification);
-                }));
+                });
             }
         }
 
