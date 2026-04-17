@@ -31,6 +31,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     alwaysOnTop = s.AlwaysOnTop,
                     enableVoiceControl = s.EnableVoiceControl,
                     enableNoteTaking = s.EnableNoteTaking,
+                    enableVariantSwitcher = s.EnableVariantSwitcher,
                     enableDiscordRichPresence = s.EnableDiscordRichPresence,
                     enableAutoUpdateCheck = s.EnableAutoUpdateCheck,
                     enableBackgroundNdi = s.EnableBackgroundNdi,
@@ -47,7 +48,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         }
 
         [McpServerTool(Name = "set_setting")]
-        [Description("Set an application setting by key. Valid keys: ignoreAllLogic, displayAllLocations, alwaysAllowClearing, autoUnpinLocationsOnClear, pinLocationsOnItemCapture, fastToolTips, promptOnRefreshClose, alwaysOnTop, enableVoiceControl, enableNoteTaking, enableDiscordRichPresence, enableAutoUpdateCheck, enableBackgroundNdi, mapEnabled, swapLeftRight")]
+        [Description("Set an application setting by key. Valid keys: ignoreAllLogic, displayAllLocations, alwaysAllowClearing, autoUnpinLocationsOnClear, pinLocationsOnItemCapture, fastToolTips, promptOnRefreshClose, alwaysOnTop, enableVoiceControl, enableNoteTaking, enableVariantSwitcher, enableDiscordRichPresence, enableAutoUpdateCheck, enableBackgroundNdi, mapEnabled, swapLeftRight")]
         public static async Task<string> SetSetting(
             [Description("The setting key")] string key,
             [Description("The value to set (true/false for booleans)")] string value)
@@ -110,6 +111,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
                             if (!bool.TryParse(value, out boolVal))
                                 return JsonSerializer.Serialize(new { success = false, error = "Expected true/false" });
                             s.EnableNoteTaking = boolVal;
+                            break;
+                        case "enableVariantSwitcher":
+                            if (!bool.TryParse(value, out boolVal))
+                                return JsonSerializer.Serialize(new { success = false, error = "Expected true/false" });
+                            s.EnableVariantSwitcher = boolVal;
                             break;
                         case "enableDiscordRichPresence":
                             if (!bool.TryParse(value, out boolVal))

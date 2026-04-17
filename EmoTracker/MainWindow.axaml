@@ -155,6 +155,9 @@
                                 <MenuItem Header="Note Taking"
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding EnableNoteTaking, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                <MenuItem Header="Variant Switcher"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding EnableVariantSwitcher, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Assistance">
