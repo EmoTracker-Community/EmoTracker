@@ -76,14 +76,14 @@ namespace EmoTracker.Services.Updates
 
                 await ExtractArchiveAsync(downloadFilePath, stagingDir, CancellationToken.None);
 
-                string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                string exeName = OperatingSystem.IsWindows()
                     ? "EmoTracker.exe" : "EmoTracker";
 
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                if (OperatingSystem.IsWindows())
                     LaunchWindowsSwapScript(installDir, stagingDir, exeName);
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                else if (OperatingSystem.IsMacOS())
                     LaunchMacOSSwapScript(installDir, stagingDir);
-                else
+                else if (OperatingSystem.IsLinux())
                     LaunchLinuxSwapScript(installDir, stagingDir, exeName);
 
                 Log.Information("[Update] Swap script launched — exiting for update.");
@@ -186,6 +186,7 @@ namespace EmoTracker.Services.Updates
         // macOS shell swap script
         // -----------------------------------------------------------------------
 
+        [System.Runtime.Versioning.SupportedOSPlatform("macos")]
         private static void LaunchMacOSSwapScript(string installDir, string stagingDir)
         {
             // The release archive contains EmoTracker.app/ at its root, so staging looks like:
@@ -199,18 +200,28 @@ namespace EmoTracker.Services.Updates
             string appName   = Path.GetFileName(appBundle)!; // "EmoTracker.app"
             int    pid       = Environment.ProcessId;
 
+            string logPath    = Path.Combine(Path.GetTempPath(), "emotracker_update.log");
+
+            Log.Information("[Update] macOS swap — installDir={InstallDir} appBundle={AppBundle} appParent={AppParent} appName={AppName} stagingDir={StagingDir}",
+                installDir, appBundle, appParent, appName, stagingDir);
+
             // Poll for the parent PID to exit (mirrors the Windows tasklist loop) so that
             // the rm/cp never races a still-exiting EmoTracker instance. Without this,
             // 'open' can activate the dying original process instead of launching the new one.
             string script = $"""
                 #!/bin/sh
+                set -x
+                exec >"{logPath}" 2>&1
+                echo "Waiting for PID {pid} to exit..."
                 while kill -0 {pid} 2>/dev/null; do
                     sleep 0.5
                 done
+                echo "PID gone, performing swap..."
                 rm -rf "{appBundle}"
                 cp -R "{stagingDir}/{appName}" "{appParent}/"
                 rm -rf "{stagingDir}"
                 xattr -r -d com.apple.quarantine "{appBundle}" 2>/dev/null || true
+                echo "Launching app..."
                 open "{appBundle}"
                 """;
 
@@ -223,7 +234,7 @@ namespace EmoTracker.Services.Updates
             // process exiting. Without nohup the script can receive SIGHUP and be killed
             // when the parent App bundle terminates.
             Process.Start(new ProcessStartInfo(
-                "/bin/sh", $"-c \"nohup /bin/sh '{scriptPath}' </dev/null >/dev/null 2>&1 &\"")
+                "/bin/sh", $"-c \"nohup /bin/sh '{scriptPath}' </dev/null 2>/dev/null &\"")
             {
                 UseShellExecute = false,
             });
@@ -233,6 +244,7 @@ namespace EmoTracker.Services.Updates
         // Linux shell swap script
         // -----------------------------------------------------------------------
 
+        [System.Runtime.Versioning.SupportedOSPlatform("linux")]
         private static void LaunchLinuxSwapScript(
             string installDir, string stagingDir, string exeName)
         {
@@ -259,6 +271,8 @@ namespace EmoTracker.Services.Updates
             });
         }
 
+        [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+        [System.Runtime.Versioning.SupportedOSPlatform("linux")]
         private static void MakeExecutable(string path)
         {
             File.SetUnixFileMode(path,
