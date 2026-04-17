@@ -217,7 +217,7 @@ namespace EmoTracker.Services.Updates
             string scriptPath = Path.Combine(Path.GetTempPath(), "emotracker_update.sh");
             File.WriteAllText(scriptPath, script);
 
-            RunProcessAsync("chmod", $"+x \"{scriptPath}\"", CancellationToken.None).GetAwaiter().GetResult();
+            MakeExecutable(scriptPath);
 
             // Launch via a detached subshell (nohup + &) so the script survives this
             // process exiting. Without nohup the script can receive SIGHUP and be killed
@@ -251,12 +251,20 @@ namespace EmoTracker.Services.Updates
             string scriptPath = Path.Combine(Path.GetTempPath(), "emotracker_update.sh");
             File.WriteAllText(scriptPath, script);
 
-            RunProcessAsync("chmod", $"+x \"{scriptPath}\"", CancellationToken.None).GetAwaiter().GetResult();
+            MakeExecutable(scriptPath);
 
             Process.Start(new ProcessStartInfo("/bin/sh", $"\"{scriptPath}\"")
             {
                 UseShellExecute = false,
             });
+        }
+
+        private static void MakeExecutable(string path)
+        {
+            File.SetUnixFileMode(path,
+                UnixFileMode.UserRead  | UnixFileMode.UserWrite  | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
         }
     }
 }
