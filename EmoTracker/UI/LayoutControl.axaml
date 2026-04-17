@@ -342,8 +342,7 @@
         <DataTemplate DataType="layout:MapPanel">
             <LayoutTransformControl Margin="{Binding Margin, Converter={x:Static converters:StringToThicknessConverter.Instance}}"
                                     HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
-                                    ClipToBounds="True">
+                                    VerticalAlignment="{Binding VerticalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}">
                 <LayoutTransformControl.LayoutTransform>
                     <ScaleTransform ScaleX="{Binding EffectiveScale}" ScaleY="{Binding EffectiveScale}" />
                 </LayoutTransformControl.LayoutTransform>

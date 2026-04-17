@@ -20,6 +20,15 @@ namespace EmoTracker.UI.Controls
             {
                 if (Source == null) return false;
 
+                // When ClipToBounds is false on ancestor controls (e.g. LayoutTransformControl,
+                // Viewbox), Avalonia's hit-test walk can deliver points that are outside this
+                // Image's arranged bounds.  Without this early-out the Math.Min clamp below
+                // would map them to an edge pixel of the alpha mask, producing false positives
+                // that steal clicks from neighbouring layout elements.
+                if (point.X < 0 || point.Y < 0 ||
+                    point.X >= Bounds.Width || point.Y >= Bounds.Height)
+                    return false;
+
                 var maskEntry = IconUtility.GetAlphaMask(Source);
                 // No mask → treat as fully transparent (click-through).
                 // This is critical for the async image pipeline: placeholder images
