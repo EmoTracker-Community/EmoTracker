@@ -130,12 +130,12 @@
                                                 </Viewbox>
                                             </Border>
 
-                                            <!-- Badges host: top-left corner of each badge is placed at the
-                                                 center of the location dot (size/2, size/2), so the badge
-                                                 overlaps the dot corner and extends to the lower-right.
-                                                 Margin is applied to the ItemsControl directly; the Grid
-                                                 panel has no margin so items render from (0,0) within it. -->
+                                            <!-- Badges host: the badge is positioned relative to the blip center
+                                                 (Grid 0,0) according to BadgeAlignment (default BottomRight, which
+                                                 places the badge top-left at the blip center so it extends to the
+                                                 lower-right). BadgeMargin encodes this; BadgeOffset shifts further. -->
                                             <ItemsControl ItemsSource="{Binding Location.Badges}"
+                                                          IsVisible="{Binding DataContext.ShowBadge, ElementName=MinifiedLocation}"
                                                           VerticalAlignment="Top"
                                                           HorizontalAlignment="Left"
                                                           Margin="{Binding DataContext.BadgeMargin, ElementName=MinifiedLocation, Converter={x:Static converters:ThicknessConverter.Instance}}">

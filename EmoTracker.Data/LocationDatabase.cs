@@ -509,10 +509,30 @@ namespace EmoTracker.Data
                             mapLocation.AlwaysVisible = entry.GetValue<bool>("always_visible", false);
                             mapLocation.EnableBadgeHitTest = entry.GetValue<bool>("enable_badge_hit_test", false);
 
-                            if (badgesize > 0)
+                            if (badgesize >= 0)
                             {
                                 mapLocation.OverrideBadgeSize = true;
                                 mapLocation.BadgeSize = badgesize;
+                            }
+
+                            string badgealignment = entry.GetValue<string>("badge_alignment");
+                            if (!string.IsNullOrEmpty(badgealignment))
+                            {
+                                if (System.Enum.TryParse<Locations.BadgeAlignment>(badgealignment, ignoreCase: true, out var alignment))
+                                    mapLocation.BadgeAlignment = alignment;
+                            }
+
+                            string badgeoffset = entry.GetValue<string>("badge_offset");
+                            if (!string.IsNullOrEmpty(badgeoffset))
+                            {
+                                var parts = badgeoffset.Split(',');
+                                if (parts.Length >= 2 &&
+                                    double.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double ox) &&
+                                    double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double oy))
+                                {
+                                    mapLocation.BadgeOffsetX = ox;
+                                    mapLocation.BadgeOffsetY = oy;
+                                }
                             }
 
                             JArray visibilityRules = entry.GetValue<JArray>("restrict_visibility_rules", entry.GetValue<JArray>("visibility_rules"));

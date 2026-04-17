@@ -21,7 +21,10 @@ namespace EmoTracker.Data.Locations
         Thickness mItemMargin = new Thickness(-35, -35, 0, 0);
 
         double mBadgeSize = 35;
-        Thickness mBadgeMargin = new Thickness(-17.5, -17.5, 0, 0);
+        Thickness mBadgeMargin = new Thickness(0, 0, 0, 0);
+        BadgeAlignment mBadgeAlignment = BadgeAlignment.BottomRight;
+        double mBadgeOffsetX = 0;
+        double mBadgeOffsetY = 0;
 
         double mNoteIndicatorSize = 35;
         Thickness mNoteIndicatorMargin = new Thickness(-17.5, -17.5, 0, 0);
@@ -131,10 +134,29 @@ namespace EmoTracker.Data.Locations
 
         private void UpdateBadgeMargin()
         {
-            // Centre the badge on the location dot: offset the badge's top-left by
-            // (dotCentre - badgeSize/2) so the badge is symmetrically overlaid on the dot.
-            double offset = (mSize - mBadgeSize) * 0.5;
-            mBadgeMargin = new Thickness(offset, offset, 0, 0);
+            // The blip is centered at (0,0) in the MinifiedLocation Grid coordinate space.
+            // We anchor the chosen point on the badge to that center, then apply any
+            // additional pixel offset.  "tl" is the resulting top-left of the badge.
+            double half = mBadgeSize / 2.0;
+            double left, top;
+
+            switch (mBadgeAlignment)
+            {
+                // Each case: badge margin so that the badge appears in the named position
+                // relative to the blip center (Grid (0,0)).  The badge top-left is placed at
+                // the required offset so the badge visually sits in the correct quadrant/edge.
+                case BadgeAlignment.TopLeft:    left = -mBadgeSize; top = -mBadgeSize; break;
+                case BadgeAlignment.Top:        left = -half;       top = -mBadgeSize; break;
+                case BadgeAlignment.TopRight:   left = 0;           top = -mBadgeSize; break;
+                case BadgeAlignment.Left:       left = -mBadgeSize; top = -half;       break;
+                case BadgeAlignment.Right:      left = 0;           top = -half;       break;
+                case BadgeAlignment.BottomLeft: left = -mBadgeSize; top = 0;           break;
+                case BadgeAlignment.Bottom:     left = -half;       top = 0;           break;
+                case BadgeAlignment.BottomRight:left = 0;           top = 0;           break;
+                default: /* Center */           left = -half;       top = -half;       break;
+            }
+
+            mBadgeMargin = new Thickness(left + mBadgeOffsetX, top + mBadgeOffsetY, 0, 0);
             NotifyPropertyChanged("BadgeMargin");
         }
 
@@ -155,6 +177,44 @@ namespace EmoTracker.Data.Locations
             set
             {
                 if (SetProperty(ref mBadgeSize, value))
+                {
+                    UpdateBadgeMargin();
+                    NotifyPropertyChanged("ShowBadge");
+                }
+            }
+        }
+
+        public bool ShowBadge
+        {
+            get { return mBadgeSize != 0; }
+        }
+
+        public BadgeAlignment BadgeAlignment
+        {
+            get { return mBadgeAlignment; }
+            set
+            {
+                if (SetProperty(ref mBadgeAlignment, value))
+                    UpdateBadgeMargin();
+            }
+        }
+
+        public double BadgeOffsetX
+        {
+            get { return mBadgeOffsetX; }
+            set
+            {
+                if (SetProperty(ref mBadgeOffsetX, value))
+                    UpdateBadgeMargin();
+            }
+        }
+
+        public double BadgeOffsetY
+        {
+            get { return mBadgeOffsetY; }
+            set
+            {
+                if (SetProperty(ref mBadgeOffsetY, value))
                     UpdateBadgeMargin();
             }
         }
