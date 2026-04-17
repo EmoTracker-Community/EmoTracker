@@ -12,7 +12,8 @@
                Placement="Top"
                HorizontalOffset="4"
                VerticalOffset="4"
-               IsLightDismissEnabled="False"
+               IsLightDismissEnabled="True"
+               Closed="NotesPopup_Closed"
                PlacementTarget="{Binding ElementName=OpenNotesButton}">
             <Border Name="PopupRegion"
                     BorderBrush="DarkGray"

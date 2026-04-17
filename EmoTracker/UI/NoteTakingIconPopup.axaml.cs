@@ -61,5 +61,13 @@ namespace EmoTracker.UI
         {
             NotesPopup.IsOpen = false;
         }
+
+        private void NotesPopup_Closed(object? sender, EventArgs e)
+        {
+            // When light-dismissed by an outside click, sync the toggle button state
+            // so the next click correctly reopens the popup.
+            if (OpenNotesButton.IsChecked == true)
+                OpenNotesButton.IsChecked = false;
+        }
     }
 }
