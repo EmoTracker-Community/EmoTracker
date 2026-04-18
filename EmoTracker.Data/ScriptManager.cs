@@ -369,6 +369,9 @@ end
                 mLua["NotificationType"] = new NotificationType();
                 mLua["ScriptHost"] = this;
                 mLua["ImageReference"] = new ImageReferenceProvider();
+                
+                if (ApplicationSettings.Instance.SupportLua53VersionChecks)
+                    mLua["_VERSION"] = "Lua 5.3";
 
                 foreach (var entry in mGlobals)
                 {
