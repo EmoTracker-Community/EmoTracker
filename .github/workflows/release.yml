@@ -43,13 +43,20 @@ jobs:
       - name: Bundle libvosk for Windows
         shell: bash
         run: |
-          VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/win-x64/native/libvosk.dll" -print -quit 2>/dev/null)
-          if [ -n "$VOSK_NATIVE" ]; then
-            cp "$VOSK_NATIVE" publish/win-x64/libvosk.dll
-            echo "Bundled libvosk.dll from: $VOSK_NATIVE"
+          if [ -f "publish/win-x64/libvosk.dll" ]; then
+            echo "libvosk.dll already present in publish output"
           else
-            echo "::error::libvosk.dll not found in NuGet cache — voice recognition will not work"
-            exit 1
+            VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/win-x64/native/libvosk.dll" -print -quit 2>/dev/null)
+            if [ -n "$VOSK_NATIVE" ]; then
+              cp "$VOSK_NATIVE" publish/win-x64/libvosk.dll
+              echo "Bundled libvosk.dll from NuGet cache: $VOSK_NATIVE"
+            else
+              VOSK_VER=$(sed -n 's/.*<PackageReference Include="Vosk" Version="\([^"]*\)".*/\1/p' EmoTracker/EmoTracker.csproj)
+              echo "Downloading libvosk.dll from NuGet (Vosk ${VOSK_VER})"
+              curl -fsSL "https://www.nuget.org/api/v2/package/Vosk/${VOSK_VER}" -o /tmp/vosk.nupkg
+              unzip -p /tmp/vosk.nupkg "runtimes/win-x64/native/libvosk.dll" > publish/win-x64/libvosk.dll
+              echo "Bundled libvosk.dll from NuGet download"
+            fi
           fi
 
       - name: Publish osx-x64
@@ -78,13 +85,20 @@ jobs:
             fi
           done
 
-          VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/linux-x64/native/libvosk.so" -print -quit 2>/dev/null)
-          if [ -n "$VOSK_NATIVE" ]; then
-            cp "$VOSK_NATIVE" publish/linux-x64/libvosk.so
-            echo "Bundled libvosk.so from: $VOSK_NATIVE"
+          if [ -f "publish/linux-x64/libvosk.so" ]; then
+            echo "libvosk.so already present in publish output"
           else
-            echo "::error::libvosk.so not found in NuGet cache — voice recognition will not work"
-            exit 1
+            VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/linux-x64/native/libvosk.so" -print -quit 2>/dev/null)
+            if [ -n "$VOSK_NATIVE" ]; then
+              cp "$VOSK_NATIVE" publish/linux-x64/libvosk.so
+              echo "Bundled libvosk.so from NuGet cache: $VOSK_NATIVE"
+            else
+              VOSK_VER=$(sed -n 's/.*<PackageReference Include="Vosk" Version="\([^"]*\)".*/\1/p' EmoTracker/EmoTracker.csproj)
+              echo "Downloading libvosk.so from NuGet (Vosk ${VOSK_VER})"
+              curl -fsSL "https://www.nuget.org/api/v2/package/Vosk/${VOSK_VER}" -o /tmp/vosk-linux.nupkg
+              unzip -p /tmp/vosk-linux.nupkg "runtimes/linux-x64/native/libvosk.so" > publish/linux-x64/libvosk.so
+              echo "Bundled libvosk.so from NuGet download"
+            fi
           fi
 
       - name: Create universal macOS binary
