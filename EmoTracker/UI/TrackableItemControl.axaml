@@ -5,7 +5,7 @@
              xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI">
-    <Grid ToolTip.Tip="{Binding Name}"
+    <Grid ToolTip.Tip="{Binding Name, Converter={x:Static local:TrackableItemControl.EmptyStringToNullConverter}}"
           ToolTip.ShowDelay="{Binding FastToolTips, Source={x:Static data:ApplicationSettings.Instance}, Converter={x:Static local:TrackableItemControl.FastToolTipsToDelayConverter}}"
           Opacity="{Binding Converter={x:Static local:TrackableItemControl.NullToZeroOpacityConverter}}"
           PointerReleased="Grid_PointerReleased">

@@ -28,6 +28,12 @@ namespace EmoTracker.UI
         public static readonly IValueConverter FastToolTipsToDelayConverter =
             new FuncValueConverter<bool, int>(fast => fast ? 400 : 5000);
 
+        /// <summary>
+        /// Converts a string to null when empty/whitespace, suppressing the tooltip.
+        /// </summary>
+        public static readonly IValueConverter EmptyStringToNullConverter =
+            new FuncValueConverter<string?, object?>(value => string.IsNullOrWhiteSpace(value) ? null : value);
+
         public interface IClickHandler
         {
             bool OnLeftClick(ITrackableItem item);
