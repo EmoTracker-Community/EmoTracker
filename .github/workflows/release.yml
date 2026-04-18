@@ -40,6 +40,18 @@ jobs:
           curl -fsSL "https://github.com/spatialaudio/portaudio-binaries/raw/master/libportaudio64bit.dll" \
             -o "publish/win-x64/portaudio.dll"
 
+      - name: Bundle libvosk for Windows
+        shell: bash
+        run: |
+          VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/win-x64/native/libvosk.dll" -print -quit 2>/dev/null)
+          if [ -n "$VOSK_NATIVE" ]; then
+            cp "$VOSK_NATIVE" publish/win-x64/libvosk.dll
+            echo "Bundled libvosk.dll from: $VOSK_NATIVE"
+          else
+            echo "::error::libvosk.dll not found in NuGet cache — voice recognition will not work"
+            exit 1
+          fi
+
       - name: Publish osx-x64
         run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime osx-x64 --self-contained --output publish/osx-x64
 
@@ -48,6 +60,32 @@ jobs:
 
       - name: Publish linux-x64
         run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime linux-x64 --self-contained --output publish/linux-x64
+
+      - name: Bundle libvosk for macOS and Linux
+        shell: bash
+        run: |
+          for arch in x64 arm64; do
+            VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/osx-${arch}/native/libvosk.dylib" -print -quit 2>/dev/null)
+            if [ -z "$VOSK_NATIVE" ]; then
+              VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/osx/native/libvosk.dylib" -print -quit 2>/dev/null)
+            fi
+            if [ -n "$VOSK_NATIVE" ]; then
+              cp "$VOSK_NATIVE" "publish/osx-${arch}/libvosk.dylib"
+              echo "Bundled libvosk.dylib (${arch}) from: $VOSK_NATIVE"
+            else
+              echo "::error::libvosk.dylib not found in NuGet cache for ${arch} — voice recognition will not work"
+              exit 1
+            fi
+          done
+
+          VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/linux-x64/native/libvosk.so" -print -quit 2>/dev/null)
+          if [ -n "$VOSK_NATIVE" ]; then
+            cp "$VOSK_NATIVE" publish/linux-x64/libvosk.so
+            echo "Bundled libvosk.so from: $VOSK_NATIVE"
+          else
+            echo "::error::libvosk.so not found in NuGet cache — voice recognition will not work"
+            exit 1
+          fi
 
       - name: Create universal macOS binary
         run: |
