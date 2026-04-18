@@ -475,7 +475,7 @@ namespace EmoTracker
             base.OnSizeChanged(e);
         }
 
-        private void MainWindow_PositionChanged(object? sender, PixelPointEventArgs e)
+        private void MainWindow_PositionChanged(object sender, PixelPointEventArgs e)
         {
             if (WindowState == WindowState.Normal)
                 mLastNormalPosition = e.Point;
