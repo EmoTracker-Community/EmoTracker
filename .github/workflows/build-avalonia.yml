@@ -66,6 +66,32 @@ jobs:
           curl -fsSL "https://github.com/spatialaudio/portaudio-binaries/raw/master/libportaudio64bit.dll" \
             -o "publish/raw/portaudio.dll"
 
+      - name: Bundle libvosk (Windows only)
+        if: startsWith(matrix.rid, 'win')
+        shell: bash
+        run: |
+          VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/win-x64/native/libvosk.dll" -print -quit 2>/dev/null)
+          if [ -n "$VOSK_NATIVE" ]; then
+            cp "$VOSK_NATIVE" publish/raw/libvosk.dll
+            echo "Bundled libvosk.dll from: $VOSK_NATIVE"
+          else
+            echo "::error::libvosk.dll not found in NuGet cache — voice recognition will not work"
+            exit 1
+          fi
+
+      - name: Bundle libvosk (Linux only)
+        if: startsWith(matrix.rid, 'linux')
+        shell: bash
+        run: |
+          VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/linux-x64/native/libvosk.so" -print -quit 2>/dev/null)
+          if [ -n "$VOSK_NATIVE" ]; then
+            cp "$VOSK_NATIVE" publish/raw/libvosk.so
+            echo "Bundled libvosk.so from: $VOSK_NATIVE"
+          else
+            echo "::error::libvosk.so not found in NuGet cache — voice recognition will not work"
+            exit 1
+          fi
+
       - name: Stage Windows output
         if: startsWith(matrix.rid, 'win')
         run: |
@@ -106,6 +132,22 @@ jobs:
           VER=$(sed -n 's/.*AssemblyFileVersion("\([^"]*\)").*/\1/p' EmoTracker/Properties/AssemblyInfo.cs)
           echo "app_version=$VER" >> "$GITHUB_OUTPUT"
           echo "Detected version: $VER"
+
+      - name: Bundle libvosk (macOS)
+        run: |
+          for arch in x64 arm64; do
+            VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/osx-${arch}/native/libvosk.dylib" -print -quit 2>/dev/null)
+            if [ -z "$VOSK_NATIVE" ]; then
+              VOSK_NATIVE=$(find ~/.nuget/packages -path "*/vosk/*/runtimes/osx/native/libvosk.dylib" -print -quit 2>/dev/null)
+            fi
+            if [ -n "$VOSK_NATIVE" ]; then
+              cp "$VOSK_NATIVE" "publish/${arch}/libvosk.dylib"
+              echo "Bundled libvosk.dylib (${arch}) from: $VOSK_NATIVE"
+            else
+              echo "::error::libvosk.dylib not found in NuGet cache for ${arch} — voice recognition will not work"
+              exit 1
+            fi
+          done
 
       - name: Create universal binary
         run: |
