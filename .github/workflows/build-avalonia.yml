@@ -2,9 +2,9 @@ name: Build Avalonia (Cross-Platform)
 
 on:
   push:
-    branches: [avalonia]
+    branches: [avalonia, main]
   pull_request:
-    branches: [avalonia]
+    branches: [avalonia, main]
 
 jobs:
   build:
