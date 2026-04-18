@@ -33,8 +33,11 @@ namespace EmoTracker.Data
             WriteSettings();
         }
 
+        double mInitialX = double.NaN;
+        double mInitialY = double.NaN;
         double mInitialWidth = -1.0;
         double mInitialHeight = -1.0;
+        bool mbInitialMaximized = false;
         double mNDIFrameRate = 30.0;
         int mNDIOutputScale = 1;
         bool mbEnableBackgroundNdi = true;
@@ -104,6 +107,18 @@ namespace EmoTracker.Data
 
         ObservableCollection<string> mPackageRepositories = new ObservableCollection<string>();
 
+        public double InitialX
+        {
+            get { return mInitialX; }
+            set { SetProperty(ref mInitialX, value); }
+        }
+
+        public double InitialY
+        {
+            get { return mInitialY; }
+            set { SetProperty(ref mInitialY, value); }
+        }
+
         public double InitialWidth
         {
             get { return mInitialWidth; }
@@ -114,6 +129,12 @@ namespace EmoTracker.Data
         {
             get { return mInitialHeight; }
             set { SetProperty(ref mInitialHeight, value); }
+        }
+
+        public bool InitialMaximized
+        {
+            get { return mbInitialMaximized; }
+            set { SetProperty(ref mbInitialMaximized, value); }
         }
 
         public bool AlwaysOnTop
@@ -267,8 +288,11 @@ namespace EmoTracker.Data
                     {
                         JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
 
+                        InitialX = root.GetValue<double>("initial_x", double.NaN);
+                        InitialY = root.GetValue<double>("initial_y", double.NaN);
                         InitialWidth = root.GetValue<double>("initial_width", -1.0);
                         InitialHeight = root.GetValue<double>("initial_height", -1.0);
+                        InitialMaximized = root.GetValue<bool>("initial_maximized", false);
                         NdiFrameRate = root.GetValue<double>("ndi_frame_rate", 30.0);
                         NdiOutputScale = root.GetValue<int>("ndi_output_scale", 1);
                         EnableBackgroundNdi = root.GetValue<bool>("enable_background_ndi", true);
@@ -362,11 +386,19 @@ namespace EmoTracker.Data
 
                         JObject root = new JObject();
 
+                        if (!double.IsNaN(InitialX))
+                            root.Add("initial_x", JToken.FromObject(InitialX));
+
+                        if (!double.IsNaN(InitialY))
+                            root.Add("initial_y", JToken.FromObject(InitialY));
+
                         if (InitialWidth >= 0.0)
                             root.Add("initial_width", JToken.FromObject(InitialWidth));
 
                         if (InitialHeight >= 0.0)
                             root.Add("initial_height", JToken.FromObject(InitialHeight));
+
+                        root.Add("initial_maximized", JToken.FromObject(InitialMaximized));
 
                         if (NdiFrameRate > 1.0)
                             root.Add("ndi_frame_rate", JToken.FromObject(NdiFrameRate));
