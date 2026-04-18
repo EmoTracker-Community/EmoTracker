@@ -360,6 +360,11 @@ namespace EmoTracker.UI
                             BadgesLocation = data.Location;
                             BadgesTarget = element;
                         }
+                        else
+                        {
+                            BadgesLocation = null;
+                            BadgesTarget = null;
+                        }
                     }
                 }
                 else

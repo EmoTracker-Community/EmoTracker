@@ -2,9 +2,9 @@ name: Build Avalonia (Cross-Platform)
 
 on:
   push:
-    branches: [avalonia]
+    branches: [avalonia, main]
   pull_request:
-    branches: [avalonia]
+    branches: [avalonia, main]
 
 jobs:
   build:
@@ -66,6 +66,41 @@ jobs:
           curl -fsSL "https://github.com/spatialaudio/portaudio-binaries/raw/master/libportaudio64bit.dll" \
             -o "publish/raw/portaudio.dll"
 
+      - name: Bundle libvosk (Windows only)
+        if: startsWith(matrix.rid, 'win')
+        shell: bash
+        run: |
+          VOSK_VER=$(sed -n 's/.*<PackageReference Include="Vosk" Version="\([^"]*\)".*/\1/p' EmoTracker/EmoTracker.csproj)
+          VOSK_CACHE=$(find ~/.nuget/packages -maxdepth 3 -path "*/vosk/${VOSK_VER}/build/lib/win-x64" -type d -print -quit 2>/dev/null)
+          if [ -z "$VOSK_CACHE" ]; then
+            echo "NuGet cache miss — downloading Vosk ${VOSK_VER} from NuGet"
+            curl -fsSL "https://www.nuget.org/api/v2/package/Vosk/${VOSK_VER}" -o /tmp/vosk.nupkg
+            mkdir -p /tmp/vosk-extract
+            unzip -o /tmp/vosk.nupkg -d /tmp/vosk-extract
+            VOSK_CACHE="/tmp/vosk-extract/build/lib/win-x64"
+          fi
+          cp "$VOSK_CACHE/libvosk.dll" publish/raw/libvosk.dll
+          cp "$VOSK_CACHE/libstdc++-6.dll" publish/raw/ 2>/dev/null || true
+          cp "$VOSK_CACHE/libwinpthread-1.dll" publish/raw/ 2>/dev/null || true
+          cp "$VOSK_CACHE/libgcc_s_seh-1.dll" publish/raw/ 2>/dev/null || true
+          echo "Bundled libvosk.dll and companion DLLs"
+
+      - name: Bundle libvosk (Linux only)
+        if: startsWith(matrix.rid, 'linux')
+        shell: bash
+        run: |
+          VOSK_VER=$(sed -n 's/.*<PackageReference Include="Vosk" Version="\([^"]*\)".*/\1/p' EmoTracker/EmoTracker.csproj)
+          VOSK_CACHE=$(find ~/.nuget/packages -maxdepth 3 -path "*/vosk/${VOSK_VER}/build/lib/linux-x64" -type d -print -quit 2>/dev/null)
+          if [ -z "$VOSK_CACHE" ]; then
+            echo "NuGet cache miss — downloading Vosk ${VOSK_VER} from NuGet"
+            curl -fsSL "https://www.nuget.org/api/v2/package/Vosk/${VOSK_VER}" -o /tmp/vosk.nupkg
+            mkdir -p /tmp/vosk-extract
+            unzip -o /tmp/vosk.nupkg -d /tmp/vosk-extract
+            VOSK_CACHE="/tmp/vosk-extract/build/lib/linux-x64"
+          fi
+          cp "$VOSK_CACHE/libvosk.so" publish/raw/libvosk.so
+          echo "Bundled libvosk.so"
+
       - name: Stage Windows output
         if: startsWith(matrix.rid, 'win')
         run: |
@@ -106,6 +141,22 @@ jobs:
           VER=$(sed -n 's/.*AssemblyFileVersion("\([^"]*\)").*/\1/p' EmoTracker/Properties/AssemblyInfo.cs)
           echo "app_version=$VER" >> "$GITHUB_OUTPUT"
           echo "Detected version: $VER"
+
+      - name: Bundle libvosk (macOS)
+        run: |
+          VOSK_VER=$(sed -n 's/.*<PackageReference Include="Vosk" Version="\([^"]*\)".*/\1/p' EmoTracker/EmoTracker.csproj)
+          VOSK_CACHE=$(find ~/.nuget/packages -maxdepth 3 -path "*/vosk/${VOSK_VER}/build/lib/osx-universal" -type d -print -quit 2>/dev/null)
+          if [ -z "$VOSK_CACHE" ]; then
+            echo "NuGet cache miss — downloading Vosk ${VOSK_VER} from NuGet"
+            curl -fsSL "https://www.nuget.org/api/v2/package/Vosk/${VOSK_VER}" -o /tmp/vosk.nupkg
+            mkdir -p /tmp/vosk-extract
+            unzip -o /tmp/vosk.nupkg -d /tmp/vosk-extract
+            VOSK_CACHE="/tmp/vosk-extract/build/lib/osx-universal"
+          fi
+          for arch in x64 arm64; do
+            cp "$VOSK_CACHE/libvosk.dylib" "publish/${arch}/libvosk.dylib"
+            echo "Bundled libvosk.dylib (osx-${arch})"
+          done
 
       - name: Create universal binary
         run: |

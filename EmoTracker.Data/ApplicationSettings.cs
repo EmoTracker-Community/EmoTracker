@@ -33,8 +33,11 @@ namespace EmoTracker.Data
             WriteSettings();
         }
 
+        double mInitialX = double.NaN;
+        double mInitialY = double.NaN;
         double mInitialWidth = -1.0;
         double mInitialHeight = -1.0;
+        bool mbInitialMaximized = false;
         double mNDIFrameRate = 30.0;
         int mNDIOutputScale = 1;
         bool mbEnableBackgroundNdi = true;
@@ -94,6 +97,13 @@ namespace EmoTracker.Data
             set { SetProperty(ref mbFastTooltips, value); }
         }
 
+        bool mbSupportLua53VersionChecks = false;
+        public bool SupportLua53VersionChecks
+        {
+            get { return mbSupportLua53VersionChecks; }
+            set { SetProperty(ref mbSupportLua53VersionChecks, value); }
+        }
+
         string mServiceBaseURL = "https://emotracker-community.github.io/EmoTracker-Service/service/";
         string mTwitchChannelName;
         string mLastActivePackage;
@@ -103,6 +113,18 @@ namespace EmoTracker.Data
         bool mNoAsyncImages;
 
         ObservableCollection<string> mPackageRepositories = new ObservableCollection<string>();
+
+        public double InitialX
+        {
+            get { return mInitialX; }
+            set { SetProperty(ref mInitialX, value); }
+        }
+
+        public double InitialY
+        {
+            get { return mInitialY; }
+            set { SetProperty(ref mInitialY, value); }
+        }
 
         public double InitialWidth
         {
@@ -114,6 +136,12 @@ namespace EmoTracker.Data
         {
             get { return mInitialHeight; }
             set { SetProperty(ref mInitialHeight, value); }
+        }
+
+        public bool InitialMaximized
+        {
+            get { return mbInitialMaximized; }
+            set { SetProperty(ref mbInitialMaximized, value); }
         }
 
         public bool AlwaysOnTop
@@ -267,8 +295,11 @@ namespace EmoTracker.Data
                     {
                         JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
 
+                        InitialX = root.GetValue<double>("initial_x", double.NaN);
+                        InitialY = root.GetValue<double>("initial_y", double.NaN);
                         InitialWidth = root.GetValue<double>("initial_width", -1.0);
                         InitialHeight = root.GetValue<double>("initial_height", -1.0);
+                        InitialMaximized = root.GetValue<bool>("initial_maximized", false);
                         NdiFrameRate = root.GetValue<double>("ndi_frame_rate", 30.0);
                         NdiOutputScale = root.GetValue<int>("ndi_output_scale", 1);
                         EnableBackgroundNdi = root.GetValue<bool>("enable_background_ndi", true);
@@ -292,6 +323,7 @@ namespace EmoTracker.Data
                         PinLocationsOnItemCapture = root.GetValue<bool>("tracking_pin_locations_on_item_capture", true);
 
                         FastToolTips = root.GetValue<bool>("assistance_fast_tool_tips", false);
+                        SupportLua53VersionChecks = root.GetValue<bool>("lua_support_53_version_checks", false);
 
                         JArray repositories = root.GetValue<JArray>("package_repositories");
                         if (repositories != null)
@@ -362,11 +394,19 @@ namespace EmoTracker.Data
 
                         JObject root = new JObject();
 
+                        if (!double.IsNaN(InitialX))
+                            root.Add("initial_x", JToken.FromObject(InitialX));
+
+                        if (!double.IsNaN(InitialY))
+                            root.Add("initial_y", JToken.FromObject(InitialY));
+
                         if (InitialWidth >= 0.0)
                             root.Add("initial_width", JToken.FromObject(InitialWidth));
 
                         if (InitialHeight >= 0.0)
                             root.Add("initial_height", JToken.FromObject(InitialHeight));
+
+                        root.Add("initial_maximized", JToken.FromObject(InitialMaximized));
 
                         if (NdiFrameRate > 1.0)
                             root.Add("ndi_frame_rate", JToken.FromObject(NdiFrameRate));
@@ -405,6 +445,7 @@ namespace EmoTracker.Data
                         root.Add("tracking_pin_locations_on_item_capture", JToken.FromObject(PinLocationsOnItemCapture));
 
                         root.Add("assistance_fast_tool_tips", JToken.FromObject(FastToolTips));
+                        root.Add("lua_support_53_version_checks", JToken.FromObject(SupportLua53VersionChecks));
 
                         JArray reposVal = JArray.FromObject(AdditionalRepositories);
                         if (reposVal != null)

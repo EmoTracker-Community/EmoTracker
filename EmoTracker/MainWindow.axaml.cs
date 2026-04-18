@@ -15,6 +15,16 @@ namespace EmoTracker
 {
     public partial class MainWindow : Window
     {
+        // Track the last known normal-state position and size so we can persist
+        // the restore bounds even when the window is closed while maximized.
+        private PixelPoint mLastNormalPosition;
+        private double mLastNormalWidth;
+        private double mLastNormalHeight;
+
+        // Set to true when we cancel a close, restore the window, then re-close
+        // so we can capture the accurate normal-state bounds before saving.
+        private bool mIsRestoreClosing = false;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -29,6 +39,21 @@ namespace EmoTracker
             if (ApplicationSettings.Instance.InitialHeight >= 0.0)
                 Height = ApplicationSettings.Instance.InitialHeight;
 
+            // Restore window position if previously saved
+            if (!double.IsNaN(ApplicationSettings.Instance.InitialX) &&
+                !double.IsNaN(ApplicationSettings.Instance.InitialY))
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Position = new PixelPoint(
+                    (int)ApplicationSettings.Instance.InitialX,
+                    (int)ApplicationSettings.Instance.InitialY);
+            }
+
+            // Seed last-normal tracking from initial values
+            mLastNormalPosition = Position;
+            mLastNormalWidth = Width;
+            mLastNormalHeight = Height;
+
             this.Loaded += MainWindow_Loaded;
             // Use Tunnel routing to match WPF's PreviewKeyDown — the window
             // handles shortcuts before any child control can consume the key.
@@ -38,10 +63,20 @@ namespace EmoTracker
             // Set initial layout and resize mode
             RefreshTrackerLayout();
             UpdateResizeMode();
+
+            this.PositionChanged += MainWindow_PositionChanged;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            // Validate restored position is still on a visible screen
+            EnsureWindowIsOnScreen();
+
+            // Restore maximized state after position/size are set so the
+            // normal-state bounds are established first
+            if (ApplicationSettings.Instance.InitialMaximized)
+                WindowState = WindowState.Maximized;
+
             if (this.FindControl<Button>("SettingsButton") is Button settingsBtn)
                 settingsBtn.Click += SettingsButton_Click;
 
@@ -52,6 +87,40 @@ namespace EmoTracker
             {
                 TrackerLayout?.Focus();
             });
+        }
+
+        private void EnsureWindowIsOnScreen()
+        {
+            var screens = Screens;
+            if (screens == null || screens.ScreenCount == 0)
+                return;
+
+            var pos = Position;
+            bool onAnyScreen = false;
+
+            foreach (var screen in screens.All)
+            {
+                var bounds = screen.WorkingArea;
+                // Check that at least part of the title bar (top-left corner + some margin) is visible
+                if (pos.X + 50 > bounds.X && pos.X < bounds.X + bounds.Width &&
+                    pos.Y >= bounds.Y && pos.Y < bounds.Y + bounds.Height)
+                {
+                    onAnyScreen = true;
+                    break;
+                }
+            }
+
+            if (!onAnyScreen)
+            {
+                // Reset to center of primary screen
+                WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                var primary = screens.Primary ?? screens.All[0];
+                var wa = primary.WorkingArea;
+                var scaling = primary.Scaling;
+                Position = new PixelPoint(
+                    wa.X + (int)((wa.Width - Width * scaling) / 2),
+                    wa.Y + (int)((wa.Height - Height * scaling) / 2));
+            }
         }
 
         private async void CheckForUpdatesMenuItem_Click(object sender, RoutedEventArgs e)
@@ -285,6 +354,28 @@ namespace EmoTracker
 
         protected override void OnClosing(WindowClosingEventArgs e)
         {
+            // If closing while maximized or fullscreen, cancel this close, restore the window
+            // to normal so the OS reports accurate bounds, then re-close on the next frame.
+            if (!mIsRestoreClosing && WindowState != WindowState.Normal)
+            {
+                e.Cancel = true;
+                mIsRestoreClosing = true;
+                ApplicationSettings.Instance.InitialMaximized =
+                    WindowState == WindowState.Maximized || WindowState == WindowState.FullScreen;
+                WindowState = WindowState.Normal;
+                Avalonia.Threading.Dispatcher.UIThread.Post(Close, Avalonia.Threading.DispatcherPriority.Background);
+                return;
+            }
+
+            // Save window state, position, and size for next launch.
+            // At this point WindowState is Normal (either it was already, or we just restored it above).
+            if (!mIsRestoreClosing)
+                ApplicationSettings.Instance.InitialMaximized = false;
+            ApplicationSettings.Instance.InitialX = Position.X;
+            ApplicationSettings.Instance.InitialY = Position.Y;
+            ApplicationSettings.Instance.InitialWidth = Width;
+            ApplicationSettings.Instance.InitialHeight = Height;
+
             if (ApplicationSettings.Instance.PromptOnRefreshClose)
             {
                 // For Phase 6 just close — async dialog in Phase 7
@@ -344,8 +435,37 @@ namespace EmoTracker
                 TrackerLayout.DataContext = layout;
         }
 
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+
+            if (change.Property == WindowStateProperty)
+            {
+                var oldState = change.GetOldValue<WindowState>();
+                var newState = change.GetNewValue<WindowState>();
+
+                // When restoring to Normal, explicitly apply our saved normal-state bounds.
+                // The OS restore bounds may be wrong when the window was born maximized
+                // (opened from a previously-maximized session), so we always enforce our own.
+                if (newState == WindowState.Normal && oldState != WindowState.Normal)
+                {
+                    Width = mLastNormalWidth;
+                    Height = mLastNormalHeight;
+                    Position = mLastNormalPosition;
+                }
+            }
+        }
+
         protected override void OnSizeChanged(SizeChangedEventArgs e)
         {
+            // Keep mLastNormal* up to date while the window is being resized in Normal state.
+            if (WindowState == WindowState.Normal)
+            {
+                mLastNormalWidth = e.NewSize.Width;
+                mLastNormalHeight = e.NewSize.Height;
+                mLastNormalPosition = Position;
+            }
+
             bool bOldAspect = e.PreviousSize.Height > e.PreviousSize.Width;
             bool bNewAspect = e.NewSize.Height > e.NewSize.Width;
 
@@ -353,6 +473,12 @@ namespace EmoTracker
                 RefreshTrackerLayout();
 
             base.OnSizeChanged(e);
+        }
+
+        private void MainWindow_PositionChanged(object sender, PixelPointEventArgs e)
+        {
+            if (WindowState == WindowState.Normal)
+                mLastNormalPosition = e.Point;
         }
 
         public UI.DeveloperConsole DeveloperConsole { get; private set; }
