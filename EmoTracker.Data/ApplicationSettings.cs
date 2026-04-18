@@ -97,6 +97,13 @@ namespace EmoTracker.Data
             set { SetProperty(ref mbFastTooltips, value); }
         }
 
+        bool mbSupportLua53VersionChecks = false;
+        public bool SupportLua53VersionChecks
+        {
+            get { return mbSupportLua53VersionChecks; }
+            set { SetProperty(ref mbSupportLua53VersionChecks, value); }
+        }
+
         string mServiceBaseURL = "https://emotracker-community.github.io/EmoTracker-Service/service/";
         string mTwitchChannelName;
         string mLastActivePackage;
@@ -316,6 +323,7 @@ namespace EmoTracker.Data
                         PinLocationsOnItemCapture = root.GetValue<bool>("tracking_pin_locations_on_item_capture", true);
 
                         FastToolTips = root.GetValue<bool>("assistance_fast_tool_tips", false);
+                        SupportLua53VersionChecks = root.GetValue<bool>("lua_support_53_version_checks", false);
 
                         JArray repositories = root.GetValue<JArray>("package_repositories");
                         if (repositories != null)
@@ -437,6 +445,7 @@ namespace EmoTracker.Data
                         root.Add("tracking_pin_locations_on_item_capture", JToken.FromObject(PinLocationsOnItemCapture));
 
                         root.Add("assistance_fast_tool_tips", JToken.FromObject(FastToolTips));
+                        root.Add("lua_support_53_version_checks", JToken.FromObject(SupportLua53VersionChecks));
 
                         JArray reposVal = JArray.FromObject(AdditionalRepositories);
                         if (reposVal != null)

@@ -176,6 +176,12 @@
                                 <MenuItem Header="Open Override Folder" Command="{Binding OpenPackOverrideFolderCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                                 <MenuItem Header="Clear Overrides" Command="{Binding ResetUserDataCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                                 <Separator />
+                                <MenuItem Header="Lua Environment">
+                                    <MenuItem Header="Support Lua 5.3 Version Checks"
+                                              ToggleType="CheckBox"
+                                              IsChecked="{Binding SupportLua53VersionChecks, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                </MenuItem>
+                                <Separator />
                                 <MenuItem Header="Developer Console" Command="{Binding ShowDeveloperConsoleCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                             </MenuItem>
                         </ContextMenu>
