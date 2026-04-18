@@ -516,6 +516,11 @@ namespace EmoTracker.Data.Locations
             }
         }
 
+        public void ClearBadges()
+        {
+            mBadges.Clear();
+        }
+
         private void Badges_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
             NotifyPropertyChanged("HasBadges");
