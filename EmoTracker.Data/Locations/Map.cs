@@ -21,7 +21,10 @@ namespace EmoTracker.Data.Locations
         Thickness mItemMargin = new Thickness(-35, -35, 0, 0);
 
         double mBadgeSize = 35;
-        Thickness mBadgeMargin = new Thickness(-17.5, -17.5, 0, 0);
+        Thickness mBadgeMargin = new Thickness(0, 0, 0, 0);
+        EmoTracker.Data.Layout.ContentAlignment mBadgeAlignment = EmoTracker.Data.Layout.ContentAlignment.BottomRight;
+        double mBadgeOffsetX = 0;
+        double mBadgeOffsetY = 0;
 
         double mNoteIndicatorSize = 35;
         Thickness mNoteIndicatorMargin = new Thickness(-17.5, -17.5, 0, 0);
@@ -131,10 +134,33 @@ namespace EmoTracker.Data.Locations
 
         private void UpdateBadgeMargin()
         {
-            // Centre the badge on the location dot: offset the badge's top-left by
-            // (dotCentre - badgeSize/2) so the badge is symmetrically overlaid on the dot.
-            double offset = (mSize - mBadgeSize) * 0.5;
-            mBadgeMargin = new Thickness(offset, offset, 0, 0);
+            // The blip square spans from (-mSize/2, -mSize/2) to (mSize/2, mSize/2) in the
+            // MinifiedLocation Grid coordinate space (centered at 0,0).
+            // Each alignment anchors the badge center on the corresponding point of the blip:
+            //   TopLeft     → (-mSize/2, -mSize/2)     Top    → (0, -mSize/2)
+            //   TopRight    → ( mSize/2, -mSize/2)     Left   → (-mSize/2, 0)
+            //   Center      → (0, 0)                   Right  → ( mSize/2, 0)
+            //   BottomLeft  → (-mSize/2,  mSize/2)     Bottom → (0,  mSize/2)
+            //   BottomRight → ( mSize/2,  mSize/2)
+            // The badge top-left = anchor - badgeSize/2 on each axis.
+            double half  = mBadgeSize / 2.0;
+            double sHalf = mSize / 2.0;
+            double left, top;
+
+            switch (mBadgeAlignment)
+            {
+                case EmoTracker.Data.Layout.ContentAlignment.TopLeft:    left = -sHalf - half; top = -sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.Top:        left = -half;         top = -sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.TopRight:   left =  sHalf - half; top = -sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.Left:       left = -sHalf - half; top = -half;         break;
+                case EmoTracker.Data.Layout.ContentAlignment.Right:      left =  sHalf - half; top = -half;         break;
+                case EmoTracker.Data.Layout.ContentAlignment.BottomLeft: left = -sHalf - half; top =  sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.Bottom:     left = -half;         top =  sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.BottomRight:left =  sHalf - half; top =  sHalf - half; break;
+                default: /* Center */                                    left = -half;         top = -half;         break;
+            }
+
+            mBadgeMargin = new Thickness(left + mBadgeOffsetX, top + mBadgeOffsetY, 0, 0);
             NotifyPropertyChanged("BadgeMargin");
         }
 
@@ -155,6 +181,38 @@ namespace EmoTracker.Data.Locations
             set
             {
                 if (SetProperty(ref mBadgeSize, value))
+                {
+                    UpdateBadgeMargin();
+                }
+            }
+        }
+
+        public EmoTracker.Data.Layout.ContentAlignment BadgeAlignment
+        {
+            get { return mBadgeAlignment; }
+            set
+            {
+                if (SetProperty(ref mBadgeAlignment, value))
+                    UpdateBadgeMargin();
+            }
+        }
+
+        public double BadgeOffsetX
+        {
+            get { return mBadgeOffsetX; }
+            set
+            {
+                if (SetProperty(ref mBadgeOffsetX, value))
+                    UpdateBadgeMargin();
+            }
+        }
+
+        public double BadgeOffsetY
+        {
+            get { return mBadgeOffsetY; }
+            set
+            {
+                if (SetProperty(ref mBadgeOffsetY, value))
                     UpdateBadgeMargin();
             }
         }

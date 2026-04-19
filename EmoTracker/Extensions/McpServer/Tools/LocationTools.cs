@@ -40,6 +40,10 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         hasUnclaimedItems = section.HasUnclaimedItems,
                         clearAsGroup = section.ClearAsGroup,
                         captureItem = section.CaptureItem,
+                        captureBadge = section.CaptureBadge,
+                        captureBadgeOffsetX = section.CaptureBadgeOffsetX,
+                        captureBadgeOffsetY = section.CaptureBadgeOffsetY,
+                        clearOnCapture = section.ClearOnCapture,
                         hostedItemCode = section.HostedItemCode,
                         capturedItem = section.CapturedItem?.Name
                     });
@@ -76,6 +80,40 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     }
                 }
 
+                var badges = new List<object>();
+                foreach (var kvp in loc.Badges)
+                {
+                    badges.Add(new
+                    {
+                        key = kvp.Key,
+                        offsetX = kvp.Value.OffsetX,
+                        offsetY = kvp.Value.OffsetY,
+                        imageUri = kvp.Value.Image?.ToString()
+                    });
+                }
+
+                var mapLocations = new List<object>();
+                foreach (var map in MapDatabase.Instance.Maps)
+                {
+                    foreach (var ml in map.Locations)
+                    {
+                        if (ml.Location == loc)
+                        {
+                            mapLocations.Add(new
+                            {
+                                map = map.Name,
+                                x = ml.X,
+                                y = ml.Y,
+                                size = ml.Size,
+                                badgeSize = ml.BadgeSize,
+                                badgeAlignment = ml.BadgeAlignment.ToString(),
+                                badgeOffsetX = ml.BadgeOffsetX,
+                                badgeOffsetY = ml.BadgeOffsetY
+                            });
+                        }
+                    }
+                }
+
                 return JsonSerializer.Serialize(new
                 {
                     found = true,
@@ -87,10 +125,13 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     color = loc.Color,
                     hasLocalItems = loc.HasLocalItems,
                     hasAvailableItems = loc.HasAvailableItems,
+                    hasBadges = loc.HasBadges,
                     availableItemCount = loc.AvailableItemCount,
                     modifiedByUser = loc.ModifiedByUser,
                     parent = loc.Parent?.Name,
                     sections,
+                    badges,
+                    mapLocations,
                     children,
                     notes
                 });

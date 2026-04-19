@@ -55,6 +55,26 @@ namespace EmoTracker.Data.Layout
         Stretch = 3
     }
 
+    /// <summary>
+    /// Represents one of nine anchor positions on a 3×3 grid:
+    ///
+    ///   TopLeft   | Top    | TopRight
+    ///   Left      | Center | Right
+    ///   BottomLeft| Bottom | BottomRight
+    /// </summary>
+    public enum ContentAlignment
+    {
+        TopLeft = 0,
+        Top = 1,
+        TopRight = 2,
+        Left = 3,
+        Center = 4,
+        Right = 5,
+        BottomLeft = 6,
+        Bottom = 7,
+        BottomRight = 8
+    }
+
     public abstract class LayoutItem : ObservableObject
     {
         string mBackground;

@@ -33,12 +33,29 @@ namespace EmoTracker.Data.Locations
         private bool mbCachedVisibilty = true;
         private bool mbClearAsGroup = false;
         private bool mbCaptureItem = false;
+        private bool mbCaptureBadge = false;
+        private double mCaptureBadgeOffsetX = 0;
+        private double mCaptureBadgeOffsetY = 0;
+        private bool mbClearOnCapture = false;
+        private bool mSuppressCaptureClearing = false;
         private bool mbShowGateItem = true;
 
         public Section(Location owner)
         {
             VisualParent = owner;
             mOwner = owner;
+
+            PropertyChanging += (sender, e) =>
+            {
+                if (e.PropertyName == nameof(CapturedItem) || e.PropertyName == nameof(AvailableChestCount))
+                    ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdating, this);
+            };
+
+            PropertyChanged += (sender, e) =>
+            {
+                if (e.PropertyName == nameof(CapturedItem) || e.PropertyName == nameof(AvailableChestCount))
+                    ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdated, this);
+            };
         }
 
         public Location Owner
@@ -95,6 +112,34 @@ namespace EmoTracker.Data.Locations
                         LocationDatabase.Instance.RefeshAccessibility();
                     }))
                     {
+                        if (mbCaptureBadge)
+                        {
+                            string badgeKey = "capture_" + mName;
+                            if (value?.PotentialIcon != null)
+                            {
+                                Owner.AddBadge(badgeKey, value.PotentialIcon, null, mCaptureBadgeOffsetX, mCaptureBadgeOffsetY);
+                            }
+                            else
+                            {
+                                Owner.RemoveBadge(badgeKey);
+                            }
+                        }
+
+                        if (mbClearOnCapture && value != null)
+                        {
+                            mSuppressCaptureClearing = true;
+                            try
+                            {
+                                if (HostedItem != null)
+                                    HostedItem.AdvanceToCode(HostedItemCode);
+                                AvailableChestCount = 0;
+                            }
+                            finally
+                            {
+                                mSuppressCaptureClearing = false;
+                            }
+                        }
+
                         //  Because relevant section data allows open transaction reads,
                         //  we update the pinned status here to include it in the
                         //  current open transaction.
@@ -154,7 +199,7 @@ namespace EmoTracker.Data.Locations
             {
                 using (TransactionProcessor.Current.OpenTransaction())
                 {
-                    if (value == 0 && CapturedItem != null)
+                    if (value == 0 && CapturedItem != null && !mbCaptureBadge && !mSuppressCaptureClearing)
                     {
                         CapturedItem.AdvanceToCode();
                         CapturedItem = null;
@@ -198,6 +243,30 @@ namespace EmoTracker.Data.Locations
         {
             get { return mbCaptureItem; }
             set { mbCaptureItem = value; NotifyPropertyChanged(); }
+        }
+
+        public bool CaptureBadge
+        {
+            get { return mbCaptureBadge; }
+            set { SetProperty(ref mbCaptureBadge, value); }
+        }
+
+        public double CaptureBadgeOffsetX
+        {
+            get { return mCaptureBadgeOffsetX; }
+            set { SetProperty(ref mCaptureBadgeOffsetX, value); }
+        }
+
+        public double CaptureBadgeOffsetY
+        {
+            get { return mCaptureBadgeOffsetY; }
+            set { SetProperty(ref mCaptureBadgeOffsetY, value); }
+        }
+
+        public bool ClearOnCapture
+        {
+            get { return mbClearOnCapture; }
+            set { SetProperty(ref mbClearOnCapture, value); }
         }
 
         public bool ShowGateItem

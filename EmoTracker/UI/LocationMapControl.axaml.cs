@@ -266,9 +266,6 @@ namespace EmoTracker.UI
 
             if (location != null)
             {
-                foreach (ImageReference badge in location.Badges)
-                    mBadgeImages.Add(badge);
-
                 var items = new HashSet<ITrackableItem>();
                 foreach (Section s in location.Sections)
                 {
