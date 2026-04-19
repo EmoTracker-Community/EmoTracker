@@ -95,6 +95,8 @@ namespace EmoTracker.Data.Locations
             {
                 using (TransactionProcessor.Current.OpenTransaction())
                 {
+                    ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdating, this);
+
                     if (SetTransactableProperty(value, (processedValue) =>
                     {
                         LocationDatabase.Instance.RefeshAccessibility();
@@ -132,6 +134,8 @@ namespace EmoTracker.Data.Locations
                         //  we update the pinned status here to include it in the
                         //  current open transaction.
                         Owner.AutoUnpinIfAppropriate();
+
+                        ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdated, this);
                     }
                 }
             }
@@ -187,6 +191,9 @@ namespace EmoTracker.Data.Locations
             {
                 using (TransactionProcessor.Current.OpenTransaction())
                 {
+                    if (!mSuppressCaptureClearing)
+                        ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdating, this);
+
                     if (value == 0 && CapturedItem != null && !mbCaptureBadge && !mSuppressCaptureClearing)
                     {
                         CapturedItem.AdvanceToCode();
@@ -202,6 +209,9 @@ namespace EmoTracker.Data.Locations
                         //  we update the pinned status here to include it in the
                         //  current open transaction.
                         Owner.AutoUnpinIfAppropriate();
+
+                        if (!mSuppressCaptureClearing)
+                            ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdated, this);
                     }
                 }
             }
