@@ -134,26 +134,30 @@ namespace EmoTracker.Data.Locations
 
         private void UpdateBadgeMargin()
         {
-            // The blip is centered at (0,0) in the MinifiedLocation Grid coordinate space.
-            // We anchor the chosen point on the badge to that center, then apply any
-            // additional pixel offset.  "tl" is the resulting top-left of the badge.
-            double half = mBadgeSize / 2.0;
+            // The blip square spans from (-mSize/2, -mSize/2) to (mSize/2, mSize/2) in the
+            // MinifiedLocation Grid coordinate space (centered at 0,0).
+            // Each alignment anchors the badge center on the corresponding point of the blip:
+            //   TopLeft     → (-mSize/2, -mSize/2)     Top    → (0, -mSize/2)
+            //   TopRight    → ( mSize/2, -mSize/2)     Left   → (-mSize/2, 0)
+            //   Center      → (0, 0)                   Right  → ( mSize/2, 0)
+            //   BottomLeft  → (-mSize/2,  mSize/2)     Bottom → (0,  mSize/2)
+            //   BottomRight → ( mSize/2,  mSize/2)
+            // The badge top-left = anchor - badgeSize/2 on each axis.
+            double half  = mBadgeSize / 2.0;
+            double sHalf = mSize / 2.0;
             double left, top;
 
             switch (mBadgeAlignment)
             {
-                // Each case: badge margin so that the badge appears in the named position
-                // relative to the blip center (Grid (0,0)).  The badge top-left is placed at
-                // the required offset so the badge visually sits in the correct quadrant/edge.
-                case BadgeAlignment.TopLeft:    left = -mBadgeSize; top = -mBadgeSize; break;
-                case BadgeAlignment.Top:        left = -half;       top = -mBadgeSize; break;
-                case BadgeAlignment.TopRight:   left = 0;           top = -mBadgeSize; break;
-                case BadgeAlignment.Left:       left = -mBadgeSize; top = -half;       break;
-                case BadgeAlignment.Right:      left = 0;           top = -half;       break;
-                case BadgeAlignment.BottomLeft: left = -mBadgeSize; top = 0;           break;
-                case BadgeAlignment.Bottom:     left = -half;       top = 0;           break;
-                case BadgeAlignment.BottomRight:left = 0;           top = 0;           break;
-                default: /* Center */           left = -half;       top = -half;       break;
+                case BadgeAlignment.TopLeft:    left = -sHalf - half; top = -sHalf - half; break;
+                case BadgeAlignment.Top:        left = -half;         top = -sHalf - half; break;
+                case BadgeAlignment.TopRight:   left =  sHalf - half; top = -sHalf - half; break;
+                case BadgeAlignment.Left:       left = -sHalf - half; top = -half;         break;
+                case BadgeAlignment.Right:      left =  sHalf - half; top = -half;         break;
+                case BadgeAlignment.BottomLeft: left = -sHalf - half; top =  sHalf - half; break;
+                case BadgeAlignment.Bottom:     left = -half;         top =  sHalf - half; break;
+                case BadgeAlignment.BottomRight:left =  sHalf - half; top =  sHalf - half; break;
+                default: /* Center */           left = -half;         top = -half;         break;
             }
 
             mBadgeMargin = new Thickness(left + mBadgeOffsetX, top + mBadgeOffsetY, 0, 0);

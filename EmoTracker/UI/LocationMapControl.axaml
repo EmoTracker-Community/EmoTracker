@@ -130,10 +130,9 @@
                                                 </Viewbox>
                                             </Border>
 
-                                            <!-- Badges host: the badge is positioned relative to the blip center
-                                                 (Grid 0,0) according to BadgeAlignment (default BottomRight, which
-                                                 places the badge top-left at the blip center so it extends to the
-                                                 lower-right). BadgeMargin encodes this; BadgeOffset shifts further. -->
+                                            <!-- Badges host: badge is centered on the alignment anchor point
+                                                 of the blip (e.g. BottomRight = blip corner at Size/2, Size/2).
+                                                 BadgeMargin encodes the computed offset; BadgeOffset shifts further. -->
                                             <ItemsControl ItemsSource="{Binding Location.BadgeItems}"
                                                           IsVisible="{Binding DataContext.ShowBadge, ElementName=MinifiedLocation}"
                                                           VerticalAlignment="Top"
