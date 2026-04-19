@@ -15,12 +15,6 @@ namespace EmoTracker
 {
     public partial class MainWindow : Window
     {
-        // Track the last known normal-state position and size so we can persist
-        // the restore bounds even when the window is closed while maximized.
-        private PixelPoint mLastNormalPosition;
-        private double mLastNormalWidth;
-        private double mLastNormalHeight;
-
         // Set to true when we cancel a close, restore the window, then re-close
         // so we can capture the accurate normal-state bounds before saving.
         private bool mIsRestoreClosing = false;
@@ -49,11 +43,6 @@ namespace EmoTracker
                     (int)ApplicationSettings.Instance.InitialY);
             }
 
-            // Seed last-normal tracking from initial values
-            mLastNormalPosition = Position;
-            mLastNormalWidth = Width;
-            mLastNormalHeight = Height;
-
             this.Loaded += MainWindow_Loaded;
             // Use Tunnel routing to match WPF's PreviewKeyDown — the window
             // handles shortcuts before any child control can consume the key.
@@ -63,8 +52,6 @@ namespace EmoTracker
             // Set initial layout and resize mode
             RefreshTrackerLayout();
             UpdateResizeMode();
-
-            this.PositionChanged += MainWindow_PositionChanged;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -435,37 +422,8 @@ namespace EmoTracker
                 TrackerLayout.DataContext = layout;
         }
 
-        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
-        {
-            base.OnPropertyChanged(change);
-
-            if (change.Property == WindowStateProperty)
-            {
-                var oldState = change.GetOldValue<WindowState>();
-                var newState = change.GetNewValue<WindowState>();
-
-                // When restoring to Normal, explicitly apply our saved normal-state bounds.
-                // The OS restore bounds may be wrong when the window was born maximized
-                // (opened from a previously-maximized session), so we always enforce our own.
-                if (newState == WindowState.Normal && oldState != WindowState.Normal)
-                {
-                    Width = mLastNormalWidth;
-                    Height = mLastNormalHeight;
-                    Position = mLastNormalPosition;
-                }
-            }
-        }
-
         protected override void OnSizeChanged(SizeChangedEventArgs e)
         {
-            // Keep mLastNormal* up to date while the window is being resized in Normal state.
-            if (WindowState == WindowState.Normal)
-            {
-                mLastNormalWidth = e.NewSize.Width;
-                mLastNormalHeight = e.NewSize.Height;
-                mLastNormalPosition = Position;
-            }
-
             bool bOldAspect = e.PreviousSize.Height > e.PreviousSize.Width;
             bool bNewAspect = e.NewSize.Height > e.NewSize.Width;
 
@@ -475,11 +433,6 @@ namespace EmoTracker
             base.OnSizeChanged(e);
         }
 
-        private void MainWindow_PositionChanged(object sender, PixelPointEventArgs e)
-        {
-            if (WindowState == WindowState.Normal)
-                mLastNormalPosition = e.Point;
-        }
 
         public UI.DeveloperConsole DeveloperConsole { get; private set; }
 
