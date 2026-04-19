@@ -22,7 +22,7 @@ namespace EmoTracker.Data.Locations
 
         double mBadgeSize = 35;
         Thickness mBadgeMargin = new Thickness(0, 0, 0, 0);
-        BadgeAlignment mBadgeAlignment = BadgeAlignment.BottomRight;
+        EmoTracker.Data.Layout.ContentAlignment mBadgeAlignment = EmoTracker.Data.Layout.ContentAlignment.BottomRight;
         double mBadgeOffsetX = 0;
         double mBadgeOffsetY = 0;
 
@@ -149,15 +149,15 @@ namespace EmoTracker.Data.Locations
 
             switch (mBadgeAlignment)
             {
-                case BadgeAlignment.TopLeft:    left = -sHalf - half; top = -sHalf - half; break;
-                case BadgeAlignment.Top:        left = -half;         top = -sHalf - half; break;
-                case BadgeAlignment.TopRight:   left =  sHalf - half; top = -sHalf - half; break;
-                case BadgeAlignment.Left:       left = -sHalf - half; top = -half;         break;
-                case BadgeAlignment.Right:      left =  sHalf - half; top = -half;         break;
-                case BadgeAlignment.BottomLeft: left = -sHalf - half; top =  sHalf - half; break;
-                case BadgeAlignment.Bottom:     left = -half;         top =  sHalf - half; break;
-                case BadgeAlignment.BottomRight:left =  sHalf - half; top =  sHalf - half; break;
-                default: /* Center */           left = -half;         top = -half;         break;
+                case EmoTracker.Data.Layout.ContentAlignment.TopLeft:    left = -sHalf - half; top = -sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.Top:        left = -half;         top = -sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.TopRight:   left =  sHalf - half; top = -sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.Left:       left = -sHalf - half; top = -half;         break;
+                case EmoTracker.Data.Layout.ContentAlignment.Right:      left =  sHalf - half; top = -half;         break;
+                case EmoTracker.Data.Layout.ContentAlignment.BottomLeft: left = -sHalf - half; top =  sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.Bottom:     left = -half;         top =  sHalf - half; break;
+                case EmoTracker.Data.Layout.ContentAlignment.BottomRight:left =  sHalf - half; top =  sHalf - half; break;
+                default: /* Center */                                    left = -half;         top = -half;         break;
             }
 
             mBadgeMargin = new Thickness(left + mBadgeOffsetX, top + mBadgeOffsetY, 0, 0);
@@ -183,17 +183,11 @@ namespace EmoTracker.Data.Locations
                 if (SetProperty(ref mBadgeSize, value))
                 {
                     UpdateBadgeMargin();
-                    NotifyPropertyChanged("ShowBadge");
                 }
             }
         }
 
-        public bool ShowBadge
-        {
-            get { return mBadgeSize != 0; }
-        }
-
-        public BadgeAlignment BadgeAlignment
+        public EmoTracker.Data.Layout.ContentAlignment BadgeAlignment
         {
             get { return mBadgeAlignment; }
             set

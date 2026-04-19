@@ -134,7 +134,7 @@
                                                  of the blip (e.g. BottomRight = blip corner at Size/2, Size/2).
                                                  BadgeMargin encodes the computed offset; BadgeOffset shifts further. -->
                                             <ItemsControl ItemsSource="{Binding Location.BadgeItems}"
-                                                          IsVisible="{Binding DataContext.ShowBadge, ElementName=MinifiedLocation}"
+                                                          IsVisible="{Binding DataContext.BadgeSize, ElementName=MinifiedLocation, Converter={x:Static converters:NonZeroToBoolConverter.Instance}}"
                                                           VerticalAlignment="Top"
                                                           HorizontalAlignment="Left"
                                                           Margin="{Binding DataContext.BadgeMargin, ElementName=MinifiedLocation, Converter={x:Static converters:ThicknessConverter.Instance}}">

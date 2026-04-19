@@ -108,8 +108,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                                 badgeSize = ml.BadgeSize,
                                 badgeAlignment = ml.BadgeAlignment.ToString(),
                                 badgeOffsetX = ml.BadgeOffsetX,
-                                badgeOffsetY = ml.BadgeOffsetY,
-                                showBadge = ml.ShowBadge
+                                badgeOffsetY = ml.BadgeOffsetY
                             });
                         }
                     }

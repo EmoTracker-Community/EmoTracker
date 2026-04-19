@@ -11,6 +11,8 @@ namespace EmoTracker.Data.Locations
 {
     public class Location : LocationVisualProperties
     {
+        public const string DefaultBadgeKey = "";
+
         private static AccessibilityLevel Min(AccessibilityLevel a, AccessibilityLevel b)
         {
             return (a < b) ? a : b;
@@ -493,7 +495,7 @@ namespace EmoTracker.Data.Locations
             {
                 ImageReference badge = ImageReference.FromPackRelativePath(Tracker.Instance.ActiveGamePackage, imageRef, filterSpec);
                 if (badge == null) return null;
-                mBadges[""] = new BadgeEntry("", badge);
+                mBadges[DefaultBadgeKey] = new BadgeEntry(DefaultBadgeKey, badge);
                 return badge;
             }
             catch
@@ -508,7 +510,7 @@ namespace EmoTracker.Data.Locations
             {
                 ImageReference badge = ImageReference.FromImageReference(imageRef, filter);
                 if (badge == null) return null;
-                mBadges[""] = new BadgeEntry("", badge);
+                mBadges[DefaultBadgeKey] = new BadgeEntry(DefaultBadgeKey, badge);
                 return badge;
             }
             catch

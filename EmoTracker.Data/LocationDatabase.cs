@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-
 namespace EmoTracker.Data
 {
     public class LocationDatabase : ObservableSingleton<LocationDatabase>, ICodeProvider
@@ -434,8 +433,8 @@ namespace EmoTracker.Data
                     {
                         string[] parts = captureBadgeOffset.Split(',');
                         if (parts.Length == 2 &&
-                            double.TryParse(parts[0].Trim(), out double ox) &&
-                            double.TryParse(parts[1].Trim(), out double oy))
+                            double.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double ox) &&
+                            double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double oy))
                         {
                             section.CaptureBadge = true;
                             section.CaptureBadgeOffsetX = ox;
@@ -532,7 +531,7 @@ namespace EmoTracker.Data
                             string badgealignment = entry.GetValue<string>("badge_alignment");
                             if (!string.IsNullOrEmpty(badgealignment))
                             {
-                                if (System.Enum.TryParse<Locations.BadgeAlignment>(badgealignment, ignoreCase: true, out var alignment))
+                                if (System.Enum.TryParse<EmoTracker.Data.Layout.ContentAlignment>(badgealignment, ignoreCase: true, out var alignment))
                                     mapLocation.BadgeAlignment = alignment;
                             }
 
@@ -743,7 +742,8 @@ namespace EmoTracker.Data
                         foreach (JProperty badge in badgesData.Properties())
                         {
                             string key = badge.Name;
-                            JObject badgeData = (JObject)badge.Value;
+                            JObject badgeData = badge.Value as JObject;
+                            if (badgeData == null) continue;
                             string imagePath = badgeData.GetValue<string>("image");
                             string filter = badgeData.GetValue<string>("filter");
                             double ox = badgeData.GetValue<double>("ox", 0);
