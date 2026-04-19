@@ -95,7 +95,7 @@
                                                     <Binding Path="Location.HasVisibleSections" />
                                                     <Binding Path="Location.AccessibilityLevel" />
                                                     <Binding Path="Location.HasAvailableItems" />
-                                                    <Binding Path="Location.Badges.Count" />
+                                                    <Binding Path="Location.BadgeItems.Count" />
                                                     <Binding Path="Location.NoteTakingSite.Empty" />
                                                     <Binding Path="DisplayAllLocations" Source="{x:Static data:ApplicationSettings.Instance}" />
                                                     <Binding Path="IsShiftPressed" RelativeSource="{RelativeSource AncestorType=local:LocationMapControl}" />
@@ -134,7 +134,7 @@
                                                  (Grid 0,0) according to BadgeAlignment (default BottomRight, which
                                                  places the badge top-left at the blip center so it extends to the
                                                  lower-right). BadgeMargin encodes this; BadgeOffset shifts further. -->
-                                            <ItemsControl ItemsSource="{Binding Location.Badges}"
+                                            <ItemsControl ItemsSource="{Binding Location.BadgeItems}"
                                                           IsVisible="{Binding DataContext.ShowBadge, ElementName=MinifiedLocation}"
                                                           VerticalAlignment="Top"
                                                           HorizontalAlignment="Left"
@@ -149,9 +149,12 @@
                                                         <Viewbox Width="{Binding DataContext.BadgeSize, ElementName=MinifiedLocation}"
                                                                  Height="{Binding DataContext.BadgeSize, ElementName=MinifiedLocation}"
                                                                  StretchDirection="Both">
+                                                            <Viewbox.RenderTransform>
+                                                                <TranslateTransform X="{Binding OffsetX}" Y="{Binding OffsetY}" />
+                                                            </Viewbox.RenderTransform>
                                                             <controls:InputMaskingImage
                                                                 IsHitTestVisible="{Binding DataContext.EnableBadgeHitTest, ElementName=MinifiedLocation}"
-                                                                Source="{Binding ResolvedImage}" />
+                                                                Source="{Binding Image.ResolvedImage}" />
                                                         </Viewbox>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>

@@ -1,6 +1,7 @@
 ﻿using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Media;
 using EmoTracker.Data.Notes;
+using EmoTracker.Core;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -46,6 +47,10 @@ namespace EmoTracker.Data.Locations
                                 s.HostedItem.AdvanceToCode(s.HostedItemCode);
 
                             s.AvailableChestCount = 0;
+
+                            if (s.CapturedItem != null && s.CaptureBadge)
+                                s.CapturedItem = null;
+
                             ++numClearedSections;
                         }
                     }
@@ -60,7 +65,8 @@ namespace EmoTracker.Data.Locations
 
         ObservableCollection<Location> mChildren = new ObservableCollection<Location>();
         ObservableCollection<Section> mSections = new ObservableCollection<Section>();
-        ObservableCollection<ImageReference> mBadges = new ObservableCollection<ImageReference>();
+        ObservableDictionary<string, BadgeEntry> mBadges = new ObservableDictionary<string, BadgeEntry>();
+        ObservableCollection<BadgeEntry> mBadgeItems = new ObservableCollection<BadgeEntry>();
         AccessibilityRuleSet mAccessibility = new AccessibilityRuleSet();
         AccessibilityLevel mCachedAccessibility = AccessibilityLevel.None;
         AccessibilityLevel mCachedBaseAccessibility = AccessibilityLevel.None;
@@ -466,9 +472,14 @@ namespace EmoTracker.Data.Locations
 
         #region -- Badges --
 
-        public IEnumerable<ImageReference> Badges
+        public ObservableDictionary<string, BadgeEntry> Badges
         {
             get { return mBadges; }
+        }
+
+        public ObservableCollection<BadgeEntry> BadgeItems
+        {
+            get { return mBadgeItems; }
         }
 
         public bool HasBadges
@@ -481,7 +492,8 @@ namespace EmoTracker.Data.Locations
             try
             {
                 ImageReference badge = ImageReference.FromPackRelativePath(Tracker.Instance.ActiveGamePackage, imageRef, filterSpec);
-                mBadges.Add(badge);
+                if (badge == null) return null;
+                mBadges[""] = new BadgeEntry("", badge);
                 return badge;
             }
             catch
@@ -495,7 +507,23 @@ namespace EmoTracker.Data.Locations
             try
             {
                 ImageReference badge = ImageReference.FromImageReference(imageRef, filter);
-                mBadges.Add(badge);
+                if (badge == null) return null;
+                mBadges[""] = new BadgeEntry("", badge);
+                return badge;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public ImageReference AddBadge(string key, ImageReference imageRef, string filter = null, double offsetX = 0, double offsetY = 0)
+        {
+            try
+            {
+                ImageReference badge = ImageReference.FromImageReference(imageRef, filter);
+                if (badge == null) return null;
+                mBadges[key] = new BadgeEntry(key, badge, offsetX, offsetY);
                 return badge;
             }
             catch
@@ -508,8 +536,30 @@ namespace EmoTracker.Data.Locations
         {
             try
             {
-                if (badge != null && mBadges.Contains(badge))
-                    mBadges.Remove(badge);
+                if (badge == null) return;
+                string keyToRemove = null;
+                foreach (var kvp in mBadges)
+                {
+                    if (kvp.Value.Image == badge || (kvp.Value.Image != null && kvp.Value.Image.Equals(badge)))
+                    {
+                        keyToRemove = kvp.Key;
+                        break;
+                    }
+                }
+                if (keyToRemove != null)
+                    mBadges.Remove(keyToRemove);
+            }
+            catch
+            {
+            }
+        }
+
+        public void RemoveBadge(string key)
+        {
+            try
+            {
+                if (key != null)
+                    mBadges.Remove(key);
             }
             catch
             {
@@ -521,8 +571,16 @@ namespace EmoTracker.Data.Locations
             mBadges.Clear();
         }
 
+        private void SyncBadgeItems()
+        {
+            mBadgeItems.Clear();
+            foreach (var kvp in mBadges)
+                mBadgeItems.Add(kvp.Value);
+        }
+
         private void Badges_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
+            SyncBadgeItems();
             NotifyPropertyChanged("HasBadges");
         }
 

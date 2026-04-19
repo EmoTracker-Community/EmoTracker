@@ -429,6 +429,20 @@ namespace EmoTracker.Data
                     section.ChestCount = section.AvailableChestCount = sectionData.GetValue<uint>("item_count", 0);
                     section.ClearAsGroup = sectionData.GetValue<bool>("clear_as_group", true);
                     section.CaptureItem = sectionData.GetValue<bool>("capture_item", false);
+                    string captureBadgeOffset = sectionData.GetValue<string>("capture_badge_offset");
+                    if (captureBadgeOffset != null)
+                    {
+                        string[] parts = captureBadgeOffset.Split(',');
+                        if (parts.Length == 2 &&
+                            double.TryParse(parts[0].Trim(), out double ox) &&
+                            double.TryParse(parts[1].Trim(), out double oy))
+                        {
+                            section.CaptureBadge = true;
+                            section.CaptureBadgeOffsetX = ox;
+                            section.CaptureBadgeOffsetY = oy;
+                        }
+                    }
+                    section.ClearOnCapture = sectionData.GetValue<bool>("clear_on_capture", false);
                     section.ShowGateItem = sectionData.GetValue<bool>("show_gate_item", true);
 
                     JArray sectionRules = sectionData.GetValue<JArray>("access_rules");
@@ -615,6 +629,39 @@ namespace EmoTracker.Data
                     if (notesDataArray != null)
                         locationData["notes"] = notesDataArray;
 
+                    if (location.HasBadges)
+                    {
+                        JObject badgesData = new JObject();
+                        foreach (var kvp in location.Badges)
+                        {
+                            var entry = kvp.Value;
+                            JObject badgeData = new JObject();
+
+                            if (entry.Image is ConcreteImageReference concrete)
+                            {
+                                string path = concrete.URI?.ToString()?.Replace("gamepackage://", "") ?? "";
+                                badgeData["image"] = path;
+                                if (!string.IsNullOrEmpty(concrete.Filter))
+                                    badgeData["filter"] = concrete.Filter;
+                            }
+                            else if (entry.Image is FilterImageReference filtered && filtered.Reference is ConcreteImageReference baseRef)
+                            {
+                                string path = baseRef.URI?.ToString()?.Replace("gamepackage://", "") ?? "";
+                                badgeData["image"] = path;
+                                badgeData["filter"] = filtered.Filter;
+                            }
+
+                            if (badgeData.ContainsKey("image"))
+                            {
+                                badgeData["ox"] = entry.OffsetX;
+                                badgeData["oy"] = entry.OffsetY;
+                                badgesData[kvp.Key] = badgeData;
+                            }
+                        }
+                        if (badgesData.Count > 0)
+                            locationData["badges"] = badgesData;
+                    }
+
                     locationDataArray.Add(locationData);
                 }
             }
@@ -689,6 +736,27 @@ namespace EmoTracker.Data
                     }
 
                     location.NoteTakingSite.PopulateWithJsonArray(locationData.GetValue<JArray>("notes"));
+
+                    JObject badgesData = locationData.GetValue<JObject>("badges");
+                    if (badgesData != null)
+                    {
+                        foreach (JProperty badge in badgesData.Properties())
+                        {
+                            string key = badge.Name;
+                            JObject badgeData = (JObject)badge.Value;
+                            string imagePath = badgeData.GetValue<string>("image");
+                            string filter = badgeData.GetValue<string>("filter");
+                            double ox = badgeData.GetValue<double>("ox", 0);
+                            double oy = badgeData.GetValue<double>("oy", 0);
+
+                            if (!string.IsNullOrEmpty(imagePath))
+                            {
+                                ImageReference imageRef = ImageReference.FromPackRelativePath(imagePath, filter);
+                                if (imageRef != null)
+                                    location.AddBadge(key, imageRef, null, ox, oy);
+                            }
+                        }
+                    }
                 }
 
                 JArray pinArray = locationDatabaseData.GetValue<JArray>("pinned_locations");
