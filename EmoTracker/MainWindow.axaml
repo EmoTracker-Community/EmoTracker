@@ -180,7 +180,7 @@
                                 <MenuItem Header="Lua Environment">
                                     <MenuItem Header="Support Lua 5.3 Version Checks"
                                               ToggleType="CheckBox"
-                                              IsChecked="{Binding SupportLua53VersionChecks, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                              IsChecked="{Binding Global.SupportLua53VersionChecks, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                                 </MenuItem>
                                 <Separator />
                                 <MenuItem Header="Developer Console" Command="{Binding ShowDeveloperConsoleCommand, Source={x:Static local:ApplicationModel.Instance}}" />
