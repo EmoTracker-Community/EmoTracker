@@ -44,6 +44,7 @@ namespace EmoTracker.Data
         bool mbEnableDiscordRichPresence = false;
         bool mbEnableVoice = true;
         bool mbEnableNoteTaking = true;
+        bool mbEnableVariantSwitcher = false;
         bool mbPromptOnRefreshClose = false;
         string mbVoiceInputDeviceName;
 
@@ -132,6 +133,12 @@ namespace EmoTracker.Data
         {
             get { return mbEnableNoteTaking; }
             set { SetProperty(ref mbEnableNoteTaking, value); }
+        }
+
+        public bool EnableVariantSwitcher
+        {
+            get { return mbEnableVariantSwitcher; }
+            set { SetProperty(ref mbEnableVariantSwitcher, value); }
         }
 
         public string VoiceInputDeviceName
@@ -271,6 +278,7 @@ namespace EmoTracker.Data
                         EnableDiscordRichPresence = root.GetValue<bool>("discord_rich_presence", false);
                         EnableVoiceControl = root.GetValue<bool>("enable_voice_control", true);
                         EnableNoteTaking = root.GetValue<bool>("enable_note_taking", true);
+                        EnableVariantSwitcher = root.GetValue<bool>("enable_variant_switcher", false);
                         VoiceInputDeviceName = root.GetValue<string>("voice_input_device_name");
                         PromptOnRefreshClose = root.GetValue<bool>("prompt_on_refresh_close", false);
                         LastActivePackage = root.GetValue<string>("last_active_package");
@@ -374,6 +382,7 @@ namespace EmoTracker.Data
                         root.Add("discord_rich_presence", JToken.FromObject(EnableDiscordRichPresence));
                         root.Add("enable_voice_control", JToken.FromObject(EnableVoiceControl));
                         root.Add("enable_note_taking", JToken.FromObject(EnableNoteTaking));
+                        root.Add("enable_variant_switcher", JToken.FromObject(EnableVariantSwitcher));
                         if (!string.IsNullOrWhiteSpace(VoiceInputDeviceName))
                             root.Add("voice_input_device_name", JToken.FromObject(VoiceInputDeviceName));
                         root.Add("prompt_on_refresh_close", JToken.FromObject(PromptOnRefreshClose));

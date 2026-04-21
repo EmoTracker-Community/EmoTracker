@@ -1306,9 +1306,19 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                         mPreviousNotifications.RemoveAt(9);
                     }
 
+                    notification.ForceExpired += OnNotificationForceExpired;
                     mPreviousNotifications.Insert(0, notification);
                     mNotifications.Insert(0, notification);
                 });
+            }
+        }
+
+        private void OnNotificationForceExpired(object sender, EventArgs e)
+        {
+            if (sender is Notification n)
+            {
+                n.ForceExpired -= OnNotificationForceExpired;
+                mNotifications.Remove(n);
             }
         }
 

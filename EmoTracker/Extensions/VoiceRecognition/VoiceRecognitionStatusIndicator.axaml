@@ -4,7 +4,7 @@
              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
              xmlns:session="clr-namespace:EmoTracker.Data.Session;assembly=EmoTracker.Data"
              IsVisible="{Binding Global.EnableVoiceControl, Source={x:Static session:TrackerSession.Current}}">
-    <Grid Background="Transparent" ToolTip.Tip="Voice Recognition">
+    <Grid Name="StatusGrid" Background="Transparent" ToolTip.Tip="Voice Recognition">
         <Grid.ContextMenu>
             <ContextMenu Opened="ContextMenu_Opened">
                 <MenuItem Header="Active" Name="ActiveMenuItem" ToggleType="CheckBox" IsChecked="{Binding Active, Mode=TwoWay}"/>

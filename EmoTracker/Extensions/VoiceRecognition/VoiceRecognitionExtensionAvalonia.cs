@@ -41,6 +41,13 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private CancellationTokenSource _buildCommandMapCts;
 
+        private bool _audioLibrariesAvailable = true;
+        public bool AudioLibrariesAvailable
+        {
+            get => _audioLibrariesAvailable;
+            private set => SetProperty(ref _audioLibrariesAvailable, value);
+        }
+
         private bool _active = false;
         public bool Active
         {
@@ -89,8 +96,26 @@ namespace EmoTracker.Extensions.VoiceRecognition
         public VoiceRecognitionExtension()
         {
             StatusBarControl = new VoiceRecognitionStatusIndicator { DataContext = this };
-            Vosk.Vosk.SetLogLevel(-1);
-            RefreshAudioDevices();
+            try
+            {
+                Vosk.Vosk.SetLogLevel(-1);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "[Voice] Vosk native library unavailable");
+                AudioLibrariesAvailable = false;
+                return;
+            }
+
+            try
+            {
+                RefreshAudioDevices();
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Warning(ex, "[Voice] PortAudio unavailable");
+                AudioLibrariesAvailable = false;
+            }
         }
 
         public void Start() { }

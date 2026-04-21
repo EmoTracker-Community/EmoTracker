@@ -156,6 +156,9 @@
                                 <MenuItem Header="Note Taking"
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding Global.EnableNoteTaking, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
+                                <MenuItem Header="Variant Switcher"
+                                          ToggleType="CheckBox"
+                                          IsChecked="{Binding Global.EnableVariantSwitcher, Mode=TwoWay, Source={x:Static session:TrackerSession.Current}}" />
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Assistance">
