@@ -499,7 +499,8 @@ namespace EmoTracker.Data.Locations
             try
             {
                 ImageReference badge = ImageReference.FromPackRelativePath(TrackerSession.Current.Tracker.ActiveGamePackage, imageRef, filterSpec);
-                mBadges.Add(badge);
+                if (badge == null) return null;
+                mBadges[DefaultBadgeKey] = new BadgeEntry(DefaultBadgeKey, badge);
                 return badge;
             }
             catch

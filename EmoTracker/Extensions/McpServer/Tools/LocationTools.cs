@@ -94,7 +94,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 }
 
                 var mapLocations = new List<object>();
-                foreach (var map in MapDatabase.Instance.Maps)
+                foreach (var map in TrackerSession.Current.Maps.Maps)
                 {
                     foreach (var ml in map.Locations)
                     {

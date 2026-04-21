@@ -49,13 +49,13 @@ namespace EmoTracker.Data.Locations
             PropertyChanging += (sender, e) =>
             {
                 if (e.PropertyName == nameof(CapturedItem) || e.PropertyName == nameof(AvailableChestCount))
-                    ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdating, this);
+                    TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdating, this);
             };
 
             PropertyChanged += (sender, e) =>
             {
                 if (e.PropertyName == nameof(CapturedItem) || e.PropertyName == nameof(AvailableChestCount))
-                    ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdated, this);
+                    TrackerSession.Current.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdated, this);
             };
         }
 

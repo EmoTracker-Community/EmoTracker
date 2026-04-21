@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using EmoTracker.Data;
+using EmoTracker.Data.Session;
 using System.Linq;
 
 namespace EmoTracker.Extensions.VariantSwitcher
@@ -34,7 +35,7 @@ namespace EmoTracker.Extensions.VariantSwitcher
         {
             menu.Items.Clear();
 
-            var variants = Tracker.Instance.ActiveGamePackage?.AvailableVariants?.ToList();
+            var variants = TrackerSession.Current.Tracker.ActiveGamePackage?.AvailableVariants?.ToList();
             if (variants == null || variants.Count == 0)
             {
                 menu.Items.Add(new MenuItem
@@ -46,7 +47,7 @@ namespace EmoTracker.Extensions.VariantSwitcher
             }
 
             var command = EmoTracker.ApplicationModel.Instance.ActivatePackCommand;
-            var activeVariant = Tracker.Instance.ActiveGamePackage?.ActiveVariant;
+            var activeVariant = TrackerSession.Current.Tracker.ActiveGamePackage?.ActiveVariant;
             foreach (var variant in variants)
             {
                 menu.Items.Add(new MenuItem

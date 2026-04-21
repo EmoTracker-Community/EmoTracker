@@ -768,11 +768,13 @@ end
             FinishLoadingSaveFile,
             PackReady,
             AutoTrackerStarted,
-            AutoTrackerStopped
+            AutoTrackerStopped,
+            LocationUpdating,
+            LocationUpdated
         }
 
         [LuaHide]
-        public void InvokeStandardCallback(StandardCallback callback)
+        public void InvokeStandardCallback(StandardCallback callback, params object[] args)
         {
             string functionName = null;
             switch (callback)
@@ -804,6 +806,14 @@ end
                 case StandardCallback.AutoTrackerStopped:
                     functionName = "autotracker_stopped";
                     break;
+
+                case StandardCallback.LocationUpdating:
+                    functionName = "tracker_on_location_updating";
+                    break;
+
+                case StandardCallback.LocationUpdated:
+                    functionName = "tracker_on_location_updated";
+                    break;
             }
 
             if (!mbInPostLogicUpdate)
@@ -817,7 +827,7 @@ end
                         using (LuaFunction func = mLua[functionName] as LuaFunction)
                         {
                             if (func != null)
-                                SafeCall(func);
+                                SafeCall(func, args);
                         }
                     }
                 }
@@ -826,7 +836,7 @@ end
                     OutputException(e);
                 }
                 finally
-                { 
+                {
                     mbInPostLogicUpdate = false;
                 }
             }
