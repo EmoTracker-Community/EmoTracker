@@ -132,7 +132,7 @@
         <!-- Package list -->
         <ScrollViewer Grid.Row="1" Grid.Column="1"
                       VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
+                      HorizontalScrollBarVisibility="Disabled" ClipToBounds="True">
             <Grid TextElement.Foreground="WhiteSmoke" Grid.IsSharedSizeScope="True" MinHeight="50">
 
                 <!-- Empty state message -->

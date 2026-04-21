@@ -399,7 +399,7 @@
                     </Grid>
                     <!-- Content area -->
                     <Grid Grid.Row="1"
-                          Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}, TargetNullValue=#66212121, FallbackValue=#66212121}">
+                          Background="{Binding Background, Converter={x:Static converters:StringToBrushConverter.Instance}, TargetNullValue=#66212121, FallbackValue=#66212121}" ClipToBounds="True">
                         <!-- Use a single-cell Grid panel (not StackPanel) so children
                              receive the GroupBox content area's finite height constraint.
                              StackPanel measures children at infinite height in the stacking
