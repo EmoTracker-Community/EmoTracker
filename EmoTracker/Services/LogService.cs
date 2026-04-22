@@ -93,5 +93,21 @@ namespace EmoTracker.Services
         {
             Log.Error(format, tokens);
         }
+        public void Debug(Exception ex, string format, params object[] tokens)
+        {
+            Log.Debug(ex, format, tokens);
+        }
+        public void Info(Exception ex, string format, params object[] tokens)
+        {
+            Log.Information(ex, format, tokens);
+        }
+        public void Warn(Exception ex, string format, params object[] tokens)
+        {
+            Log.Warning(ex, format, tokens);
+        }
+        public void Error(Exception ex, string format, params object[] tokens)
+        {
+            Log.Error(ex, format, tokens);
+        }
     }
 }

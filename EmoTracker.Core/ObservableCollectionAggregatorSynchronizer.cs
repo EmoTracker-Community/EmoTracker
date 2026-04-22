@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmoTracker.Core
@@ -27,6 +28,7 @@ namespace EmoTracker.Core
         private List<ListSegment> Segments = new List<ListSegment>();
         private ObservableCollection<DstType> mDest;
         private Func<SrcType, DstType> mItemConverter;
+        private CancellationToken mCancellationToken;
 
         public bool EnableDispose
         {
@@ -38,6 +40,18 @@ namespace EmoTracker.Core
         {
             mDest = dest;
             mItemConverter = itemConverter;
+
+            foreach (IReadOnlyCollection<SrcType> source in sources)
+            {
+                AddSource(source);
+            }
+        }
+
+        public ObservableCollectionAggregatorSynchronizer(ObservableCollection<DstType> dest, Func<SrcType, DstType> itemConverter, CancellationToken cancellationToken, params IReadOnlyCollection<SrcType>[] sources)
+        {
+            mDest = dest;
+            mItemConverter = itemConverter;
+            mCancellationToken = cancellationToken;
 
             foreach (IReadOnlyCollection<SrcType> source in sources)
             {
@@ -244,6 +258,17 @@ namespace EmoTracker.Core
                 RemoveSource(segment.Source);
             }
         }
+
+        /// <summary>
+        /// Cancels the synchronization by unsubscribing all source change handlers.
+        /// </summary>
+        public void Cancel()
+        {
+            foreach (var segment in Segments.ToArray())
+            {
+                RemoveSource(segment.Source);
+            }
+        }
     }
 
     public class TrivialObservableCollectionAggregatorSynchronizer<T> : ObservableCollectionAggregatorSynchronizer<T, T>
@@ -255,6 +280,12 @@ namespace EmoTracker.Core
 
         public TrivialObservableCollectionAggregatorSynchronizer(ObservableCollection<T> dest, params IReadOnlyCollection<T>[] sources) :
             base(dest, ItemConverter, sources)
+        {
+            EnableDispose = false;
+        }
+
+        public TrivialObservableCollectionAggregatorSynchronizer(ObservableCollection<T> dest, CancellationToken cancellationToken, params IReadOnlyCollection<T>[] sources) :
+            base(dest, ItemConverter, cancellationToken, sources)
         {
             EnableDispose = false;
         }
