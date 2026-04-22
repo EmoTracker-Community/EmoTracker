@@ -23,6 +23,11 @@ namespace EmoTracker.UI
             ActionButton.Content = actionButtonTitle;
         }
 
+        public new void Show()
+        {
+            base.Show(Services.Updates.UpdateUIFactory.MainWindow);
+        }
+
         public void OnDownloadProgressChanged(object sender, ItemDownloadProgressEventArgs args)
         {
             Dispatcher.UIThread.Post(() =>

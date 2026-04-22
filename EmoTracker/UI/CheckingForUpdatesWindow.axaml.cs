@@ -16,7 +16,7 @@ namespace EmoTracker.UI
 
         public new void Show()
         {
-            base.Show();
+            base.Show(Services.Updates.UpdateUIFactory.MainWindow);
         }
 
         public new void Close()

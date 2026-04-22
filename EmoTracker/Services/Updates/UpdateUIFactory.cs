@@ -18,14 +18,17 @@ namespace EmoTracker.Services.Updates
 
         public override ICheckingForUpdates ShowCheckingForUpdates()
         {
-            var window = new EmoTracker.UI.CheckingForUpdatesWindow();
-            Dispatcher.UIThread.Post(() => window.Show());
-            return window;
+            return OnUIThread(() =>
+            {
+                var window = new EmoTracker.UI.CheckingForUpdatesWindow();
+                window.Show(MainWindow);
+                return window;
+            });
         }
 
         public override void ShowVersionIsUpToDate()
         {
-            Dispatcher.UIThread.Post(() => new ApplicationIsUpToDateWindow().Show());
+            Dispatcher.UIThread.Post(() => new ApplicationIsUpToDateWindow().Show(MainWindow));
         }
 
         public override IUpdateAvailable CreateUpdateAvailableWindow(
@@ -35,13 +38,28 @@ namespace EmoTracker.Services.Updates
             string appName,
             bool isUpdateAlreadyDownloaded)
         {
-            var window = new EmoTracker.UI.UpdateAvailableWindow(updates, currentVersion, appName);
-            return window;
+            return OnUIThread(() => new EmoTracker.UI.UpdateAvailableWindow(updates, currentVersion, appName));
         }
 
         public override IDownloadProgress CreateProgressWindow(string downloadTitle, string actionButtonTitleAfterDownload)
         {
-            return new EmoTracker.UI.UpdateDownloadWindow(downloadTitle, actionButtonTitleAfterDownload);
+            return OnUIThread(() => new EmoTracker.UI.UpdateDownloadWindow(downloadTitle, actionButtonTitleAfterDownload));
+        }
+
+        internal static Window MainWindow =>
+            (Avalonia.Application.Current?.ApplicationLifetime
+                as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)
+            ?.MainWindow;
+
+        // NetSparkle calls UIFactory methods from a background thread. On Windows,
+        // Avalonia Window objects must be created on the UI thread or the Win32 backend
+        // throws. On macOS the AppKit backend is more lenient, which is why updates
+        // appeared to work there but not on Windows.
+        private static T OnUIThread<T>(System.Func<T> func)
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+                return func();
+            return Dispatcher.UIThread.InvokeAsync(func).GetAwaiter().GetResult();
         }
     }
 }

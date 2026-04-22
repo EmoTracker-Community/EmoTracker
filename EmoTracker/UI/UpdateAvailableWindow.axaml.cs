@@ -51,7 +51,7 @@ namespace EmoTracker.UI
         // ── IUpdateAvailable ───────────────────────────────────────────────────
         public new void Show()
         {
-            base.Show();
+            base.Show(Services.Updates.UpdateUIFactory.MainWindow);
         }
 
         public void HideReleaseNotes()
