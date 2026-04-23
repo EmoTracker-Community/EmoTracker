@@ -134,6 +134,22 @@ namespace EmoTracker
             if (installedMenu == null)
                 return;
 
+            // Unsubscribe old items from command events before clearing.
+            // MenuItem internally subscribes to ICommand.CanExecuteChanged when
+            // Command is assigned. Clearing the collection leaves orphaned
+            // subscriptions alive on the singleton ActivatePackCommand.
+            foreach (var item in installedMenu.Items)
+            {
+                if (item is MenuItem outerMi)
+                {
+                    outerMi.Command = null;
+                    foreach (var sub in outerMi.Items)
+                    {
+                        if (sub is MenuItem innerMi)
+                            innerMi.Command = null;
+                    }
+                }
+            }
             installedMenu.Items.Clear();
 
             var groups = ApplicationModel.Instance.InstalledPackagesGroupedView;
