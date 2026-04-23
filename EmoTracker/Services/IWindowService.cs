@@ -1,3 +1,5 @@
+using Avalonia.Input;
+
 namespace EmoTracker.Services
 {
     public interface IWindowService
@@ -7,6 +9,9 @@ namespace EmoTracker.Services
 
         /// <summary>Returns keyboard focus to the main application window.</summary>
         void FocusMainWindow();
+
+        /// <summary>Sets the cursor on the main window.</summary>
+        void SetCursor(Cursor cursor);
 
         /// <summary>Opens a folder in the platform file manager.</summary>
         void OpenFolder(string path);

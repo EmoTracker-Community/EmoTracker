@@ -1,4 +1,5 @@
 #nullable enable annotations
+using Avalonia.Input;
 using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
@@ -15,6 +16,7 @@ using EmoTracker.UI;
 using EmoTracker.UI.Media;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Threading.Tasks;
 using System.CodeDom;
 using System.Collections;
 using System.Collections.Generic;
@@ -27,7 +29,7 @@ namespace EmoTracker
 {
     public class ApplicationModel : ObservableSingleton<ApplicationModel>, ICodeProvider, INotificationService
     {
-        public DelegateCommand RefreshCommand { get; private set; }
+        public AsyncDelegateCommand RefreshCommand { get; private set; }
         public DelegateCommand ResetUserDataCommand { get; private set; }
         public DelegateCommand OpenPackOverrideFolderCommand { get; private set; }
         public DelegateCommand ActivatePackCommand { get; private set; }
@@ -36,9 +38,9 @@ namespace EmoTracker
         public DelegateCommand ShowBroadcastViewCommand { get; private set; }
         public DelegateCommand ShowDeveloperConsoleCommand { get; private set; }
 
-        public DelegateCommand SaveCommand { get; private set; }
-        public DelegateCommand SaveAsCommand { get; private set; }
-        public DelegateCommand OpenCommand { get; private set; }
+        public AsyncDelegateCommand SaveCommand { get; private set; }
+        public AsyncDelegateCommand SaveAsCommand { get; private set; }
+        public AsyncDelegateCommand OpenCommand { get; private set; }
 
         public DelegateCommand OpenPackageDocumentationCommand { get; private set; }
 
@@ -131,15 +133,15 @@ namespace EmoTracker
             Tracker.Instance.OnPackageLoadStarting += Tracker_OnPackageLoadStarting;
             Tracker.Instance.OnPackageLoadComplete += Tracker_OnPackageLoadComplete;
 
-            RefreshCommand = new DelegateCommand(RefreshHandler);
+            RefreshCommand = new AsyncDelegateCommand(RefreshHandler);
             ResetUserDataCommand = new DelegateCommand(ResetUserDataHandler);
             OpenPackOverrideFolderCommand = new DelegateCommand(OpenPackOverrideFolderHandler);
             ActivatePackCommand = new DelegateCommand(ActivatePackHandler);
             ShowPackageManagerCommand = new DelegateCommand(ShowPackManagerHandler);
             ExportPackageOverrideCommand = new DelegateCommand(ExportPackageOverrideHandler);
-            SaveCommand = new DelegateCommand(SaveHandler, CanSave);
-            SaveAsCommand = new DelegateCommand(SaveAsHandler, CanSave);
-            OpenCommand = new DelegateCommand(OpenHandler);
+            SaveCommand = new AsyncDelegateCommand(SaveHandler, CanSave);
+            SaveAsCommand = new AsyncDelegateCommand(SaveAsHandler, CanSave);
+            OpenCommand = new AsyncDelegateCommand(OpenHandler);
 
             OpenPackageDocumentationCommand = new DelegateCommand(OpenPackageDocumentation, CanOpenPackageDocumentation);
             ResetLayoutScaleCommand = new DelegateCommand(ResetLayoutScale);
@@ -376,17 +378,26 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
             WindowService.Instance.FocusMainWindow();
         }
 
-        private async void RefreshHandler(object param)
+        private async void RefreshHandler(object param, TaskCompletionSource<object> tcs)
         {
-            if (ApplicationSettings.Instance.PromptOnRefreshClose)
+            WindowService.Instance.SetCursor(new Cursor(StandardCursorType.Wait));
+            try
             {
-                bool result = await DialogService.Instance.ShowYesNoAsync("Warning!", "Refreshing will cause you to lose all unsaved progress. Are you sure you want to refresh?", defaultYes: false);
-                if (!result)
-                    return;
-            }
+                if (ApplicationSettings.Instance.PromptOnRefreshClose)
+                {
+                    bool result = await DialogService.Instance.ShowYesNoAsync("Warning!", "Refreshing will cause you to lose all unsaved progress. Are you sure you want to refresh?", defaultYes: false);
+                    if (!result)
+                        return;
+                }
 
-            Reload();
-            WindowService.Instance.FocusMainWindow();
+                Reload();
+                WindowService.Instance.FocusMainWindow();
+            }
+            finally
+            {
+                WindowService.Instance.SetCursor(new Cursor(StandardCursorType.Arrow));
+                tcs?.TrySetResult(null);
+            }
         }
 
         private async void ResetUserDataHandler(object param)
@@ -461,7 +472,7 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
         string mCurrentSavePath;
 
-        private async void OpenHandler(object obj)
+        private async void OpenHandler(object obj, TaskCompletionSource<object> tcs)
         {
             string defaultSaveDataPath = Path.Combine(UserDirectory.Path, "saves");
 
@@ -485,6 +496,8 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
                     mCurrentSavePath = filename;
                 }
             }
+
+            tcs?.TrySetResult(null);
         }
 
         private bool CanSave(object obj)
@@ -492,19 +505,20 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
             return Tracker.Instance.ActiveGamePackage != null;
         }
 
-        private void SaveHandler(object obj)
+        private void SaveHandler(object obj, TaskCompletionSource<object> tcs)
         {
             if (!string.IsNullOrWhiteSpace(mCurrentSavePath))
             {
                 SaveProgress(mCurrentSavePath);
+                tcs?.TrySetResult(null);
             }
             else
             {
-                SaveAsHandler(obj);
+                SaveAsHandler(obj, tcs);
             }
         }
 
-        private async void SaveAsHandler(object obj)
+        private async void SaveAsHandler(object obj, TaskCompletionSource<object> tcs)
         {
             string defaultSaveDataPath = Path.Combine(UserDirectory.Path, "saves");
 
@@ -529,6 +543,8 @@ defaultSaveDataPath)
                 Directory.CreateDirectory(Path.GetDirectoryName(filename));
                 SaveProgress(filename);
             }
+
+            tcs?.TrySetResult(null);
         }
 
         private bool SaveProgress(string path)

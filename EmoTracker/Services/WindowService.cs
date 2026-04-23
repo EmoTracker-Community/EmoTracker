@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 
 namespace EmoTracker.Services
 {
@@ -32,6 +33,16 @@ namespace EmoTracker.Services
         public void FocusMainWindow()
         {
             MainWindow?.Focus();
+        }
+
+        public void SetCursor(Cursor cursor)
+        {
+            var win = MainWindow;
+            if (win != null)
+            {
+                win.UpdateLayout();
+                win.Cursor = cursor;
+            }
         }
 
         public void OpenFolder(string path)
