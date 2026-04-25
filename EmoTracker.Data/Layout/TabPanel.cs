@@ -89,16 +89,42 @@ namespace EmoTracker.Data.Layout
             get { return mTabs; }
         }
 
-        // CurrentTab is pure per-state runtime state (no definition default).
-        // Held as a private Tab reference rather than via the KV store —
-        // the Tab itself is a per-state owned instance, so storing it in
-        // MutableData would invite IDeepCopyable-on-Tab questions for no
-        // benefit. On Fork we rewire CurrentTab to the fork's same-index Tab.
-        Tab mCurrentTab;
+        // CurrentTab is pure per-state runtime state — the user's currently-
+        // selected tab in this state, with no parse-time definition default.
+        // Stored by DefinitionId in MutableData (matching the Phase 3
+        // Section.HostedItemId pattern) and exposed through a hand-written
+        // CurrentTab accessor that resolves the id through this state's
+        // mTabs collection.
+        //
+        // Why Guid-by-DefinitionId instead of storing the Tab reference?
+        //
+        // 1. Tab is a ModelTypeBase reference type that doesn't (and
+        //    shouldn't) implement IDeepCopyable, so the per-key COW boundary
+        //    won't accept it directly via [KVMutable] partial Tab.
+        // 2. The Guid roundtrip means CurrentTabId carries through Fork via
+        //    per-key COW automatically — no explicit rewire in Fork(). The
+        //    fork's CurrentTab getter resolves the inherited Guid through
+        //    its own mTabs and returns the matching fork-side Tab.
+        // 3. Tab order isn't an invariant the design needs to lean on; the
+        //    DefinitionId lookup is order-independent (future per-state tab
+        //    insertion / reordering wouldn't break the selection).
+        // 4. Upgrade path: swapping [KVMutable] for [KVTransactable] makes
+        //    tab selection undoable without restructuring the storage.
+        [KVMutable]
+        [DependentProperty(nameof(CurrentTab))]
+        public partial System.Guid CurrentTabId { get; set; }
+
         public Tab CurrentTab
         {
-            get { return mCurrentTab; }
-            set { SetProperty(ref mCurrentTab, value); }
+            get
+            {
+                var id = CurrentTabId;
+                if (id == System.Guid.Empty) return null;
+                foreach (var tab in mTabs)
+                    if (tab.DefinitionId == id) return tab;
+                return null;
+            }
+            set { CurrentTabId = (value != null) ? value.DefinitionId : System.Guid.Empty; }
         }
 
         public override void Dispose()
@@ -142,21 +168,12 @@ namespace EmoTracker.Data.Layout
             var copy = (TabPanel)System.Activator.CreateInstance(this.GetType());
             copy.InitializeAsForkOf(this);
 
-            int currentIdx = -1;
-            for (int i = 0; i < this.mTabs.Count; i++)
-            {
-                if (ReferenceEquals(this.mTabs[i], this.mCurrentTab))
-                    currentIdx = i;
-
-                var forked = (Tab)this.mTabs[i].Fork();
-                copy.mTabs.Add(forked);
-            }
-
-            // Rewire CurrentTab to the fork's same-index tab (pre-Phase-4
-            // semantics: first tab is current after parse, the user may have
-            // switched at runtime — preserve that runtime selection).
-            if (currentIdx >= 0 && currentIdx < copy.mTabs.Count)
-                copy.mCurrentTab = copy.mTabs[currentIdx];
+            // Fork the owned mTabs subtree. CurrentTabId is inherited via
+            // per-key COW on MutableData and resolves through the fork's
+            // own mTabs (since each forked Tab carries the same DefinitionId
+            // as its source counterpart) — no explicit selection rewire needed.
+            foreach (var tab in this.mTabs)
+                copy.mTabs.Add((Tab)tab.Fork());
 
             return copy;
         }

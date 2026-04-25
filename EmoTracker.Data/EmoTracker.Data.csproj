@@ -30,4 +30,11 @@
     <PackageReference Include="NLua" Version="1.7.8" />
   </ItemGroup>
 
+  <!--
+    Note: <InternalsVisibleTo> ItemGroup wouldn't be picked up here because
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo> disables the SDK's
+    auto-emission of assembly-level attributes. The equivalent IVT attribute
+    is declared in AssemblyInfo.cs instead.
+  -->
+
 </Project>

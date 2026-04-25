@@ -282,5 +282,86 @@ namespace EmoTracker.SourceGenerators.Tests
             Assert.Equal("Fork", fork.Title);
             Assert.Equal("Source", tab.Title);
         }
+
+        // -------- TabPanel.CurrentTab Guid resolution -----------------------
+
+        [Fact]
+        public void TabPanel_CurrentTab_StoredByDefinitionId_ResolvesThroughLocalTabs()
+        {
+            // Verify the Guid-by-DefinitionId pattern: setting CurrentTab on
+            // a parent stores its DefinitionId, the matching tab is found by
+            // walking the parent's mTabs, and the fork — which holds its own
+            // forked Tab instances with the SAME DefinitionIds — resolves the
+            // inherited CurrentTabId through its own mTabs (not the parent's).
+            var panel = new TabPanel();
+            // Construct two Tabs via the SeedDefinition helper that
+            // TabPanel.TryParseInternal also uses.
+            var tab0 = new TabPanel.Tab();
+            tab0.SeedDefinition("First", null, null);
+            var tab1 = new TabPanel.Tab();
+            tab1.SeedDefinition("Second", null, null);
+            // Reflectively add to the otherwise-private mTabs collection (the
+            // production path goes through TryParseInternal, which is parser-
+            // gated; for unit tests we go around it).
+            var tabsField = typeof(TabPanel).GetField("mTabs",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var mTabs = (System.Collections.ObjectModel.ObservableCollection<TabPanel.Tab>)tabsField.GetValue(panel);
+            mTabs.Add(tab0);
+            mTabs.Add(tab1);
+
+            // Initially CurrentTab is null — no Guid set.
+            Assert.Null(panel.CurrentTab);
+
+            // Setting CurrentTab to tab1 stores its DefinitionId; the getter
+            // resolves it back to tab1.
+            panel.CurrentTab = tab1;
+            Assert.Equal(tab1.DefinitionId, panel.CurrentTabId);
+            Assert.Same(tab1, panel.CurrentTab);
+
+            // Fork: the fork has its own forked Tab instances (same
+            // DefinitionIds, different references); the inherited CurrentTabId
+            // resolves through the fork's mTabs.
+            var fork = (TabPanel)panel.Fork();
+            var forkMTabs = (System.Collections.ObjectModel.ObservableCollection<TabPanel.Tab>)tabsField.GetValue(fork);
+            Assert.Equal(2, forkMTabs.Count);
+            Assert.Equal(tab0.DefinitionId, forkMTabs[0].DefinitionId);
+            Assert.Equal(tab1.DefinitionId, forkMTabs[1].DefinitionId);
+
+            // Fork's CurrentTab resolves to its own tab1, not the source's.
+            var forkCurrent = fork.CurrentTab;
+            Assert.NotNull(forkCurrent);
+            Assert.NotSame(tab1, forkCurrent);
+            Assert.Same(forkMTabs[1], forkCurrent);
+
+            // Per-state COW: changing the fork's selection doesn't disturb the
+            // source's selection.
+            fork.CurrentTab = forkMTabs[0];
+            Assert.Same(forkMTabs[0], fork.CurrentTab);
+            Assert.Same(tab1, panel.CurrentTab);
+        }
+
+        [Fact]
+        public void TabPanel_CurrentTabId_RaisesINPCFor_CurrentTab()
+        {
+            // [DependentProperty(nameof(CurrentTab))] on CurrentTabId means
+            // setting CurrentTabId fires PropertyChanged for both
+            // "CurrentTabId" and "CurrentTab" — XAML bindings on CurrentTab
+            // refresh when the underlying Guid mutates.
+            var panel = new TabPanel();
+            var tab = new TabPanel.Tab();
+            tab.SeedDefinition("T", null, null);
+            var tabsField = typeof(TabPanel).GetField("mTabs",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var mTabs = (System.Collections.ObjectModel.ObservableCollection<TabPanel.Tab>)tabsField.GetValue(panel);
+            mTabs.Add(tab);
+
+            var changed = new System.Collections.Generic.List<string>();
+            ((INotifyPropertyChanged)panel).PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+            panel.CurrentTab = tab;
+
+            Assert.Contains("CurrentTabId", changed);
+            Assert.Contains("CurrentTab", changed);
+        }
     }
 }
