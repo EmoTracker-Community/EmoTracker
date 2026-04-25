@@ -1,10 +1,13 @@
-﻿using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
+using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Media;
+using System;
 using System.Collections.Generic;
 
 namespace EmoTracker.Data.Locations
 {
-    public class Section : LocationVisualProperties
+    public partial class Section : LocationVisualProperties
     {
         private static AccessibilityLevel Min(AccessibilityLevel a, AccessibilityLevel b)
         {
@@ -16,36 +19,52 @@ namespace EmoTracker.Data.Locations
             return (a > b) ? a : b;
         }
 
-        private Location mOwner;
-        private string mName;
-        private string mShortName;
-        private string mGateCode;
-        private string mItemCaptureLayout;
-        private uint mnNumChests = 0;
-        private ImageReference mThumbnail;
+        // Definition data: rule sets parsed once and never re-assigned at runtime.
+        // Held as private fields per the same exemption used elsewhere in the data
+        // model (reference-typed, don't fit IDeepCopyable cleanly). Forks share
+        // by reference via OnForked.
         private AccessibilityRuleSet mGateAccessibilityRules = new AccessibilityRuleSet();
         private AccessibilityRuleSet mGateBypassRules = new AccessibilityRuleSet();
         private AccessibilityRuleSet mAccessibilityRules = new AccessibilityRuleSet();
         private AccessibilityRuleSet mVisibilityRules = new AccessibilityRuleSet();
-        private ITrackableItem mGateItem;
+
+        // Cross-references via the Phase 2.5 framework.
+        private ModelReference<Location> mOwnerRef;
+        private ModelReference<ITrackableItem> mHostedItemRef;
+        private ModelReference<ITrackableItem> mGateItemRef;
+        private ModelReference<ITrackableItem> mCapturedItemRef;
+
+        // Computed accessibility / visibility cache. Held as fields and refreshed
+        // by RefreshAccessibility; per-state state. (Could move into MutableData
+        // for clean per-state semantics; that's a follow-up if accessibility
+        // values need to differ across forks before the state-lifecycle phase.)
         private AccessibilityLevel mCachedAccessibility = AccessibilityLevel.None;
         private AccessibilityLevel mCachedGateAccessibility = AccessibilityLevel.None;
         private bool mbCachedVisibilty = true;
-        private bool mbClearAsGroup = false;
-        private bool mbCaptureItem = false;
-        private bool mbCaptureBadge = false;
-        private double mCaptureBadgeOffsetX = 0;
-        private double mCaptureBadgeOffsetY = 0;
-        private bool mbClearOnCapture = false;
-        private bool mbCapturePersist = false;
-        private bool mSuppressCaptureClearing = false;
-        private bool mbShowGateItem = true;
 
-        public Section(Location owner)
+        // Reentrancy guard for the ClearOnCapture cascade. Lifetime: a single
+        // setter invocation. Stays as a transient private field — see Phase 3 §3.1.
+        private bool mSuppressCaptureClearing = false;
+
+        // Parameterless ctor — required for Fork's Activator path.
+        public Section()
+        {
+            mOwnerRef = new ModelReference<Location>(this);
+            mHostedItemRef = new ModelReference<ITrackableItem>(this);
+            mGateItemRef = new ModelReference<ITrackableItem>(this);
+            mCapturedItemRef = new ModelReference<ITrackableItem>(this);
+
+            WireScriptManagerCallbacks();
+        }
+
+        public Section(Location owner) : this()
         {
             VisualParent = owner;
-            mOwner = owner;
+            mOwnerRef.Set(owner);
+        }
 
+        void WireScriptManagerCallbacks()
+        {
             PropertyChanging += (sender, e) =>
             {
                 if (e.PropertyName == nameof(CapturedItem) || e.PropertyName == nameof(AvailableChestCount))
@@ -61,72 +80,168 @@ namespace EmoTracker.Data.Locations
 
         public Location Owner
         {
-            get { return mOwner; }
+            get { return mOwnerRef.Target; }
         }
 
-        public string Name
-        {
-            get { return mName; }
-            set { SetProperty(ref mName, value); NotifyPropertyChanged("ShortName"); }
-        }
+        // -------- KVMutable scalar / string properties -----------------------
+
+        [KVMutable]
+        public partial string Name { get; set; }
+
+        // ShortName falls back to Name. Hand-written getter; the actual storage
+        // is a private [KVMutable] partial so the public surface exposes only
+        // the wrapper.
+        [KVMutable]
+        private partial string ShortNameRaw { get; set; }
 
         public string ShortName
         {
             get
             {
-                if (mShortName != null)
-                    return mShortName;
-
+                var raw = ShortNameRaw;
+                if (raw != null) return raw;
                 return Name;
             }
-            set { SetProperty(ref mShortName, value); }
+            set { ShortNameRaw = value; }
         }
 
-        public string ItemCaptureLayout
+        [KVMutable]
+        public partial string ItemCaptureLayout { get; set; }
+
+        [KVMutable]
+        public partial ImageReference Thumbnail { get; set; }
+
+        // ChestCount is definition-time today (set once during parse). Pre-Phase-3
+        // had no equality check (`mnNumChests = value; NotifyPropertyChanged()`),
+        // so we always notify on assignment — preserving that quirk via a
+        // hand-written setter rather than [KVMutable]'s on-change-only firing.
+        public uint ChestCount
         {
-            get { return mItemCaptureLayout; }
-            set { SetProperty(ref mItemCaptureLayout, value); }
+            get { return MutableData.GetValue<uint>(nameof(ChestCount), 0); }
+            set
+            {
+                MutableData.SetValue(nameof(ChestCount), value);
+                NotifyPropertyChanged();
+            }
         }
 
-        public ImageReference Thumbnail
+        [KVMutable]
+        public partial bool ClearAsGroup { get; set; }
+
+        [KVMutable]
+        public partial bool CaptureItem { get; set; }
+
+        [KVMutable]
+        public partial bool CaptureBadge { get; set; }
+
+        [KVMutable]
+        public partial double CaptureBadgeOffsetX { get; set; }
+
+        [KVMutable]
+        public partial double CaptureBadgeOffsetY { get; set; }
+
+        [KVMutable]
+        public partial bool ClearOnCapture { get; set; }
+
+        [KVMutable]
+        public partial bool CapturePersist { get; set; }
+
+        [KVMutable]
+        public partial bool ShowGateItem { get; set; }
+
+        // -------- Cross-reference accessors (Guid + ModelReference wrapper) ---
+
+        // The transactable storage slots. The Guid is the undo-tracked value
+        // and the ModelReference is a per-instance cache that resolves through
+        // this section's GetModelResolver(). [TransactablePropertyReadBehavior
+        // .AllowOpenTransactionRead] on CapturedItemId so reads inside an open
+        // transaction scope (e.g. the side-effect cascade itself) see the
+        // in-flight value, matching the pre-Phase-3 attribute on CapturedItem.
+
+        [KVTransactable]
+        [OnChanged(nameof(OnHostedItemIdChanged))]
+        private partial Guid HostedItemId { get; set; }
+
+        [KVTransactable]
+        [OnChanged(nameof(OnGateItemIdChanged))]
+        private partial Guid GateItemId { get; set; }
+
+        [KVTransactable]
+        [OnChanged(nameof(OnCapturedItemIdChanged))]
+        [TransactablePropertyReadBehavior(TransactablePropertyReadBehavior.AllowOpenTransactionRead)]
+        private partial Guid CapturedItemIdStored { get; set; }
+
+        // Resolves the typed item by syncing the local cache to the in-flight Guid.
+        ITrackableItem ResolveTyped(ModelReference<ITrackableItem> cache, Guid currentId)
         {
-            get { return mThumbnail; }
-            set { mThumbnail = value; NotifyPropertyChanged(); }
+            if (cache.DefinitionId != currentId)
+                cache.Set(currentId);
+            return cache.Target;
         }
 
         public ITrackableItem HostedItem
         {
-            get { return GetTransactableProperty<ITrackableItem>(); }
-            private set { SetTransactableProperty(value); }
+            get { return ResolveTyped(mHostedItemRef, HostedItemId); }
+            private set { HostedItemId = (value as ModelTypeBase)?.DefinitionId ?? Guid.Empty; }
         }
 
-        [TransactablePropertyReadBehavior(TransactablePropertyReadBehavior.AllowOpenTransactionRead)]
+        public ITrackableItem GateItem
+        {
+            get { return ResolveTyped(mGateItemRef, GateItemId); }
+            private set { GateItemId = (value as ModelTypeBase)?.DefinitionId ?? Guid.Empty; }
+        }
+
+        // CapturedItem is hand-written end-to-end because its setter has a
+        // synchronous side-effect cascade (capture-badge management,
+        // ClearOnCapture, AutoUnpinIfAppropriate) that must run BEFORE the
+        // transaction commits.
         public ITrackableItem CapturedItem
         {
-            get { return GetTransactableProperty<ITrackableItem>(); }
+            get
+            {
+                // Honors AllowOpenTransactionRead via GetTransactableProperty.
+                Guid currentId = GetTransactableProperty<Guid>(nameof(CapturedItemIdStored));
+                return ResolveTyped(mCapturedItemRef, currentId);
+            }
             set
             {
+                Guid newId = (value as ModelTypeBase)?.DefinitionId ?? Guid.Empty;
                 using (TransactionProcessor.Current.OpenTransaction())
                 {
-                    if (SetTransactableProperty(value, (processedValue) =>
+                    // PropertyChanging("CapturedItem") fires explicitly for the
+                    // ScriptManager LocationUpdating callback (the constructor's
+                    // subscription).
+                    NotifyPropertyChanging(nameof(CapturedItem));
+
+                    bool queued = SetTransactableProperty<Guid>(newId, _ =>
                     {
+                        // Post-commit callback: refresh the cache, fire INPC
+                        // for the typed wrapper, refresh accessibility.
+                        Guid commitedId = GetTransactableProperty<Guid>(nameof(CapturedItemIdStored));
+                        if (mCapturedItemRef.DefinitionId != commitedId)
+                            mCapturedItemRef.Set(commitedId);
+                        NotifyPropertyChanged(nameof(CapturedItem));
                         LocationDatabase.Instance.RefeshAccessibility();
-                    }))
+                    }, nameof(CapturedItemIdStored));
+
+                    if (queued)
                     {
-                        if (mbCaptureBadge)
+                        // Synchronous side effects (run before commit, inside
+                        // the open transaction scope so they participate in undo).
+                        if (CaptureBadge)
                         {
-                            string badgeKey = "capture_" + mName;
+                            string badgeKey = "capture_" + Name;
                             if (value?.PotentialIcon != null)
                             {
-                                Owner.AddBadge(badgeKey, value.PotentialIcon, null, mCaptureBadgeOffsetX, mCaptureBadgeOffsetY);
+                                Owner?.AddBadge(badgeKey, value.PotentialIcon, null, CaptureBadgeOffsetX, CaptureBadgeOffsetY);
                             }
                             else
                             {
-                                Owner.RemoveBadge(badgeKey);
+                                Owner?.RemoveBadge(badgeKey);
                             }
                         }
 
-                        if (mbClearOnCapture && value != null)
+                        if (ClearOnCapture && value != null)
                         {
                             mSuppressCaptureClearing = true;
                             try
@@ -141,80 +256,96 @@ namespace EmoTracker.Data.Locations
                             }
                         }
 
-                        //  Because relevant section data allows open transaction reads,
-                        //  we update the pinned status here to include it in the
-                        //  current open transaction.
-                        Owner.AutoUnpinIfAppropriate();
+                        // Pinned read inside an open transaction is allowed via the
+                        // Pinned property's AllowOpenTransactionRead.
+                        Owner?.AutoUnpinIfAppropriate();
                     }
                 }
             }
         }
 
-        public string GateItemCode
+        // OnChanged callback for HostedItemId.
+        void OnHostedItemIdChanged()
         {
-            get { return mGateCode; }
-            set
-            {
-                if (SetProperty(ref mGateCode, value))
-                {
-                    GateItem = ItemDatabase.Instance.FindProvidingItemForCode(mGateCode);
-                }
-            }
+            mHostedItemRef.Set(HostedItemId);
+            NotifyPropertyChanged(nameof(HostedItem));
         }
 
-        public ITrackableItem GateItem
+        // OnChanged callback for GateItemId.
+        void OnGateItemIdChanged()
         {
-            get { return mGateItem; }
-            private set
-            {
-                if (SetProperty(ref mGateItem, value))
-                    LocationDatabase.Instance.RefeshAccessibility();
-            }
+            mGateItemRef.Set(GateItemId);
+            NotifyPropertyChanged(nameof(GateItem));
+            LocationDatabase.Instance.RefeshAccessibility();
         }
 
-        private string mHostedItemCode;
-
-        public string HostedItemCode
+        // OnChanged callback for CapturedItemIdStored. Most of the side-effect
+        // cascade runs in the typed CapturedItem setter (synchronous, before
+        // commit); this callback handles the post-commit pieces only.
+        void OnCapturedItemIdChanged()
         {
-            get { return mHostedItemCode; }
-            set
-            {
-                mHostedItemCode = value;
-                NotifyPropertyChanged();
-
-                HostedItem = ItemDatabase.Instance.FindProvidingItemForCode(mHostedItemCode);
-            }
+            // Side effects already ran in the typed setter; nothing more here.
+            // (The typed setter wires its own post-commit callback into
+            // SetTransactableProperty, which is the canonical commit hook.)
         }
 
-        public uint ChestCount
+        // -------- HostedItemCode / GateItemCode (re-resolve on change) -------
+
+        // HostedItemCode setter today always notifies (no equality check). The
+        // [KVMutable] generator's on-change-only fire is acceptable — same code
+        // resolves to the same item, so no observable difference.
+        [KVMutable]
+        [OnChanged(nameof(OnHostedItemCodeChanged))]
+        public partial string HostedItemCode { get; set; }
+
+        void OnHostedItemCodeChanged()
         {
-            get { return mnNumChests; }
-            set { mnNumChests = value; NotifyPropertyChanged(); }
+            HostedItem = ItemDatabase.Instance.FindProvidingItemForCode(HostedItemCode);
         }
+
+        [KVMutable]
+        [OnChanged(nameof(OnGateItemCodeChanged))]
+        public partial string GateItemCode { get; set; }
+
+        void OnGateItemCodeChanged()
+        {
+            GateItem = ItemDatabase.Instance.FindProvidingItemForCode(GateItemCode);
+        }
+
+        // -------- AvailableChestCount: transactable + side-effect cascade ----
+
+        [KVTransactable]
+        [TransactablePropertyReadBehavior(TransactablePropertyReadBehavior.AllowOpenTransactionRead)]
+        private partial uint AvailableChestCountStored { get; set; }
 
         [TransactablePropertyReadBehavior(TransactablePropertyReadBehavior.AllowOpenTransactionRead)]
         public uint AvailableChestCount
         {
-            get { return GetTransactableProperty<uint>(); }
+            get { return AvailableChestCountStored; }
             set
             {
                 using (TransactionProcessor.Current.OpenTransaction())
                 {
-                    if (value == 0 && CapturedItem != null && !mSuppressCaptureClearing && !mbCapturePersist)
+                    // Drop-captured-on-clear cascade, gated by the same exclusions
+                    // as pre-Phase-3 (CaptureBadge / mSuppressCaptureClearing /
+                    // CapturePersist).
+                    if (value == 0 && CapturedItem != null && !mSuppressCaptureClearing && !CapturePersist)
                     {
                         CapturedItem.AdvanceToCode();
                         CapturedItem = null;
                     }
 
-                    if (SetTransactableProperty(value, (processedValue) =>
+                    NotifyPropertyChanging(nameof(AvailableChestCount));
+
+                    bool queued = SetTransactableProperty<uint>(value, _ =>
                     {
+                        NotifyPropertyChanged(nameof(AvailableChestCount));
                         LocationDatabase.Instance.RefeshAccessibility();
-                    }))
+                    }, nameof(AvailableChestCountStored));
+
+                    if (queued)
                     {
-                        //  Because relevant section data allows open transaction reads,
-                        //  we update the pinned status here to include it in the
-                        //  current open transaction.
-                        Owner.AutoUnpinIfAppropriate();
+                        Owner?.AutoUnpinIfAppropriate();
                     }
                 }
             }
@@ -234,88 +365,18 @@ namespace EmoTracker.Data.Locations
             }
         }
 
-        public bool ClearAsGroup
-        {
-            get { return mbClearAsGroup; }
-            set { mbClearAsGroup = value; NotifyPropertyChanged(); }
-        }
+        // -------- Definition-data accessors ----------------------------------
 
-        public bool CaptureItem
-        {
-            get { return mbCaptureItem; }
-            set { mbCaptureItem = value; NotifyPropertyChanged(); }
-        }
+        public AccessibilityRuleSet GateAccessibilityRules { get { return mGateAccessibilityRules; } }
+        public AccessibilityRuleSet GateBypassRules { get { return mGateBypassRules; } }
+        public AccessibilityRuleSet AccessibilityRules { get { return mAccessibilityRules; } }
+        public AccessibilityRuleSet VisibilityRules { get { return mVisibilityRules; } }
 
-        public bool CaptureBadge
-        {
-            get { return mbCaptureBadge; }
-            set { SetProperty(ref mbCaptureBadge, value); }
-        }
+        // -------- Computed / cached accessibility ---------------------------
 
-        public double CaptureBadgeOffsetX
-        {
-            get { return mCaptureBadgeOffsetX; }
-            set { SetProperty(ref mCaptureBadgeOffsetX, value); }
-        }
-
-        public double CaptureBadgeOffsetY
-        {
-            get { return mCaptureBadgeOffsetY; }
-            set { SetProperty(ref mCaptureBadgeOffsetY, value); }
-        }
-
-        public bool ClearOnCapture
-        {
-            get { return mbClearOnCapture; }
-            set { SetProperty(ref mbClearOnCapture, value); }
-        }
-
-        public bool CapturePersist
-        {
-            get { return mbCapturePersist; }
-            set { SetProperty(ref mbCapturePersist, value); }
-        }
-
-        public bool ShowGateItem
-        {
-            get { return mbShowGateItem; }
-            set { SetProperty(ref mbShowGateItem, value); }
-        }
-
-        public AccessibilityRuleSet GateAccessibilityRules
-        {
-            get { return mGateAccessibilityRules; }
-        }
-
-        public AccessibilityRuleSet GateBypassRules
-        {
-            get { return mGateBypassRules; }
-        }
-
-        public AccessibilityRuleSet AccessibilityRules
-        {
-            get { return mAccessibilityRules; }
-        }
-
-        public AccessibilityRuleSet VisibilityRules
-        {
-            get { return mVisibilityRules; }
-        }
-
-        public AccessibilityLevel AccessibilityLevel
-        {
-            get { return mCachedAccessibility; }
-        }
-
-        public AccessibilityLevel GateAccessibilityLevel
-        {
-            get { return mCachedGateAccessibility; }
-        }
-
-        public bool Visible
-        {
-            get { return mbCachedVisibilty; }
-        }
+        public AccessibilityLevel AccessibilityLevel { get { return mCachedAccessibility; } }
+        public AccessibilityLevel GateAccessibilityLevel { get { return mCachedGateAccessibility; } }
+        public bool Visible { get { return mbCachedVisibilty; } }
 
         public void ComputeGateDependencies(Dictionary<string, uint> aggregateGateRequirements, bool bIsRoot = true)
         {
@@ -358,18 +419,21 @@ namespace EmoTracker.Data.Locations
 
         public void RefreshAccessibility()
         {
+            var owner = Owner;
+            if (owner == null) return;
+
             if (GateItem != null)
             {
-                mCachedGateAccessibility = Min(mOwner.BaseAccessibilityLevel, GateAccessibilityRules.AccessibilityWithoutModifiers);
+                mCachedGateAccessibility = Min(owner.BaseAccessibilityLevel, GateAccessibilityRules.AccessibilityWithoutModifiers);
 
                 if (GateItem.ProvidesCode(GateItemCode) > 0)
                     mCachedGateAccessibility = AccessibilityLevel.Normal;
             }
 
             if (CapturedItem != null)
-                mCachedAccessibility = Min(mOwner.BaseAccessibilityLevel, AccessibilityRules.AccessibilityWithoutModifiers);
+                mCachedAccessibility = Min(owner.BaseAccessibilityLevel, AccessibilityRules.AccessibilityWithoutModifiers);
             else
-                mCachedAccessibility = Min(mOwner.BaseAccessibilityLevel, AccessibilityRules.Accessibility);
+                mCachedAccessibility = Min(owner.BaseAccessibilityLevel, AccessibilityRules.Accessibility);
 
             if (mCachedAccessibility >= AccessibilityLevel.Inspect &&
                 GateItem != null &&
@@ -391,7 +455,6 @@ namespace EmoTracker.Data.Locations
                     AccessibilityLevel _unused;
                     uint providedCount = ItemDatabase.Instance.ProviderCountForCode(code, out _unused);
 
-#if true
                     AccessibilityLevel bypassLevel = (!GateBypassRules.Empty && providedCount >= (count - localCount)) ? GateBypassRules.AccessibilityWithoutModifiers : AccessibilityLevel.None;
                     AccessibilityLevel gateLevel = (providedCount >= count && GateAccessibilityLevel >= AccessibilityLevel.Unlockable) ? GateAccessibilityLevel : AccessibilityLevel.None;
 
@@ -399,20 +462,6 @@ namespace EmoTracker.Data.Locations
                         mCachedAccessibility = AccessibilityLevel.Unlockable;
                     else
                         mCachedAccessibility = Max(Min(bypassLevel, mCachedAccessibility), gateLevel);
-#else
-                        if (!GateBypassRules.Empty && GateBypassRules.AccessibilityWithoutInspect >= AccessibilityLevel.SequenceBreak)
-                        {
-                            mCachedAccessibility = Min(mOwner.BaseAccessibilityLevel, GateBypassRules.AccessibilityWithoutInspect);
-                        }
-                        else if (providedCount >= count && GateAccessibilityLevel >= AccessibilityLevel.SequenceBreak)
-                        {
-                            mCachedAccessibility = Min(AccessibilityLevel.Unlockable, mCachedAccessibility);
-                        }
-                        else
-                        {
-                            mCachedAccessibility = AccessibilityLevel.None;
-                        }
-#endif
                 }
             }
 
@@ -421,6 +470,55 @@ namespace EmoTracker.Data.Locations
             NotifyPropertyChanged("AccessibilityLevel");
             NotifyPropertyChanged("GateAccessibilityLevel");
             NotifyPropertyChanged("Visible");
+        }
+
+        // -------- Internal: setting Owner during coordinated fork -------------
+
+        // Called by Location.Fork() on each forked Section to rewire the
+        // back-reference. The ModelReference's identity (the parent location's
+        // DefinitionId) is preserved, but the cache is updated to the actual
+        // newly-constructed parent.
+        internal void SetOwner(Location newOwner)
+        {
+            mOwnerRef.Set(newOwner);
+            // VisualParent is also the owning Location.
+            VisualParent = newOwner;
+        }
+
+        // -------- Fork --------------------------------------------------------
+
+        public override ModelTypeBase Fork()
+        {
+            var copy = new Section();
+            copy.InitializeAsForkOf(this);
+            return copy;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (Section)source;
+
+            // Definition rule sets shared by reference.
+            mGateAccessibilityRules = src.mGateAccessibilityRules;
+            mGateBypassRules = src.mGateBypassRules;
+            mAccessibilityRules = src.mAccessibilityRules;
+            mVisibilityRules = src.mVisibilityRules;
+
+            // Carry cross-references across by identity. The owning Location
+            // will overwrite mOwnerRef via SetOwner() during its coordinated
+            // fork; until then, the ref points at the *source's* owner — fine
+            // because we've inherited the source's MutableData via COW.
+            mOwnerRef = src.mOwnerRef.ForFork(this);
+            mHostedItemRef = src.mHostedItemRef.ForFork(this);
+            mGateItemRef = src.mGateItemRef.ForFork(this);
+            mCapturedItemRef = src.mCapturedItemRef.ForFork(this);
+
+            // Computed accessibility cache: copy as a starting point; will be
+            // refreshed by RefreshAccessibility on the parent's next pass.
+            mCachedAccessibility = src.mCachedAccessibility;
+            mCachedGateAccessibility = src.mCachedGateAccessibility;
+            mbCachedVisibilty = src.mbCachedVisibilty;
         }
     }
 }

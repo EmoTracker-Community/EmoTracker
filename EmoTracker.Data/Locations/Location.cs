@@ -1,7 +1,8 @@
-﻿using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
+using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Media;
 using EmoTracker.Data.Notes;
-using EmoTracker.Core;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -9,7 +10,7 @@ using System.Linq;
 
 namespace EmoTracker.Data.Locations
 {
-    public class Location : LocationVisualProperties
+    public partial class Location : LocationVisualProperties
     {
         public const string DefaultBadgeKey = "";
 
@@ -22,7 +23,166 @@ namespace EmoTracker.Data.Locations
         {
             return (a > b) ? a : b;
         }
-               
+
+        // Owned subtrees: live per-state instances.
+        ObservableCollection<Location> mChildren = new ObservableCollection<Location>();
+        ObservableCollection<Section> mSections = new ObservableCollection<Section>();
+        ObservableDictionary<string, BadgeEntry> mBadges = new ObservableDictionary<string, BadgeEntry>();
+        ObservableCollection<BadgeEntry> mBadgeItems = new ObservableCollection<BadgeEntry>();
+
+        // Definition data: parsed once at pack-load.
+        AccessibilityRuleSet mAccessibility = new AccessibilityRuleSet();
+
+        // Cross-references via Phase 2.5 framework. Parent is set externally
+        // (LocationDatabase parser; coordinated fork). Group is partly
+        // identity-based (set explicitly) and partly inherited from Parent.
+        ModelReference<Location> mParentRef;
+        ModelReference<Group> mGroupRef;
+
+        // Computed/cached accessibility values: per-instance state, refreshed
+        // by RefreshAccessibility.
+        AccessibilityLevel mCachedAccessibility = AccessibilityLevel.None;
+        AccessibilityLevel mCachedBaseAccessibility = AccessibilityLevel.None;
+
+        // Instance-local state (not in any KV store).
+        NoteTakingSite mNoteTakingSite = new NoteTakingSite();
+
+        public Location()
+        {
+            mParentRef = new ModelReference<Location>(this);
+            mGroupRef = new ModelReference<Group>(this);
+            mBadges.CollectionChanged += Badges_CollectionChanged;
+        }
+
+        // -------- KVMutable strings & flags ----------------------------------
+
+        [KVMutable]
+        [OnChanged(nameof(OnNameChanged))]
+        public partial string Name { get; set; }
+
+        void OnNameChanged()
+        {
+            // Pre-Phase-3 the setter additionally raised "ShortName" for
+            // ShortName's fallback semantics. Keep that.
+            NotifyPropertyChanged("ShortName");
+        }
+
+        [KVMutable]
+        private partial string ShortNameRaw { get; set; }
+
+        public string ShortName
+        {
+            get
+            {
+                var raw = ShortNameRaw;
+                if (raw != null) return raw;
+                return Name;
+            }
+            set { ShortNameRaw = value; }
+        }
+
+        [KVMutable]
+        public partial bool ModifiedByUser { get; set; }
+
+        // Color: per-location override, falls back to Parent's color.
+        [KVMutable]
+        private partial string ColorRaw { get; set; }
+
+        public string Color
+        {
+            get
+            {
+                var raw = ColorRaw;
+                if (raw != null) return raw;
+
+                var parent = Parent;
+                if (parent != null) return parent.Color;
+
+                return null;
+            }
+            set { ColorRaw = value; NotifyPropertyChanged(); }
+        }
+
+        [KVMutable]
+        public partial ImageReference Thumbnail { get; set; }
+
+        // Per-instance HasAvailableItems / HasVisibleSections — these are
+        // updated by RefreshAccessibility, not via direct assignment from the
+        // outside, so we keep them as straightforward backing storage.
+        [KVMutable]
+        public partial bool HasAvailableItems { get; set; }
+
+        [KVMutable]
+        public partial bool HasVisibleSections { get; set; }
+
+        // -------- Pinned (transactable) ---------------------------------------
+
+        // Hand-written so we can preserve ForceSetTransactableProperty (always
+        // invokes the callback, even on no-op writes — pre-Phase-3 quirk).
+        [TransactablePropertyReadBehavior(TransactablePropertyReadBehavior.AllowOpenTransactionRead)]
+        public bool Pinned
+        {
+            get { return GetTransactableProperty<bool>(); }
+            set
+            {
+                ForceSetTransactableProperty(value, (processedValue) =>
+                {
+                    if (processedValue)
+                        LocationDatabase.Instance.PinLocation(this);
+                    else
+                        LocationDatabase.Instance.UnpinLocation(this);
+                });
+            }
+        }
+
+        // -------- Cross-references --------------------------------------------
+
+        public Location Parent
+        {
+            get { return mParentRef.Target; }
+            set
+            {
+                var current = mParentRef.Target;
+                if (ReferenceEquals(current, value)) return;
+                NotifyPropertyChanging();
+                mParentRef.Set(value);
+                VisualParent = value;
+                NotifyPropertyChanged();
+            }
+        }
+
+        public Group Group
+        {
+            get
+            {
+                var local = mGroupRef.Target;
+                if (local != null) return local;
+
+                var parent = Parent;
+                if (parent != null) return parent.Group;
+
+                return null;
+            }
+            set { mGroupRef.Set(value); NotifyPropertyChanged(); }
+        }
+
+        // -------- Owned children / sections collections ----------------------
+
+        public IEnumerable<Location> Children
+        {
+            get { return mChildren; }
+        }
+
+        public IEnumerable<Section> Sections
+        {
+            get { return mSections; }
+        }
+
+        public bool HasLocalItems
+        {
+            get { return mSections.Count > 0; }
+        }
+
         public Section FindSection(string name)
         {
             foreach (Section s in Sections)
@@ -33,6 +193,54 @@ namespace EmoTracker.Data.Locations
 
             return null;
         }
+
+        public bool AddChild(Location child)
+        {
+            if (child != null && !mChildren.Contains(child))
+            {
+                mChildren.Add(child);
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool AddSection(Section section)
+        {
+            if (section != null && !mSections.Contains(section))
+            {
+                mSections.Add(section);
+                return true;
+            }
+
+            return false;
+        }
+
+        // -------- Definition data accessors ----------------------------------
+
+        public AccessibilityRuleSet AccessibilityRules { get { return mAccessibility; } }
+
+        public AccessibilityLevel BaseAccessibilityLevel { get { return mCachedBaseAccessibility; } }
+        public AccessibilityLevel AccessibilityLevel { get { return mCachedAccessibility; } }
+
+        public uint AvailableItemCount
+        {
+            get
+            {
+                uint count = 0;
+                foreach (Section s in Sections)
+                {
+                    count += s.AvailableChestCount;
+
+                    if (s.HostedItem != null && 0 == s.HostedItem.ProvidesCode(s.HostedItemCode))
+                        ++count;
+                }
+
+                return count;
+            }
+        }
+
+        // -------- Domain operations -------------------------------------------
 
         public void FullClearAllPossible()
         {
@@ -60,197 +268,6 @@ namespace EmoTracker.Data.Locations
 
                 if (numClearedSections >= Sections.Count() && AutoUnpinOnClear)
                     Pinned = false;
-            }
-        }
-
-#region --- Fields ---
-
-        ObservableCollection<Location> mChildren = new ObservableCollection<Location>();
-        ObservableCollection<Section> mSections = new ObservableCollection<Section>();
-        ObservableDictionary<string, BadgeEntry> mBadges = new ObservableDictionary<string, BadgeEntry>();
-        ObservableCollection<BadgeEntry> mBadgeItems = new ObservableCollection<BadgeEntry>();
-        AccessibilityRuleSet mAccessibility = new AccessibilityRuleSet();
-        AccessibilityLevel mCachedAccessibility = AccessibilityLevel.None;
-        AccessibilityLevel mCachedBaseAccessibility = AccessibilityLevel.None;
-        Location mParent;
-        Group mGroup;
-        ImageReference mThumbnail;
-        string mName;
-        string mShortName;
-        string mColor;
-        bool mModifiedByUser = false;
-
-#endregion
-
-        public string Name
-        {
-            get { return mName; }
-            set { SetProperty(ref mName, value); NotifyPropertyChanged("ShortName"); }
-        }
-
-        public string ShortName
-        {
-            get
-            {
-                if (mShortName != null)
-                    return mShortName;
-
-                return Name;
-            }
-            set { SetProperty(ref mShortName, value); }
-        }
-
-        public bool ModifiedByUser
-        {
-            get { return mModifiedByUser; }
-            set { SetProperty(ref mModifiedByUser, value); }
-        }
-
-        public AccessibilityRuleSet AccessibilityRules
-        {
-            get { return mAccessibility; }
-        }
-
-        public AccessibilityLevel BaseAccessibilityLevel
-        {
-            get { return mCachedBaseAccessibility; }
-        }
-
-        public AccessibilityLevel AccessibilityLevel
-        {
-            get { return mCachedAccessibility; }
-        }
-
-        public bool HasLocalItems
-        {
-            get { return mSections.Count > 0; }
-        }
-
-        private bool mbHasAvailableItems = false;
-
-        public bool HasAvailableItems
-        {
-            get { return mbHasAvailableItems; }
-            set { mbHasAvailableItems = value; NotifyPropertyChanged(); }
-        }
-
-        bool mbHasVisibleSections = false;
-        public bool HasVisibleSections
-        {
-            get { return mbHasVisibleSections; }
-            set { SetProperty(ref mbHasVisibleSections, value); }
-        }
-
-        public Location Parent
-        {
-            get { return mParent; }
-            set
-            {
-                if (SetProperty(ref mParent, value))
-                {
-                    VisualParent = mParent;
-                }
-            }
-        }
-        public Group Group
-        {
-            get
-            {
-                if (mGroup != null)
-                    return mGroup;
-
-                if (Parent != null)
-                    return Parent.Group;
-
-                return null;
-            }
-            set { mGroup = value; NotifyPropertyChanged(); }
-        }
-
-        public string Color
-        {
-            get
-            {
-                if (mColor != null)
-                    return mColor;
-
-                if (mParent != null)
-                    return mParent.Color;
-
-                return null;
-            }
-
-            set { SetProperty(ref mColor, value); }
-        }
-
-        public IEnumerable<Location> Children
-        {
-            get { return mChildren; }
-        }
-
-        public IEnumerable<Section> Sections
-        {
-            get { return mSections; }
-        }
-
-        public ImageReference Thumbnail
-        {
-            get { return mThumbnail; }
-            set { mThumbnail = value; NotifyPropertyChanged(); }
-        }
-
-        [TransactablePropertyReadBehavior(TransactablePropertyReadBehavior.AllowOpenTransactionRead)]
-        public bool Pinned
-        {
-            get { return GetTransactableProperty<bool>(); }
-            set
-            {
-                ForceSetTransactableProperty(value, (processedValue) =>
-                {
-                    if (processedValue)
-                        LocationDatabase.Instance.PinLocation(this);
-                    else
-                        LocationDatabase.Instance.UnpinLocation(this);
-                });
-            }
-        }
-
-        public bool AddChild(Location child)
-        {
-            if (child != null && !mChildren.Contains(child))
-            {
-                mChildren.Add(child);
-                return true;
-            }
-
-            return false;
-        }
-
-        public bool AddSection(Section section)
-        {
-            if (section != null && !mSections.Contains(section))
-            {
-                mSections.Add(section);
-                return true;
-            }
-
-            return false;
-        }
-
-        public uint AvailableItemCount
-        {
-            get
-            {
-                uint count = 0;
-                foreach (Section s in Sections)
-                {
-                    count += s.AvailableChestCount;
-
-                    if (s.HostedItem != null && 0 == s.HostedItem.ProvidesCode(s.HostedItemCode))
-                        ++count;
-                }
-
-                return count;
             }
         }
 
@@ -301,11 +318,10 @@ namespace EmoTracker.Data.Locations
                 {
                     section.RefreshAccessibility();
 
-                    //  Update our notion of section visibility
                     if (section.Visible)
                         HasVisibleSections = true;
                     else
-                        continue;   // Invisible sections do not count towards accessibility
+                        continue;
 
                     if (section.HasUnclaimedItems)
                     {
@@ -365,7 +381,7 @@ namespace EmoTracker.Data.Locations
                 }
 
                 mCachedAccessibility = mCachedBaseAccessibility;
-               
+
                 if (numAccessibleItems > 0)
                 {
                     HasAvailableItems = true;
@@ -418,7 +434,7 @@ namespace EmoTracker.Data.Locations
             }
         }
 
-        #region -- Section References --
+        // -------- Section References (persistable) ---------------------------
 
         public string GetPersistableSectionReference(Section section)
         {
@@ -459,35 +475,15 @@ namespace EmoTracker.Data.Locations
             return section;
         }
 
-        #endregion
+        // -------- INoteTaking -------------------------------------------------
 
-        #region -- INoteTaking --
+        public NoteTakingSite NoteTakingSite { get { return mNoteTakingSite; } }
 
-        NoteTakingSite mNoteTakingSite = new NoteTakingSite();
+        // -------- Badges ------------------------------------------------------
 
-        public NoteTakingSite NoteTakingSite
-        {
-            get { return mNoteTakingSite; }
-        }
-
-        #endregion
-
-        #region -- Badges --
-
-        public ObservableDictionary<string, BadgeEntry> Badges
-        {
-            get { return mBadges; }
-        }
-
-        public ObservableCollection<BadgeEntry> BadgeItems
-        {
-            get { return mBadgeItems; }
-        }
-
-        public bool HasBadges
-        {
-            get { return mBadges.Count > 0; }
-        }
+        public ObservableDictionary<string, BadgeEntry> Badges { get { return mBadges; } }
+        public ObservableCollection<BadgeEntry> BadgeItems { get { return mBadgeItems; } }
+        public bool HasBadges { get { return mBadges.Count > 0; } }
 
         public ImageReference AddBadge(string imageRef, string filterSpec = null)
         {
@@ -586,11 +582,47 @@ namespace EmoTracker.Data.Locations
             NotifyPropertyChanged("HasBadges");
         }
 
-        #endregion
+        // -------- Fork --------------------------------------------------------
 
-        public Location()
+        public override ModelTypeBase Fork()
         {
-            mBadges.CollectionChanged += Badges_CollectionChanged;
+            var copy = new Location();
+            copy.InitializeAsForkOf(this);
+
+            // Coordinated fork: walk owned subtrees and rewire back-references.
+            // Sections first.
+            foreach (var section in this.mSections)
+            {
+                var forkedSection = (Section)section.Fork();
+                forkedSection.SetOwner(copy);
+                copy.mSections.Add(forkedSection);
+            }
+            // Children second; rewire each child's Parent to the new fork.
+            foreach (var child in this.mChildren)
+            {
+                var forkedChild = (Location)child.Fork();
+                forkedChild.Parent = copy;
+                copy.mChildren.Add(forkedChild);
+            }
+
+            return copy;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (Location)source;
+            mAccessibility = src.mAccessibility;
+
+            // Cross-references rebound to this fork. Parent will be set
+            // explicitly by the parent's coordinated fork (via the Parent
+            // setter); Group is identity-preserved.
+            mParentRef = src.mParentRef.ForFork(this);
+            mGroupRef = src.mGroupRef.ForFork(this);
+
+            // Computed cache: copy as a starting point; refresh sweep updates it.
+            mCachedAccessibility = src.mCachedAccessibility;
+            mCachedBaseAccessibility = src.mCachedBaseAccessibility;
         }
     }
 }
