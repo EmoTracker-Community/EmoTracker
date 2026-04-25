@@ -34,13 +34,14 @@ namespace EmoTracker.Data.Scripting
         // identity natively (they're the actual Lua values), giving us a
         // sound cycle / shared-subtree primitive that doesn't depend on
         // NLua's wrapper Equals semantics.
+        //
+        // External callers (LuaItem.OnForked, ScriptManager.Fork's per-item
+        // wire-up) query this map through <see cref="Resolve"/>, which runs
+        // the source-side wrapper through the Lua helper to get its id
+        // before looking up the destination clone. This is the correct
+        // path for any caller holding a LuaTable / LuaFunction reference
+        // that wasn't the exact wrapper we walked during CloneAll.
         readonly Dictionary<int, object> mIdentityMap = new Dictionary<int, object>();
-        // Tracks the externally-visible identity map shape (source-wrapper →
-        // destination value) so callers using CloneAll's return value can do
-        // their own post-processing. Keys are source-side LuaTable / LuaFunction
-        // wrappers; comparisons on this dictionary use default equality (NLua
-        // ≥1.7's LuaBase wires Equals/GetHashCode through the Lua reference).
-        readonly Dictionary<object, object> mPublicIdentityMap = new Dictionary<object, object>();
         bool mIdMapInitialized;
 
         // C# bridge globals re-injected by ScriptManager.Load — never cloned
@@ -60,7 +61,8 @@ namespace EmoTracker.Data.Scripting
         // not yet supported" warning for the helper function).
         static readonly HashSet<string> ClonerHelperNames = new HashSet<string>
         {
-            "__et_cloner_id", "__et_cloner_idmap", "__et_cloner_idmap_counter",
+            "__et_cloner_id", "__et_cloner_lookup",
+            "__et_cloner_idmap", "__et_cloner_idmap_counter",
             "__et_cloner_tmp",
         };
 
@@ -113,9 +115,13 @@ namespace EmoTracker.Data.Scripting
             }
         }
 
-        // Lazily install a Lua-side helper that assigns a stable integer id
+        // Lazily install Lua-side helpers that assign a stable integer id
         // to each table / function we encounter on the source. Lua tables
         // compare by reference natively (same table → same key → same id).
+        // <c>__et_cloner_id</c> is the assigning lookup (inserts if missing);
+        // <c>__et_cloner_lookup</c> is the read-only counterpart used by
+        // <see cref="Resolve"/> so external callers don't pollute the map
+        // with values the cloner never actually cloned.
         void EnsureIdMapInitialized()
         {
             if (mIdMapInitialized) return;
@@ -128,6 +134,9 @@ function __et_cloner_id(v)
     __et_cloner_idmap_counter = __et_cloner_idmap_counter + 1
     __et_cloner_idmap[v] = __et_cloner_idmap_counter
     return __et_cloner_idmap_counter, false
+end
+function __et_cloner_lookup(v)
+    return __et_cloner_idmap[v]
 end
 ");
             mIdMapInitialized = true;
@@ -147,14 +156,122 @@ end
         }
 
         /// <summary>
-        /// Walks the source's <c>_G</c> table and clones every non-stdlib,
-        /// non-bridge entry into the destination's globals. Returns the
-        /// identity map (source-side reference type → destination-side
-        /// counterpart) so callers can post-process — e.g. redirect
-        /// <see cref="LuaItem.ItemState"/> references to point at the
-        /// destination's cloned tables.
+        /// Resolves a source-side Lua value (typically a <see cref="LuaTable"/>
+        /// or <see cref="LuaFunction"/>) to its destination-side clone, using
+        /// the Lua-level identity map populated during <see cref="CloneAll"/>.
+        ///
+        /// <para>
+        /// This is the correct lookup path for any caller holding a reference
+        /// that came from somewhere other than the cloner's internal walk —
+        /// e.g. <c>LuaItem.OnForked</c>'s <c>mItemState</c> /
+        /// <c>mOnLeftClick</c> field references, or
+        /// <c>ScriptManager.InvokeStandardCallback</c>'s cached
+        /// <see cref="LuaFunction"/> handles. NLua creates a fresh
+        /// <see cref="LuaTable"/> / <see cref="LuaFunction"/> wrapper on every
+        /// access of the same underlying Lua object, so a Dictionary keyed on
+        /// the C# wrapper reference would miss every external lookup;
+        /// <c>Resolve</c> instead routes through the Lua-side identity helper
+        /// (which compares by Lua-level reference equality, the actual
+        /// "sameness" we care about).
+        /// </para>
+        ///
+        /// <para>
+        /// Returns:
+        /// <list type="bullet">
+        ///   <item><paramref name="src"/> itself if it's a primitive (Lua
+        ///     primitives are immutable and don't need cloning).</item>
+        ///   <item>The destination-side counterpart if <paramref name="src"/>
+        ///     was cloned during <see cref="CloneAll"/>.</item>
+        ///   <item>The bridge-identity-map's destination if the source-side
+        ///     reference is a known C# bridge global.</item>
+        ///   <item><c>null</c> if the source reference was never seen by the
+        ///     cloner (e.g. a stdlib function that wasn't cloned, or a
+        ///     reference into a different interpreter).</item>
+        /// </list>
+        /// </para>
         /// </summary>
-        public IReadOnlyDictionary<object, object> CloneAll()
+        public object Resolve(object src)
+        {
+            if (src == null) return null;
+
+            // Primitives pass through (immutable in Lua).
+            switch (src)
+            {
+                case bool _:
+                case sbyte _:
+                case byte _:
+                case short _:
+                case ushort _:
+                case int _:
+                case uint _:
+                case long _:
+                case ulong _:
+                case float _:
+                case double _:
+                case decimal _:
+                case string _:
+                case char _:
+                    return src;
+            }
+
+            // Bridge-identity remap: if a caller hands in a source-side
+            // bridge object, resolve to the destination's bridge directly.
+            if (mBridgeIdentityMap.TryGetValue(src, out var bridge))
+                return bridge;
+
+            // Tables / functions: Lua-level id lookup. Without the helper
+            // (i.e. before CloneAll has been called) there's nothing to
+            // resolve — return null.
+            if (!mIdMapInitialized)
+                return null;
+
+            using (var lookupFunc = (LuaFunction)mSource["__et_cloner_lookup"])
+            {
+                if (lookupFunc == null) return null;
+                var result = lookupFunc.Call(src);
+                if (result == null || result.Length == 0 || result[0] == null)
+                    return null;
+
+                int id;
+                try
+                {
+                    id = Convert.ToInt32(result[0]);
+                }
+                catch
+                {
+                    return null;
+                }
+
+                return mIdentityMap.TryGetValue(id, out var dest) ? dest : null;
+            }
+        }
+
+        /// <summary>
+        /// Typed convenience overload of <see cref="Resolve"/> for callers
+        /// that hold a <see cref="LuaTable"/> reference and want a typed
+        /// result. Returns null if the source wasn't cloned.
+        /// </summary>
+        public LuaTable Resolve(LuaTable src) => Resolve((object)src) as LuaTable;
+
+        /// <summary>
+        /// Typed convenience overload of <see cref="Resolve"/> for callers
+        /// that hold a <see cref="LuaFunction"/> reference and want a typed
+        /// result. Returns null if the source wasn't cloned (e.g. when
+        /// closure cloning is the next step's responsibility).
+        /// </summary>
+        public LuaFunction Resolve(LuaFunction src) => Resolve((object)src) as LuaFunction;
+
+        /// <summary>
+        /// Walks the source's <c>_G</c> table and clones every non-baseline,
+        /// non-bridge entry into the destination's globals. After this
+        /// returns, <see cref="Resolve"/> can be used to map
+        /// source-side Lua values (tables and — once step 3 lands —
+        /// functions) to their destination clones, which is how
+        /// <c>LuaItem.OnForked</c> and the holder-aware standard-callback
+        /// dispatch redirect their cached references away from the source's
+        /// orphaned interpreter.
+        /// </summary>
+        public void CloneAll()
         {
             // Iterate every key in source's globals via the LuaTable enumerator
             // (the same shape LuaItem.Save uses for its own table walks).
@@ -186,8 +303,6 @@ end
                     mDestination[key] = cloned;
                 }
             }
-
-            return mPublicIdentityMap;
         }
 
         /// <summary>
@@ -277,7 +392,6 @@ end
             // back at srcTable will see destTable already in the map and
             // return it without re-entering CloneTable.
             mIdentityMap[srcId] = destTable;
-            mPublicIdentityMap[srcTable] = destTable;
 
             var iter = srcTable.GetEnumerator();
             while (iter.MoveNext())

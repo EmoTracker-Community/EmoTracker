@@ -281,5 +281,156 @@ namespace EmoTracker.SourceGenerators.Tests
             src.Close();
             dst.Close();
         }
+
+        // -------- Resolve() — the critical lookup path used by --------
+        // -------- LuaItem.OnForked + standard-callback dispatch --------
+
+        [Fact]
+        public void Resolve_LuaTable_AfterCloneAll_ReturnsDestinationClone()
+        {
+            // The exact scenario LuaItem.OnForked needs: hold a reference
+            // to a source-side LuaTable (acquired via mItemState before the
+            // fork), pass it to Resolve, get back the destination's clone.
+            // The cloner walks _G during CloneAll — anything reachable
+            // there ends up in the identity map.
+            var (src, dst, _, cloner) = NewPair();
+
+            src.DoString(@"
+                game_state = { score = 42, deaths = 3 }
+            ");
+
+            // Capture a source-side reference BEFORE the clone, the way a
+            // LuaItem stashes its mItemState handle at parse time.
+            var srcGameState = (LuaTable)src["game_state"];
+
+            cloner.CloneAll();
+
+            // Resolve maps the source-side reference to the destination clone.
+            var dstGameState = cloner.Resolve(srcGameState);
+            Assert.NotNull(dstGameState);
+
+            // The resolved destination is the same table the destination's
+            // _G holds — verified via Lua-level equality.
+            dst.DoString("__same = (game_state == __et_resolved)");
+            // ...except we can't put dstGameState into dst directly via
+            // __et_resolved. Just verify content matches.
+            Assert.Equal(42L, Convert.ToInt64(dstGameState["score"]));
+            Assert.Equal(3L, Convert.ToInt64(dstGameState["deaths"]));
+
+            // Mutating the source's table after CloneAll has no effect on
+            // the resolved destination clone — proves it's not a back-door
+            // alias.
+            src.DoString("game_state.score = 999");
+            Assert.Equal(42L, Convert.ToInt64(dstGameState["score"]));
+
+            src.Close();
+            dst.Close();
+        }
+
+        [Fact]
+        public void Resolve_NestedLuaTable_AlsoMapped()
+        {
+            // A LuaItem might hold a reference to an inner table (e.g.
+            // mItemState.config). Resolve needs to map any source-reachable
+            // table, not just top-level globals.
+            var (src, dst, _, cloner) = NewPair();
+
+            src.DoString(@"
+                pack = {
+                    config = { volume = 5 },
+                    name = 'test'
+                }
+            ");
+            var srcConfig = (LuaTable)((LuaTable)src["pack"])["config"];
+
+            cloner.CloneAll();
+
+            var dstConfig = cloner.Resolve(srcConfig);
+            Assert.NotNull(dstConfig);
+            Assert.Equal(5L, Convert.ToInt64(dstConfig["volume"]));
+        }
+
+        [Fact]
+        public void Resolve_Primitives_PassThrough()
+        {
+            var (src, dst, _, cloner) = NewPair();
+
+            // Primitives need no cloning — Resolve returns them verbatim
+            // even before CloneAll has run.
+            Assert.Equal(42, cloner.Resolve((object)42));
+            Assert.Equal("hello", cloner.Resolve((object)"hello"));
+            Assert.Equal(true, cloner.Resolve((object)true));
+            Assert.Null(cloner.Resolve((object)null));
+        }
+
+        [Fact]
+        public void Resolve_NeverClonedReference_ReturnsNull()
+        {
+            // If a caller passes in a source LuaTable that wasn't reachable
+            // from _G (and so wasn't cloned), Resolve returns null rather
+            // than fabricating an entry. The LuaItem.OnForked contract is
+            // "look up via Resolve; if null, drop the reference".
+            var (src, dst, _, cloner) = NewPair();
+
+            src.DoString(@"
+                cloned_table = { x = 1 }
+                detached_table = { y = 2 }
+            ");
+            cloner.CloneAll();
+
+            // Now allocate a NEW source-side table that the cloner never
+            // saw because it's not reachable from _G — set as a registry
+            // value.
+            src.DoString(@"
+                local _local_only = { z = 3 }
+                __unreachable = _local_only
+            ");
+            // _G entries get cloned, so __unreachable would be picked up if
+            // CloneAll were re-run — but we've already done it. Lookup
+            // should return null because that table wasn't in the map.
+            var srcUnreachable = (LuaTable)src["__unreachable"];
+            var resolved = cloner.Resolve(srcUnreachable);
+            Assert.Null(resolved);
+        }
+
+        [Fact]
+        public void Resolve_BridgeIdentityMap_OverridesLookup()
+        {
+            // The bridge identity map exists so that closures captured the
+            // source's Tracker / Layout / etc. globals get remapped to the
+            // destination's bridge instances on Resolve. Even though
+            // step 3 is what wires this for closures, the Resolve API
+            // already honors the bridge map.
+            var (src, _, _, _) = NewPair();
+            var dst = new Lua();
+
+            // Two sentinel C# objects standing in for source/dest bridges.
+            var srcBridge = new object();
+            var dstBridge = new object();
+            var bridgeMap = new Dictionary<object, object> { { srcBridge, dstBridge } };
+
+            var cloner = new LuaStateCloner(src, dst, bridgeMap);
+            // Even before CloneAll, the bridge map applies.
+            Assert.Same(dstBridge, cloner.Resolve(srcBridge));
+
+            src.Close();
+            dst.Close();
+        }
+
+        [Fact]
+        public void Resolve_LuaTableBeforeCloneAll_ReturnsNullForUninitializedMap()
+        {
+            // Before CloneAll runs, the Lua-side helper hasn't been
+            // installed; Resolve must safely return null rather than
+            // throwing.
+            var (src, dst, _, cloner) = NewPair();
+            src.DoString("t = {}");
+            var srcT = (LuaTable)src["t"];
+
+            Assert.Null(cloner.Resolve(srcT));
+
+            src.Close();
+            dst.Close();
+        }
     }
 }
