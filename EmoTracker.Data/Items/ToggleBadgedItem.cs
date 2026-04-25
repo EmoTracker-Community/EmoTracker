@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
@@ -7,22 +8,34 @@ using System.Collections.Generic;
 namespace EmoTracker.Data.Items
 {
     [JsonTypeTags("toggle_badged")]
-    public class ToggleBadgedItem : ItemBase
+    public partial class ToggleBadgedItem : ItemBase
     {
+        // Definition data: parsed once at pack-load.
         ImageReference mInactiveIcon;
         ImageReference mActiveIcon;
         CodeProvider mCodeProvider = new CodeProvider();
-        ITrackableItem mBaseItem;
 
+        // Cross-item reference. Stored as a private field, not in MutableData —
+        // see CompositeToggleItem and Phase 2 §2.3 for the rationale.
+        ITrackableItem mBaseItem;
+        // Cached resolution code for OnForked.
+        string mBaseItemCode;
+
+        // Hand-written: setter manages the PropertyChanged subscription on the
+        // referenced base item, then triggers the icon refresh. Cannot be
+        // generated because the subscription unwiring needs the previous value.
         public ITrackableItem BaseItem
         {
             get { return mBaseItem; }
             set
             {
-                if (SetProperty(ref mBaseItem, value))
-                {
-                    UpdateDisplayIcon();
-                }
+                if (ReferenceEquals(mBaseItem, value)) return;
+                NotifyPropertyChanging();
+                if (mBaseItem != null) mBaseItem.PropertyChanged -= BaseItem_PropertyChanged;
+                mBaseItem = value;
+                if (mBaseItem != null) mBaseItem.PropertyChanged += BaseItem_PropertyChanged;
+                NotifyPropertyChanged();
+                UpdateDisplayIcon();
             }
         }
 
@@ -36,17 +49,11 @@ namespace EmoTracker.Data.Items
             }
         }
 
-        public bool Active
-        {
-            get { return GetTransactableProperty<bool>(); }
-            set
-            {
-                SetTransactableProperty(value, (processedValue) =>
-                {
-                    UpdateDisplayIcon();
-                });
-            }
-        }
+        // Generator-emitted: per-state, undo-tracked. UpdateDisplayIcon runs on
+        // the post-commit callback.
+        [KVTransactable]
+        [OnChanged(nameof(UpdateDisplayIcon))]
+        public partial bool Active { get; set; }
 
         private void UpdateDisplayIcon()
         {
@@ -100,9 +107,8 @@ namespace EmoTracker.Data.Items
 
         protected override void ParseDataInternal(JObject data, IGamePackage package)
         {
-            BaseItem = ItemDatabase.Instance.FindProvidingItemForCode(data.GetValue<string>("base_item"));
-            if (BaseItem != null)
-                BaseItem.PropertyChanged += BaseItem_PropertyChanged;
+            mBaseItemCode = data.GetValue<string>("base_item");
+            BaseItem = ItemDatabase.Instance.FindProvidingItemForCode(mBaseItemCode);
 
             string disabledImgMods = data.GetValue<string>("disabled_img_spec");
             disabledImgMods = data.GetValue<string>("disabled_img_mods", disabledImgMods);
@@ -129,6 +135,21 @@ namespace EmoTracker.Data.Items
         private void BaseItem_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             UpdateDisplayIcon();
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (ToggleBadgedItem)source;
+            mInactiveIcon = src.mInactiveIcon;
+            mActiveIcon = src.mActiveIcon;
+            mCodeProvider = src.mCodeProvider;
+            mBaseItemCode = src.mBaseItemCode;
+
+            // Re-resolve the base item via the singleton ItemDatabase. Phase 2
+            // known limitation: resolves to the original state's instance. The
+            // setter handles re-subscribing PropertyChanged.
+            BaseItem = ItemDatabase.Instance.FindProvidingItemForCode(mBaseItemCode);
         }
     }
 }

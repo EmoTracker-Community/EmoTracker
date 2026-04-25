@@ -36,6 +36,8 @@ namespace EmoTracker.Core.DataModel
         /// <summary>
         /// Either returns <paramref name="value"/> as-is (when its runtime type is
         /// trivially copyable) or returns the result of <see cref="IDeepCopyable.DeepCopy"/>.
+        /// Arrays of trivially-copyable element types are shallow-cloned (a new array
+        /// with the same element values), so callers can't mutate stored arrays.
         /// Throws <see cref="InvalidOperationException"/> if the value is a mutable
         /// reference type that does not implement <see cref="IDeepCopyable"/>.
         /// <c>null</c> is always returned as-is.
@@ -46,11 +48,17 @@ namespace EmoTracker.Core.DataModel
             Type t = value.GetType();
             if (IsTriviallyCopyable(t)) return value;
             if (value is IDeepCopyable copyable) return copyable.DeepCopy();
+            // Array of trivially-copyable elements: clone the array shape so the
+            // store's snapshot is independent of caller mutations on the original
+            // array, even though the individual elements are themselves value-copy
+            // safe and need no per-element work.
+            if (t.IsArray && t.GetArrayRank() == 1 && IsTriviallyCopyable(t.GetElementType()))
+                return ((Array)value).Clone();
             throw new InvalidOperationException(
                 "Cannot store a value of type '" + t.FullName + "' in a key-value store: " +
                 "it is a non-trivial reference type and does not implement IDeepCopyable. " +
                 "Either implement IDeepCopyable on the type or use a primitive/string/enum/" +
-                "DateTime/DateTimeOffset/Guid/TimeSpan/decimal value.");
+                "DateTime/DateTimeOffset/Guid/TimeSpan/decimal value (or a 1-D array of those).");
         }
     }
 }

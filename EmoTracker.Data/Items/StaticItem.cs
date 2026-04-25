@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
@@ -7,8 +8,9 @@ using System.Collections.Generic;
 namespace EmoTracker.Data.Items
 {
     [JsonTypeTags("static")]
-    public class StaticItem : ItemBase
+    public partial class StaticItem : ItemBase
     {
+        // Definition data: parsed once at pack-load.
         CodeProvider mCodeProvider = new CodeProvider();
 
         public StaticItem()
@@ -48,6 +50,13 @@ namespace EmoTracker.Data.Items
             Icon = ImageReference.FromPackRelativePath(package, data.GetValue<string>("img"), data.GetValue<string>("img_mods"));
             mCodeProvider.AddCodes(data.GetValue<string>("codes"));
             Capturable = data.GetValue<bool>("capturable", false);
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (StaticItem)source;
+            mCodeProvider = src.mCodeProvider;
         }
     }
 }

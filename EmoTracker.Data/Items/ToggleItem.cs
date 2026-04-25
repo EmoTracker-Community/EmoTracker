@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
@@ -7,19 +8,23 @@ using System.Collections.Generic;
 namespace EmoTracker.Data.Items
 {
     [JsonTypeTags("toggle")]
-    public class ToggleItem : ItemBase, IConsumingItem
+    public partial class ToggleItem : ItemBase, IConsumingItem
     {
+        // Definition data: parsed once at pack-load, never re-assigned at runtime.
+        // Kept as private fields rather than ImmutableData entries because
+        // ImageReference and CodeProvider are reference-typed and the KV-store
+        // boundary's IDeepCopyable contract makes them awkward to store there
+        // (per Phase 2 §2.6). Forks share these by reference via OnForked.
         ImageReference mInactiveIcon;
         ImageReference mActiveIcon;
-        bool mbLoop = false;
         string mConsumedCode;
         CodeProvider mCodeProvider = new CodeProvider();
 
-        public bool Loop
-        {
-            get { return mbLoop; }
-            set { SetProperty(ref mbLoop, value); }
-        }
+        // Per-state runtime config: public setter is part of the API surface, so
+        // this lives in MutableData even though the value is nominally definition-
+        // time (matches the Loop/Capturable rationale in the Phase 2 plan).
+        [KVMutable]
+        public partial bool Loop { get; set; }
 
         public string ConsumedCode
         {
@@ -36,6 +41,10 @@ namespace EmoTracker.Data.Items
             }
         }
 
+        // Hand-written: setter coordinates with the mConsumedCode provider's
+        // Consume() / Release() before queueing the transaction, mirroring the
+        // pre-Phase-2 behavior verbatim. KVTransactable can't express the
+        // "filter the value before writing" pattern, so this stays manual.
         public bool Active
         {
             get { return GetTransactableProperty<bool>(); }
@@ -166,6 +175,19 @@ namespace EmoTracker.Data.Items
             code = null;
             count = 0;
             return false;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (ToggleItem)source;
+            // Definition fields are shared by reference across forks. CodeProvider
+            // is mutated only at parse time; ImageReference instances are logically
+            // immutable (see ImageReference.IDeepCopyable.DeepCopy → this).
+            mInactiveIcon = src.mInactiveIcon;
+            mActiveIcon = src.mActiveIcon;
+            mConsumedCode = src.mConsumedCode;
+            mCodeProvider = src.mCodeProvider;
         }
     }
 

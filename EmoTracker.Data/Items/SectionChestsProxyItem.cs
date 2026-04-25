@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using Newtonsoft.Json.Linq;
@@ -8,10 +9,17 @@ using Newtonsoft.Json.Linq;
 namespace EmoTracker.Data.Items
 {
     [JsonTypeTags("sectionchests")]
-    public class SectionChestsProxyItem : ItemBase
+    public partial class SectionChestsProxyItem : ItemBase
     {
+        // Definition data.
         CodeProvider mCodeProvider = new CodeProvider();
+        // Cached resolution code so OnForked can re-resolve through the singleton
+        // Tracker (Phase 2 known limitation: resolves to the original state's
+        // section).
+        string mSectionCode;
 
+        // Cross-reference: stored as a private field, not in MutableData. The
+        // setter manages the PropertyChanged subscription.
         Section mSection;
         public Section Section
         {
@@ -19,14 +27,13 @@ namespace EmoTracker.Data.Items
             protected set
             {
                 Section prevSection = mSection;
-                if (SetProperty(ref mSection, value))
+                if (!ReferenceEquals(prevSection, value))
                 {
-                    if (prevSection != null)
-                        prevSection.PropertyChanged -= Section_PropertyChanged;
-
-                    if (mSection != null)
-                        mSection.PropertyChanged += Section_PropertyChanged;
-
+                    NotifyPropertyChanging();
+                    if (prevSection != null) prevSection.PropertyChanged -= Section_PropertyChanged;
+                    mSection = value;
+                    if (mSection != null) mSection.PropertyChanged += Section_PropertyChanged;
+                    NotifyPropertyChanged();
                     RefreshState();
                 }
             }
@@ -67,7 +74,7 @@ namespace EmoTracker.Data.Items
                 {
                     if (ApplicationSettings.Instance.AlwaysAllowClearing || Section.AccessibilityLevel != AccessibilityLevel.None)
                         return true;
-                }   
+                }
 
                 return false;
             }
@@ -124,7 +131,20 @@ namespace EmoTracker.Data.Items
         protected override void ParseDataInternal(JObject data, IGamePackage package)
         {
             mCodeProvider.AddCodes(data.GetValue<string>("codes"));
-            Section = Tracker.Instance.FindObjectForCode(data.GetValue<string>("section")) as Section;
-        }       
+            mSectionCode = data.GetValue<string>("section");
+            Section = Tracker.Instance.FindObjectForCode(mSectionCode) as Section;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (SectionChestsProxyItem)source;
+            mCodeProvider = src.mCodeProvider;
+            mSectionCode = src.mSectionCode;
+            // Re-resolve via the singleton Tracker. Phase 2 known limitation
+            // (per §2.3): this resolves to the original state's Section
+            // instance.
+            Section = Tracker.Instance.FindObjectForCode(mSectionCode) as Section;
+        }
     }
 }

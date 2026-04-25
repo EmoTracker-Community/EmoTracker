@@ -1,52 +1,50 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 
 namespace EmoTracker.Data.Items
 {
     [JsonTypeTags("consumable")]
-    public class ConsumableItem : ItemBase
+    public partial class ConsumableItem : ItemBase
     {
-        int mMaxCount = int.MaxValue;
-        int mMinCount = 0;
-        int mIncrement = 1;
-
-        bool mbSwapActions = false;
-        bool mbDisplayAsFractionOfMax = false;
-
+        // Definition data: parsed once at pack-load. See note on ToggleItem for
+        // why these are private fields rather than ImmutableData entries.
         ImageReference mEmptyIcon;
         ImageReference mFullIcon;
-
         CodeProvider mCodeProvider = new CodeProvider();
 
-        public bool SwapActions
+        public ConsumableItem()
         {
-            get { return mbSwapActions; }
-            set { SetProperty(ref mbSwapActions, value); }
+            // Seed defaults for the runtime-mutable bound properties so the
+            // generator-emitted getters return the historical values.
+            MutableData.SetValue(nameof(MaxCount), int.MaxValue);
+            MutableData.SetValue(nameof(MinCount), 0);
+            MutableData.SetValue(nameof(CountIncrement), 1);
         }
 
-        public bool DisplayAsFractionOfMax
-        {
-            get { return mbDisplayAsFractionOfMax; }
-            set
-            {
-                if (SetProperty(ref mbDisplayAsFractionOfMax, value))
-                {
-                    UpdateBadgeAndIcon();
-                }
-            }
-        }
+        [KVMutable]
+        public partial bool SwapActions { get; set; }
 
+        [KVMutable]
+        [OnChanged(nameof(UpdateBadgeAndIcon))]
+        public partial bool DisplayAsFractionOfMax { get; set; }
+
+        // Hand-written: clamps the input against the dynamic bounds set by
+        // MinCount / MaxCount / ConsumedCount, then routes the result through the
+        // transactable accessors (so the clamp happens before the undo entry is
+        // captured rather than after). Cannot be expressed via [KVTransactable]
+        // alone because the generated setter has no clamping hook.
         [DependentProperty("AvailableCount")]
         public int AcquiredCount
         {
             get { return GetTransactableProperty<int>(); }
             set
             {
-                int filteredValue = Math.Min(Math.Max(Math.Max(value, ConsumedCount), mMinCount), mMaxCount);
+                int filteredValue = Math.Min(Math.Max(Math.Max(value, ConsumedCount), MinCount), MaxCount);
                 SetTransactableProperty(filteredValue, (processedValue) =>
                 {
                     UpdateBadgeAndIcon();
@@ -58,7 +56,7 @@ namespace EmoTracker.Data.Items
         [DependentProperty("AvailableCount")]
         public int ConsumedCount
         {
-            get { return GetTransactableProperty<int> (); }
+            get { return GetTransactableProperty<int>(); }
             set
             {
                 int filteredValue = Math.Max(Math.Min(value, AvailableCount), 0);
@@ -75,38 +73,49 @@ namespace EmoTracker.Data.Items
             get { return AcquiredCount - ConsumedCount; }
         }
 
-        public int CountIncrement
-        {
-            get { return mIncrement; }
-            set { SetProperty(ref mIncrement, value); }
-        }
+        [KVMutable]
+        public partial int CountIncrement { get; set; }
 
+        // Hand-written: changing MinCount / MaxCount must re-clamp the existing
+        // AcquiredCount / ConsumedCount values, which the generator can't do on
+        // its own. The "AcquiredCount = AcquiredCount" trick re-runs the
+        // hand-written clamp logic above.
         public int MinCount
         {
-            get { return mMinCount; }
+            get { return MutableData.GetValue<int>(nameof(MinCount), 0); }
             set
             {
-                if (SetProperty(ref mMinCount, value))
+                int current = MutableData.GetValue<int>(nameof(MinCount), 0);
+                if (current != value)
                 {
+                    NotifyPropertyChanging();
+                    MutableData.SetValue(nameof(MinCount), value);
+
                     AcquiredCount = AcquiredCount;
                     ConsumedCount = ConsumedCount;
-
                     UpdateBadgeAndIcon();
+
+                    NotifyPropertyChanged();
                 }
             }
         }
 
         public int MaxCount
         {
-            get { return mMaxCount; }
+            get { return MutableData.GetValue<int>(nameof(MaxCount), int.MaxValue); }
             set
             {
-                if (SetProperty(ref mMaxCount, value))
+                int current = MutableData.GetValue<int>(nameof(MaxCount), int.MaxValue);
+                if (current != value)
                 {
+                    NotifyPropertyChanging();
+                    MutableData.SetValue(nameof(MaxCount), value);
+
                     AcquiredCount = AcquiredCount;
                     ConsumedCount = ConsumedCount;
-
                     UpdateBadgeAndIcon();
+
+                    NotifyPropertyChanged();
                 }
             }
         }
@@ -135,7 +144,7 @@ namespace EmoTracker.Data.Items
 
         public override void OnLeftClick()
         {
-            if (!mbSwapActions)
+            if (!SwapActions)
                 Increment();
             else
                 Decrement();
@@ -143,21 +152,21 @@ namespace EmoTracker.Data.Items
 
         public int Increment(int count = 1)
         {
-            int newCount = Math.Min(MaxCount, Math.Max(MinCount, AcquiredCount + (mIncrement * count)));
+            int newCount = Math.Min(MaxCount, Math.Max(MinCount, AcquiredCount + (CountIncrement * count)));
             AcquiredCount = newCount;
             return newCount;
         }
 
         public int Decrement(int count = 1)
         {
-            int newCount = Math.Min(MaxCount, Math.Max(MinCount, AcquiredCount - (mIncrement * count)));
+            int newCount = Math.Min(MaxCount, Math.Max(MinCount, AcquiredCount - (CountIncrement * count)));
             AcquiredCount = newCount;
             return newCount;
         }
 
         public override void OnRightClick()
         {
-            if (!mbSwapActions)
+            if (!SwapActions)
                 Decrement();
             else
                 Increment();
@@ -201,7 +210,7 @@ namespace EmoTracker.Data.Items
                     BadgeText = string.Format("{0}/{1}", AvailableCount.ToString(), MaxCount.ToString());
             }
 
-            if (AcquiredCount >= mMaxCount)
+            if (AcquiredCount >= MaxCount)
                 BadgeTextColor = "#00ff00";
             else
                 BadgeTextColor = "WhiteSmoke";
@@ -227,8 +236,8 @@ namespace EmoTracker.Data.Items
             AcquiredCount = data.GetValue<int>("initial_quantity", 0);
             CountIncrement = data.GetValue<int>("increment", 1);
 
-            mbSwapActions = data.GetValue<bool>("swap_actions", false);
-            mbDisplayAsFractionOfMax = data.GetValue<bool>("display_as_fraction_of_max", false);
+            SwapActions = data.GetValue<bool>("swap_actions", false);
+            DisplayAsFractionOfMax = data.GetValue<bool>("display_as_fraction_of_max", false);
 
             UpdateBadgeAndIcon();
         }
@@ -262,5 +271,14 @@ namespace EmoTracker.Data.Items
         }
 
         #endregion
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (ConsumableItem)source;
+            mFullIcon = src.mFullIcon;
+            mEmptyIcon = src.mEmptyIcon;
+            mCodeProvider = src.mCodeProvider;
+        }
     }
 }

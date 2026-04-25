@@ -1,12 +1,23 @@
 using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using System;
 using System.Collections.Generic;
 using System.IO;
 
 namespace EmoTracker.Data.Media
 {
-    public abstract class ImageReference : ObservableObject
+    public abstract class ImageReference : ObservableObject, IDeepCopyable
     {
+        // ImageReference is a "logically immutable" value as far as the data-model-v2
+        // KV stores are concerned: its identity (URI, filter, layer composition) is
+        // set at construction and never changes; the only mutating field —
+        // ResolvedImage — is a UI-side cache that is intentionally shared across
+        // every observer of the same definition. Returning `this` from DeepCopy()
+        // therefore satisfies the store's "no caller can mutate stored state through
+        // its reference" invariant in spirit: there is no per-state mutation to
+        // protect against, and sharing the cache is a feature.
+        object IDeepCopyable.DeepCopy() => this;
+
         /// <summary>
         /// The resolved display-ready image for this reference.  Set by the image
         /// resolution service on the UI thread once background generation completes.
