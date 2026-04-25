@@ -137,5 +137,26 @@ namespace EmoTracker.Core.DataModel
         {
             return ModelResolver.Current;
         }
+
+        /// <summary>
+        /// Returns the <see cref="IScriptManager"/> that should dispatch
+        /// script-callback events on behalf of this holder. Default
+        /// implementation returns the singleton <see cref="ScriptManagerHost.Current"/>
+        /// (matching pre-Phase-5 behavior — every holder shares one
+        /// ScriptManager). Phase 6's per-state model graphs override this
+        /// to return their state's own ScriptManager, so a callback fired
+        /// from a model in state A goes through state A's Lua interpreter
+        /// rather than leaking into the active primary state.
+        ///
+        /// <para>
+        /// Analogous to <see cref="GetModelResolver"/>: the indirection is
+        /// in place from Phase 5 onward, but the per-state override doesn't
+        /// fire until Phase 6 introduces per-state TrackerStates.
+        /// </para>
+        /// </summary>
+        public virtual IScriptManager GetScriptManager()
+        {
+            return ScriptManagerHost.Current;
+        }
     }
 }

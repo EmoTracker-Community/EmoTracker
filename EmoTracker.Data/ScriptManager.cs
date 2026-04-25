@@ -1,4 +1,5 @@
 ﻿using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Media;
 using EmoTracker.Data.Scripting;
@@ -155,8 +156,63 @@ namespace EmoTracker.Data
         }
     }
 
-    public class ScriptManager : ObservableSingleton<ScriptManager>, ICodeProvider
+    /// <summary>
+    /// Phase 5: <see cref="ScriptManager"/> is no longer an
+    /// <see cref="ObservableSingleton{T}"/>; it is a regular instantiable
+    /// class so Phase 6 can hold one per <c>TrackerState</c>. The static
+    /// <see cref="Current"/> property tracks "the active primary"
+    /// ScriptManager, defaulting to a single lazily-created instance for
+    /// pre-Phase-6 callers; Phase 6's state-switch code reassigns it.
+    ///
+    /// <para>
+    /// <see cref="Instance"/> remains as a transitional alias for
+    /// <see cref="Current"/> so the existing ~97 <c>ScriptManager.Instance</c>
+    /// callsites continue to work unchanged. New holder-aware code should
+    /// prefer <see cref="ModelTypeBase.GetScriptManager"/> where a model
+    /// reference is available, so per-state routing falls into place
+    /// automatically once Phase 6 lands.
+    /// </para>
+    /// </summary>
+    public class ScriptManager : ObservableObject, ICodeProvider, IScriptManager
     {
+        // ---- Static current-instance plumbing (replaces ObservableSingleton) ----
+
+        static ScriptManager mCurrent;
+
+        /// <summary>
+        /// The currently-active ScriptManager. Lazily created on first access
+        /// (matching the pre-Phase-5 ObservableSingleton behavior). Phase 6
+        /// reassigns this on state-switch via <see cref="SetCurrent"/>.
+        /// </summary>
+        public static ScriptManager Current
+        {
+            get
+            {
+                if (mCurrent == null)
+                    mCurrent = new ScriptManager();
+                return mCurrent;
+            }
+        }
+
+        /// <summary>
+        /// Replace the active <see cref="Current"/>. Phase 6 uses this on
+        /// pack-load / state-switch; callers should not reassign in Phase 5.
+        /// Passing null lets the next <see cref="Current"/> access lazily
+        /// recreate (matches the pre-Phase-5 lazy semantics).
+        /// </summary>
+        public static void SetCurrent(ScriptManager scriptManager)
+        {
+            mCurrent = scriptManager;
+        }
+
+        /// <summary>
+        /// Pre-Phase-5 alias for <see cref="Current"/>. Retained so the
+        /// ~97 existing <c>ScriptManager.Instance</c> callsites keep
+        /// compiling. Phase 6 retires this once UI / extension callsites
+        /// are migrated to <see cref="ModelTypeBase.GetScriptManager"/>.
+        /// </summary>
+        public static ScriptManager Instance => Current;
+
         public class LogLine
         {
             public string Text { get; set; }
@@ -663,6 +719,14 @@ end
 
         bool mbInPostLogicUpdate = false;
 
+        /// <summary>
+        /// Pre-Phase-5 nested enum, retained verbatim so the existing
+        /// <c>ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.X, ...)</c>
+        /// callsites keep compiling. Values mirror
+        /// <see cref="EmoTracker.Core.DataModel.StandardCallback"/> exactly
+        /// (same names, same order); the <see cref="IScriptManager"/>
+        /// surface accepts the Core enum and casts internally.
+        /// </summary>
         public enum StandardCallback
         {
             AccessibilityUpdating,
@@ -674,6 +738,20 @@ end
             AutoTrackerStopped,
             LocationUpdating,
             LocationUpdated
+        }
+
+        /// <summary>
+        /// <see cref="IScriptManager"/> implementation: forwards to the
+        /// existing <see cref="InvokeStandardCallback(StandardCallback, object[])"/>
+        /// after casting between the Core-side and Data-side enums (which
+        /// have identical underlying values). New holder-aware callsites
+        /// (model.GetScriptManager().InvokeStandardCallback(...)) flow
+        /// through this surface; legacy <c>ScriptManager.Instance.InvokeStandardCallback</c>
+        /// callers go straight to the public overload.
+        /// </summary>
+        void IScriptManager.InvokeStandardCallback(EmoTracker.Core.DataModel.StandardCallback callback, params object[] args)
+        {
+            InvokeStandardCallback((StandardCallback)callback, args);
         }
 
         [LuaHide]

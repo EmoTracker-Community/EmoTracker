@@ -28,6 +28,12 @@ namespace EmoTracker
             // LocationDatabase graph until per-state resolvers land in the state-lifecycle phase.
             Core.DataModel.ModelResolver.Current = new Data.Core.DataModel.AmbientSingletonModelResolver();
 
+            // Phase 5: register the active script manager so ModelTypeBase.GetScriptManager()
+            // (and the holder-aware standard-callback dispatch path) can find it without
+            // taking a hard dependency on the concrete ScriptManager type from Core.
+            // Phase 6 swaps this out per-state.
+            Core.DataModel.ScriptManagerHost.Current = Data.ScriptManager.Current;
+
             Core.Services.Backends.LogService.SetServiceBackend(new Services.LogService());
             Core.Services.Backends.DispatchService.SetServiceBackend(new Services.DispatchService());
 
