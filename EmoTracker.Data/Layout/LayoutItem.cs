@@ -189,6 +189,37 @@ namespace EmoTracker.Data.Layout
         // -------- Construction / parse -------------------------------------
 
         /// <summary>
+        /// Seeds <see cref="ImmutableData"/> with the LayoutItem-level sentinel
+        /// defaults that match the pre-Phase-4 field initializers (Width = -1.0,
+        /// HorizontalAlignment = Stretch, HitTestVisible = true, etc.) so that
+        /// programmatically-constructed-but-unparsed LayoutItems behave the
+        /// same as before. <see cref="TryParse"/> later replaces ImmutableData
+        /// wholesale, so this seed is a no-op when parse runs.
+        /// </summary>
+        protected LayoutItem()
+        {
+            var def = new Dictionary<string, object>
+            {
+                { DefinitionIdKey, this.DefinitionId },
+                { nameof(Margin) + "__def", "0" },
+                { nameof(HorizontalAlignment) + "__def", HorizontalAlignment.Stretch },
+                { nameof(VerticalAlignment) + "__def", VerticalAlignment.Stretch },
+                { nameof(Scale) + "__def", -1.0 },
+                { nameof(Width) + "__def", -1.0 },
+                { nameof(Height) + "__def", -1.0 },
+                { nameof(MinWidth) + "__def", -1.0 },
+                { nameof(MinHeight) + "__def", -1.0 },
+                { nameof(MaxWidth) + "__def", -1.0 },
+                { nameof(MaxHeight) + "__def", -1.0 },
+                { nameof(CanvasX) + "__def", -1.0 },
+                { nameof(CanvasY) + "__def", -1.0 },
+                { nameof(CanvasDepth) + "__def", -1.0 },
+                { nameof(HitTestVisible) + "__def", true },
+            };
+            ImmutableData = new ImmutableKeyValueStore(def);
+        }
+
+        /// <summary>
         /// Outer parse entry point: populates <see cref="ImmutableData"/> with the
         /// parsed definition values (UniqueID + each <c>[KVOverridable]</c>
         /// property's <c>__def</c> slot) and then delegates to
@@ -276,14 +307,27 @@ namespace EmoTracker.Data.Layout
 
             // UID registration is a side effect of parse, not of definition data —
             // every fork registers itself with the singleton LayoutManager today.
-            // Phase 6 introduces per-state managers; for now the registration
-            // continues to use the singleton (see plan §4.5 / §4.8).
+            // Phase 6 introduces per-state managers; the registration is wrapped
+            // in a virtual hook so a per-state-aware override can swap the
+            // target LayoutManager without touching this base class.
             if (!string.IsNullOrWhiteSpace(uniqueID))
             {
-                LayoutManager.Instance.RegisterLayoutItemForUID(uniqueID, this);
+                RegisterUniqueID(uniqueID);
             }
 
             return TryParseInternal(data, package);
+        }
+
+        /// <summary>
+        /// Registers <paramref name="uniqueID"/> on the appropriate
+        /// <see cref="LayoutManager"/>. Defaults to the singleton; Phase 6
+        /// per-state model graphs override to register against their state's
+        /// manager. Also invoked on a fork's <see cref="OnForked"/> so the
+        /// new instance is reachable by UID lookup in its target manager.
+        /// </summary>
+        protected virtual void RegisterUniqueID(string uniqueID)
+        {
+            LayoutManager.Instance.RegisterLayoutItemForUID(uniqueID, this);
         }
 
         /// <summary>
@@ -339,6 +383,22 @@ namespace EmoTracker.Data.Layout
             var copy = (LayoutItem)Activator.CreateInstance(this.GetType());
             copy.InitializeAsForkOf(this);
             return copy;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            // Re-register the fork's UID with its target LayoutManager — under
+            // Phase 4's singleton model this just re-points the UID at the
+            // fork (overwriting the source's registration); Phase 6 per-state
+            // managers will record the fork against its own state's manager
+            // and the source remains reachable in its own state's manager.
+            // Documented Phase 4 limitation: see plan §4.8.
+            string uid = UniqueID;
+            if (!string.IsNullOrWhiteSpace(uid))
+            {
+                RegisterUniqueID(uid);
+            }
         }
     }
 }
