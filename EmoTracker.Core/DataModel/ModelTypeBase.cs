@@ -124,5 +124,18 @@ namespace EmoTracker.Core.DataModel
             this.MutableData = new MutableKeyValueStore(source.MutableData);
             this.OnForked(source);
         }
+
+        /// <summary>
+        /// Returns the <see cref="IModelResolver"/> that <see cref="ModelReference{T}"/>
+        /// holders on this instance should resolve through. Default implementation
+        /// returns the global ambient resolver (<see cref="ModelResolver.Current"/>);
+        /// per-state model graphs introduced by the state-lifecycle phase override
+        /// this to point at their state's own resolver, so cross-references
+        /// naturally chase the holder's state without rewiring on every call site.
+        /// </summary>
+        public virtual IModelResolver GetModelResolver()
+        {
+            return ModelResolver.Current;
+        }
     }
 }

@@ -15,25 +15,42 @@ namespace EmoTracker.Data.Items
         ImageReference mActiveIcon;
         CodeProvider mCodeProvider = new CodeProvider();
 
-        // Cross-item reference. Stored as a private field, not in MutableData —
-        // see CompositeToggleItem and Phase 2 §2.3 for the rationale.
-        ITrackableItem mBaseItem;
-        // Cached resolution code for OnForked.
-        string mBaseItemCode;
+        // Cross-item reference (Phase 2.5). ITrackableItem is an interface; the
+        // concrete implementation is always an ItemBase (which is ModelTypeBase-
+        // derived, so DefinitionId extraction works).
+        ModelReference<ITrackableItem> mBaseItemRef;
+
+        // Tracks the previous resolved target for PropertyChanged unwiring on
+        // setter changes. ModelReference itself doesn't expose a "what was the
+        // old target" hook, so the holder maintains it explicitly.
+        ITrackableItem mSubscribedBaseItem;
+
+        public ToggleBadgedItem()
+        {
+            mBaseItemRef = new ModelReference<ITrackableItem>(this);
+        }
 
         // Hand-written: setter manages the PropertyChanged subscription on the
-        // referenced base item, then triggers the icon refresh. Cannot be
-        // generated because the subscription unwiring needs the previous value.
+        // referenced base item, then triggers the icon refresh.
         public ITrackableItem BaseItem
         {
-            get { return mBaseItem; }
+            get { return mBaseItemRef.Target; }
             set
             {
-                if (ReferenceEquals(mBaseItem, value)) return;
+                var current = mBaseItemRef.Target;
+                if (ReferenceEquals(current, value)) return;
                 NotifyPropertyChanging();
-                if (mBaseItem != null) mBaseItem.PropertyChanged -= BaseItem_PropertyChanged;
-                mBaseItem = value;
-                if (mBaseItem != null) mBaseItem.PropertyChanged += BaseItem_PropertyChanged;
+                if (mSubscribedBaseItem != null)
+                {
+                    mSubscribedBaseItem.PropertyChanged -= BaseItem_PropertyChanged;
+                    mSubscribedBaseItem = null;
+                }
+                mBaseItemRef.Set(value);
+                if (value != null)
+                {
+                    value.PropertyChanged += BaseItem_PropertyChanged;
+                    mSubscribedBaseItem = value;
+                }
                 NotifyPropertyChanged();
                 UpdateDisplayIcon();
             }
@@ -57,10 +74,11 @@ namespace EmoTracker.Data.Items
 
         private void UpdateDisplayIcon()
         {
-            if (BaseItem != null)
+            var baseItem = BaseItem;
+            if (baseItem != null)
             {
-                PotentialIcon = LayeredImageReference.FromLayeredImageReferences(BaseItem.PotentialIcon, mActiveIcon);
-                Icon = LayeredImageReference.FromLayeredImageReferences(BaseItem.Icon, Active ? mActiveIcon : mInactiveIcon);
+                PotentialIcon = LayeredImageReference.FromLayeredImageReferences(baseItem.PotentialIcon, mActiveIcon);
+                Icon = LayeredImageReference.FromLayeredImageReferences(baseItem.Icon, Active ? mActiveIcon : mInactiveIcon);
             }
             else
             {
@@ -71,8 +89,9 @@ namespace EmoTracker.Data.Items
 
         public override void OnLeftClick()
         {
-            if (BaseItem != null)
-                BaseItem.OnLeftClick();
+            var baseItem = BaseItem;
+            if (baseItem != null)
+                baseItem.OnLeftClick();
         }
 
         public override void OnRightClick()
@@ -107,8 +126,7 @@ namespace EmoTracker.Data.Items
 
         protected override void ParseDataInternal(JObject data, IGamePackage package)
         {
-            mBaseItemCode = data.GetValue<string>("base_item");
-            BaseItem = ItemDatabase.Instance.FindProvidingItemForCode(mBaseItemCode);
+            BaseItem = ItemDatabase.Instance.FindProvidingItemForCode(data.GetValue<string>("base_item"));
 
             string disabledImgMods = data.GetValue<string>("disabled_img_spec");
             disabledImgMods = data.GetValue<string>("disabled_img_mods", disabledImgMods);
@@ -144,12 +162,25 @@ namespace EmoTracker.Data.Items
             mInactiveIcon = src.mInactiveIcon;
             mActiveIcon = src.mActiveIcon;
             mCodeProvider = src.mCodeProvider;
-            mBaseItemCode = src.mBaseItemCode;
 
-            // Re-resolve the base item via the singleton ItemDatabase. Phase 2
-            // known limitation: resolves to the original state's instance. The
-            // setter handles re-subscribing PropertyChanged.
-            BaseItem = ItemDatabase.Instance.FindProvidingItemForCode(mBaseItemCode);
+            // Carry the reference across by identity. ForFork(this) creates a
+            // fresh ModelReference bound to this fork — same DefinitionId,
+            // no cache — so resolution flows through this fork's
+            // GetModelResolver() on first read.
+            mBaseItemRef = src.mBaseItemRef.ForFork(this);
+
+            // Wire up PropertyChanged subscription on the (per-state) resolved
+            // base. Done directly rather than via the BaseItem setter because
+            // the setter's ReferenceEquals shortcut would early-exit (mBaseItemRef
+            // .Target now caches the resolved value, and value == that same
+            // instance) and skip the resubscribe.
+            mSubscribedBaseItem = null;
+            var resolved = mBaseItemRef.Target;
+            if (resolved != null)
+            {
+                resolved.PropertyChanged += BaseItem_PropertyChanged;
+                mSubscribedBaseItem = resolved;
+            }
         }
     }
 }

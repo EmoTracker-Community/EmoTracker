@@ -23,6 +23,11 @@ namespace EmoTracker
             Data.Core.Transactions.TransactionProcessor.SetTransactionProcessor(
                 new Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo());
 
+            // Install the data-model-v2 ambient cross-model reference resolver. Bridges
+            // ModelReference<T>.Target lookups to the singleton ItemDatabase / Tracker /
+            // LocationDatabase graph until per-state resolvers land in the state-lifecycle phase.
+            Core.DataModel.ModelResolver.Current = new Data.Core.DataModel.AmbientSingletonModelResolver();
+
             Core.Services.Backends.LogService.SetServiceBackend(new Services.LogService());
             Core.Services.Backends.DispatchService.SetServiceBackend(new Services.DispatchService());
 
