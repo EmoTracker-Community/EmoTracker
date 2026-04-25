@@ -45,7 +45,7 @@ namespace EmoTracker.Data.Layout
 
         public override ModelTypeBase Fork()
         {
-            var copy = new DockPanel();
+            var copy = (DockPanel)System.Activator.CreateInstance(this.GetType());
             copy.InitializeAsForkOf(this);
             foreach (var child in this.mChildren)
             {

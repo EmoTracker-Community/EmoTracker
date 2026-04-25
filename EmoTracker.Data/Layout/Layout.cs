@@ -79,7 +79,7 @@ namespace EmoTracker.Data.Layout
 
         public override ModelTypeBase Fork()
         {
-            var copy = new Layout();
+            var copy = (Layout)System.Activator.CreateInstance(this.GetType());
             copy.InitializeAsForkOf(this);
             if (this.mRoot != null)
                 copy.mRoot = (LayoutItem)this.mRoot.Fork();

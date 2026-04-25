@@ -74,7 +74,7 @@ namespace EmoTracker.Data.Layout
 
             public override ModelTypeBase Fork()
             {
-                var copy = new Tab();
+                var copy = (Tab)System.Activator.CreateInstance(this.GetType());
                 copy.InitializeAsForkOf(this);
                 if (this.mContent != null)
                     copy.mContent = (LayoutItem)this.mContent.Fork();
@@ -139,7 +139,7 @@ namespace EmoTracker.Data.Layout
 
         public override ModelTypeBase Fork()
         {
-            var copy = new TabPanel();
+            var copy = (TabPanel)System.Activator.CreateInstance(this.GetType());
             copy.InitializeAsForkOf(this);
 
             int currentIdx = -1;

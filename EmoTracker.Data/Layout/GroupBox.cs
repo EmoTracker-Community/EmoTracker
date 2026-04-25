@@ -58,16 +58,12 @@ namespace EmoTracker.Data.Layout
 
         public override ModelTypeBase Fork()
         {
-            // Container.Fork would only fork the Items collection — GroupBox
-            // also owns HeaderContent. Reproduce the Container loop here +
-            // fork the header.
-            var copy = new GroupBox();
-            copy.InitializeAsForkOf(this);
-            foreach (var child in this.mItems)
-            {
-                var forked = (LayoutItem)child.Fork();
-                copy.mItems.Add(forked);
-            }
+            // Container.Fork uses Activator.CreateInstance(this.GetType()),
+            // so calling base.Fork() returns a fully-set-up GroupBox with
+            // ImmutableData + COW MutableData wired and the Items collection
+            // already forked. We just need to fork the GroupBox-specific
+            // owned subtree (HeaderContent) on top.
+            var copy = (GroupBox)base.Fork();
             if (this.mHeaderContent != null)
             {
                 copy.mHeaderContent = (LayoutItem)this.mHeaderContent.Fork();
