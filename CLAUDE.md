@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-EmoTracker is a C# / .NET 8 desktop application built with **Avalonia UI 11.3.3** for cross-platform desktop (Windows, macOS, Linux). It is an advanced item and location tracker for randomized games like A Link to the Past Randomizer, providing item tracking, interactive maps, auto-tracking via memory emulation, NDI broadcasting, Twitch chat HUD overlays, voice recognition, Markdown notes, and a Lua scripting console.
+EmoTracker is a C# / .NET 10 desktop application built with **Avalonia UI 11.3.3** for cross-platform desktop (Windows, macOS, Linux). It is an advanced item and location tracker for randomized games like A Link to the Past Randomizer, providing item tracking, interactive maps, auto-tracking via memory emulation, NDI broadcasting, Twitch chat HUD overlays, voice recognition, Markdown notes, and a Lua scripting console.
 
 ## Solution Structure
 
@@ -44,7 +44,7 @@ Dependency flow: `EmoTracker` -> `Core` <- `Data` -> `Core`, `EmoTracker.UI` -> 
 
 ## Development Commands
 
-**Prerequisites:** .NET 8 SDK
+**Prerequisites:** .NET 10 SDK
 
 ```bash
 # Restore packages
@@ -63,7 +63,7 @@ dotnet run --project EmoTracker/EmoTracker.csproj
 dotnet run --project EmoTracker/EmoTracker.csproj -- -dev -localservice
 
 # Publish self-contained for distribution
-dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime win-x64 --self-contained --output publish/
+dotnet publish EmoTracker/EmoTracker.csproj --framework net10.0 --configuration Release --runtime win-x64 --self-contained --output publish/
 # Other runtimes: linux-x64, osx-x64, osx-arm64
 
 # Clean

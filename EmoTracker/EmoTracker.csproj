@@ -5,7 +5,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>EmoTracker</RootNamespace>
     <AssemblyName>EmoTracker</AssemblyName>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ApplicationIcon>emohead_icon_transparent_7h3_icon.ico</ApplicationIcon>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>

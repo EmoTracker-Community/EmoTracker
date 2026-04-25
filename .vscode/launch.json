@@ -6,9 +6,9 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build Avalonia (Debug)",
-            "program": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0/EmoTracker.dll",
+            "program": "${workspaceFolder}/EmoTracker/bin/Debug/net10.0/EmoTracker.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0",
+            "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net10.0",
             "stopAtEntry": false,
             "console": "internalConsole"
         },
@@ -17,9 +17,9 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build Avalonia (Debug)",
-            "program": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0/EmoTracker.dll",
+            "program": "${workspaceFolder}/EmoTracker/bin/Debug/net10.0/EmoTracker.dll",
             "args": ["-dev"],
-            "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net8.0",
+            "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net10.0",
             "stopAtEntry": false,
             "console": "internalConsole"
         },
