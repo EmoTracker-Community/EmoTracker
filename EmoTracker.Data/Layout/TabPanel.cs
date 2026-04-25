@@ -10,7 +10,7 @@ using System.Linq;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("tabbed")]
-    public class TabPanel : LayoutItem
+    public partial class TabPanel : LayoutItem
     {
         public class Tab : ObservableObject
         {

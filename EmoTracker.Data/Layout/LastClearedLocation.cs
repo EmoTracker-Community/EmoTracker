@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("last_cleared_location")]
-    public class LastClearedLocation : LayoutItem
+    public partial class LastClearedLocation : LayoutItem
     {
         bool mbDisplayCompact = true;
 

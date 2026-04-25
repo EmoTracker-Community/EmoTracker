@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("group")]
-    public class GroupBox : Container
+    public partial class GroupBox : Container
     {
         string mHeader;
 

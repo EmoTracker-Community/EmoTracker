@@ -10,7 +10,7 @@ using System.Collections.Specialized;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("recentpins", "recent_pins")]
-    public class RecentPinnedLocations : ArrayPanel
+    public partial class RecentPinnedLocations : ArrayPanel
     {
         ObservableCollection<Location> mDisplayLocations = new ObservableCollection<Location>();
         int mNumItems = 0;

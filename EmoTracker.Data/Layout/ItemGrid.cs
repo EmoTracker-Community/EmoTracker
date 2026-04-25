@@ -7,7 +7,7 @@ using System;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("itemgrid")]
-    public class ItemGrid : LayoutItem
+    public partial class ItemGrid : LayoutItem
     {
         private static Version mMarginFixVersion = new Version("1.0");
 

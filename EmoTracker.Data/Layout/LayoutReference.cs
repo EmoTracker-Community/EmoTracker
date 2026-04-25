@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("layout")]
-    public class LayoutReference : LayoutItem
+    public partial class LayoutReference : LayoutItem
     {
         string mKey;
         Layout mLayout;

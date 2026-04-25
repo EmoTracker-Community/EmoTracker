@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("image")]
-    public class Image : LayoutItem
+    public partial class Image : LayoutItem
     {
         ImageReference mContent;
 

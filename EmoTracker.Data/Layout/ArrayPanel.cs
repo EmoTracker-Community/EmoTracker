@@ -21,7 +21,7 @@ namespace EmoTracker.Data.Layout
     };
 
     [JsonTypeTags("array")]
-    public class ArrayPanel : LayoutItem
+    public partial class ArrayPanel : LayoutItem
     {
         ObservableCollection<LayoutItem> mChildren = new ObservableCollection<LayoutItem>();
         Orientation mOrientation = Orientation.Vertical;

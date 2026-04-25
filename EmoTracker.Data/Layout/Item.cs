@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("item")]
-    public class Item : LayoutItem
+    public partial class Item : LayoutItem
     {
         Data.ITrackableItem mData;
 

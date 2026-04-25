@@ -8,7 +8,7 @@ using System.Collections.ObjectModel;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("dock")]
-    public class DockPanel : LayoutItem
+    public partial class DockPanel : LayoutItem
     {
         ObservableCollection<LayoutItem> mChildren = new ObservableCollection<LayoutItem>();
 

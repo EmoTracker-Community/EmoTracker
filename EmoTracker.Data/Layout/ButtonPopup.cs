@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("button_popup")]
-    public class ButtonPopup : LayoutItem
+    public partial class ButtonPopup : LayoutItem
     {
         public enum ButtonStyle
         {

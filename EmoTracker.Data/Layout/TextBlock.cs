@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("text")]
-    public class TextBlock : LayoutItem
+    public partial class TextBlock : LayoutItem
     {
         string mText;
         double mFontSize = -1.0;

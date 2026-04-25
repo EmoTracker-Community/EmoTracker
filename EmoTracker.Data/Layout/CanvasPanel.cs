@@ -8,7 +8,7 @@ using System.Collections.ObjectModel;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("canvas")]
-    public class CanvasPanel : LayoutItem
+    public partial class CanvasPanel : LayoutItem
     {
         ObservableCollection<LayoutItem> mChildren = new ObservableCollection<LayoutItem>();
 

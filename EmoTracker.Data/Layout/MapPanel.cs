@@ -9,7 +9,7 @@ using System.Collections.ObjectModel;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("map")]
-    public class MapPanel : LayoutItem
+    public partial class MapPanel : LayoutItem
     {
         public enum MapOrientation
         {

@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("scroll")]
-    public class ScrollPanel : Container
+    public partial class ScrollPanel : Container
     {
         public enum ScrollBarVisibility
         {
