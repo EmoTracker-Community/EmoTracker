@@ -442,6 +442,7 @@ namespace EmoTracker.Data
                         }
                     }
                     section.ClearOnCapture = sectionData.GetValue<bool>("clear_on_capture", false);
+                    section.CapturePersist = sectionData.GetValue<bool>("capture_persist", false);
                     section.ShowGateItem = sectionData.GetValue<bool>("show_gate_item", true);
 
                     JArray sectionRules = sectionData.GetValue<JArray>("access_rules");

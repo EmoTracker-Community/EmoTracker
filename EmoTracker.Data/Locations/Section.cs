@@ -37,6 +37,7 @@ namespace EmoTracker.Data.Locations
         private double mCaptureBadgeOffsetX = 0;
         private double mCaptureBadgeOffsetY = 0;
         private bool mbClearOnCapture = false;
+        private bool mbCapturePersist = false;
         private bool mSuppressCaptureClearing = false;
         private bool mbShowGateItem = true;
 
@@ -199,7 +200,7 @@ namespace EmoTracker.Data.Locations
             {
                 using (TransactionProcessor.Current.OpenTransaction())
                 {
-                    if (value == 0 && CapturedItem != null && !mbCaptureBadge && !mSuppressCaptureClearing)
+                    if (value == 0 && CapturedItem != null && !mSuppressCaptureClearing && !mbCapturePersist)
                     {
                         CapturedItem.AdvanceToCode();
                         CapturedItem = null;
@@ -267,6 +268,12 @@ namespace EmoTracker.Data.Locations
         {
             get { return mbClearOnCapture; }
             set { SetProperty(ref mbClearOnCapture, value); }
+        }
+
+        public bool CapturePersist
+        {
+            get { return mbCapturePersist; }
+            set { SetProperty(ref mbCapturePersist, value); }
         }
 
         public bool ShowGateItem
