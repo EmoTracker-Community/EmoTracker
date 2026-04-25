@@ -24,6 +24,28 @@
             "console": "internalConsole"
         },
         {
+            "name": "Launch EmoTracker Avalonia (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build Avalonia (Release)",
+            "program": "${workspaceFolder}/EmoTracker/bin/Release/net10.0/EmoTracker.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/EmoTracker/bin/Release/net10.0",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
+            "name": "Launch EmoTracker Avalonia (Dev-Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build Avalonia (Release)",
+            "program": "${workspaceFolder}/EmoTracker/bin/Release/net10.0/EmoTracker.dll",
+            "args": ["-dev"],
+            "cwd": "${workspaceFolder}/EmoTracker/bin/Release/net10.0",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
             "name": "Attach to EmoTracker",
             "type": "coreclr",
             "request": "attach"
