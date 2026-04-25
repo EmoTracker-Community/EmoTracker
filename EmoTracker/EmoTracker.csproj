@@ -69,6 +69,15 @@
     <PackageReference Include="Grpc.Tools" Version="2.69.0" PrivateAssets="All" />
   </ItemGroup>
 
+  <!--
+    Override the transitive Avalonia.FreeDesktop -> Tmds.DBus.Protocol 0.21.2 dep
+    (GHSA-xrw6-gwf8-vvr9). 0.21.3 is the backported patch; direct PackageReference
+    wins over the transitive resolution. See the matching note in EmoTracker.UI.csproj.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+  </ItemGroup>
+
   <!-- gRPC proto compilation for SNI provider -->
   <ItemGroup>
     <Protobuf Include="Providers\SNI\Protos\sni.proto" GrpcServices="Client" ProtoRoot="Providers\SNI\Protos" />
