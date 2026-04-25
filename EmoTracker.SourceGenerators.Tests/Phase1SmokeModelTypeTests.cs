@@ -152,6 +152,142 @@ namespace EmoTracker.SourceGenerators.Tests
             Assert.Contains("Active", changes);
         }
 
+        // ---------- KVOverridable ---------------------------------------------------
+
+        [Fact]
+        public void KVOverridable_ReturnsDefinitionDefault_WhenNoOverridePresent()
+        {
+            var def = Phase1SmokeModelType.CreateDefinition(
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+
+            // No override has been written; getter falls through to the __def key
+            // in ImmutableData.
+            Assert.Equal(42.0, def.Width);
+            Assert.Equal("navy", def.Background);
+        }
+
+        [Fact]
+        public void KVOverridable_SetWritesOverride_GetterSeesOverrideValue()
+        {
+            var def = Phase1SmokeModelType.CreateDefinition(
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+
+            def.Width = 100.0;
+            Assert.Equal(100.0, def.Width);
+
+            def.Background = "red";
+            Assert.Equal("red", def.Background);
+        }
+
+        [Fact]
+        public void KVOverridable_SetRaisesINPC_AndInvokesOnChanged()
+        {
+            var def = Phase1SmokeModelType.CreateDefinition(
+                "d", null, defaultWidth: 0.0, defaultBackground: null);
+
+            var changes = new List<string>();
+            ((INotifyPropertyChanged)def).PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+            def.Width = 7.0;
+            def.Background = "amber";
+
+            Assert.Contains("Width", changes);
+            Assert.Contains("Background", changes);
+            Assert.Equal(1, def.BackgroundChangedCount);
+        }
+
+        [Fact]
+        public void KVOverridable_ExplicitNullOverride_HonoredAsForceNull()
+        {
+            // Definition default is "navy"; explicitly overriding to null must be
+            // honored (because the discriminator is MutableData.ContainsKey, not
+            // "value is null"). This is the contract that distinguishes a layout
+            // element saying "force no background" from "no override is set".
+            var def = Phase1SmokeModelType.CreateDefinition(
+                "d", null, defaultWidth: 0.0, defaultBackground: "navy");
+            Assert.Equal("navy", def.Background);
+
+            def.Background = null;
+            Assert.Null(def.Background);
+        }
+
+        [Fact]
+        public void KVOverridable_RemoveOverride_FallsBackToDefinitionDefault()
+        {
+            var def = Phase1SmokeModelType.CreateDefinition(
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+
+            def.Width = 100.0;
+            def.Background = "red";
+            Assert.Equal(100.0, def.Width);
+            Assert.Equal("red", def.Background);
+
+            // Drop the per-state override; getter must fall back to ImmutableData.
+            def.ClearWidthOverride();
+            def.ClearBackgroundOverride();
+            Assert.Equal(42.0, def.Width);
+            Assert.Equal("navy", def.Background);
+        }
+
+        [Fact]
+        public void KVOverridable_NoOpWrite_DoesNotRaiseINPC_OrInvokeOnChanged()
+        {
+            var def = Phase1SmokeModelType.CreateDefinition(
+                "d", null, defaultWidth: 0.0, defaultBackground: "navy");
+
+            // First write installs the override and counts as a change relative to the
+            // definition default.
+            def.Background = "red";
+            Assert.Equal(1, def.BackgroundChangedCount);
+
+            // Second identical write must be a no-op: no INPC, no OnChanged.
+            var changes = new List<string>();
+            ((INotifyPropertyChanged)def).PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+            def.Background = "red";
+
+            Assert.DoesNotContain("Background", changes);
+            Assert.Equal(1, def.BackgroundChangedCount);
+        }
+
+        [Fact]
+        public void KVOverridable_Fork_OverrideIsCOWIsolated()
+        {
+            var def = Phase1SmokeModelType.CreateDefinition(
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+            def.Width = 100.0;
+
+            // Fork inherits the override through copy-on-write.
+            var fork = def.ForkAs();
+            Assert.Equal(100.0, fork.Width);
+
+            // Fork-side write shadows the parent without mutating it.
+            fork.Width = 200.0;
+            Assert.Equal(200.0, fork.Width);
+            Assert.Equal(100.0, def.Width);
+        }
+
+        [Fact]
+        public void KVOverridable_Fork_DefinitionDefaultIsSharedThroughImmutableData()
+        {
+            // Fork shares ImmutableData by reference, so the __def fallback survives
+            // forks and stays consistent across the family.
+            var def = Phase1SmokeModelType.CreateDefinition(
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+
+            var fork = def.ForkAs();
+
+            // Without a local override on the fork, both the source and fork report the
+            // same definition default.
+            Assert.Equal(42.0, fork.Width);
+            Assert.Equal("navy", fork.Background);
+
+            // Setting the override on one side does not change the other's fall-through
+            // behavior (per-key COW on MutableData).
+            fork.Width = 9999.0;
+            Assert.Equal(42.0, def.Width);
+            Assert.Equal(9999.0, fork.Width);
+        }
+
         // ---------- DefinitionId / fork --------------------------------------------
 
         [Fact]

@@ -12,7 +12,8 @@ namespace EmoTracker.SourceGenerators
     /// <summary>
     /// Roslyn incremental generator that emits implementation halves for partial
     /// properties annotated with one of <c>[KVImmutable]</c> / <c>[KVMutable]</c> /
-    /// <c>[KVTransactable]</c>, optionally combined with <c>[OnChanged(nameof(Method))]</c>.
+    /// <c>[KVTransactable]</c> / <c>[KVOverridable]</c>, optionally combined with
+    /// <c>[OnChanged(nameof(Method))]</c>.
     ///
     /// <para>
     /// The generator runs over every project that references this assembly as an
@@ -27,6 +28,7 @@ namespace EmoTracker.SourceGenerators
         const string KVImmutable = AttrNS + ".KVImmutableAttribute";
         const string KVMutable = AttrNS + ".KVMutableAttribute";
         const string KVTransactable = AttrNS + ".KVTransactableAttribute";
+        const string KVOverridable = AttrNS + ".KVOverridableAttribute";
         const string OnChanged = AttrNS + ".OnChangedAttribute";
 
         const string ModelTypeBase = AttrNS + ".ModelTypeBase";
@@ -85,6 +87,7 @@ namespace EmoTracker.SourceGenerators
                 if (fullName == KVImmutable)    { kvKind = KVKind.Immutable;   kvCount++; kvKeyOverride = TryReadStringNamedArg(ad, "Key"); }
                 else if (fullName == KVMutable) { kvKind = KVKind.Mutable;     kvCount++; kvKeyOverride = TryReadStringNamedArg(ad, "Key"); }
                 else if (fullName == KVTransactable) { kvKind = KVKind.Transactable; kvCount++; }
+                else if (fullName == KVOverridable) { kvKind = KVKind.Overridable; kvCount++; kvKeyOverride = TryReadStringNamedArg(ad, "Key"); }
             }
 
             if (kvCount == 0) return null;
@@ -359,6 +362,41 @@ namespace EmoTracker.SourceGenerators
                     sb.Append(ind).AppendLine("    }");
                     sb.Append(ind).AppendLine("}");
                     break;
+
+                case KVKind.Overridable:
+                {
+                    // Definition default lives in ImmutableData under "{Key}__def";
+                    // per-state override (when present) lives in MutableData under "{Key}".
+                    // ContainsKey on MutableData is the discriminator so an explicit
+                    // override-to-null is honored as "force null" rather than collapsed
+                    // into "no override is set".
+                    string defKeyLiteral = "\"" + (m.StorageKey + "__def").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+                    sb.AppendLine();
+                    sb.Append(ind).Append(m.PropertyAccessibility).Append(" partial ").Append(typeName).Append(' ').Append(m.PropertyName).AppendLine();
+                    sb.Append(ind).AppendLine("{");
+                    sb.Append(ind).AppendLine("    get");
+                    sb.Append(ind).AppendLine("    {");
+                    sb.Append(ind).Append("        if (this.MutableData.ContainsKey(").Append(keyLiteral).AppendLine("))");
+                    sb.Append(ind).Append("            return this.MutableData.GetValue<").Append(typeName).Append(">(").Append(keyLiteral).Append(", default(").Append(typeName).AppendLine("));");
+                    sb.Append(ind).Append("        return this.ImmutableData.GetValue<").Append(typeName).Append(">(").Append(defKeyLiteral).Append(", default(").Append(typeName).AppendLine("));");
+                    sb.Append(ind).AppendLine("    }");
+                    sb.Append(ind).AppendLine("    set");
+                    sb.Append(ind).AppendLine("    {");
+                    sb.Append(ind).Append("        var __current = this.").Append(m.PropertyName).AppendLine(";");
+                    sb.Append(ind).Append("        if (!global::System.Collections.Generic.EqualityComparer<").Append(typeName).AppendLine(">.Default.Equals(__current, value))");
+                    sb.Append(ind).AppendLine("        {");
+                    sb.Append(ind).Append("            this.NotifyPropertyChanging(nameof(").Append(m.PropertyName).AppendLine("));");
+                    sb.Append(ind).Append("            this.MutableData.SetValue<").Append(typeName).Append(">(").Append(keyLiteral).AppendLine(", value);");
+                    if (m.OnChangedMethodName != null)
+                    {
+                        sb.Append(ind).Append("            this.").Append(m.OnChangedMethodName).AppendLine("();");
+                    }
+                    sb.Append(ind).Append("            this.NotifyPropertyChanged(nameof(").Append(m.PropertyName).AppendLine("));");
+                    sb.Append(ind).AppendLine("        }");
+                    sb.Append(ind).AppendLine("    }");
+                    sb.Append(ind).AppendLine("}");
+                    break;
+                }
             }
         }
 
@@ -371,6 +409,7 @@ namespace EmoTracker.SourceGenerators
         Immutable,
         Mutable,
         Transactable,
+        Overridable,
     }
 
     internal sealed record PropertyModel(

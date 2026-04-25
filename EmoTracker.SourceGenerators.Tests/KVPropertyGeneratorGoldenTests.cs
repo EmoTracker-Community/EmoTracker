@@ -49,8 +49,16 @@ namespace Demo
         [OnChanged(nameof(SelectedNoticed))]
         public partial string Selected { get; set; }
 
+        [KVOverridable]
+        public partial double Width { get; set; }
+
+        [KVOverridable]
+        [OnChanged(nameof(BackgroundChanged))]
+        public partial string Background { get; set; }
+
         protected void Bumped() { }
         protected void SelectedNoticed() { }
+        protected void BackgroundChanged() { }
 
         public override ModelTypeBase Fork()
         {

@@ -88,6 +88,19 @@ namespace EmoTracker.Core.DataModel
         }
 
         /// <summary>
+        /// Returns <c>true</c> iff <paramref name="key"/> resolves to a non-tombstoned
+        /// entry anywhere in the copy-on-write parent chain. A tombstone in the local
+        /// dictionary short-circuits to <c>false</c> (the key is logically absent at
+        /// this level), regardless of any parent-chain entry. The discriminator used by
+        /// <c>[KVOverridable]</c>-generated getters to distinguish "override set
+        /// (possibly to null)" from "no override".
+        /// </summary>
+        public bool ContainsKey(string key)
+        {
+            return TryReadRaw(key, out _);
+        }
+
+        /// <summary>
         /// Per-key COW: deep-copies <paramref name="value"/> (using
         /// <see cref="IDeepCopyable"/> for non-trivially-copyable types) and writes it
         /// into the local dictionary, shadowing any value inherited from the parent

@@ -63,5 +63,46 @@ namespace Demo
                 this.SetTransactableProperty<string>(value, _ => this.SelectedNoticed(), nameof(Selected));
             }
         }
+
+        public partial double Width
+        {
+            get
+            {
+                if (this.MutableData.ContainsKey("Width"))
+                    return this.MutableData.GetValue<double>("Width", default(double));
+                return this.ImmutableData.GetValue<double>("Width__def", default(double));
+            }
+            set
+            {
+                var __current = this.Width;
+                if (!global::System.Collections.Generic.EqualityComparer<double>.Default.Equals(__current, value))
+                {
+                    this.NotifyPropertyChanging(nameof(Width));
+                    this.MutableData.SetValue<double>("Width", value);
+                    this.NotifyPropertyChanged(nameof(Width));
+                }
+            }
+        }
+
+        public partial string Background
+        {
+            get
+            {
+                if (this.MutableData.ContainsKey("Background"))
+                    return this.MutableData.GetValue<string>("Background", default(string));
+                return this.ImmutableData.GetValue<string>("Background__def", default(string));
+            }
+            set
+            {
+                var __current = this.Background;
+                if (!global::System.Collections.Generic.EqualityComparer<string>.Default.Equals(__current, value))
+                {
+                    this.NotifyPropertyChanging(nameof(Background));
+                    this.MutableData.SetValue<string>("Background", value);
+                    this.BackgroundChanged();
+                    this.NotifyPropertyChanged(nameof(Background));
+                }
+            }
+        }
     }
 }

@@ -9,7 +9,7 @@ namespace EmoTracker.SourceGenerators
         public static readonly DiagnosticDescriptor MultipleKVAttributes = new DiagnosticDescriptor(
             id: "EMODM001",
             title: "Property declares multiple KV attributes",
-            messageFormat: "Property '{0}' declares more than one of [KVImmutable], [KVMutable], [KVTransactable]; pick exactly one",
+            messageFormat: "Property '{0}' declares more than one of [KVImmutable], [KVMutable], [KVTransactable], [KVOverridable]; pick exactly one",
             category: Category,
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);
@@ -41,7 +41,7 @@ namespace EmoTracker.SourceGenerators
         public static readonly DiagnosticDescriptor KVMutableMustHaveSetter = new DiagnosticDescriptor(
             id: "EMODM005",
             title: "[KVMutable] property must declare a setter",
-            messageFormat: "Property '{0}' is annotated with [KVMutable] / [KVTransactable] but declares no setter; the generator has nothing to emit",
+            messageFormat: "Property '{0}' is annotated with [KVMutable] / [KVTransactable] / [KVOverridable] but declares no setter; the generator has nothing to emit",
             category: Category,
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);
