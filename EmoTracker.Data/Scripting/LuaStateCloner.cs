@@ -64,6 +64,10 @@ namespace EmoTracker.Data.Scripting
             "__et_cloner_id", "__et_cloner_lookup",
             "__et_cloner_idmap", "__et_cloner_idmap_counter",
             "__et_cloner_tmp",
+            "__et_cloner_func_info", "__et_cloner_dump_bytes",
+            "__et_cloner_get_upvalue",
+            "__et_cloner_load_bytes", "__et_cloner_set_upvalue",
+            "__et_cloner_pending_bytes",
         };
 
         // Names present in the destination's _G at cloner construction time —
@@ -115,16 +119,29 @@ namespace EmoTracker.Data.Scripting
             }
         }
 
-        // Lazily install Lua-side helpers that assign a stable integer id
-        // to each table / function we encounter on the source. Lua tables
-        // compare by reference natively (same table → same key → same id).
-        // <c>__et_cloner_id</c> is the assigning lookup (inserts if missing);
-        // <c>__et_cloner_lookup</c> is the read-only counterpart used by
-        // <see cref="Resolve"/> so external callers don't pollute the map
-        // with values the cloner never actually cloned.
+        // Lazily install Lua-side helpers used by the cloner.
+        //
+        // Source-side:
+        //   __et_cloner_id          - Lua tables/functions get a stable int id
+        //                             (inserting the entry if not already there).
+        //                             Used during the walk for cycle detection.
+        //   __et_cloner_lookup      - read-only counterpart used by Resolve so
+        //                             external callers don't pollute the map.
+        //   __et_cloner_func_info   - returns (what, nups) from debug.getinfo.
+        //   __et_cloner_dump_bytes  - returns the function's bytecode as a
+        //                             table of byte values, avoiding NLua's
+        //                             encoding-roundtrip corruption of binary
+        //                             strings.
+        //   __et_cloner_get_upvalue - wrap debug.getupvalue.
+        //
+        // Destination-side:
+        //   __et_cloner_load_bytes  - rebuild a binary string from an int
+        //                             table and load() it as a function.
+        //   __et_cloner_set_upvalue - wrap debug.setupvalue.
         void EnsureIdMapInitialized()
         {
             if (mIdMapInitialized) return;
+
             mSource.DoString(@"
 __et_cloner_idmap = {}
 __et_cloner_idmap_counter = 0
@@ -138,7 +155,37 @@ end
 function __et_cloner_lookup(v)
     return __et_cloner_idmap[v]
 end
+function __et_cloner_func_info(f)
+    local info = debug.getinfo(f, 'Su')
+    return info.what, info.nups, info.short_src or '?'
+end
+function __et_cloner_dump_bytes(f)
+    local s = string.dump(f, true)
+    local bytes = {}
+    for i = 1, #s do
+        bytes[i] = s:byte(i)
+    end
+    return bytes
+end
+function __et_cloner_get_upvalue(f, i)
+    return debug.getupvalue(f, i)
+end
 ");
+
+            mDestination.DoString(@"
+function __et_cloner_load_bytes(bytes, name)
+    local chunks = {}
+    for i = 1, #bytes do
+        chunks[i] = string.char(bytes[i])
+    end
+    local fn, err = load(table.concat(chunks), name, 'b')
+    return fn, err
+end
+function __et_cloner_set_upvalue(f, i, value)
+    debug.setupvalue(f, i, value)
+end
+");
+
             mIdMapInitialized = true;
         }
 
@@ -348,19 +395,22 @@ end
             if (sourceValue is LuaTable srcTable)
             {
                 var (id, seen) = GetSourceId(srcTable);
-                if (seen && mIdentityMap.TryGetValue(id, out var cachedDest))
-                    return cachedDest;
+                if (seen && mIdentityMap.TryGetValue(id, out var cachedTable))
+                    return cachedTable;
                 return CloneTable(srcTable, id);
             }
 
-            // Functions: deferred to step 3. Skip with a warning so packs
-            // that don't store closures in globals fork cleanly today; packs
-            // that do will see those closures dropped on fork until step 3
-            // lands.
-            if (sourceValue is LuaFunction)
+            // Functions: same id-based cycle handling as tables. Pure Lua
+            // closures get bytecode-dump-and-reload + per-upvalue clone;
+            // C functions are skipped with a warning (step 3 deliberately
+            // doesn't try to resolve them by-name yet — most pack scripts
+            // don't store standalone C function references in user globals).
+            if (sourceValue is LuaFunction srcFunc)
             {
-                mWarn("LuaStateCloner: encountered a LuaFunction; closure cloning is not yet implemented (step 3) — skipping.");
-                return null;
+                var (id, seen) = GetSourceId(srcFunc);
+                if (seen && mIdentityMap.TryGetValue(id, out var cachedFunc))
+                    return cachedFunc;
+                return CloneFunction(srcFunc, id);
             }
 
             // Userdata + miscellaneous: pass through by reference. NLua
@@ -429,6 +479,135 @@ end
             }
 
             return destTable;
+        }
+
+        // -------- Closure cloning ----------------------------------------
+
+        LuaFunction CloneFunction(LuaFunction srcFunc, int srcId)
+        {
+            // debug.getinfo gives us "what" (Lua / C / main) and the upvalue
+            // count. C functions are skipped (step 3 doesn't try to resolve
+            // by name); pure Lua functions go through the dump-load-rewire
+            // pipeline.
+            string what;
+            int nups;
+            string sourceName;
+            using (var infoFunc = (LuaFunction)mSource["__et_cloner_func_info"])
+            {
+                var info = infoFunc.Call(srcFunc);
+                if (info == null || info.Length < 2 || info[0] == null)
+                {
+                    mWarn("LuaStateCloner: debug.getinfo returned no result; skipping function.");
+                    return null;
+                }
+                what = info[0] as string ?? "?";
+                nups = Convert.ToInt32(info[1] ?? 0);
+                sourceName = (info.Length >= 3 ? info[2] as string : null) ?? "clone";
+            }
+
+            if (what != "Lua" && what != "main")
+            {
+                // C function — typically a stdlib reference. Pack scripts
+                // that store standalone C function references in globals
+                // are unusual; most C-function captures happen as upvalues
+                // in Lua closures, where they're handled by the upvalue-
+                // copy below (NLua hands them through as the same C function
+                // reference, which the destination's stdlib already provides).
+                mWarn(string.Format("LuaStateCloner: skipping C function '{0}' (resolution-by-name is not yet implemented).", sourceName));
+                return null;
+            }
+
+            // Dump bytecode as a table of byte values to avoid NLua's
+            // default UTF-8 round-trip corrupting binary bytes.
+            LuaTable bytesTable;
+            using (var dumpFunc = (LuaFunction)mSource["__et_cloner_dump_bytes"])
+            {
+                var dumpResult = dumpFunc.Call(srcFunc);
+                if (dumpResult == null || dumpResult.Length == 0 || !(dumpResult[0] is LuaTable bt))
+                {
+                    mWarn(string.Format("LuaStateCloner: string.dump returned no bytes for '{0}'.", sourceName));
+                    return null;
+                }
+                bytesTable = bt;
+            }
+
+            // Push the bytes to the destination via a temporary global, then
+            // load them. Same temporary-global trick as CloneTable uses for
+            // table allocation — NLua doesn't expose a direct cross-
+            // interpreter table-handle transfer, so we reconstruct on the
+            // destination side.
+            //
+            // Walk the source's bytes table and rebuild on the destination.
+            mDestination.DoString("__et_cloner_pending_bytes = {}");
+            var destBytesTable = (LuaTable)mDestination["__et_cloner_pending_bytes"];
+            int byteCount = 0;
+            var bytesIter = bytesTable.GetEnumerator();
+            while (bytesIter.MoveNext())
+            {
+                byteCount++;
+                destBytesTable[bytesIter.Key] = bytesIter.Value;
+            }
+
+            // Load the bytecode on the destination.
+            LuaFunction destFunc;
+            using (var loadFunc = (LuaFunction)mDestination["__et_cloner_load_bytes"])
+            {
+                var loadResult = loadFunc.Call(destBytesTable, "et_clone_" + srcId + "_" + sourceName);
+                if (loadResult == null || loadResult.Length == 0 || !(loadResult[0] is LuaFunction df))
+                {
+                    string err = (loadResult != null && loadResult.Length >= 2) ? (loadResult[1] as string) : "unknown error";
+                    mWarn(string.Format("LuaStateCloner: load() failed for '{0}': {1}", sourceName, err ?? "<no error>"));
+                    mDestination["__et_cloner_pending_bytes"] = null;
+                    return null;
+                }
+                destFunc = df;
+            }
+            mDestination["__et_cloner_pending_bytes"] = null;
+
+            // Record the (source -> destination) id mapping BEFORE recursing
+            // into upvalues so a closure that captures itself (recursive
+            // Lua function) terminates: when its own upvalue is cloned, the
+            // recursion sees this id already mapped.
+            mIdentityMap[srcId] = destFunc;
+
+            // Copy upvalues, cloning each value. Upvalues are 1-indexed in
+            // Lua; debug.getupvalue returns (name, value) and debug.setupvalue
+            // takes (function, index, value).
+            for (int i = 1; i <= nups; i++)
+            {
+                object upvalueValue;
+                using (var getUpvalFunc = (LuaFunction)mSource["__et_cloner_get_upvalue"])
+                {
+                    var upResult = getUpvalFunc.Call(srcFunc, i);
+                    if (upResult == null || upResult.Length < 2)
+                    {
+                        // Upvalue at this slot doesn't exist or is otherwise
+                        // not readable — skip. Lua leaves it nil-valued on
+                        // the destination, which matches a fresh closure's
+                        // initial state.
+                        continue;
+                    }
+                    upvalueValue = upResult[1];
+                }
+
+                object clonedUpvalue;
+                try
+                {
+                    clonedUpvalue = CloneValue(upvalueValue);
+                }
+                catch (Exception ex)
+                {
+                    mWarn(string.Format("LuaStateCloner: failed to clone upvalue {0} of '{1}': {2}", i, sourceName, ex.Message));
+                    continue;
+                }
+
+                using (var setUpvalFunc = (LuaFunction)mDestination["__et_cloner_set_upvalue"])
+                {
+                    setUpvalFunc.Call(destFunc, i, clonedUpvalue);
+                }
+            }
+
+            return destFunc;
         }
     }
 }

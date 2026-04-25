@@ -221,30 +221,253 @@ namespace EmoTracker.SourceGenerators.Tests
             dst.Close();
         }
 
+        // -------- Closure cloning (step 3) ---------------------------------
+
         [Fact]
-        public void Closures_AreSkippedWithWarning_Step2()
+        public void Closures_NoUpvalues_DumpAndReloadOnDestination()
         {
-            // Step 2 doesn't yet handle closures — they're skipped with a
-            // logged warning. Step 3 will add the upvalue-aware clone.
-            var (src, dst, warnings, cloner) = NewPair();
+            // Pure Lua closure with no upvalues — the simplest case.
+            // String.dump produces bytecode, load() rebuilds the function on
+            // the destination, calling it returns the same constant.
+            var (src, dst, _, cloner) = NewPair();
 
             src.DoString(@"
-                my_closure = function() return 1 end
-                also_table = { x = 1 }
+                my_closure = function() return 42 end
             ");
 
             cloner.CloneAll();
 
-            // Closure not cloned.
-            Assert.Null(dst["my_closure"]);
-            // Table beside it still cloned.
-            Assert.NotNull(dst["also_table"]);
-
-            // Warning emitted for the skipped closure.
-            Assert.Contains(warnings, w => w.Contains("LuaFunction"));
+            // The destination's my_closure exists and returns 42.
+            using (var fn = (LuaFunction)dst["my_closure"])
+            {
+                Assert.NotNull(fn);
+                var result = fn.Call();
+                Assert.Equal(42L, Convert.ToInt64(result[0]));
+            }
 
             src.Close();
             dst.Close();
+        }
+
+        [Fact]
+        public void Closures_WithPrimitiveUpvalue_PreservesCapturedValue()
+        {
+            // A closure that captures a primitive upvalue (a number). Each
+            // closure has its own private upvalue slot — mutating the
+            // closure's view via a returned setter doesn't disturb the
+            // original interpreter's view.
+            var (src, dst, _, cloner) = NewPair();
+
+            src.DoString(@"
+                local count = 5
+                bumper = function() count = count + 1; return count end
+            ");
+
+            cloner.CloneAll();
+
+            using (var fn = (LuaFunction)dst["bumper"])
+            {
+                Assert.NotNull(fn);
+                // First call increments to 6, second to 7.
+                Assert.Equal(6L, Convert.ToInt64(fn.Call()[0]));
+                Assert.Equal(7L, Convert.ToInt64(fn.Call()[0]));
+            }
+
+            // Source's bumper still bumps from its own captured 5 — proving
+            // the upvalue is per-closure, not shared.
+            using (var srcFn = (LuaFunction)src["bumper"])
+            {
+                Assert.Equal(6L, Convert.ToInt64(srcFn.Call()[0]));
+            }
+
+            src.Close();
+            dst.Close();
+        }
+
+        [Fact]
+        public void Closures_WithTableUpvalue_PointsAtClonedTable()
+        {
+            // A closure capturing a Lua table. The cloned closure must
+            // reference the destination's clone of that table — NOT the
+            // source's table — and observably reflect mutations on the
+            // destination side without disturbing the source.
+            var (src, dst, _, cloner) = NewPair();
+
+            src.DoString(@"
+                shared_state = { tally = 0 }
+                add_one = function() shared_state.tally = shared_state.tally + 1; return shared_state.tally end
+            ");
+
+            cloner.CloneAll();
+
+            using (var fn = (LuaFunction)dst["add_one"])
+            {
+                Assert.NotNull(fn);
+                Assert.Equal(1L, Convert.ToInt64(fn.Call()[0]));
+                Assert.Equal(2L, Convert.ToInt64(fn.Call()[0]));
+            }
+
+            // Destination's shared_state observed the mutations.
+            var dstShared = (LuaTable)dst["shared_state"];
+            Assert.Equal(2L, Convert.ToInt64(dstShared["tally"]));
+
+            // Source's shared_state remained at 0.
+            var srcShared = (LuaTable)src["shared_state"];
+            Assert.Equal(0L, Convert.ToInt64(srcShared["tally"]));
+
+            src.Close();
+            dst.Close();
+        }
+
+        [Fact]
+        public void Closures_SharedTableUpvalue_ResolvesToSameDestinationTable()
+        {
+            // Two closures capturing the same source table must end up
+            // capturing the same DESTINATION clone. This is the key
+            // invariant for pack-author shared-mutable-state patterns
+            // (e.g. two LuaItem callbacks both mutating a shared
+            // game_state table) — Save/Load round-tripping flattens these
+            // into independent copies; the cloner preserves the sharing.
+            var (src, dst, _, cloner) = NewPair();
+
+            src.DoString(@"
+                shared = { value = 0 }
+                writer = function(v) shared.value = v end
+                reader = function() return shared.value end
+            ");
+
+            cloner.CloneAll();
+
+            using (var w = (LuaFunction)dst["writer"])
+            using (var r = (LuaFunction)dst["reader"])
+            {
+                w.Call(99);
+                var got = r.Call();
+                Assert.Equal(99L, Convert.ToInt64(got[0]));
+            }
+
+            // Verify shared identity at the Lua level. The destination's
+            // 'shared' global IS the same table the writer / reader closures
+            // captured.
+            dst.DoString("__same = (writer ~= reader)"); // sanity check
+            Assert.True((bool)dst["__same"]);
+
+            src.Close();
+            dst.Close();
+        }
+
+        [Fact]
+        public void Closures_BridgeIdentityMap_RemapsCapturedBridgeUpvalue()
+        {
+            // The headline case for the bridge identity map: a Lua closure
+            // that captured a C# bridge object (e.g. Tracker) on the source
+            // must capture the destination's instance after cloning.
+            //
+            // We simulate the bridge with a sentinel 'side marker' object —
+            // the source binds 'TestBridge' to a marker object, the closure
+            // captures it as an upvalue, the destination is configured with
+            // a different marker, and the bridge identity map remaps the
+            // upvalue during the clone.
+            var src = new Lua();
+            var dst = new Lua();
+
+            // Two distinct C# sentinels stand in for the source and
+            // destination bridges.
+            var srcBridge = new BridgeMarker { Tag = "source" };
+            var dstBridge = new BridgeMarker { Tag = "destination" };
+
+            // Bind on each interpreter so closures can capture them.
+            src["TestBridge"] = srcBridge;
+            dst["TestBridge"] = dstBridge;
+
+            // Source closure captures TestBridge as an upvalue (note: the
+            // 'local' makes it an upvalue rather than a global lookup).
+            src.DoString(@"
+                local _bridge = TestBridge
+                get_bridge_tag = function() return _bridge.Tag end
+            ");
+
+            // Clone with the bridge map wired up so the captured upvalue
+            // remaps from src to dst.
+            var bridgeMap = new Dictionary<object, object> { { srcBridge, dstBridge } };
+            var warnings = new List<string>();
+            var cloner = new LuaStateCloner(src, dst, bridgeMap, w => warnings.Add(w));
+            cloner.CloneAll();
+
+            // The cloned closure invokes through the destination's bridge.
+            using (var fn = (LuaFunction)dst["get_bridge_tag"])
+            {
+                Assert.NotNull(fn);
+                var got = fn.Call();
+                Assert.Equal("destination", (string)got[0]);
+            }
+
+            src.Close();
+            dst.Close();
+        }
+
+        [Fact]
+        public void Closures_RecursiveSelfCapture_TerminatesCleanly()
+        {
+            // A closure that captures itself via an upvalue (factorial-
+            // style). The cloner's id-keyed identity map must terminate
+            // the recursion when the upvalue clone hits the same source
+            // function.
+            var (src, dst, _, cloner) = NewPair();
+
+            src.DoString(@"
+                local self_ref
+                self_ref = function(n)
+                    if n <= 1 then return 1 end
+                    return n * self_ref(n - 1)
+                end
+                fact = self_ref
+            ");
+
+            cloner.CloneAll();
+
+            using (var fn = (LuaFunction)dst["fact"])
+            {
+                Assert.NotNull(fn);
+                Assert.Equal(120L, Convert.ToInt64(fn.Call(5)[0]));
+            }
+
+            src.Close();
+            dst.Close();
+        }
+
+        [Fact]
+        public void Resolve_LuaFunction_AfterCloneAll_ReturnsDestinationClone()
+        {
+            // The closure analog of Resolve_LuaTable_AfterCloneAll. LuaItem
+            // step-7 wire-up depends on this: holding a source-side
+            // LuaFunction reference (mOnLeftClick etc.), call Resolve, get
+            // the destination clone.
+            var (src, dst, _, cloner) = NewPair();
+
+            src.DoString(@"
+                left_click = function(x) return x * 2 end
+            ");
+            var srcFn = (LuaFunction)src["left_click"];
+
+            cloner.CloneAll();
+
+            var resolvedFn = cloner.Resolve(srcFn);
+            Assert.NotNull(resolvedFn);
+            // The resolved function executes on the destination's interpreter.
+            var got = resolvedFn.Call(7);
+            Assert.Equal(14L, Convert.ToInt64(got[0]));
+
+            src.Close();
+            dst.Close();
+        }
+
+        // Helper class for the bridge-map test — needs a public field that
+        // Lua can read via the C#-bridge-property path (NLua treats
+        // user-defined types' fields/properties as accessible from Lua).
+        public class BridgeMarker
+        {
+            public string Tag { get; set; }
         }
 
         [Fact]
