@@ -69,5 +69,13 @@ namespace EmoTracker.SourceGenerators
             category: Category,
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);
+
+        public static readonly DiagnosticDescriptor KVPropertyMustHaveGetter = new DiagnosticDescriptor(
+            id: "EMODM009",
+            title: "KV-attributed property must declare a getter",
+            messageFormat: "Property '{0}' is annotated with a KV attribute but declares no getter; the generator emits both halves of a get/set partial property",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
     }
 }

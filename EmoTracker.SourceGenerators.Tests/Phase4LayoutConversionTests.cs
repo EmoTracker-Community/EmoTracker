@@ -187,6 +187,70 @@ namespace EmoTracker.SourceGenerators.Tests
             Assert.Null(fork.Root);
         }
 
+        // -------- DependentProperty cascades -------------------------------
+
+        [Fact]
+        public void Scale_Setter_CascadesINPCFor_OverrideScale_And_EffectiveScale()
+        {
+            // Pre-Phase-4 the protected Scale setter explicitly raised
+            // OverrideScale + EffectiveScale alongside Scale. Phase 4 replaces
+            // it with a [KVOverridable] partial property; [DependentProperty]
+            // attributes preserve the cascade so XAML bindings (e.g.
+            // ScaleTransform on EffectiveScale in LayoutControl.axaml) refresh.
+            var t = new TextBlock();
+            var changed = new System.Collections.Generic.List<string>();
+            ((INotifyPropertyChanged)t).PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+            t.Scale = 2.0;
+
+            Assert.Contains("Scale", changed);
+            Assert.Contains("OverrideScale", changed);
+            Assert.Contains("EffectiveScale", changed);
+        }
+
+        [Fact]
+        public void Width_Setter_CascadesINPCFor_OverrideWidth()
+        {
+            var t = new TextBlock();
+            var changed = new System.Collections.Generic.List<string>();
+            ((INotifyPropertyChanged)t).PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+            t.Width = 100.0;
+
+            Assert.Contains("Width", changed);
+            Assert.Contains("OverrideWidth", changed);
+        }
+
+        [Fact]
+        public void DimensionalProperties_AllCascade()
+        {
+            // Spot-check the rest of the dimensional Override flags. All of
+            // Width/Height/Min/Max/Canvas{X,Y,Depth} should follow the same
+            // pattern; the original setters raised exactly one Override*
+            // notification each.
+            var t = new TextBlock();
+            var changed = new System.Collections.Generic.HashSet<string>();
+            ((INotifyPropertyChanged)t).PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+            t.Height = 50.0;
+            t.MinWidth = 10.0;
+            t.MinHeight = 11.0;
+            t.MaxWidth = 200.0;
+            t.MaxHeight = 201.0;
+            t.CanvasX = 5.0;
+            t.CanvasY = 6.0;
+            t.CanvasDepth = 7.0;
+
+            Assert.Contains("OverrideHeight", changed);
+            Assert.Contains("OverrideMinWidth", changed);
+            Assert.Contains("OverrideMinHeight", changed);
+            Assert.Contains("OverrideMaxWidth", changed);
+            Assert.Contains("OverrideMaxHeight", changed);
+            Assert.Contains("OverrideCanvasX", changed);
+            Assert.Contains("OverrideCanvasY", changed);
+            Assert.Contains("OverrideCanvasDepth", changed);
+        }
+
         // -------- TabPanel inner Tab class ----------------------------------
 
         [Fact]

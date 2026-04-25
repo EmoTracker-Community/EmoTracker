@@ -123,13 +123,20 @@ namespace EmoTracker.SourceGenerators
             if (kvKind == KVKind.Transactable && !inheritsTransactableBase)
                 diagnostics.Add(new DiagnosticInfo(Diagnostics.KVTransactableNotOnTransactableBase, prop.Identifier.GetLocation(), symbol.Name, containingType.Name));
 
-            // Setter expectations.
+            // Accessor expectations.
             bool hasSetter = symbol.SetMethod != null;
             bool hasGetter = symbol.GetMethod != null;
             if (kvKind == KVKind.Immutable && hasSetter)
                 diagnostics.Add(new DiagnosticInfo(Diagnostics.KVImmutableHasSetter, prop.Identifier.GetLocation(), symbol.Name));
             if (kvKind != KVKind.Immutable && !hasSetter)
                 diagnostics.Add(new DiagnosticInfo(Diagnostics.KVMutableMustHaveSetter, prop.Identifier.GetLocation(), symbol.Name));
+            // All KV kinds require a getter — there's no read-only-write-only
+            // shape we can emit. Catch that explicitly so a malformed partial
+            // declaration ("public partial int Foo { set; }") surfaces as a
+            // generator diagnostic rather than as a confusing "missing
+            // implementation" CS error after emission.
+            if (!hasGetter)
+                diagnostics.Add(new DiagnosticInfo(Diagnostics.KVPropertyMustHaveGetter, prop.Identifier.GetLocation(), symbol.Name));
 
             // [OnChanged] resolution.
             string? onChangedMethodName = null;

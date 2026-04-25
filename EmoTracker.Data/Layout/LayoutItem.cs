@@ -130,34 +130,52 @@ namespace EmoTracker.Data.Layout
         [KVOverridable]
         public partial VerticalAlignment VerticalAlignment { get; set; }
 
+        // [DependentProperty] cascades preserve the pre-Phase-4 INPC behavior:
+        // the original Width/Height/Scale/etc. setters explicitly raised
+        // PropertyChanged for the matching OverrideXxx (and EffectiveScale)
+        // computed flag. Because computed flags are getter-only, the cascade
+        // is the only way XAML bindings on EffectiveScale (used heavily in
+        // LayoutControl.axaml) and OverrideXxx flags refresh when the
+        // underlying KVOverridable property is mutated at runtime.
         [KVOverridable]
+        [DependentProperty(nameof(OverrideScale))]
+        [DependentProperty(nameof(EffectiveScale))]
         public partial double Scale { get; set; }
 
         [KVOverridable]
+        [DependentProperty(nameof(OverrideWidth))]
         public partial double Width { get; set; }
 
         [KVOverridable]
+        [DependentProperty(nameof(OverrideHeight))]
         public partial double Height { get; set; }
 
         [KVOverridable]
+        [DependentProperty(nameof(OverrideMinWidth))]
         public partial double MinWidth { get; set; }
 
         [KVOverridable]
+        [DependentProperty(nameof(OverrideMinHeight))]
         public partial double MinHeight { get; set; }
 
         [KVOverridable]
+        [DependentProperty(nameof(OverrideMaxWidth))]
         public partial double MaxWidth { get; set; }
 
         [KVOverridable]
+        [DependentProperty(nameof(OverrideMaxHeight))]
         public partial double MaxHeight { get; set; }
 
         [KVOverridable]
+        [DependentProperty(nameof(OverrideCanvasX))]
         public partial double CanvasX { get; set; }
 
         [KVOverridable]
+        [DependentProperty(nameof(OverrideCanvasY))]
         public partial double CanvasY { get; set; }
 
         [KVOverridable]
+        [DependentProperty(nameof(OverrideCanvasDepth))]
         public partial double CanvasDepth { get; set; }
 
         [KVOverridable]

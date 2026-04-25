@@ -162,6 +162,29 @@ namespace D
         }
 
         [Fact]
+        public void GeneratorEmitsErrorWhenKVMutablePropertyHasNoGetter()
+        {
+            // C# 14 partial properties allow set-only declarations syntactically,
+            // but the generator can't emit a useful body without a getter — both
+            // halves are needed for the dual-storage / setter-with-INPC pattern.
+            const string setOnly = """
+using EmoTracker.Core.DataModel;
+using EmoTracker.Data.Core.DataModel;
+namespace D
+{
+    public partial class C : TransactableModelTypeBase
+    {
+        [KVMutable]
+        public partial int X { set; }
+        public override ModelTypeBase Fork() => null;
+    }
+}
+""";
+            var (_, diagnostics) = RunGenerator(setOnly);
+            Assert.Contains(diagnostics, d => d.Id == "EMODM009");
+        }
+
+        [Fact]
         public void GeneratorEmitsErrorWhenOnChangedTargetMissing()
         {
             // Roslyn will already diagnose nameof() against an unknown name as a
