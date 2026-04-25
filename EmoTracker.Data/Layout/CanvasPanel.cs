@@ -1,4 +1,5 @@
 ﻿using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
@@ -31,6 +32,20 @@ namespace EmoTracker.Data.Layout
             ParseLayoutItemList(data.GetValue<JArray>("content"), mChildren, package);
 
             return true;
+        }
+
+        // -------- Fork ------------------------------------------------------
+
+        public override ModelTypeBase Fork()
+        {
+            var copy = new CanvasPanel();
+            copy.InitializeAsForkOf(this);
+            foreach (var child in this.mChildren)
+            {
+                var forked = (LayoutItem)child.Fork();
+                copy.mChildren.Add(forked);
+            }
+            return copy;
         }
     }
 }

@@ -1,25 +1,30 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("image")]
     public partial class Image : LayoutItem
     {
-        ImageReference mContent;
+        // ImageReference is treated as logically immutable per Phase 2 §2.6 — its
+        // IDeepCopyable.DeepCopy() returns this. So the per-key COW boundary
+        // shares the reference safely across forks.
+        [KVOverridable]
+        public partial ImageReference Content { get; set; }
 
-        public ImageReference Content
+        protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
         {
-            get { return mContent; }
-            set { SetProperty(ref mContent, value); }
+            definition[nameof(Content) + "__def"] = ImageReference.FromPackRelativePath(
+                package, data.GetValue<string>("image"), data.GetValue<string>("image_filter"));
         }
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            Content = ImageReference.FromPackRelativePath(package, data.GetValue<string>("image"), data.GetValue<string>("image_filter"));
             return true;
         }
     }

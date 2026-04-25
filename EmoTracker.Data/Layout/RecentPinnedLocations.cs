@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
@@ -12,9 +13,10 @@ namespace EmoTracker.Data.Layout
     [JsonTypeTags("recentpins", "recent_pins")]
     public partial class RecentPinnedLocations : ArrayPanel
     {
+        // Per-state runtime view of LocationDatabase.PinnedLocations, capped to
+        // NumItems. Held as a private field — derived from the singleton +
+        // NumItems, recomputed via OnNumItemsChanged / Ncc_CollectionChanged.
         ObservableCollection<Location> mDisplayLocations = new ObservableCollection<Location>();
-        int mNumItems = 0;
-        bool mbDisplayCompact = true;
 
         public RecentPinnedLocations()
         {
@@ -41,20 +43,15 @@ namespace EmoTracker.Data.Layout
         {
             get { return mDisplayLocations; }
         }
-        
-        public int NumItems
-        {
-            get { return mNumItems; }
-            set { SetProperty(ref mNumItems, value); RefreshDisplayItems(); }
-        }
 
-        public bool CompactDisplay
-        {
-            get { return mbDisplayCompact; }
-            set { SetProperty(ref mbDisplayCompact, value); }
-        }
+        [KVOverridable]
+        [OnChanged(nameof(RefreshDisplayItems))]
+        public partial int NumItems { get; set; }
 
-        private void RefreshDisplayItems()
+        [KVOverridable]
+        public partial bool CompactDisplay { get; set; }
+
+        protected void RefreshDisplayItems()
         {
             mDisplayLocations.Clear();
 
@@ -68,12 +65,31 @@ namespace EmoTracker.Data.Layout
             }
         }
 
+        protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
+        {
+            base.PopulateDefinitionData(data, package, definition);
+            definition[nameof(CompactDisplay) + "__def"] = data.GetValue<bool>("compact", true);
+            definition[nameof(NumItems) + "__def"] = data.GetValue<int>("num_items", 0);
+        }
+
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            TryParsePanelConfiguration(data, package);
-            CompactDisplay = data.GetValue<bool>("compact", true);
-            NumItems = data.GetValue<int>("num_items", 0);
+            // Both ArrayPanel-level (Orientation, Style) and the local NumItems /
+            // CompactDisplay defaults have been seeded into ImmutableData by
+            // PopulateDefinitionData. We still need to do the post-definition
+            // refresh so mDisplayLocations starts populated.
+            base.TryParseInternal(data, package);
+            RefreshDisplayItems();
             return true;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            // Each fork gets its own mDisplayLocations subscribed to the
+            // singleton's PinnedLocations (Phase 6 will route through the
+            // per-state LocationDatabase). Repopulate from current state.
+            RefreshDisplayItems();
         }
     }
 }

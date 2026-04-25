@@ -1,12 +1,9 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
+using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
-using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EmoTracker.Data.Layout
 {
@@ -21,29 +18,19 @@ namespace EmoTracker.Data.Layout
             Visible = 3
         }
 
-        ScrollBarVisibility mHorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
-        ScrollBarVisibility mVerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        [KVOverridable]
+        public partial ScrollBarVisibility HorizontalScrollBarVisibility { get; set; }
 
-        public ScrollBarVisibility HorizontalScrollBarVisibility
+        [KVOverridable]
+        public partial ScrollBarVisibility VerticalScrollBarVisibility { get; set; }
+
+        protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
         {
-            get { return mHorizontalScrollBarVisibility; }
-            set { SetProperty(ref mHorizontalScrollBarVisibility, value); }
-        }
-
-        public ScrollBarVisibility VerticalScrollBarVisibility
-        {
-            get { return mVerticalScrollBarVisibility; }
-            set { SetProperty(ref mVerticalScrollBarVisibility, value); }
-        }
-
-        protected override bool TryParseInternal(JObject data, IGamePackage package)
-        {
-            bool bResult = base.TryParseInternal(data, package);
-
-            HorizontalScrollBarVisibility = data.GetEnumValue<ScrollBarVisibility>("horizontal_scrollbar_visibility", ScrollBarVisibility.Auto);
-            VerticalScrollBarVisibility = data.GetEnumValue<ScrollBarVisibility>("vertical_scrollbar_visibility", ScrollBarVisibility.Auto);
-
-            return bResult;
+            base.PopulateDefinitionData(data, package, definition);
+            definition[nameof(HorizontalScrollBarVisibility) + "__def"] =
+                data.GetEnumValue<ScrollBarVisibility>("horizontal_scrollbar_visibility", ScrollBarVisibility.Auto);
+            definition[nameof(VerticalScrollBarVisibility) + "__def"] =
+                data.GetEnumValue<ScrollBarVisibility>("vertical_scrollbar_visibility", ScrollBarVisibility.Auto);
         }
     }
 }

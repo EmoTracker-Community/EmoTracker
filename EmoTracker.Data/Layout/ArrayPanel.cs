@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
@@ -23,9 +24,8 @@ namespace EmoTracker.Data.Layout
     [JsonTypeTags("array")]
     public partial class ArrayPanel : LayoutItem
     {
-        ObservableCollection<LayoutItem> mChildren = new ObservableCollection<LayoutItem>();
-        Orientation mOrientation = Orientation.Vertical;
-        PanelStyle mStyle = PanelStyle.Stack;
+        // Owned subtree of children — same pattern as Container.
+        protected ObservableCollection<LayoutItem> mChildren = new ObservableCollection<LayoutItem>();
 
         public IEnumerable<LayoutItem> Children
         {
@@ -40,47 +40,47 @@ namespace EmoTracker.Data.Layout
             base.Dispose();
         }
 
-        public Orientation Orientation
-        {
-            get { return mOrientation; }
-            set { SetProperty(ref mOrientation, value); }
-        }
+        [KVOverridable]
+        public partial Orientation Orientation { get; set; }
 
-        public PanelStyle Style
-        {
-            get { return mStyle; }
-            set { SetProperty(ref mStyle, value); }
-        }
+        [KVOverridable]
+        public partial PanelStyle Style { get; set; }
 
-        protected bool TryParsePanelConfiguration(JObject data, IGamePackage package)
+        protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
         {
             string orientationVal = data.GetValue<string>("orientation");
-            if (!string.IsNullOrEmpty(orientationVal) && string.Equals(orientationVal, "horizontal", StringComparison.OrdinalIgnoreCase))
-            {
-                Orientation = Orientation.Horizontal;
-            }
-            else
-            {
-                Orientation = Orientation.Vertical;
-            }
+            var orientation = (!string.IsNullOrEmpty(orientationVal) && string.Equals(orientationVal, "horizontal", StringComparison.OrdinalIgnoreCase))
+                ? Orientation.Horizontal
+                : Orientation.Vertical;
+            definition[nameof(Orientation) + "__def"] = orientation;
 
             string styleVal = data.GetValue<string>("style");
-            if (!string.IsNullOrEmpty(styleVal) && string.Equals(styleVal, "wrap", StringComparison.OrdinalIgnoreCase))
-                Style = PanelStyle.Wrap;
-            else
-                Style = PanelStyle.Stack;
-
-            return true;
+            var style = (!string.IsNullOrEmpty(styleVal) && string.Equals(styleVal, "wrap", StringComparison.OrdinalIgnoreCase))
+                ? PanelStyle.Wrap
+                : PanelStyle.Stack;
+            definition[nameof(Style) + "__def"] = style;
         }
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            TryParsePanelConfiguration(data, package);
-
             mChildren.Clear();
             ParseLayoutItemList(data.GetValue<JArray>("content"), mChildren, package);
 
             return true;
+        }
+
+        // -------- Fork ------------------------------------------------------
+
+        public override ModelTypeBase Fork()
+        {
+            var copy = (ArrayPanel)System.Activator.CreateInstance(this.GetType());
+            copy.InitializeAsForkOf(this);
+            foreach (var child in this.mChildren)
+            {
+                var forked = (LayoutItem)child.Fork();
+                copy.mChildren.Add(forked);
+            }
+            return copy;
         }
     }
 }

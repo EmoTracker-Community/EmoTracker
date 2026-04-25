@@ -1,11 +1,20 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 namespace EmoTracker.Data.Layout
 {
+    /// <summary>
+    /// Phase 4: a button-shaped layout element that opens a popup containing a
+    /// referenced <see cref="Data.Layout.Layout"/>. The Layout reference is held
+    /// as a <see cref="ModelReference{Layout}"/> for per-state resolution; the
+    /// referenced layout key is preserved in <see cref="ImmutableData"/> so a
+    /// per-state resolver can re-resolve in Phase 6.
+    /// </summary>
     [JsonTypeTags("button_popup")]
     public partial class ButtonPopup : LayoutItem
     {
@@ -16,50 +25,67 @@ namespace EmoTracker.Data.Layout
             Image
         }
 
-        ButtonStyle mStyle = ButtonStyle.Settings;
-        ImageReference mImage;
-        Layout mLayout;
-        string mPopupBackground = "#FF212121";
-        bool mbMaskInput = false;
+        [KVOverridable]
+        public partial ButtonStyle Style { get; set; }
 
-        public ButtonStyle Style
-        {
-            get { return mStyle; }
-            set { SetProperty(ref mStyle, value); }
-        }
+        [KVOverridable]
+        public partial ImageReference Image { get; set; }
 
-        public ImageReference Image
+        [KVOverridable]
+        public partial string PopupBackground { get; set; }
+
+        [KVOverridable]
+        public partial bool MaskInput { get; set; }
+
+        // The referenced layout name lives in ImmutableData (definition); the
+        // resolved Layout instance is per-state via ModelReference.
+        [KVImmutable]
+        public partial string LayoutKey { get; }
+
+        ModelReference<Layout> mLayoutRef;
+
+        public ButtonPopup()
         {
-            get { return mImage; }
-            set { SetProperty(ref mImage, value); }
+            mLayoutRef = new ModelReference<Layout>(this);
         }
 
         public Layout Layout
         {
-            get { return mLayout; }
-            set { SetProperty(ref mLayout, value); }
+            get { return mLayoutRef.Target; }
+            set
+            {
+                var current = mLayoutRef.Target;
+                if (ReferenceEquals(current, value)) return;
+                NotifyPropertyChanging();
+                mLayoutRef.Set(value);
+                NotifyPropertyChanged();
+            }
         }
 
-        public string PopupBackground
+        protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
         {
-            get { return mPopupBackground; }
-            set { SetProperty(ref mPopupBackground, value); }
-        }
-
-        public bool MaskInput
-        {
-            get { return mbMaskInput; }
-            set { SetProperty(ref mbMaskInput, value); }
+            definition[nameof(Style) + "__def"] = data.GetEnumValue<ButtonStyle>("style", ButtonStyle.Settings);
+            definition[nameof(Image) + "__def"] = ImageReference.FromPackRelativePath(
+                package, data.GetValue<string>("image"), data.GetValue<string>("image_filter"));
+            definition[nameof(PopupBackground) + "__def"] = data.GetValue<string>("popup_background", "#ff212121");
+            definition[nameof(MaskInput) + "__def"] = data.GetValue<bool>("mask_input", false);
+            definition[nameof(LayoutKey)] = data.GetValue<string>("layout");
         }
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            Style = data.GetEnumValue<ButtonStyle>("style", ButtonStyle.Settings);
-            Image = ImageReference.FromPackRelativePath(package, data.GetValue<string>("image"), data.GetValue<string>("image_filter"));
-            Layout = LayoutManager.Instance.FindLayout(data.GetValue<string>("layout"));
-            PopupBackground = data.GetValue<string>("popup_background", "#ff212121");
-            MaskInput = data.GetValue<bool>("mask_input", false);
+            // Resolve referenced layout through the singleton at parse time. The
+            // resolved instance's DefinitionId is captured in mLayoutRef.
+            var resolved = LayoutManager.Instance.FindLayout(LayoutKey);
+            mLayoutRef.Set(resolved);
             return true;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (ButtonPopup)source;
+            mLayoutRef = src.mLayoutRef.ForFork(this);
         }
     }
 }

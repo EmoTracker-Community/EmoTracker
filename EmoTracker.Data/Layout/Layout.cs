@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -7,8 +8,23 @@ using System.IO;
 
 namespace EmoTracker.Data.Layout
 {
-    public class Layout : ObservableObject
+    /// <summary>
+    /// Phase 4: <see cref="Layout"/> is now a <see cref="ModelTypeBase"/>. Its
+    /// owned <see cref="Root"/> subtree is forked element-by-element on
+    /// <see cref="Fork"/>; cross-references to a Layout (held by
+    /// <c>LayoutReference</c> and <c>ButtonPopup</c>) are
+    /// <see cref="ModelReference{Layout}"/>-tracked.
+    ///
+    /// <para>
+    /// Layout itself has no <c>[KVOverridable]</c> properties — it's a thin
+    /// owner of the root <see cref="LayoutItem"/>. Its identity comes from its
+    /// auto-generated <see cref="ModelTypeBase.DefinitionId"/>.
+    /// </para>
+    /// </summary>
+    public partial class Layout : ModelTypeBase
     {
+        // Owned subtree: the root LayoutItem. Held as a private field — owning
+        // relationship — and forked explicitly.
         LayoutItem mRoot;
 
         public LayoutItem Root
@@ -57,6 +73,17 @@ namespace EmoTracker.Data.Layout
         public void Clear()
         {
             Root = null;
+        }
+
+        // -------- Fork ------------------------------------------------------
+
+        public override ModelTypeBase Fork()
+        {
+            var copy = new Layout();
+            copy.InitializeAsForkOf(this);
+            if (this.mRoot != null)
+                copy.mRoot = (LayoutItem)this.mRoot.Fork();
+            return copy;
         }
     }
 }

@@ -266,6 +266,12 @@ namespace EmoTracker.Data.Layout
             def[nameof(BroadcastShadow) + "__def"] = data.GetValue<bool>("broadcast_shadow", false);
             def[nameof(HitTestVisible) + "__def"] = data.GetValue<bool>("hit_test_visible", true);
 
+            // Subclass extension point: lets concrete leaves seed their own
+            // [KVOverridable] / [KVImmutable] __def entries before the
+            // ImmutableData store is frozen. Subclasses that hold no extra
+            // definition state simply don't override.
+            PopulateDefinitionData(data, package, def);
+
             ImmutableData = new ImmutableKeyValueStore(def);
 
             // UID registration is a side effect of parse, not of definition data —
@@ -278,6 +284,18 @@ namespace EmoTracker.Data.Layout
             }
 
             return TryParseInternal(data, package);
+        }
+
+        /// <summary>
+        /// Subclass extension point invoked from <see cref="TryParse"/> after the
+        /// base layout-item definition keys are populated and before
+        /// <see cref="ImmutableData"/> is frozen. Concrete leaves with their own
+        /// <c>[KVOverridable]</c> or <c>[KVImmutable]</c> properties override this
+        /// to add their <c>{Name}__def</c> entries to <paramref name="definition"/>.
+        /// Subclasses with no type-specific definition state need not override.
+        /// </summary>
+        protected virtual void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
+        {
         }
 
         protected void ParseLayoutItemList(JArray list, ICollection<LayoutItem> destination, IGamePackage package)
