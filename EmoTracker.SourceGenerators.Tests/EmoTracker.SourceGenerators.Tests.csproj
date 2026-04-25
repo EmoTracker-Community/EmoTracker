@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>EmoTracker.SourceGenerators.Tests</RootNamespace>
+    <AssemblyName>EmoTracker.SourceGenerators.Tests</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!--
+      Pulled in for the golden tests below: drives the generator manually against
+      compiled snippets and asserts on its output.
+    -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference the assemblies-under-test. -->
+    <ProjectReference Include="..\EmoTracker.Core\EmoTracker.Core.csproj" />
+    <ProjectReference Include="..\EmoTracker.Data\EmoTracker.Data.csproj" />
+    <!-- Plain reference so we can instantiate KVPropertyGenerator directly in
+         golden tests via the Roslyn driver API. We don't add it as an Analyzer
+         here — this project doesn't host any KV-attributed types of its own. -->
+    <ProjectReference Include="..\EmoTracker.SourceGenerators\EmoTracker.SourceGenerators.csproj" />
+  </ItemGroup>
+
+  <!-- The Snapshots folder holds checked-in golden generator outputs as .cs files
+       for editor-friendliness, but they must not participate in this project's
+       compilation (they declare partial-property halves whose other half lives in
+       a hypothetical input). Exclude from compilation; copy to output so tests
+       can read them at runtime via LocateSnapshot(). -->
+  <ItemGroup>
+    <Compile Remove="Snapshots\**\*.cs" />
+    <None Include="Snapshots\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

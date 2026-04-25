@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 
 namespace EmoTracker.Data.Core.Transactions
 {
-    public class TransactableObject : ObservableObject
+    public class TransactableObject : ObservableObject, ITransactableObject
     {
         static Dictionary<Type, Dictionary<string, bool>> mGlobalReadFromOpenTransactionCache = new Dictionary<Type, Dictionary<string, bool>>();
 

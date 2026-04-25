@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace EmoTracker.Data.Core.Transactions
 {
@@ -15,9 +15,9 @@ namespace EmoTracker.Data.Core.Transactions
     {
         TransactionStatus Status { get; }
 
-        bool HasPropertyValue(TransactableObject src, string propertyName);
+        bool HasPropertyValue(ITransactableObject src, string propertyName);
 
-        T GetPropertyValue<T>(TransactableObject src, string propertyName);
+        T GetPropertyValue<T>(ITransactableObject src, string propertyName);
     }
 
     public interface ITransactionScope : IDisposable
@@ -47,10 +47,11 @@ namespace EmoTracker.Data.Core.Transactions
         /// open/close a new transaction if necessary.
         /// </summary>
         /// <typeparam name="T"></typeparam>
-        /// <param name="obj"></param>
+        /// <param name="obj">Target object — either the legacy <see cref="TransactableObject"/> or any
+        /// data-model-v2 <c>TransactableModelTypeBase</c>; both implement <see cref="ITransactableObject"/>.</param>
         /// <param name="fieldName"></param>
         /// <param name="value"></param>
-        void WriteProperty<T>(TransactableObject obj, string fieldName, T value, Action<ITransaction> transactionStateCallback = null);
+        void WriteProperty<T>(ITransactableObject obj, string fieldName, T value, Action<ITransaction> transactionStateCallback = null);
     }
 
     public static class TransactionProcessor
