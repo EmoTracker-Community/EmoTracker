@@ -57,28 +57,44 @@ namespace EmoTracker.UI.Media.Resolvers
                     Uri.UnescapeDataString(concreteRef.URI.Host),
                     Uri.UnescapeDataString(concreteRef.URI.AbsolutePath));
 
-                // Get the decoded base SKBitmap from cache, or decode it
-                SKBitmap baseSK = GetCachedSource(filePath);
-                if (baseSK == null)
+                // Acquire-and-clone the cached base bitmap under the same lock that
+                // ClearSourceCache holds when it disposes entries. Without this scope
+                // a pack-load event can fire ClearSourceCache between our cache lookup
+                // and the Copy(), freeing the SKBitmap's native pixel-ref while we're
+                // still pointing at it — leading to a 0xC0000005 inside Skia's shader
+                // fallback path (sk_bitmap_make_shader). The decode + Copy are both
+                // fast (~ms scale) and only block other ConcreteImageReference work,
+                // so widening the lock here is acceptable.
+                SKBitmap working;
+                lock (sSourceCache)
                 {
-                    using (Stream s = Tracker.Instance.ActiveGamePackage.Open(filePath))
+                    if (!sSourceCache.TryGetValue(filePath, out SKBitmap baseSK))
                     {
-                        if (s == null)
+                        using (Stream s = Tracker.Instance.ActiveGamePackage.Open(filePath))
+                        {
+                            if (s == null)
+                                return null;
+
+                            baseSK = Utility.IconUtility.DecodeSKBitmap(s);
+                        }
+
+                        if (baseSK == null)
                             return null;
 
-                        baseSK = Utility.IconUtility.DecodeSKBitmap(s);
+                        sSourceCache[filePath] = baseSK;
                     }
 
-                    if (baseSK == null)
-                        return null;
-
-                    PutCachedSource(filePath, baseSK);
+                    // Clone the base bitmap so filter operations don't mutate the
+                    // cached original. The Copy() must happen inside the lock so
+                    // the source can't be disposed between cache hit and clone.
+                    working = baseSK.Copy();
                 }
 
-                // Clone the base bitmap so filter operations don't mutate the
-                // cached original, then run the entire filter chain in SKBitmap
-                // space (no intermediate PNG round-trips).
-                SKBitmap working = baseSK.Copy();
+                if (working == null)
+                    return null;
+
+                // Filtering happens outside the lock — it operates on `working`
+                // (our exclusive copy) and doesn't touch the cache.
                 working = Utility.IconUtility.ApplyFilterSpecToSKBitmap(
                     Tracker.Instance.ActiveGamePackage, working, concreteRef.Filter);
 
@@ -88,24 +104,6 @@ namespace EmoTracker.UI.Media.Resolvers
             }
 
             return Utility.IconUtility.GetImageRaw(concreteRef.URI);
-        }
-
-        static SKBitmap GetCachedSource(string filePath)
-        {
-            lock (sSourceCache)
-            {
-                if (sSourceCache.TryGetValue(filePath, out SKBitmap bmp))
-                    return bmp;
-                return null;
-            }
-        }
-
-        static void PutCachedSource(string filePath, SKBitmap bmp)
-        {
-            lock (sSourceCache)
-            {
-                sSourceCache[filePath] = bmp;
-            }
         }
     }
 }
