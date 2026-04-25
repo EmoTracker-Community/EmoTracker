@@ -1,4 +1,5 @@
 ﻿using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Media;
@@ -305,6 +306,18 @@ namespace EmoTracker.Data
         bool mbInRefresh = false;
         uint mPendingRefreshCount = 0;
 
+        // Holder-aware script-manager lookup for standard-callback dispatch.
+        // Prefers mRoot's per-state ScriptManager (Phase 6 makes this
+        // meaningful by returning the state's manager rather than the
+        // ambient singleton); falls back to the static host when no pack
+        // root is loaded yet, and finally to the no-op manager when nothing
+        // is registered (test scenarios).
+        IScriptManager GetActiveScriptManager()
+        {
+            if (mRoot != null) return mRoot.GetScriptManager();
+            return ScriptManagerHost.Current ?? NullScriptManager.Instance;
+        }
+
         internal void RefeshAccessibility(bool bPendingOnly = false)
         {
             if (mSuspendRefreshCount == 0)
@@ -330,7 +343,12 @@ namespace EmoTracker.Data
                                 AccessibilityRule.ClearCaches();
                                 ScriptManager.Instance.ClearExpressionCache();
 
-                                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
+                                // Phase 5 step 5: route the standard-callback through the
+                                // holder-aware path. mRoot is a Location (ModelTypeBase),
+                                // so its GetScriptManager() override (Phase 6) returns the
+                                // owning state's ScriptManager. Falls back to the singleton
+                                // host when no pack is loaded (mRoot == null).
+                                GetActiveScriptManager().InvokeStandardCallback(StandardCallback.AccessibilityUpdating);
 
                                 if (mRoot != null)
                                     mRoot.RefreshAccessibility();
@@ -352,7 +370,7 @@ namespace EmoTracker.Data
 
                         if (bRefreshedAccessibility)
                         {
-                            ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdated);
+                            GetActiveScriptManager().InvokeStandardCallback(StandardCallback.AccessibilityUpdated);
                         }
                     }
                 }

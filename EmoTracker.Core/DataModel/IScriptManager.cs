@@ -68,4 +68,25 @@ namespace EmoTracker.Core.DataModel
     {
         public static IScriptManager Current { get; set; }
     }
+
+    /// <summary>
+    /// No-op <see cref="IScriptManager"/> used as the fallback when
+    /// <see cref="ScriptManagerHost.Current"/> is null. Returned by
+    /// <see cref="ModelTypeBase.GetScriptManager"/> in test scenarios
+    /// where app startup hasn't registered the real script manager —
+    /// callsites that fire standard callbacks via
+    /// <c>holder.GetScriptManager().InvokeStandardCallback(...)</c> stay
+    /// safe rather than NRE'ing. The pre-Phase-5 lazy-create behavior
+    /// of <c>ScriptManager.Instance</c> served the same role; this is
+    /// the equivalent for the holder-aware path.
+    /// </summary>
+    public sealed class NullScriptManager : IScriptManager
+    {
+        public static readonly NullScriptManager Instance = new NullScriptManager();
+        private NullScriptManager() { }
+        public void InvokeStandardCallback(StandardCallback callback, params object[] args)
+        {
+            // Intentionally no-op.
+        }
+    }
 }

@@ -65,16 +65,23 @@ namespace EmoTracker.Data.Locations
 
         void WireScriptManagerCallbacks()
         {
+            // Phase 5 step 5: dispatch through GetScriptManager() rather than
+            // the singleton. Section is a ModelTypeBase, so its
+            // GetScriptManager() override (Phase 6) returns the owning state's
+            // ScriptManager — and the Lua callback fires against that state's
+            // interpreter. Today GetScriptManager() returns the same singleton
+            // ScriptManager.Instance pointed at, so observable behavior is
+            // unchanged; only the indirection point is in place.
             PropertyChanging += (sender, e) =>
             {
                 if (e.PropertyName == nameof(CapturedItem) || e.PropertyName == nameof(AvailableChestCount))
-                    ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdating, this);
+                    GetScriptManager().InvokeStandardCallback(StandardCallback.LocationUpdating, this);
             };
 
             PropertyChanged += (sender, e) =>
             {
                 if (e.PropertyName == nameof(CapturedItem) || e.PropertyName == nameof(AvailableChestCount))
-                    ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.LocationUpdated, this);
+                    GetScriptManager().InvokeStandardCallback(StandardCallback.LocationUpdated, this);
             };
         }
 

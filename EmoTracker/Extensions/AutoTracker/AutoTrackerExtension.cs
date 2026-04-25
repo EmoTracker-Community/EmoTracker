@@ -1,4 +1,5 @@
 using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Core.Services;
 using EmoTracker.Data;
 using EmoTracker.Data.AutoTracking;
@@ -306,7 +307,7 @@ namespace EmoTracker.Extensions.AutoTracker
             ActiveProvider = null;
 
             if (bWasActive)
-                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStopped);
+                (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.AutoTrackerStopped);
         }
 
         private bool CanStartAutoTracking(object obj = null)
@@ -331,7 +332,7 @@ namespace EmoTracker.Extensions.AutoTracker
                         await SelectedProvider.ConnectAsync();
                         ActiveProvider = SelectedProvider;
 
-                        ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStarted);
+                        (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.AutoTrackerStarted);
                     }
                     catch
                     {

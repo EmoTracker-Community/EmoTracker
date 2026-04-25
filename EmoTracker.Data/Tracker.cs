@@ -1,4 +1,5 @@
 ﻿using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Layout;
 using EmoTracker.Data.Locations;
@@ -220,7 +221,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             try
             {
                 ScriptManager.Instance.Output("Loading save game \"{0}\"", path);
-                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.StartLoadingSaveFile);
+                (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.StartLoadingSaveFile);
 
                 using (StreamReader reader = new StreamReader(path))
                 {
@@ -277,8 +278,8 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             }
             finally
             {
-                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.FinishLoadingSaveFile);
-                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.PackReady);
+                (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.FinishLoadingSaveFile);
+                (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.PackReady);
 
                 ScriptManager.Instance.Output("Finished loading save game \"{0}\"", path);
 
@@ -505,7 +506,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                         OnPackageLoadComplete(this, EventArgs.Empty);
 
                     if (!SuspendPackReadyEvent)
-                        ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.PackReady);
+                        (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.PackReady);
                 }
             }
         }

@@ -156,7 +156,7 @@ namespace EmoTracker.Core.DataModel
         /// </summary>
         public virtual IScriptManager GetScriptManager()
         {
-            return ScriptManagerHost.Current;
+            return ScriptManagerHost.Current ?? NullScriptManager.Instance;
         }
     }
 }
