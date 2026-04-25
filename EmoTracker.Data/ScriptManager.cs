@@ -173,7 +173,7 @@ namespace EmoTracker.Data
     /// automatically once Phase 6 lands.
     /// </para>
     /// </summary>
-    public class ScriptManager : ObservableObject, ICodeProvider, IScriptManager
+    public class ScriptManager : ModelTypeBase, ICodeProvider, IScriptManager
     {
         // ---- Static current-instance plumbing (replaces ObservableSingleton) ----
 
@@ -380,64 +380,84 @@ end
                 //  Dispose our previous Lua instance
                 DisposeObjectAndDefault(ref mLua);
 
-                mLua = new Lua();
-                mLua.DebugHook += MLua_DebugHook;
-                mLua.HookException += MLua_HookException;
-                mLua.RegisterFunction("_output", this, this.GetType().GetMethod("OutputRaw"));
+                BootstrapInterpreter();
 
-                //  Remove disallowed os methods
+                LoadScript(mPackage, "scripts/init.lua");
+            }
+        }
+
+        /// <summary>
+        /// Allocates a fresh <see cref="Lua"/> interpreter on this manager
+        /// and installs the standard EmoTracker scaffolding: the
+        /// <c>_output</c> bridge for <see cref="OutputRaw"/>, the os/io
+        /// sandbox, the C#-side bridge globals (Tracker / Layout / etc.),
+        /// and the <see cref="SystemLua"/> Lua-side helpers (_safe_call,
+        /// print, import). Used by both <see cref="Load"/> (which then runs
+        /// <c>scripts/init.lua</c>) and the Phase 5 fork path (which then
+        /// hands the freshly-bootstrapped interpreter to
+        /// <see cref="LuaStateCloner"/> to migrate live state from the
+        /// source manager). Exposed at <c>internal</c> so unit tests in
+        /// <c>EmoTracker.SourceGenerators.Tests</c> can drive the
+        /// bootstrap directly without a full <see cref="IGamePackage"/>
+        /// fixture; production callers go through <see cref="Load"/>.
+        /// </summary>
+        internal void BootstrapInterpreter()
+        {
+            mLua = new Lua();
+            mLua.DebugHook += MLua_DebugHook;
+            mLua.HookException += MLua_HookException;
+            mLua.RegisterFunction("_output", this, this.GetType().GetMethod("OutputRaw"));
+
+            //  Remove disallowed os methods
+            try
+            {
+                using (LuaTable os = (LuaTable)mLua["os"])
+                {
+                    os["execute"] = null;
+                    os["exit"] = null;
+                    os["setlocale"] = null;
+                }
+            }
+            catch
+            {
+            }
+
+            if (mPackage != null && !mPackage.FlaggedAsUnsafe)
+            {
                 try
                 {
                     using (LuaTable os = (LuaTable)mLua["os"])
                     {
-                        os["execute"] = null;
-                        os["exit"] = null;
-                        os["setlocale"] = null;
+                        os["tmpname"] = null;
+                        os["rename"] = null;
+                        os["getenv"] = null;
+                        os["remove"] = null;
                     }
                 }
                 catch
                 {
+                    mLua["os"] = null;
                 }
 
-                if (!mPackage.FlaggedAsUnsafe)
-                {
-                    try
-                    {
-                        using (LuaTable os = (LuaTable)mLua["os"])
-                        {
-                            os["tmpname"] = null;
-                            os["rename"] = null;
-                            os["getenv"] = null;
-                            os["remove"] = null;
-                        }
-                    }
-                    catch
-                    {
-                        mLua["os"] = null;
-                    }
-
-                    mLua["io"] = null;
-                }
-
-                mLua["Tracker"] = TrackerScriptInterface.Instance;
-                mLua["Layout"] = LayoutScriptInterface.Instance;
-                mLua["AccessibilityLevel"] = new AccessibilityLevel();
-                mLua["NotificationType"] = new NotificationType();
-                mLua["ScriptHost"] = this;
-                mLua["ImageReference"] = new ImageReferenceProvider();
-                
-                if (ApplicationSettings.Instance.SupportLua53VersionChecks)
-                    mLua["_VERSION"] = "Lua 5.3";
-
-                foreach (var entry in mGlobals)
-                {
-                    mLua[entry.Key] = entry.Value;
-                }
-
-                mLua.DoString(SystemLua);
-
-                LoadScript(mPackage, "scripts/init.lua");
+                mLua["io"] = null;
             }
+
+            mLua["Tracker"] = TrackerScriptInterface.Instance;
+            mLua["Layout"] = LayoutScriptInterface.Instance;
+            mLua["AccessibilityLevel"] = new AccessibilityLevel();
+            mLua["NotificationType"] = new NotificationType();
+            mLua["ScriptHost"] = this;
+            mLua["ImageReference"] = new ImageReferenceProvider();
+
+            if (ApplicationSettings.Instance.SupportLua53VersionChecks)
+                mLua["_VERSION"] = "Lua 5.3";
+
+            foreach (var entry in mGlobals)
+            {
+                mLua[entry.Key] = entry.Value;
+            }
+
+            mLua.DoString(SystemLua);
         }
 
         [NLua.LuaHide]
@@ -884,6 +904,77 @@ end
             ItemDatabase.Instance.RegisterItem(item);
 
             return item;
+        }
+
+        // -------- Phase 5 fork plumbing -----------------------------------
+
+        /// <summary>
+        /// The <see cref="LuaStateCloner"/> used during this manager's
+        /// <see cref="OnForked"/> step. Step 7's <c>LuaItem.OnForked</c>
+        /// reads this on the fork's manager to resolve its source-side
+        /// <c>mItemState</c> / callback references to the destination's
+        /// clones — without it those references would point at the
+        /// source's now-orphaned interpreter and any callback would
+        /// either no-op or exec against the wrong state.
+        /// <para>
+        /// Null on a freshly-created (non-forked) manager. Holds the
+        /// cloner used during the most recent fork until the next fork
+        /// or until the manager is reset / disposed.
+        /// </para>
+        /// </summary>
+        internal LuaStateCloner ForkCloner { get; private set; }
+
+        /// <summary>
+        /// Phase 5: produces a fork of this manager whose Lua interpreter
+        /// is a deep copy of this manager's live Lua state. The fork's
+        /// interpreter shares definition data (mPackage, mGlobals,
+        /// service refs) by reference but allocates a fresh
+        /// <see cref="Lua"/> with its own bridge bindings; pack-author
+        /// state from <c>scripts/init.lua</c> and any subsequent runtime
+        /// mutations carry across via <see cref="LuaStateCloner.CloneAll"/>.
+        /// </summary>
+        public override ModelTypeBase Fork()
+        {
+            var copy = new ScriptManager();
+            copy.InitializeAsForkOf(this);
+            return copy;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (ScriptManager)source;
+
+            // Definition-tier state: share by reference per plan §5.2 — these
+            // are pack-defined values that are constant across the fork
+            // family.
+            mPackage = src.mPackage;
+            mGlobals = src.mGlobals;
+            mMemoryService = src.mMemoryService;
+            mNotificationService = src.mNotificationService;
+
+            // Allocate a fresh interpreter on this fork and run the
+            // scaffolding bootstrap (system Lua, bridge globals, sandbox).
+            // After this returns, this.mLua is a viable destination for the
+            // cloner to migrate the source's reachable Lua state into.
+            DisposeObjectAndDefault(ref mLua);
+            BootstrapInterpreter();
+
+            // If the source has no Lua interpreter (Load was never called or
+            // Reset was), there's nothing to clone — leave the fork's freshly-
+            // bootstrapped interpreter as-is.
+            if (src.mLua == null) return;
+
+            // Build the bridge identity map. In Phase 5 the bridges are
+            // still singletons (TrackerScriptInterface.Instance etc.), so
+            // src and dst hand the SAME C# object reference back. The map
+            // is empty for now; Phase 6's per-state bridges populate it
+            // with src.bridge → dst.bridge entries so closure upvalues
+            // capturing the source's bridges get remapped to the fork's.
+            var bridgeMap = new Dictionary<object, object>();
+
+            ForkCloner = new LuaStateCloner(src.mLua, mLua, bridgeMap, OutputWarning);
+            ForkCloner.CloneAll();
         }
     }
 }
