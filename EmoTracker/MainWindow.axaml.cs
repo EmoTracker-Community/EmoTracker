@@ -34,7 +34,16 @@ namespace EmoTracker
         public UI.StateTabStripControl GetTabStrip()
             => this.FindControl<UI.StateTabStripControl>("StateTabStrip");
 
-        public MainWindow()
+        public MainWindow() : this(seedWithPrimaryState: true) { }
+
+        /// <summary>
+        /// Phase 7.6 / 7.9: secondary windows opened via tear-off pass
+        /// <paramref name="seedWithPrimaryState"/> = false so the new
+        /// window's WindowContext starts empty. The caller (typically
+        /// <see cref="ApplicationModel.OpenStateInNewWindow"/>) then
+        /// explicitly adds the torn-off state.
+        /// </summary>
+        public MainWindow(bool seedWithPrimaryState)
         {
             // Phase 7.6: allocate per-window context BEFORE InitializeComponent
             // so XAML bindings via {Binding ElementName} can resolve it.
@@ -48,12 +57,17 @@ namespace EmoTracker
             Tracker.Instance.PropertyChanged += Tracker_PropertyChanged;
 
             // Phase 7.6: register with the app's window collection. The
-            // first WindowContext gets the active primary state added so
-            // existing UI continues to work.
+            // first window seeds its WindowContext with the active primary
+            // state so existing UI works unchanged. Tear-off windows
+            // (seedWithPrimaryState=false) start empty; the caller adds
+            // the torn-off state explicitly.
             ApplicationModel.Instance.RegisterWindow(WindowContext);
-            var primary = ApplicationModel.Instance.PrimaryState;
-            if (primary != null)
-                WindowContext.AddState(primary);
+            if (seedWithPrimaryState)
+            {
+                var primary = ApplicationModel.Instance.PrimaryState;
+                if (primary != null)
+                    WindowContext.AddState(primary);
+            }
             ApplicationModel.Instance.CurrentlyActiveWindowContext = WindowContext;
             this.Activated += (_, __) => ApplicationModel.Instance.CurrentlyActiveWindowContext = WindowContext;
             this.Closed += (_, __) => ApplicationModel.Instance.UnregisterWindow(WindowContext);

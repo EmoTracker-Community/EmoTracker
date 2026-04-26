@@ -114,7 +114,9 @@ namespace EmoTracker
         {
             if (state == null) return null;
             sourceCtx?.RemoveState(state);
-            var newWindow = new MainWindow();
+            // seedWithPrimaryState=false: tear-off windows start empty;
+            // we add only the torn-off state below.
+            var newWindow = new MainWindow(seedWithPrimaryState: false);
             newWindow.WindowContext.AddState(state);
             newWindow.Show();
             return newWindow.WindowContext;
@@ -439,8 +441,15 @@ namespace EmoTracker
             }, Avalonia.Threading.DispatcherPriority.Background);
         }
 
+        bool mInitialized;
         public void Initialize()
         {
+            // Phase 7.6: Initialize is idempotent — additional MainWindow
+            // instances (spawned by tear-off in Phase 7.9) call Initialize
+            // in their ctor; we run the heavy setup once.
+            if (mInitialized) return;
+            mInitialized = true;
+
             //  Start the image resolution service.  When --no-async-images is
             //  set, resolution falls back to synchronous on-demand behaviour.
             ImageReferenceService.Instance.SyncMode = Data.ApplicationSettings.Instance.NoAsyncImages;
