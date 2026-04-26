@@ -15,16 +15,29 @@ namespace EmoTracker.Core.DataModel
     /// </para>
     ///
     /// <para>
-    /// Step 1 (this commit) defines the marker shape only. Subsequent
-    /// Phase 6 steps add transaction-processor and script-manager
-    /// surfaces here as the per-state migration progresses; for the
-    /// data-model and Lua plumbing we already have, holders type their
-    /// references to specialized interfaces in <c>EmoTracker.Data</c>
-    /// (where the heavier types like <c>IUndoableTransactionProcessor</c>
-    /// and <c>ScriptManager</c> live).
+    /// <see cref="Scripts"/> is the per-state script manager — a callback
+    /// fired from a model in state A goes through state A's Lua
+    /// interpreter rather than leaking into the active primary state's
+    /// (the bug Phase 5's holder-aware GetScriptManager hook was
+    /// scaffolded for).
+    /// </para>
+    ///
+    /// <para>
+    /// The transaction-processor surface stays Data-side
+    /// (<c>TrackerState.Transactions</c>): it references
+    /// <c>IUndoableTransactionProcessor</c> in <c>EmoTracker.Data</c>,
+    /// and TransactableModelTypeBase casts <see cref="ModelTypeBase.OwnerState"/>
+    /// to <c>TrackerState</c> directly to access it.
     /// </para>
     /// </summary>
     public interface ITrackerStateContext : IModelResolver
     {
+        /// <summary>
+        /// The per-state script manager. Models in this state route
+        /// callback dispatch through here (via
+        /// <see cref="ModelTypeBase.GetScriptManager"/>) so Lua callbacks
+        /// fire on the right interpreter.
+        /// </summary>
+        IScriptManager Scripts { get; }
     }
 }

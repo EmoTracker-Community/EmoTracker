@@ -23,6 +23,7 @@ namespace EmoTracker.SourceGenerators.Tests
         sealed class StubStateContext : ITrackerStateContext
         {
             public IndexedModelResolver Resolver { get; } = new IndexedModelResolver();
+            public IScriptManager Scripts { get; set; } = NullScriptManager.Instance;
             public T Resolve<T>(Guid definitionId) where T : class => Resolver.Resolve<T>(definitionId);
         }
 
@@ -265,6 +266,46 @@ namespace EmoTracker.SourceGenerators.Tests
         {
             var pi = new EmoTracker.Data.Sessions.PackageInstance();
             Assert.Null(pi.GetState(Guid.NewGuid()));
+        }
+
+        // -------- GetScriptManager flows through OwnerState --------
+
+        [Fact]
+        public void GetScriptManager_PrefersOwnerStateScripts()
+        {
+            var state = new EmoTracker.Data.Sessions.TrackerState();
+            var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
+            smoke.OwnerState = state;
+
+            // GetScriptManager returns the state's ScriptManager (cast to
+            // IScriptManager via the explicit interface implementation).
+            // NOT the singleton ScriptManagerHost.Current.
+            var resolved = smoke.GetScriptManager();
+            Assert.Same(state.Scripts, resolved);
+
+            smoke.OwnerState = null;
+        }
+
+        [Fact]
+        public void GetScriptManager_NoOwnerState_FallsThroughToHost()
+        {
+            // Models without an OwnerState use the host's Current — the
+            // Phase 0–5 path. Preserves the singleton behavior for any
+            // legacy callsite that hasn't been claimed by a state.
+            var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
+            Assert.Null(smoke.OwnerState);
+
+            var prior = ScriptManagerHost.Current;
+            try
+            {
+                var stub = new StubStateContext();
+                ScriptManagerHost.Current = stub.Scripts;
+                Assert.Same(stub.Scripts, smoke.GetScriptManager());
+            }
+            finally
+            {
+                ScriptManagerHost.Current = prior;
+            }
         }
     }
 }

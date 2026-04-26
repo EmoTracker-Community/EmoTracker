@@ -61,11 +61,16 @@ namespace EmoTracker.Data.Sessions
         /// The script manager scoped to this state. Owns its own
         /// <see cref="NLua.Lua"/> interpreter; pack-author globals,
         /// LuaItem callbacks, and standard-callback dispatch all flow
-        /// through this manager (not the singleton) once
-        /// <see cref="ScriptManagerHost.Current"/> is repointed at it
-        /// in step 6.
+        /// through this manager via <see cref="ModelTypeBase.GetScriptManager"/>'s
+        /// OwnerState-preferring path.
         /// </summary>
         public ScriptManager Scripts { get; }
+
+        // ITrackerStateContext.Scripts is typed IScriptManager. Forward via
+        // explicit interface implementation so the public-facing property
+        // returns the concrete ScriptManager (avoiding casts at every
+        // ScriptManager-specific call site, e.g. RewireForkedLuaItem).
+        IScriptManager ITrackerStateContext.Scripts => Scripts;
 
         /// <summary>
         /// The transaction processor scoped to this state. Each state
