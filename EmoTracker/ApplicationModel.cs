@@ -57,7 +57,16 @@ namespace EmoTracker
         private Layout mTrackerVerticalLayout;
         private Layout mTrackerCaptureItemLayout;
 
-        // -------- Phase 6 step 7: PackageInstance + PrimaryState ----------
+        // -------- Phase 6 step 7 / Phase 7.5: PackageInstance + PrimaryState --
+
+        // Phase 7.5: collection of all live PackageInstances. Today this
+        // typically contains exactly one (the one bound to the active
+        // pack); Phase 7.6+ UI work will add the ability to load
+        // additional packs without unloading the first.
+        readonly System.Collections.ObjectModel.ObservableCollection<PackageInstance> mPackageInstances
+            = new System.Collections.ObjectModel.ObservableCollection<PackageInstance>();
+
+        public System.Collections.ObjectModel.ObservableCollection<PackageInstance> PackageInstances => mPackageInstances;
 
         private PackageInstance mActivePackageInstance;
 
@@ -319,12 +328,96 @@ namespace EmoTracker
 
             mActivePackageInstance.AdoptAsPrimary(primary);
 
+            // Phase 7.5: track in the collection so multi-pack consumers
+            // can enumerate every live PackageInstance.
+            mPackageInstances.Add(mActivePackageInstance);
+
             // Install the active state for the in-Data layer's fallback
             // resolver (PrimaryStateModelResolver) and for any in-Data
             // callsites that need to reach the active state without an
             // OwnerState holder. Phase 7.6's WindowContext makes this
             // per-window; for now it's a single global slot.
             EmoTracker.Data.Sessions.SessionContext.ActiveState = primary;
+        }
+
+        // -------- Phase 7.5: multi-PackageInstance lifecycle ----------------
+
+        /// <summary>
+        /// Phase 7.5: load a pack into a freshly-allocated
+        /// <see cref="PackageInstance"/> without disturbing any existing
+        /// instance. Returns the new instance's primary state.
+        ///
+        /// <para>
+        /// Today the existing single-pack flow (<c>LoadDefaultPackage</c>
+        /// → <c>Tracker.Reload</c> → <c>RebindActivePackageInstanceFromSingletons</c>)
+        /// remains the dominant pack-load path because Avalonia UI bindings
+        /// and several extensions still assume one active set of catalogs
+        /// (<c>ApplicationModel.Instance.PrimaryState.Items</c> etc).
+        /// Phase 7.6's <c>WindowContext</c> binding migration unblocks the
+        /// multi-pack scenario; this method exposes the API now so 7.6+
+        /// UI work can use it.
+        /// </para>
+        /// </summary>
+        public TrackerState LoadNewPack(IGamePackage package, IGamePackageVariant variant)
+        {
+            if (package == null) throw new ArgumentNullException(nameof(package));
+
+            var pi = new PackageInstance(package, variant);
+
+            // Allocate a fresh primary state with brand-new catalogs.
+            var primary = new TrackerState(
+                name: package.UniqueID + " #1",
+                scripts: new ScriptManager(),
+                transactions: new EmoTracker.Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo(),
+                items: new ItemDatabase(),
+                locations: new LocationDatabase(),
+                maps: new MapDatabase(),
+                layouts: new LayoutManager());
+            pi.AdoptAsPrimary(primary);
+
+            // Drive the package load into this state.
+            EmoTracker.Data.Sessions.PackageLoader.LoadInto(primary, package, variant);
+
+            mPackageInstances.Add(pi);
+
+            return primary;
+        }
+
+        /// <summary>
+        /// Phase 7.5: fork the given PackageInstance's primary state to
+        /// produce an additional state on the same pack. Used by Phase 7.7
+        /// "+ create new state from pack" UI.
+        /// </summary>
+        public TrackerState CreateAdditionalState(PackageInstance pi, string name = null)
+        {
+            if (pi == null) throw new ArgumentNullException(nameof(pi));
+            var sourcePrimary = pi.States.Values.FirstOrDefault();
+            if (sourcePrimary == null)
+                throw new InvalidOperationException("PackageInstance has no primary state to fork from.");
+            var fork = sourcePrimary.Fork(name);
+            // The fork is registered in the PackageInstance.States via
+            // AdoptAsPrimary so per-state extensions get attached. Multiple
+            // states per PI is the headline 7.5 capability.
+            pi.AdoptAsPrimary(fork);
+            return fork;
+        }
+
+        /// <summary>
+        /// Phase 7.5: tear down a PackageInstance and remove it from
+        /// <see cref="PackageInstances"/>. All states owned by the PI are
+        /// disposed; per-state extensions are detached via the lifecycle
+        /// observer.
+        /// </summary>
+        public void ClosePackageInstance(PackageInstance pi)
+        {
+            if (pi == null) return;
+            mPackageInstances.Remove(pi);
+            if (ReferenceEquals(pi, mActivePackageInstance))
+            {
+                ActivePackageInstance = mPackageInstances.Count > 0 ? mPackageInstances[0] : null;
+                EmoTracker.Data.Sessions.SessionContext.ActiveState = PrimaryState;
+            }
+            pi.Dispose();
         }
 
         /// <summary>
@@ -375,6 +468,14 @@ namespace EmoTracker
             // Note: SessionContext.ActiveState is unchanged — same primary
             // state, just a new PackageInstance wrapping it. Per plan
             // §7.6, this becomes per-WindowContext.
+
+            // Phase 7.5: swap the old PI out of the collection for the new
+            // one (same primary state, different shell metadata).
+            var oldIndex = mActivePackageInstance != null ? mPackageInstances.IndexOf(mActivePackageInstance) : -1;
+            if (oldIndex >= 0)
+                mPackageInstances[oldIndex] = pi;
+            else
+                mPackageInstances.Add(pi);
 
             ActivePackageInstance = pi;
         }
