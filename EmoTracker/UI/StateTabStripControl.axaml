@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:local="clr-namespace:EmoTracker"
+             xmlns:sessions="clr-namespace:EmoTracker.Data.Sessions;assembly=EmoTracker.Data"
+             x:Class="EmoTracker.UI.StateTabStripControl"
+             Name="TabStripRoot"
+             mc:Ignorable="d"
+             Height="28"
+             Background="#1A1A1A">
+
+    <Grid>
+        <ItemsControl Name="TabsHost"
+                      ItemsSource="{Binding #TabStripRoot.OpenStates}"
+                      VerticalAlignment="Stretch">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="0" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="sessions:TrackerState">
+                    <Border Name="TabBorder"
+                            Padding="8,2"
+                            Margin="0"
+                            BorderBrush="#2A2A2A"
+                            BorderThickness="0,0,1,0"
+                            Background="#1A1A1A"
+                            PointerPressed="OnTabPointerPressed"
+                            PointerReleased="OnTabPointerReleased"
+                            PointerMoved="OnTabPointerMoved"
+                            Tag="{Binding}">
+                        <Border.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Open in New Window" Click="OnContextOpenInNewWindow" Tag="{Binding}" />
+                                <MenuItem Header="Save…" Click="OnContextSave" Tag="{Binding}" />
+                                <Separator />
+                                <MenuItem Header="Close" Click="OnContextClose" Tag="{Binding}" />
+                            </ContextMenu>
+                        </Border.ContextMenu>
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              VerticalAlignment="Center">
+                            <TextBlock Grid.Column="0"
+                                       Text="•"
+                                       Foreground="#666"
+                                       Margin="0,0,4,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="10"
+                                       IsVisible="False" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Name, FallbackValue='(unnamed)'}"
+                                       Foreground="#CCCCCC"
+                                       FontSize="11"
+                                       VerticalAlignment="Center"
+                                       MaxWidth="160"
+                                       TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="2"
+                                    Content="✕"
+                                    FontSize="9"
+                                    Margin="6,0,0,0"
+                                    Padding="3,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Foreground="#888"
+                                    VerticalAlignment="Center"
+                                    Click="OnCloseTab"
+                                    Tag="{Binding}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Empty-state placeholder -->
+        <TextBlock Name="EmptyHint"
+                   Text="No states open — load a pack via the bottom bar"
+                   Foreground="#555"
+                   FontSize="10"
+                   VerticalAlignment="Center"
+                   HorizontalAlignment="Left"
+                   Margin="8,0"
+                   IsVisible="False" />
+    </Grid>
+
+</UserControl>

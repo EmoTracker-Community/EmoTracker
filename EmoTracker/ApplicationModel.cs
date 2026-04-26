@@ -1,5 +1,6 @@
 #nullable enable annotations
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using EmoTracker.Core;
 using EmoTracker.Data;
 using EmoTracker.Data.Core.Transactions;
@@ -117,6 +118,55 @@ namespace EmoTracker
             newWindow.WindowContext.AddState(state);
             newWindow.Show();
             return newWindow.WindowContext;
+        }
+
+        /// <summary>
+        /// Phase 7.9: find the StateTabStripControl whose visual bounds
+        /// contain <paramref name="screenPoint"/>, walking every live
+        /// MainWindow. Used by the tab strip's drop logic to determine
+        /// whether a drag-release should dock the state into another
+        /// window's strip.
+        /// </summary>
+        public UI.StateTabStripControl FindTabStripAtScreenPoint(Avalonia.PixelPoint screenPoint)
+        {
+            // Phase 7.9: walk every live window's tab strip and check
+            // whether screenPoint lands within its screen-space bounds.
+            // We compute the strip's screen position by combining the
+            // window's Position (a PixelPoint in screen-px) with the
+            // strip's offset within the window (computed by accumulating
+            // Bounds.Position up the visual tree until the window root).
+            foreach (var ctx in mWindows)
+            {
+                if (ctx.OwnerWindow is MainWindow mw)
+                {
+                    var strip = mw.GetTabStrip();
+                    if (strip == null) continue;
+                    try
+                    {
+                        // Walk parents to compute offset from window origin.
+                        double offX = 0, offY = 0;
+                        Avalonia.Visual cur = strip;
+                        while (cur != null && !ReferenceEquals(cur, mw))
+                        {
+                            offX += cur.Bounds.X;
+                            offY += cur.Bounds.Y;
+                            cur = cur.GetVisualParent();
+                        }
+                        var winScreenX = mw.Position.X + (int)offX;
+                        var winScreenY = mw.Position.Y + (int)offY;
+                        var widthPx = (int)strip.Bounds.Width;
+                        var heightPx = (int)strip.Bounds.Height;
+                        if (screenPoint.X >= winScreenX && screenPoint.X <= winScreenX + widthPx
+                            && screenPoint.Y >= winScreenY && screenPoint.Y <= winScreenY + heightPx)
+                            return strip;
+                    }
+                    catch
+                    {
+                        // Defensive: skip any window where the math throws.
+                    }
+                }
+            }
+            return null;
         }
 
         private PackageInstance mActivePackageInstance;

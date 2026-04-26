@@ -29,6 +29,11 @@ namespace EmoTracker
         /// </summary>
         public WindowContext WindowContext { get; }
 
+        // Phase 7.9: helper for ApplicationModel.FindTabStripAtScreenPoint —
+        // returns this window's tab strip control if hosted, else null.
+        public UI.StateTabStripControl GetTabStrip()
+            => this.FindControl<UI.StateTabStripControl>("StateTabStrip");
+
         public MainWindow()
         {
             // Phase 7.6: allocate per-window context BEFORE InitializeComponent
