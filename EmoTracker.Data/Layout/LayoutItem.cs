@@ -365,7 +365,7 @@ namespace EmoTracker.Data.Layout
         {
             if (data != null)
             {
-                LayoutItem instance = JsonTypeTagsAttribute.CreateIntanceForTypeTag<LayoutItem>(data.GetValue<string>("type"));
+                LayoutItem instance = JsonTypeTagsAttribute.CreateInstanceForTypeTag<LayoutItem>(data.GetValue<string>("type"));
 
                 if (instance != null && instance.TryParse(data, package))
                     return instance;

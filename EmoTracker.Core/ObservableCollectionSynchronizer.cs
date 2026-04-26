@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmoTracker.Core
@@ -40,6 +41,7 @@ namespace EmoTracker.Core
         private ObservableCollection<DstType> mDest;
         private Func<SrcType, DstType> mItemConverter;
         private Action<DstType> mItemDisposer;
+        private CancellationToken mCancellationToken;
 
         public bool EnableDispose
         {
@@ -47,7 +49,7 @@ namespace EmoTracker.Core
             set;
         }
 
-        public ObservableCollectionSynchronizer(IReadOnlyCollection<SrcType> source, ObservableCollection<DstType> dest, Func<SrcType, DstType> itemConverter = null, Action<DstType> itemDisposer = null)
+        public ObservableCollectionSynchronizer(IReadOnlyCollection<SrcType> source, ObservableCollection<DstType> dest, Func<SrcType, DstType> itemConverter = null, Action<DstType> itemDisposer = null, CancellationToken cancellationToken = default)
         {
             mSource = source;
             mSourceChangeTracking = mSource as INotifyCollectionChanged;
@@ -56,6 +58,7 @@ namespace EmoTracker.Core
             System.Diagnostics.Debug.Assert(mItemConverter != null);
             mItemDisposer = itemDisposer;
             EnableDispose = true;
+            mCancellationToken = cancellationToken;
 
             if (mSource != null)
             {
@@ -170,6 +173,8 @@ namespace EmoTracker.Core
 
         public virtual void Dispose()
         {
+            Cancel();
+
             if (mSourceChangeTracking != null)
                 mSourceChangeTracking.CollectionChanged -= SourceCollectionChanged;
 
@@ -185,13 +190,25 @@ namespace EmoTracker.Core
             mItemConverter = null;
             mItemDisposer = null;
         }
+
+        /// <summary>
+        /// Cancels the synchronization by disposing all tracked items and unsubscribing.
+        /// </summary>
+        public virtual void Cancel()
+        {
+            if (mSourceChangeTracking != null)
+            {
+                mSourceChangeTracking.CollectionChanged -= SourceCollectionChanged;
+                mSourceChangeTracking = null;
+            }
+        }
     }
 
     public class TrivialObservableCollectionSynchronizer<T> : ObservableCollectionSynchronizer<T, T>
         where T : class
     {
-        public TrivialObservableCollectionSynchronizer(IReadOnlyCollection<T> source, ObservableCollection<T> dest, Action<T> itemDisposer = null) :
-            base(source, dest, PassThroughConverter, itemDisposer)
+        public TrivialObservableCollectionSynchronizer(IReadOnlyCollection<T> source, ObservableCollection<T> dest, Action<T> itemDisposer = null, CancellationToken cancellationToken = default) :
+            base(source, dest, PassThroughConverter, itemDisposer, cancellationToken)
         {
             //  Disable dispose, since we're not cloning objects
             EnableDispose = false;
@@ -206,9 +223,24 @@ namespace EmoTracker.Core
     public class ObservableCollectionSynchronizerMT<SrcType, DstType> : ObservableCollectionSynchronizer<SrcType, DstType>
         where DstType : class
     {
-        public ObservableCollectionSynchronizerMT(IReadOnlyCollection<SrcType> source, ObservableCollection<DstType> dest, Func<SrcType, DstType> itemConverter, Action<DstType> itemDisposer = null) :
-            base(source, dest, itemConverter, itemDisposer)
+        public ObservableCollectionSynchronizerMT(IReadOnlyCollection<SrcType> source, ObservableCollection<DstType> dest, Func<SrcType, DstType> itemConverter, Action<DstType> itemDisposer = null, CancellationToken cancellationToken = default) :
+            base(source, dest, itemConverter, itemDisposer, cancellationToken)
         {
+        }
+
+        public override void Cancel()
+        {
+            if (EnableThreadSafety)
+            {
+                if (Async)
+                    Core.Services.Backends.DispatchService.Backend?.BeginInvoke(new Action(base.Cancel));
+                else
+                    Core.Services.Backends.DispatchService.Backend?.Invoke(new Action(base.Cancel));
+            }
+            else
+            {
+                base.Cancel();
+            }
         }
 
         public override void Dispose()
@@ -273,8 +305,8 @@ namespace EmoTracker.Core
     public class TrivialObservableCollectionSynchronizerMT<T> : ObservableCollectionSynchronizerMT<T, T>
         where T : class
     {
-        public TrivialObservableCollectionSynchronizerMT(IReadOnlyCollection<T> source, ObservableCollection<T> dest, Action<T> itemDisposer = null) :
-            base(source, dest, PassThroughConverter, itemDisposer)
+        public TrivialObservableCollectionSynchronizerMT(IReadOnlyCollection<T> source, ObservableCollection<T> dest, Action<T> itemDisposer = null, CancellationToken cancellationToken = default) :
+            base(source, dest, PassThroughConverter, itemDisposer, cancellationToken)
         {
             //  Disable dispose, since we're not cloning objects
             EnableDispose = false;
@@ -289,9 +321,18 @@ namespace EmoTracker.Core
     public class BufferedObservableCollectionSynchronizerMT<SrcType, DstType> : ObservableCollectionSynchronizer<SrcType, DstType>
         where DstType : class
     {
-        public BufferedObservableCollectionSynchronizerMT(IReadOnlyCollection<SrcType> source, ObservableCollection<DstType> dest, Func<SrcType, DstType> itemConverter, Action<DstType> itemDisposer = null) :
-            base(source, dest, itemConverter, itemDisposer)
+        public BufferedObservableCollectionSynchronizerMT(IReadOnlyCollection<SrcType> source, ObservableCollection<DstType> dest, Func<SrcType, DstType> itemConverter, Action<DstType> itemDisposer = null, CancellationToken cancellationToken = default) :
+            base(source, dest, itemConverter, itemDisposer, cancellationToken)
         {
+        }
+
+        public override void Cancel()
+        {
+            if (EnableThreadSafety)
+            {
+                mBuffer = null;
+            }
+            base.Cancel();
         }
 
         bool mbEnableThreadSafety = true;
@@ -377,8 +418,8 @@ namespace EmoTracker.Core
     public class TrivialBufferedObservableCollectionSynchronizerMT<T> : BufferedObservableCollectionSynchronizerMT<T, T>
         where T : class
     {
-        public TrivialBufferedObservableCollectionSynchronizerMT(IReadOnlyCollection<T> source, ObservableCollection<T> dest, Action<T> itemDisposer = null) :
-            base(source, dest, PassThroughConverter, itemDisposer)
+        public TrivialBufferedObservableCollectionSynchronizerMT(IReadOnlyCollection<T> source, ObservableCollection<T> dest, Action<T> itemDisposer = null, CancellationToken cancellationToken = default) :
+            base(source, dest, PassThroughConverter, itemDisposer, cancellationToken)
         {
             //  Disable dispose, since we're not cloning objects
             EnableDispose = false;
