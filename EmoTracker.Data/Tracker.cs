@@ -460,66 +460,57 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
         public void Reload()
         {
-            if (!mbReloadInProgress)
-            {
-                mbReloadInProgress = true;
+            if (mbReloadInProgress) return;
+            mbReloadInProgress = true;
 
+            try
+            {
+                // Phase 7.1: pack-load orchestration moved to PackageLoader
+                // (loads into a target TrackerState instead of mutating
+                // shared singleton catalogs). Tracker's own
+                // OnPackageLoadStarting/Complete events fire as a thin shim
+                // around PackageLoader's events for backwards compat through
+                // 7.1.g (Tracker deletion).
+                var target = Sessions.SessionContext.ActiveState;
+                if (target == null)
+                {
+                    // Pre-7.1 we mutated the singleton catalogs here. Phase
+                    // 7.1.b ensures ApplicationModel pre-allocates the
+                    // primary state + installs SessionContext.ActiveState
+                    // before any pack-load reaches Tracker.Reload, so this
+                    // path is no longer exercised. Throwing makes the
+                    // assumption explicit and turns any regression into a
+                    // loud failure rather than a silent fallback to the
+                    // deleted legacy path.
+                    throw new InvalidOperationException(
+                        "Tracker.Reload called before SessionContext.ActiveState was installed. " +
+                        "ApplicationModel must pre-allocate the primary state during construction.");
+                }
+
+                EventHandler<Sessions.PackageLoader.PackageLoadEventArgs> startHandler =
+                    (_, _) => OnPackageLoadStarting?.Invoke(this, EventArgs.Empty);
+                EventHandler<Sessions.PackageLoader.PackageLoadEventArgs> completeHandler =
+                    (_, _) => OnPackageLoadComplete?.Invoke(this, EventArgs.Empty);
+
+                Sessions.PackageLoader.OnPackageLoadStarting += startHandler;
+                Sessions.PackageLoader.OnPackageLoadComplete += completeHandler;
                 try
                 {
-                    AccessibilityRule.ClearCaches();
-
-                    if (OnPackageLoadStarting != null)
-                        OnPackageLoadStarting(this, EventArgs.Empty);
-
-                    ResetPackageSettings();
-
-                    LayoutManager.Instance.Clear();
-                    // Phase 6 step 11: route catalog Reset through the active
-                    // state when one is installed; otherwise fall back to the
-                    // legacy singleton pattern (initial pre-state pack-load).
-                    (Sessions.SessionContext.ActiveState?.Maps ?? MapDatabase.Instance).Reset();
-                    LocationDatabase.Instance.Reset();
-                    ItemDatabase.Instance.Reset();
-                    ScriptManager.Instance.Reset();
-
-                    // Reload application colors customization data
-                    ApplicationColors.Instance.LoadColors();
-
-                    if (mActiveGamePackage != null)
-                    {
-                        ScriptManager.Instance.Output("Beginning Package Load");
-                        using (new LoggingBlock())
-                        {
-                            ScriptManager.Instance.Output(string.Format("Package: {0}", ActiveGamePackage.UniqueID));
-                            if (ActiveGamePackageVariant != null)
-                                ScriptManager.Instance.Output(string.Format("Variant: {0}", ActiveGamePackageVariant.UniqueID));
-
-                            LoadPackageSettings();
-
-                            ScriptManager.Instance.Load(mActiveGamePackage);
-
-                            //  Legacy loads - should this be contingent on a flag in the manifest
-                            ItemDatabase.Instance.LegacyLoad(mActiveGamePackage);
-                            (Sessions.SessionContext.ActiveState?.Maps ?? MapDatabase.Instance).LegacyLoad(mActiveGamePackage);
-                            LocationDatabase.Instance.LegacyLoad(mActiveGamePackage);
-                        }
-                        ScriptManager.Instance.Output("Package Load Finished");
-                    }
+                    Sessions.PackageLoader.LoadInto(
+                        target,
+                        mActiveGamePackage,
+                        mActiveGamePackageVariant,
+                        suspendPackReadyEvent: SuspendPackReadyEvent);
                 }
                 finally
                 {
-                    AccessibilityRule.ClearCaches();
-
-                    mbReloadInProgress = false;
-
-                    ItemDatabase.Instance.BuildCodeIndex();
-
-                    if (OnPackageLoadComplete != null)
-                        OnPackageLoadComplete(this, EventArgs.Empty);
-
-                    if (!SuspendPackReadyEvent)
-                        (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.PackReady);
+                    Sessions.PackageLoader.OnPackageLoadStarting -= startHandler;
+                    Sessions.PackageLoader.OnPackageLoadComplete -= completeHandler;
                 }
+            }
+            finally
+            {
+                mbReloadInProgress = false;
             }
         }
 
@@ -527,10 +518,16 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
 #region -- Incremental Load Wrappers --
 
+        // Phase 7.1: route pack-script-driven incremental loads (called via
+        // Tracker:AddItems / AddMaps / AddLocations / AddLayouts from
+        // init.lua) into the active state's catalogs. PackageLoader sets
+        // SessionContext.ActiveState to the target before invoking
+        // ScriptManager.Load(package), which is when init.lua runs and
+        // calls these helpers.
         public void AddItems(string path)
         {
             if (ActiveGamePackage != null)
-                ItemDatabase.Instance.IncrementalLoad(path, ActiveGamePackage);
+                (Sessions.SessionContext.ActiveState?.Items ?? ItemDatabase.Instance).IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddMaps(string path)
@@ -542,13 +539,13 @@ An error occurred while saving. This may be due to anti-virus/malware software p
         public void AddLocations(string path)
         {
             if (ActiveGamePackage != null)
-                LocationDatabase.Instance.IncrementalLoad(path, ActiveGamePackage);
+                (Sessions.SessionContext.ActiveState?.Locations ?? LocationDatabase.Instance).IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddLayouts(string path)
         {
             if (ActiveGamePackage != null)
-                LayoutManager.Instance.IncrementalLoad(path, ActiveGamePackage);
+                (Sessions.SessionContext.ActiveState?.Layouts ?? LayoutManager.Instance).IncrementalLoad(path, ActiveGamePackage);
         }
 
         #endregion

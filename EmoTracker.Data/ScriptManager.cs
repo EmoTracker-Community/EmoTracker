@@ -946,8 +946,14 @@ end
         public LuaItem CreateLuaItem()
         {
             LuaItem item = new LuaItem();
-            ItemDatabase.Instance.RegisterItem(item);
-
+            // Phase 7.1: register the freshly-created LuaItem into the
+            // active state's ItemDatabase (PackageLoader installed it as
+            // SessionContext.ActiveState before invoking the script that
+            // called this). Falls back to the singleton for tests that
+            // use ScriptManager standalone.
+            var itemDb = Sessions.SessionContext.ActiveState?.Items
+                ?? ItemDatabase.Instance;
+            itemDb.RegisterItem(item);
             return item;
         }
 
