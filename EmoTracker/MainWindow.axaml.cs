@@ -19,14 +19,39 @@ namespace EmoTracker
         // so we can capture the accurate normal-state bounds before saving.
         private bool mIsRestoreClosing = false;
 
+        /// <summary>
+        /// Phase 7.6: per-window context — exposes the OpenStates / ActiveState
+        /// for this window. Bound by the bottom-bar state manager (7.7) and tab
+        /// strip (7.8). DataContext remains <see cref="ApplicationModel.Instance"/>
+        /// for backwards compat with existing XAML bindings; this surface is
+        /// reachable via <c>{Binding $self.WindowContext.X}</c> for new
+        /// per-window bindings, or via Tag for code-behind helpers.
+        /// </summary>
+        public WindowContext WindowContext { get; }
+
         public MainWindow()
         {
+            // Phase 7.6: allocate per-window context BEFORE InitializeComponent
+            // so XAML bindings via {Binding ElementName} can resolve it.
+            WindowContext = new WindowContext("primary") { OwnerWindow = this };
+
             InitializeComponent();
 
             ApplicationModel.Instance.Initialize();
             DataContext = ApplicationModel.Instance;
             ApplicationModel.Instance.PropertyChanged += Instance_PropertyChanged;
             Tracker.Instance.PropertyChanged += Tracker_PropertyChanged;
+
+            // Phase 7.6: register with the app's window collection. The
+            // first WindowContext gets the active primary state added so
+            // existing UI continues to work.
+            ApplicationModel.Instance.RegisterWindow(WindowContext);
+            var primary = ApplicationModel.Instance.PrimaryState;
+            if (primary != null)
+                WindowContext.AddState(primary);
+            ApplicationModel.Instance.CurrentlyActiveWindowContext = WindowContext;
+            this.Activated += (_, __) => ApplicationModel.Instance.CurrentlyActiveWindowContext = WindowContext;
+            this.Closed += (_, __) => ApplicationModel.Instance.UnregisterWindow(WindowContext);
 
             if (ApplicationSettings.Instance.InitialWidth >= 0.0)
                 Width = ApplicationSettings.Instance.InitialWidth;

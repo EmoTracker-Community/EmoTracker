@@ -68,6 +68,57 @@ namespace EmoTracker
 
         public System.Collections.ObjectModel.ObservableCollection<PackageInstance> PackageInstances => mPackageInstances;
 
+        // Phase 7.6: collection of all live WindowContexts. Each
+        // TrackerWindow registers its context on activation; closing the
+        // window removes it.
+        readonly System.Collections.ObjectModel.ObservableCollection<WindowContext> mWindows
+            = new System.Collections.ObjectModel.ObservableCollection<WindowContext>();
+        public System.Collections.ObjectModel.ObservableCollection<WindowContext> Windows => mWindows;
+
+        WindowContext mCurrentlyActiveWindowContext;
+        /// <summary>
+        /// Phase 7.6: the most recently focused window's context, or null
+        /// if no window is yet active. Updated by the window's
+        /// <c>Activated</c> handler.
+        /// </summary>
+        public WindowContext CurrentlyActiveWindowContext
+        {
+            get { return mCurrentlyActiveWindowContext; }
+            internal set { SetProperty(ref mCurrentlyActiveWindowContext, value); }
+        }
+
+        // Phase 7.6: register a window's context. Called by the
+        // TrackerWindow during ctor.
+        internal void RegisterWindow(WindowContext ctx)
+        {
+            if (ctx == null) return;
+            if (!mWindows.Contains(ctx))
+                mWindows.Add(ctx);
+        }
+
+        internal void UnregisterWindow(WindowContext ctx)
+        {
+            if (ctx == null) return;
+            mWindows.Remove(ctx);
+            if (ReferenceEquals(mCurrentlyActiveWindowContext, ctx))
+                CurrentlyActiveWindowContext = mWindows.Count > 0 ? mWindows[0] : null;
+        }
+
+        /// <summary>
+        /// Phase 7.6 / 7.9: spawn a new TrackerWindow hosting only
+        /// <paramref name="state"/>, moving the state out of
+        /// <paramref name="sourceCtx"/>. Returns the new window's context.
+        /// </summary>
+        public WindowContext OpenStateInNewWindow(WindowContext sourceCtx, TrackerState state)
+        {
+            if (state == null) return null;
+            sourceCtx?.RemoveState(state);
+            var newWindow = new MainWindow();
+            newWindow.WindowContext.AddState(state);
+            newWindow.Show();
+            return newWindow.WindowContext;
+        }
+
         private PackageInstance mActivePackageInstance;
 
         /// <summary>
