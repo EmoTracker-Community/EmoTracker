@@ -316,7 +316,17 @@ end
                     Output(string.Format("A C# exception occurred while loading script: {0}", path));
                     using (LoggingBlock excBlock = new LoggingBlock())
                     {
-                        Output(e.Message);
+                        // Phase 7.1 debug: dump the full exception (including
+                        // any inner exceptions from NLua's marshalling layer)
+                        // so we can see what's failing inside init.lua-driven
+                        // C# calls. NLua wraps user-code exceptions; only the
+                        // InnerException carries the real stack.
+                        for (Exception ex = e; ex != null; ex = ex.InnerException)
+                        {
+                            OutputError("[{0}] {1}", ex.GetType().Name, ex.Message);
+                            if (!string.IsNullOrEmpty(ex.StackTrace))
+                                OutputError(ex.StackTrace);
+                        }
                     }
                     return null;
                 }

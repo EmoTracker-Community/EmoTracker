@@ -133,9 +133,9 @@ namespace EmoTracker.Data.Sessions
                         target.Scripts.Load(package);
 
                         // Legacy loads — should this be contingent on a flag in the manifest?
-                        target.Items.LegacyLoad(package);
-                        target.Maps.LegacyLoad(package);
-                        target.Locations.LegacyLoad(package);
+                        target.Items.LegacyLoad(package, target);
+                        target.Maps.LegacyLoad(package, target);
+                        target.Locations.LegacyLoad(package, target);
                     }
                     target.Scripts.Output("Package Load Finished");
                 }
@@ -144,12 +144,6 @@ namespace EmoTracker.Data.Sessions
             {
                 AccessibilityRule.ClearCaches();
                 target.Items.BuildCodeIndex();
-
-                // Stamp OwnerState + register every model in the per-state
-                // resolver. This is the same flow ApplicationModel runs after
-                // adoption today (Phase 6 step 10 fix); having PackageLoader
-                // do it directly removes the post-hoc rebind step.
-                target.StampOwnerStateOnAdoptedModels();
 
                 mInProgress = false;
 

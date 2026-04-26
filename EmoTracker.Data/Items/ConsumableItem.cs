@@ -26,6 +26,14 @@ namespace EmoTracker.Data.Items
             MutableData.SetValue(nameof(CountIncrement), 1);
         }
 
+        public ConsumableItem(ITrackerStateContext state)
+        {
+            MutableData.SetValue(nameof(MaxCount), int.MaxValue);
+            MutableData.SetValue(nameof(MinCount), 0);
+            MutableData.SetValue(nameof(CountIncrement), 1);
+            OwnerState = state;
+        }
+
         [KVMutable]
         public partial bool SwapActions { get; set; }
 

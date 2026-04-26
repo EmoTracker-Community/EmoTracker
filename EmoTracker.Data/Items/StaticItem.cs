@@ -18,6 +18,12 @@ namespace EmoTracker.Data.Items
             Capturable = false;
         }
 
+        public StaticItem(EmoTracker.Core.DataModel.ITrackerStateContext state)
+        {
+            Capturable = false;
+            OwnerState = state;
+        }
+
         public override bool CanProvideCode(string code)
         {
             return mCodeProvider.ProvidesCode(code);

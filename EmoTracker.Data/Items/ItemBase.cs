@@ -40,6 +40,13 @@ namespace EmoTracker.Data.Items
             MutableData.SetValue(nameof(BadgeTextColor), "WhiteSmoke");
         }
 
+        protected ItemBase(EmoTracker.Core.DataModel.ITrackerStateContext state)
+        {
+            MutableData.SetValue(nameof(Capturable), true);
+            MutableData.SetValue(nameof(BadgeTextColor), "WhiteSmoke");
+            OwnerState = state;
+        }
+
         // ---------------------------------------------------------- Generated KV
 
         [KVMutable]
@@ -170,12 +177,13 @@ namespace EmoTracker.Data.Items
 
         #region -- Static Methods ---
 
-        public static ITrackableItem CreateItem(JObject data, IGamePackage package)
+        public static ITrackableItem CreateItem(JObject data, IGamePackage package, Sessions.TrackerState state)
         {
             ItemBase instance = JsonTypeTagsAttribute.CreateIntanceForTypeTag<ItemBase>(data.GetValue<string>("type"));
 
             if (instance != null)
             {
+                instance.OwnerState = state;
                 instance.Name = data.GetValue<string>("name");
                 instance.Capturable = data.GetValue<bool>("capturable", true);
                 instance.MaskInput = data.GetValue<bool>("mask_input", false);

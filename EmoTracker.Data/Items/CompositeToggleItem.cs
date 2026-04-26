@@ -31,6 +31,13 @@ namespace EmoTracker.Data.Items
             mItemB = new ModelReference<ToggleItem>(this);
         }
 
+        public CompositeToggleItem(global::EmoTracker.Core.DataModel.ITrackerStateContext state)
+        {
+            mItemA = new ModelReference<ToggleItem>(this);
+            mItemB = new ModelReference<ToggleItem>(this);
+            OwnerState = state;
+        }
+
         public class Stage : CodeProvider
         {
             public ImageReference Icon { get; set; }

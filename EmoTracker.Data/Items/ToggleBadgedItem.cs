@@ -30,6 +30,12 @@ namespace EmoTracker.Data.Items
             mBaseItemRef = new ModelReference<ITrackableItem>(this);
         }
 
+        public ToggleBadgedItem(global::EmoTracker.Core.DataModel.ITrackerStateContext state)
+        {
+            mBaseItemRef = new ModelReference<ITrackableItem>(this);
+            OwnerState = state;
+        }
+
         // Hand-written: setter manages the PropertyChanged subscription on the
         // referenced base item, then triggers the icon refresh.
         public ITrackableItem BaseItem

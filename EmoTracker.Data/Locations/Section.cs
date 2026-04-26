@@ -57,6 +57,17 @@ namespace EmoTracker.Data.Locations
             WireScriptManagerCallbacks();
         }
 
+        public Section(EmoTracker.Core.DataModel.ITrackerStateContext state)
+        {
+            mOwnerRef = new ModelReference<Location>(this);
+            mHostedItemRef = new ModelReference<ITrackableItem>(this);
+            mGateItemRef = new ModelReference<ITrackableItem>(this);
+            mCapturedItemRef = new ModelReference<ITrackableItem>(this);
+
+            WireScriptManagerCallbacks();
+            OwnerState = state;
+        }
+
         public Section(Location owner) : this()
         {
             VisualParent = owner;

@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
@@ -166,17 +166,17 @@ namespace EmoTracker.Data
             }
         }
 
-        public bool LegacyLoad(IGamePackage package)
+        public bool LegacyLoad(IGamePackage package, Sessions.TrackerState state)
         {
             //  Do not load legacy data if we already have new-style data
             if (mAllLocations.Count > 0)
                 return true;
 
-            return IncrementalLoad("locations.json", package, true);
+            return IncrementalLoad("locations.json", package, true, state);
         }
 
 
-        internal bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false)
+        internal bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false, Sessions.TrackerState state = null)
         {
             if (bLegacy)
                 this.State?.Scripts.OutputWarning("Loading legacy locations");
@@ -198,7 +198,7 @@ namespace EmoTracker.Data
                                 JArray locations = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
                                 foreach (JObject location in locations)
                                 {
-                                    Location child = LoadLocation(package, mRoot, location);
+                                    Location child = LoadLocation(package, mRoot, location, state);
                                     if (child != null)
                                         mRoot.AddChild(child);
                                 }
@@ -440,7 +440,7 @@ namespace EmoTracker.Data
             }
         }
 
-        void LoadLocationList(IGamePackage package, Location parent, JArray locationNodes)
+        void LoadLocationList(IGamePackage package, Location parent, JArray locationNodes, Sessions.TrackerState state)
         {
             if (locationNodes != null)
             {
@@ -449,14 +449,14 @@ namespace EmoTracker.Data
                     //  NOTE: We do not assume that the parent that was passed in
                     //  is the parent that we ulimately attach to. This can be 
                     //  overriden by a `parent` attribute
-                    Location child = LoadLocation(package, parent, location);
+                    Location child = LoadLocation(package, parent, location, state);
                     if (child != null && child.Parent != null)
                         child.Parent.AddChild(child);
                 }
             }
         }
 
-        Location LoadLocation(IGamePackage package, Location parent, JObject data)
+        Location LoadLocation(IGamePackage package, Location parent, JObject data, Sessions.TrackerState state)
         {
             Location instance = new Location()
             {
@@ -464,6 +464,8 @@ namespace EmoTracker.Data
                 ShortName = data.GetValue<string>("short_name"),
                 Parent = parent
             };
+            instance.OwnerState = state;
+            state?.Resolver.Register(instance);
 
             //  Allow for an explicit parent override
             string parentOverride = data.GetValue<string>("parent");
@@ -495,6 +497,8 @@ namespace EmoTracker.Data
                 foreach (JObject sectionData in sections)
                 {
                     Section section = new Section(instance);
+                    section.OwnerState = state;
+                    state?.Resolver.Register(section);
                     ParseLocationVisualProperties(sectionData, section, package);
 
                     section.Name = sectionData.GetValue<string>("name");
@@ -594,6 +598,8 @@ namespace EmoTracker.Data
                             bordersize = bordersize < 0 ? map.LocationBorderThickness : bordersize;
 
                             MapLocation mapLocation = new MapLocation() { X = x, Y = y, Size = size, BorderThickness = bordersize, Location = instance };
+                            mapLocation.OwnerState = state;
+                            state?.Resolver.Register(mapLocation);
 
                             mapLocation.AlwaysVisible = entry.GetValue<bool>("always_visible", false);
                             mapLocation.EnableBadgeHitTest = entry.GetValue<bool>("enable_badge_hit_test", false);
@@ -661,7 +667,7 @@ namespace EmoTracker.Data
             mAllLocations.Add(instance);
 
             var children = data.GetValue<JArray>("children");
-            LoadLocationList(package, instance, children);
+            LoadLocationList(package, instance, children, state);
 
             return instance;
         }

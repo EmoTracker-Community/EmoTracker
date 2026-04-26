@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Media;
@@ -40,7 +40,7 @@ namespace EmoTracker.Data
             mMaps.Clear();
         }
 
-        public bool LegacyLoad(IGamePackage package)
+        public bool LegacyLoad(IGamePackage package, Sessions.TrackerState state)
         {
             //  Do not load legacy data if we already have new-style data
             if (mMaps.Count > 0)
@@ -49,11 +49,11 @@ namespace EmoTracker.Data
             this.State?.Scripts.OutputWarning("Loading Legacy Maps");
             using (new LoggingBlock())
             {
-                return IncrementalLoad("maps.json", package);
+                return IncrementalLoad("maps.json", package, state);
             }
         }
 
-        internal bool IncrementalLoad(string path, IGamePackage package)
+        internal bool IncrementalLoad(string path, IGamePackage package, Sessions.TrackerState state = null)
         {
             this.State?.Scripts.Output("Loading Maps: {0}", path);
             using (new LoggingBlock())
@@ -69,13 +69,16 @@ namespace EmoTracker.Data
                                 JArray maps = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
                                 foreach (JObject map in maps)
                                 {
-                                    mMaps.Add(new Map()
+                                    var mapObj = new Map()
                                     {
                                         Name = map.GetValue<string>("name"),
                                         LocationSize = map.GetValue<double>("location_size", 70),
                                         LocationBorderThickness = map.GetValue<double>("location_border_thickness", 8),
                                         Image = ImageReference.FromPackRelativePath(package, map.GetValue<string>("img"), map.GetValue<string>("img_mods"))
-                                    });
+                                    };
+                                    mapObj.OwnerState = state;
+                                    state?.Resolver.Register(mapObj);
+                                    mMaps.Add(mapObj);
                                 }
                             }
                         }

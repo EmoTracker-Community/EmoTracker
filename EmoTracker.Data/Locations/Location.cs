@@ -54,6 +54,14 @@ namespace EmoTracker.Data.Locations
             mBadges.CollectionChanged += Badges_CollectionChanged;
         }
 
+        public Location(EmoTracker.Core.DataModel.ITrackerStateContext state)
+        {
+            mParentRef = new ModelReference<Location>(this);
+            mGroupRef = new ModelReference<Group>(this);
+            mBadges.CollectionChanged += Badges_CollectionChanged;
+            OwnerState = state;
+        }
+
         // -------- KVMutable strings & flags ----------------------------------
 
         [KVMutable]
@@ -398,14 +406,20 @@ namespace EmoTracker.Data.Locations
                         mCachedAccessibility = localAccessibility;
 
                     // Phase 6 step 11: prefer the owning state's ItemDatabase.
+                    // OwnerState may be null mid-load (locations register before
+                    // their state stamp completes during streaming pack loads);
+                    // skip the gate-requirement check in that case rather than NRE.
                     var itemDbForGates = (this.OwnerState as Sessions.TrackerState)?.Items;
-                    foreach (var entry in aggregateGateRequirements)
+                    if (itemDbForGates != null)
                     {
-                        AccessibilityLevel _unused;
-                        if (itemDbForGates.ProviderCountForCode(entry.Key, out _unused) < entry.Value)
+                        foreach (var entry in aggregateGateRequirements)
                         {
-                            mCachedAccessibility = AccessibilityLevel.Partial;
-                            break;
+                            AccessibilityLevel _unused;
+                            if (itemDbForGates.ProviderCountForCode(entry.Key, out _unused) < entry.Value)
+                            {
+                                mCachedAccessibility = AccessibilityLevel.Partial;
+                                break;
+                            }
                         }
                     }
                 }
@@ -424,7 +438,8 @@ namespace EmoTracker.Data.Locations
                     {
                         // Phase 6 step 11: prefer the owning state's LocationDatabase.
                         var locDbForClear = (this.OwnerState as Sessions.TrackerState)?.Locations;
-                        locDbForClear.LastClearedLocation = this;
+                        if (locDbForClear != null)
+                            locDbForClear.LastClearedLocation = this;
                     }
                 }
             }

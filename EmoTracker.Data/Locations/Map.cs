@@ -41,6 +41,12 @@ namespace EmoTracker.Data.Locations
             mLocationRef = new ModelReference<Location>(this);
         }
 
+        public MapLocation(EmoTracker.Core.DataModel.ITrackerStateContext state)
+        {
+            mLocationRef = new ModelReference<Location>(this);
+            OwnerState = state;
+        }
+
         // -------- KVMutable scalar properties ---------------------------------
 
         [KVMutable]

@@ -88,6 +88,21 @@ namespace EmoTracker.Core.DataModel
         }
 
         /// <summary>
+        /// Allocates a fresh <see cref="MutableData"/> store and a fresh
+        /// <see cref="ImmutableData"/> store seeded with a new <see cref="DefinitionId"/>,
+        /// and initializes <see cref="OwnerState"/> with the supplied <see cref="ITrackerStateContext"/>.
+        /// Used during pack-load to set OwnerState at construction time rather than
+        /// as a post-hoc assignment.
+        /// </summary>
+        protected ModelTypeBase(ITrackerStateContext state)
+        {
+            mMutableData = new MutableKeyValueStore();
+            var seed = new Dictionary<string, object> { { DefinitionIdKey, Guid.NewGuid() } };
+            mImmutableData = new ImmutableKeyValueStore(seed);
+            OwnerState = state;
+        }
+
+        /// <summary>
         /// Creates a copy-on-write fork of this instance: <see cref="ImmutableData"/>
         /// is shared by reference (definition data); <see cref="MutableData"/> is a
         /// new <see cref="MutableKeyValueStore"/> COW-layered over this instance's

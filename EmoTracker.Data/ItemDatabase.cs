@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.Items;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
@@ -113,17 +113,17 @@ namespace EmoTracker.Data
             }
         }
 
-        public bool LegacyLoad(IGamePackage package)
+        public bool LegacyLoad(IGamePackage package, Sessions.TrackerState state)
         {
             //  Do not load legacy data if we already have new-style data
             if (mItems.Count > 0)
                 return true;
 
             //  This is to support legacy-packages only
-            return IncrementalLoad("items.json", package, true);
+            return IncrementalLoad("items.json", package, true, state);
         }
 
-        public bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false)
+        public bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false, Sessions.TrackerState state = null)
         {
             bool bSuccess = false;
 
@@ -143,11 +143,15 @@ namespace EmoTracker.Data
                             JArray items = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
                             foreach (JObject item in items)
                             {
-                                ITrackableItem instance = ItemBase.CreateItem(item, package);
+                                ITrackableItem instance = ItemBase.CreateItem(item, package, state);
                                 if (instance != null)
                                 {
                                     mItemIndex[instance] = mItems.Count;
                                     mItems.Add(instance);
+                                    if (instance is global::EmoTracker.Core.DataModel.ModelTypeBase mtb)
+                                    {
+                                        state?.Resolver.Register(mtb);
+                                    }
                                 }
                             }
                         }
