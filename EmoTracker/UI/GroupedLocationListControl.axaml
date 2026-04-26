@@ -2,6 +2,7 @@
              xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:EmoTracker.UI"
+             xmlns:app="clr-namespace:EmoTracker;assembly=EmoTracker"
              xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data">
     <UserControl.Resources>
         <ItemsPanelTemplate x:Key="VerticalItemsPanel">
@@ -65,7 +66,7 @@
                           BorderBrush="Transparent" BorderThickness="0">
                 <ItemsControl ItemTemplate="{StaticResource GroupTemplate}"
                               ItemsPanel="{StaticResource HorizontalItemsPanel}"
-                              ItemsSource="{Binding Groups, Source={x:Static data:LocationDatabase.Instance}}"
+                              ItemsSource="{Binding PrimaryState.Locations.Groups, Source={x:Static app:ApplicationModel.Instance}}"
                               HorizontalAlignment="Stretch"
                               Padding="5" />
             </ScrollViewer>

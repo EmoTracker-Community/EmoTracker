@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:app="clr-namespace:EmoTracker;assembly=EmoTracker"
         xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
         mc:Ignorable="d"
         Title="Developer Console"
@@ -19,7 +20,7 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
             <ListBox Name="ConsoleOutput"
-                     ItemsSource="{Binding LogOutput, Source={x:Static data:ScriptManager.Instance}}"
+                     ItemsSource="{Binding PrimaryState.Scripts.LogOutput, Source={x:Static app:ApplicationModel.Instance}}"
                      Background="Transparent"
                      BorderThickness="0"
                      Margin="5,10"
@@ -45,7 +46,7 @@
 
         <Grid Grid.Row="1" Background="#212121">
             <Button Content="Clear"
-                    Command="{Binding ClearLogCommand, Source={x:Static data:ScriptManager.Instance}}"/>
+                    Command="{Binding PrimaryState.Scripts.ClearLogCommand, Source={x:Static app:ApplicationModel.Instance}}"/>
         </Grid>
     </Grid>
 </Window>
