@@ -9,8 +9,30 @@ using System.IO;
 
 namespace EmoTracker.Data.Layout
 {
-    public class LayoutManager : ObservableSingleton<LayoutManager>
+    /// <summary>
+    /// Phase 6 step 5: <see cref="LayoutManager"/> is now a regular
+    /// instantiable <see cref="ObservableObject"/> (was
+    /// <c>ObservableSingleton&lt;T&gt;</c>) so each <c>TrackerState</c>
+    /// holds one. <see cref="Instance"/> aliases <see cref="Current"/>
+    /// for the existing 20 callsites.
+    /// </summary>
+    public class LayoutManager : ObservableObject
     {
+        // ---- Static current-instance plumbing (replaces ObservableSingleton<T>) ----
+
+        static LayoutManager mCurrent;
+        public static LayoutManager Current
+        {
+            get
+            {
+                if (mCurrent == null)
+                    mCurrent = new LayoutManager();
+                return mCurrent;
+            }
+        }
+        public static void SetCurrent(LayoutManager manager) => mCurrent = manager;
+        public static LayoutManager Instance => Current;
+
         Dictionary<string, LayoutItem> mUidToLayoutItem = new Dictionary<string, LayoutItem>();
         Dictionary<string, Layout> mKeyToLayout = new Dictionary<string, Layout>();
 

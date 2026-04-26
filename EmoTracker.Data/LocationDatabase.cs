@@ -12,18 +12,89 @@ using System.IO;
 using System.Linq;
 namespace EmoTracker.Data
 {
-    public class LocationDatabase : ObservableSingleton<LocationDatabase>, ICodeProvider
+    /// <summary>
+    /// Phase 6 step 5: <see cref="LocationDatabase"/> is no longer a strict
+    /// <c>ObservableSingleton&lt;T&gt;</c>; it's a regular instantiable
+    /// <see cref="ObservableObject"/> so each <c>TrackerState</c> can hold one.
+    /// The static <see cref="Current"/> property tracks "the active primary"
+    /// instance, defaulting to a single lazily-created instance for
+    /// pre-Phase-6 callers; Phase 6's <c>ApplicationModel</c> reassigns it
+    /// on state-switch.
+    ///
+    /// <para>
+    /// <see cref="Instance"/> remains as a transitional alias for
+    /// <see cref="Current"/> so the existing 55 <c>LocationDatabase.Instance</c>
+    /// callsites continue to work unchanged.
+    /// </para>
+    /// </summary>
+    public class LocationDatabase : ObservableObject, ICodeProvider
     {
+        // ---- Static current-instance plumbing (replaces ObservableSingleton<T>) ----
+
+        static LocationDatabase mCurrent;
+
+        /// <summary>
+        /// The currently-active LocationDatabase. Lazily created on first
+        /// access (matching the pre-Phase-6 ObservableSingleton lazy-create
+        /// behavior). Phase 6 reassigns this on state-switch via
+        /// <see cref="SetCurrent"/>.
+        /// </summary>
+        public static LocationDatabase Current
+        {
+            get
+            {
+                if (mCurrent == null)
+                    mCurrent = new LocationDatabase();
+                return mCurrent;
+            }
+        }
+
+        /// <summary>
+        /// Replace the active <see cref="Current"/>. Phase 6 uses this on
+        /// state-switch.
+        ///
+        /// <para>
+        /// <b>Caveat — XAML <c>x:Static</c> bindings:</b> several controls
+        /// in <c>LayoutControl.axaml</c> /
+        /// <c>GroupedLocationListControl.axaml</c> bind via
+        /// <c>{x:Static data:LocationDatabase.Instance}</c>; Avalonia
+        /// resolves these once at load and won't re-fire when this property
+        /// is reassigned. Phase 6 step 7+ (when the UI rebinds through
+        /// <c>ApplicationModel.PrimaryState.Locations</c>) is where those
+        /// callsites get fixed; until then, callers reassigning this for
+        /// runtime state-switching scenarios should expect stale bindings
+        /// in those controls.
+        /// </para>
+        /// </summary>
+        public static void SetCurrent(LocationDatabase database)
+        {
+            mCurrent = database;
+        }
+
+        /// <summary>
+        /// Pre-Phase-6 alias for <see cref="Current"/>.
+        /// </summary>
+        public static LocationDatabase Instance => Current;
+
         public class SuspendRefreshScope : IDisposable
         {
-            public SuspendRefreshScope()
+            // Phase 6 step 5: capture the target LocationDatabase at construction
+            // so a SetCurrent swap mid-scope doesn't push on one instance and pop
+            // on another. Defaults to the active Current — preserves the
+            // pre-Phase-6 single-arg ctor shape.
+            readonly LocationDatabase mTarget;
+
+            public SuspendRefreshScope() : this(LocationDatabase.Current) { }
+
+            public SuspendRefreshScope(LocationDatabase target)
             {
-                LocationDatabase.Instance.PushSuspendRefresh();
+                mTarget = target ?? LocationDatabase.Current;
+                mTarget.PushSuspendRefresh();
             }
 
             public virtual void Dispose()
             {
-                LocationDatabase.Instance.PopSuspendRefresh();
+                mTarget.PopSuspendRefresh();
             }
         }
 

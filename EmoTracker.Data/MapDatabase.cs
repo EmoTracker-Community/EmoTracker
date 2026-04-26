@@ -11,8 +11,30 @@ using System.IO;
 
 namespace EmoTracker.Data
 {
-    public class MapDatabase : ObservableSingleton<MapDatabase>
+    /// <summary>
+    /// Phase 6 step 5: <see cref="MapDatabase"/> is now a regular
+    /// instantiable <see cref="ObservableObject"/> (was
+    /// <c>ObservableSingleton&lt;T&gt;</c>) so each <c>TrackerState</c>
+    /// holds one. <see cref="Instance"/> aliases <see cref="Current"/>
+    /// for the existing 9 callsites.
+    /// </summary>
+    public class MapDatabase : ObservableObject
     {
+        // ---- Static current-instance plumbing (replaces ObservableSingleton<T>) ----
+
+        static MapDatabase mCurrent;
+        public static MapDatabase Current
+        {
+            get
+            {
+                if (mCurrent == null)
+                    mCurrent = new MapDatabase();
+                return mCurrent;
+            }
+        }
+        public static void SetCurrent(MapDatabase database) => mCurrent = database;
+        public static MapDatabase Instance => Current;
+
         ObservableCollection<Map> mMaps = new ObservableCollection<Map>();
 
         public IEnumerable<Map> Maps

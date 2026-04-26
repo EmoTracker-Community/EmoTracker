@@ -2,6 +2,7 @@ using EmoTracker.Core;
 using EmoTracker.Core.DataModel;
 using EmoTracker.Data.Core.DataModel;
 using EmoTracker.Data.Core.Transactions.Processors;
+using EmoTracker.Data.Layout;
 using System;
 
 namespace EmoTracker.Data.Sessions
@@ -95,6 +96,36 @@ namespace EmoTracker.Data.Sessions
         public IUndoableTransactionProcessor Transactions { get; }
 
         /// <summary>
+        /// Per-state item database. Owns the items, sections, etc. that
+        /// appear in this state's UI. Phase 6 step 5: each state has its
+        /// own; the static <see cref="ItemDatabase.Current"/> aliases the
+        /// active state's instance once <c>ApplicationModel</c> wires up
+        /// the state-switch path in step 7.
+        /// </summary>
+        public ItemDatabase Items { get; }
+
+        /// <summary>
+        /// Per-state location database. Owns the location tree, sections,
+        /// chest counts, captured items.
+        /// </summary>
+        public LocationDatabase Locations { get; }
+
+        /// <summary>
+        /// Per-state map database. Owns the map definitions and their
+        /// per-state location markers.
+        /// </summary>
+        public MapDatabase Maps { get; }
+
+        /// <summary>
+        /// Per-state layout manager. Owns the parsed layout tree + UID
+        /// registry (LayoutItem.UniqueID lookup). Phase 4's
+        /// <c>LayoutItem.RegisterUniqueID</c> hook routes registrations
+        /// through this manager once the per-state OwnerState wiring is
+        /// in place (step 8).
+        /// </summary>
+        public LayoutManager Layouts { get; }
+
+        /// <summary>
         /// The per-state model resolver. Populated by the coordinated
         /// fork (step 8) as each model is added to this state's graph;
         /// holders read through it via <see cref="ITrackerStateContext.Resolve"/>
@@ -118,6 +149,10 @@ namespace EmoTracker.Data.Sessions
             mName = name;
             Scripts = new ScriptManager();
             Transactions = new LocalTransactionProcessorWithUndo();
+            Items = new ItemDatabase();
+            Locations = new LocationDatabase();
+            Maps = new MapDatabase();
+            Layouts = new LayoutManager();
         }
 
         /// <inheritdoc />
@@ -130,6 +165,22 @@ namespace EmoTracker.Data.Sessions
         /// Tear-down: disposes the per-state script manager and clears
         /// the resolver. Called by <c>PackageInstance.RemoveState</c>
         /// (step 3) and by application shutdown.
+        ///
+        /// <para>
+        /// <b>Known gap (step 5 audit):</b> the catalogs (Items, Locations,
+        /// Maps, Layouts) own per-state items / sections / layouts whose
+        /// Dispose chains aren't run from here. Each catalog's existing
+        /// <c>Reset()</c> / <c>Clear()</c> primitive isn't pure
+        /// teardown — <c>LocationDatabase.Reset()</c> in particular
+        /// allocates a fresh root Location with WPF-specific
+        /// <c>pack://</c> URIs that throw outside the WPF runtime — so
+        /// calling them blindly here is unsafe. Phase 6 step 7 wires up
+        /// the production state lifecycle and will introduce proper
+        /// <c>Dispose()</c> overrides on each catalog at that time.
+        /// For step 5 alone, abandoned TrackerStates leak their catalog
+        /// contents — acceptable because no production code yet creates
+        /// extra states.
+        /// </para>
         /// </summary>
         public override void Dispose()
         {

@@ -12,8 +12,58 @@ using System.IO;
 
 namespace EmoTracker.Data
 {
-    public class ItemDatabase : Singleton<ItemDatabase>, ICodeProvider
+    /// <summary>
+    /// Phase 6 step 5: <see cref="ItemDatabase"/> is no longer a strict
+    /// <c>Singleton&lt;T&gt;</c>; it's a regular instantiable class so each
+    /// <c>TrackerState</c> can hold one. The static <see cref="Current"/>
+    /// property tracks "the active primary" instance, defaulting to a single
+    /// lazily-created instance for pre-Phase-6 callers; Phase 6's
+    /// <c>ApplicationModel</c> reassigns it on state-switch.
+    ///
+    /// <para>
+    /// <see cref="Instance"/> remains as a transitional alias for
+    /// <see cref="Current"/> so the existing 43 <c>ItemDatabase.Instance</c>
+    /// callsites continue to work unchanged.
+    /// </para>
+    /// </summary>
+    public class ItemDatabase : ICodeProvider
     {
+        // ---- Static current-instance plumbing (replaces Singleton<T>) ----
+
+        static ItemDatabase mCurrent;
+
+        /// <summary>
+        /// The currently-active ItemDatabase. Lazily created on first access
+        /// (matching the pre-Phase-6 Singleton lazy-create behavior). Phase 6
+        /// reassigns this on state-switch via <see cref="SetCurrent"/>.
+        /// </summary>
+        public static ItemDatabase Current
+        {
+            get
+            {
+                if (mCurrent == null)
+                    mCurrent = new ItemDatabase();
+                return mCurrent;
+            }
+        }
+
+        /// <summary>
+        /// Replace the active <see cref="Current"/>. Phase 6 uses this on
+        /// pack-load / state-switch; pre-Phase-6 callers should not reassign.
+        /// Passing null lets the next <see cref="Current"/> access lazily
+        /// recreate (matches the pre-Phase-6 lazy semantics).
+        /// </summary>
+        public static void SetCurrent(ItemDatabase database)
+        {
+            mCurrent = database;
+        }
+
+        /// <summary>
+        /// Pre-Phase-6 alias for <see cref="Current"/>. Retained so existing
+        /// <c>ItemDatabase.Instance</c> callsites keep compiling.
+        /// </summary>
+        public static ItemDatabase Instance => Current;
+
         ObservableCollection<ITrackableItem> mItems = new ObservableCollection<ITrackableItem>();
         Dictionary<ITrackableItem, int> mItemIndex = new Dictionary<ITrackableItem, int>();
 
