@@ -79,6 +79,24 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
+                    <TextBlock Text="Load New Pack" FontWeight="Bold"
+                               Foreground="#BBBBBB" FontSize="11" Margin="0,4,0,0" />
+                    <ItemsControl Name="InstalledPacksList"
+                                  ItemsSource="{Binding InstalledPackages, Source={x:Static packages:PackageManager.Instance}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Margin="0,1" Padding="6,2" FontSize="10"
+                                        Click="OnLoadNewPack"
+                                        Tag="{Binding}">
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
                     <TextBlock Text="Actions" FontWeight="Bold"
                                Foreground="#BBBBBB" FontSize="11" Margin="0,4,0,0" />
                     <StackPanel Orientation="Horizontal" Spacing="4">

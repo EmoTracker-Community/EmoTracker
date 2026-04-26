@@ -7,7 +7,6 @@
              x:Class="EmoTracker.UI.StateTabStripControl"
              Name="TabStripRoot"
              mc:Ignorable="d"
-             Height="28"
              Background="#1A1A1A">
 
     <Grid>
@@ -21,11 +20,14 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="sessions:TrackerState">
+                    <!-- Outer border carries the top accent (active tab gets a 2px
+                         coloured top edge per VS Code style; inactive tabs no top
+                         accent). Inner border gives the tab its body, padding,
+                         click area, and right-edge separator. -->
                     <Border Name="TabBorder"
-                            Padding="8,2"
-                            Margin="0"
+                            Padding="8,3"
                             BorderBrush="#2A2A2A"
-                            BorderThickness="0,0,1,0"
+                            BorderThickness="0,2,1,0"
                             Background="#1A1A1A"
                             PointerPressed="OnTabPointerPressed"
                             PointerReleased="OnTabPointerReleased"
@@ -39,23 +41,16 @@
                                 <MenuItem Header="Close" Click="OnContextClose" Tag="{Binding}" />
                             </ContextMenu>
                         </Border.ContextMenu>
-                        <Grid ColumnDefinitions="Auto,*,Auto"
+                        <Grid ColumnDefinitions="*,Auto"
                               VerticalAlignment="Center">
                             <TextBlock Grid.Column="0"
-                                       Text="•"
-                                       Foreground="#666"
-                                       Margin="0,0,4,0"
-                                       VerticalAlignment="Center"
-                                       FontSize="10"
-                                       IsVisible="False" />
-                            <TextBlock Grid.Column="1"
                                        Text="{Binding Name, FallbackValue='(unnamed)'}"
                                        Foreground="#CCCCCC"
                                        FontSize="11"
                                        VerticalAlignment="Center"
                                        MaxWidth="160"
                                        TextTrimming="CharacterEllipsis" />
-                            <Button Grid.Column="2"
+                            <Button Grid.Column="1"
                                     Content="✕"
                                     FontSize="9"
                                     Margin="6,0,0,0"

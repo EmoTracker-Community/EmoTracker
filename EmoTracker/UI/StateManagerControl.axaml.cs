@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using EmoTracker.Data;
 using EmoTracker.Data.Sessions;
 using System;
 using System.ComponentModel;
@@ -13,8 +14,8 @@ namespace EmoTracker.UI
     /// <summary>
     /// Phase 7.7: bottom-bar state manager. Surfaces the list of loaded
     /// PackageInstances and their TrackerStates with create / switch /
-    /// open-in-new-window / close per-state plus a "load new pack" /
-    /// "save bundle" / "load bundle" actions section.
+    /// open-in-new-window / close per-state plus a "Load New Pack" pack
+    /// list and "Save Bundle" / "Load Bundle" actions.
     /// </summary>
     public partial class StateManagerControl : UserControl
     {
@@ -40,12 +41,9 @@ namespace EmoTracker.UI
 
         WindowContext ResolveWindowContext()
         {
-            // Walk up the visual tree to find the hosting MainWindow.
             var w = this.GetVisualRoot() as MainWindow;
             return w?.WindowContext;
         }
-
-        // ---------- Active-state label binding helper -----------------------
 
         public static readonly StyledProperty<string> ActiveStateLabelProperty =
             AvaloniaProperty.Register<StateManagerControl, string>(nameof(ActiveStateLabel), "(no state)");
@@ -89,66 +87,161 @@ namespace EmoTracker.UI
 
         void OnSwitchToState(object sender, RoutedEventArgs e)
         {
-            var state = StateFromButton(sender);
-            var ctx = ResolveWindowContext();
-            if (state == null || ctx == null) return;
-            if (!ctx.OpenStates.Contains(state))
-                ctx.AddState(state);
-            else
-                ctx.ActiveState = state;
+            try
+            {
+                var state = StateFromButton(sender);
+                var ctx = ResolveWindowContext();
+                if (state == null || ctx == null) return;
+                if (!ctx.OpenStates.Contains(state))
+                    ctx.AddState(state);
+                else
+                    ctx.ActiveState = state;
+                // Drive the in-Data layer's active state slot to match.
+                ApplicationModel.Instance.OnActiveStateSwitched(state);
+            }
+            catch (Exception)
+            {
+            }
             ClosePopup();
         }
 
         void OnOpenStateInNewWindow(object sender, RoutedEventArgs e)
         {
-            var state = StateFromButton(sender);
-            var ctx = ResolveWindowContext();
-            if (state == null || ctx == null) return;
-            ApplicationModel.Instance.OpenStateInNewWindow(ctx, state);
+            try
+            {
+                var state = StateFromButton(sender);
+                var ctx = ResolveWindowContext();
+                if (state == null || ctx == null) return;
+                ApplicationModel.Instance.OpenStateInNewWindow(ctx, state);
+            }
+            catch (Exception)
+            {
+            }
             ClosePopup();
         }
 
         void OnCloseState(object sender, RoutedEventArgs e)
         {
-            var state = StateFromButton(sender);
-            if (state == null) return;
-            // Find owning PackageInstance + remove the state from it.
-            foreach (var pi in ApplicationModel.Instance.PackageInstances)
+            try
             {
-                if (pi.States.ContainsKey(state.Id))
+                var state = StateFromButton(sender);
+                if (state == null) return;
+                // Snapshot windows first to avoid concurrent modification.
+                var winSnap = new System.Collections.Generic.List<WindowContext>(ApplicationModel.Instance.Windows);
+                foreach (var ctx in winSnap)
+                    ctx.RemoveState(state);
+                foreach (var pi in ApplicationModel.Instance.PackageInstances)
                 {
-                    pi.RemoveState(state.Id);
-                    break;
+                    if (pi.States.ContainsKey(state.Id))
+                    {
+                        pi.RemoveState(state.Id);
+                        break;
+                    }
                 }
             }
-            // Also remove from any window's OpenStates.
-            foreach (var ctx in ApplicationModel.Instance.Windows)
-                ctx.RemoveState(state);
+            catch (Exception)
+            {
+            }
             ClosePopup();
         }
 
         void OnCreateAdditionalState(object sender, RoutedEventArgs e)
         {
-            var pi = (sender as Control)?.Tag as PackageInstance;
-            var ctx = ResolveWindowContext();
-            if (pi == null || ctx == null) return;
-            var state = ApplicationModel.Instance.CreateAdditionalState(pi);
-            ctx.AddState(state);
+            try
+            {
+                var pi = (sender as Control)?.Tag as PackageInstance;
+                var ctx = ResolveWindowContext();
+                if (pi == null || ctx == null) return;
+                var state = ApplicationModel.Instance.CreateAdditionalState(pi);
+                ctx.AddState(state);
+                ApplicationModel.Instance.OnActiveStateSwitched(state);
+            }
+            catch (Exception)
+            {
+            }
             ClosePopup();
         }
 
-        // ---------- Bundle save / load (Phase 7.10) -------------------------
+        // Phase 7.7 polish: load a new pack into a fresh PackageInstance
+        // and add its primary state as a tab on the current window.
+        void OnLoadNewPack(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var pkg = (sender as Control)?.Tag as IGamePackage;
+                var ctx = ResolveWindowContext();
+                if (pkg == null || ctx == null) return;
+
+                ClosePopup();
+
+                // Defer the actual pack-load to the next dispatcher tick so
+                // the popup closes before the (possibly slow) load runs.
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        // For Phase 7.5 forward, LoadNewPack creates a
+                        // separate PackageInstance with its own catalogs.
+                        // To keep the existing UI bindings (which root
+                        // through Tracker.Instance singletons) coherent,
+                        // we drive the load via the existing single-pack
+                        // Activate flow when this is the only pack —
+                        // otherwise the new pack lives alongside but its
+                        // content won't be visible until the binding
+                        // migration lands.
+                        bool firstActivation =
+                            ApplicationModel.Instance.PackageInstances.Count == 0
+                            || (ApplicationModel.Instance.PackageInstances.Count == 1
+                                && ApplicationModel.Instance.PackageInstances[0].Package == null);
+                        if (firstActivation)
+                        {
+                            // Load via the existing singleton Tracker flow.
+                            Tracker.Instance.ActiveGamePackageVariant = null;
+                            Tracker.Instance.ActiveGamePackage = pkg;
+                        }
+                        else
+                        {
+                            var primary = ApplicationModel.Instance.LoadNewPack(pkg, null);
+                            ctx.AddState(primary);
+                            // Drive bindings to the new pack's content.
+                            ApplicationModel.Instance.OnActiveStateSwitched(primary);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ApplicationModel.Instance.PushMarkdownNotification(
+                            EmoTracker.Data.Scripting.NotificationType.Error,
+                            "Failed to load pack: " + ex.Message);
+                    }
+                });
+            }
+            catch (Exception)
+            {
+            }
+        }
 
         async void OnSaveBundle(object sender, RoutedEventArgs e)
         {
             ClosePopup();
-            await BundleService.SaveBundleInteractiveAsync(this.GetVisualRoot() as Window);
+            try
+            {
+                await BundleService.SaveBundleInteractiveAsync(this.GetVisualRoot() as Window);
+            }
+            catch (Exception)
+            {
+            }
         }
 
         async void OnLoadBundle(object sender, RoutedEventArgs e)
         {
             ClosePopup();
-            await BundleService.LoadBundleInteractiveAsync(this.GetVisualRoot() as Window);
+            try
+            {
+                await BundleService.LoadBundleInteractiveAsync(this.GetVisualRoot() as Window);
+            }
+            catch (Exception)
+            {
+            }
         }
 
         void ClosePopup()

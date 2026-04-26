@@ -121,6 +121,66 @@ namespace EmoTracker
         }
 
         /// <summary>
+        /// Phase 7.8 polish: called when a tab strip switches the active
+        /// state on the currently-focused window. Updates the in-Data
+        /// layer's <c>SessionContext.ActiveState</c> and, if the target
+        /// state lives in a different <see cref="PackageInstance"/> than
+        /// the currently-loaded pack, drives <c>Tracker.Reload</c> to
+        /// re-establish XAML bindings against the new pack.
+        ///
+        /// <para>
+        /// <b>Same-PackageInstance forks:</b> for tabs from the same
+        /// PackageInstance (i.e. forks of the active pack), updating
+        /// SessionContext alone is insufficient because XAML bindings
+        /// against <c>{x:Static Tracker.Instance.X}</c> resolved at load
+        /// time don't refire on a state swap. This is documented as a
+        /// limitation pending the deferred Phase 7.6 polish XAML
+        /// migration to <c>WindowContext.ActiveState.X</c> bindings.
+        /// </para>
+        /// </summary>
+        public void OnActiveStateSwitched(TrackerState newState)
+        {
+            if (newState == null) return;
+
+            EmoTracker.Data.Sessions.SessionContext.ActiveState = newState;
+
+            // Find the PackageInstance owning the new state.
+            PackageInstance owningPI = null;
+            foreach (var pi in mPackageInstances)
+            {
+                if (pi.States.ContainsKey(newState.Id))
+                {
+                    owningPI = pi;
+                    break;
+                }
+            }
+            if (owningPI == null) return;
+
+            // If the active pack is already this PackageInstance's pack,
+            // there's nothing to reload at the singleton level. The
+            // catalogs sit on the new state but XAML bindings won't refire
+            // — same-pack fork content swap is the documented limitation.
+            if (ReferenceEquals(Tracker.Instance.ActiveGamePackage, owningPI.Package)
+                && ReferenceEquals(Tracker.Instance.ActiveGamePackageVariant, owningPI.ActiveVariant))
+            {
+                ActivePackageInstance = owningPI;
+                NotifyPropertyChanged(nameof(PrimaryState));
+                return;
+            }
+
+            // Cross-PI switch: drive a Tracker.Reload of the new pack so
+            // singletons + bindings refresh.
+            ActivePackageInstance = owningPI;
+            Core.Services.Dispatch.BeginInvoke(() =>
+            {
+                Tracker.Instance.ActiveGamePackageVariant = null;
+                Tracker.Instance.ActiveGamePackage = owningPI.Package;
+                if (owningPI.ActiveVariant != null)
+                    Tracker.Instance.ActiveGamePackageVariant = owningPI.ActiveVariant;
+            });
+        }
+
+        /// <summary>
         /// Phase 7.9: find the StateTabStripControl whose visual bounds
         /// contain <paramref name="screenPoint"/>, walking every live
         /// MainWindow. Used by the tab strip's drop logic to determine
