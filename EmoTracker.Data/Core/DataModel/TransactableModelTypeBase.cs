@@ -1,6 +1,8 @@
 using EmoTracker.Core;
 using EmoTracker.Core.DataModel;
 using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Data.Core.Transactions.Processors;
+using EmoTracker.Data.Sessions;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -72,7 +74,11 @@ namespace EmoTracker.Data.Core.DataModel
         {
             if (bForceReadFromOpenTransaction || ShouldReadFromOpenTransaction(this.GetType(), propertyName))
             {
-                ITransactionScope scope = TransactionProcessor.Current?.CurrentScope;
+                // Phase 6: read-from-open-scope checks the active processor
+                // (owner state's first, then ambient) — not just the static
+                // Current — so per-state pending writes are visible to the
+                // matching property reads on the same state's models.
+                ITransactionScope scope = ResolveActiveProcessor()?.CurrentScope;
                 if (scope?.Transaction != null && scope.Transaction.HasPropertyValue(this, propertyName))
                     return scope.Transaction.GetPropertyValue<T>(this, propertyName);
             }
@@ -81,7 +87,33 @@ namespace EmoTracker.Data.Core.DataModel
         }
 
         /// <summary>
-        /// Routes the write through <see cref="TransactionProcessor"/>. On commit, the
+        /// Resolves the active <see cref="ITransactionProcessor"/> for transactable
+        /// writes on this model. Phase 6: prefers
+        /// <see cref="TrackerState.Transactions"/> when this model has been claimed
+        /// by a state (<see cref="ModelTypeBase.OwnerState"/> set), so its writes
+        /// participate in that state's per-state undo stack rather than the global
+        /// singleton's. Falls back to <see cref="TransactionProcessor.Current"/>
+        /// for unowned models — the path every Phase 0–5 model uses today.
+        ///
+        /// <para>
+        /// The <c>OwnerState as TrackerState</c> cast is the place where the
+        /// Core-side <see cref="ITrackerStateContext"/> marker meets the
+        /// Data-side <see cref="TrackerState"/> concrete type. Only TrackerState
+        /// exposes a transaction processor; if a different
+        /// <see cref="ITrackerStateContext"/> implementation lands later that
+        /// also has one, this resolver needs updating.
+        /// </para>
+        /// </summary>
+        ITransactionProcessor ResolveActiveProcessor()
+        {
+            return (this.OwnerState as TrackerState)?.Transactions
+                ?? TransactionProcessor.Current;
+        }
+
+        /// <summary>
+        /// Routes the write through the active transaction processor — the
+        /// owning <see cref="TrackerState"/>'s when set, the global
+        /// <see cref="TransactionProcessor.Current"/> otherwise. On commit, the
         /// transaction's callback writes the resulting value into
         /// <see cref="ModelTypeBase.MutableData"/>, raises <c>PropertyChanging</c> /
         /// <c>PropertyChanged</c>, and invokes <paramref name="onTransactionProcessed"/>.
@@ -96,7 +128,7 @@ namespace EmoTracker.Data.Core.DataModel
             if (EqualityComparer<T>.Default.Equals(GetTransactableProperty<T>(propertyName), value))
                 return false;
 
-            TransactionProcessor.Current.WriteProperty(this, propertyName, value, (transactionState) =>
+            ResolveActiveProcessor().WriteProperty(this, propertyName, value, (transactionState) =>
             {
                 if (transactionState.Status == TransactionStatus.Completed)
                 {
@@ -149,5 +181,28 @@ namespace EmoTracker.Data.Core.DataModel
         // generator output is emitted as part of the same partial class, so it has
         // access to MutableData/ImmutableData directly. This stub exists only to
         // keep the inherited members visible to IDE consumers.
+
+        // -------- Phase 6 transaction scope API ------------------------------
+
+        /// <summary>
+        /// Phase 6: opens a transaction scope on this model's owning state's
+        /// transaction processor (or the ambient one when this model isn't
+        /// owned by a state). While the scope is open, transactable writes
+        /// on any model whose owner is the same processor are batched into
+        /// one undoable entry.
+        ///
+        /// <para>
+        /// Per plan §6.2 this is the ONLY way to open a scope — the public
+        /// API does not expose <c>state.Transactions.OpenTransaction()</c>
+        /// — so writes inside an open scope can't accidentally cross state
+        /// boundaries by stylistic mistake. (Cross-state writes that bypass
+        /// the public API surface — reflection, test harnesses — go through
+        /// the runtime sentinel landing in a follow-up step.)
+        /// </para>
+        /// </summary>
+        public ITransactionScope OpenTransaction()
+        {
+            return ResolveActiveProcessor().OpenTransaction();
+        }
     }
 }

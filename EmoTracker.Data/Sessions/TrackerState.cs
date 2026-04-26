@@ -1,6 +1,7 @@
 using EmoTracker.Core;
 using EmoTracker.Core.DataModel;
 using EmoTracker.Data.Core.DataModel;
+using EmoTracker.Data.Core.Transactions.Processors;
 using System;
 
 namespace EmoTracker.Data.Sessions
@@ -67,6 +68,28 @@ namespace EmoTracker.Data.Sessions
         public ScriptManager Scripts { get; }
 
         /// <summary>
+        /// The transaction processor scoped to this state. Each state
+        /// has its own undo / redo stack; transactable property writes
+        /// on a model owned by this state route through this processor
+        /// (via <see cref="TransactableModelTypeBase.SetTransactableProperty"/>'s
+        /// owner-resolution path). Step 4 wires this up; step 8's
+        /// coordinated fork ensures every transactable model in a forked
+        /// state has its <see cref="ModelTypeBase.OwnerState"/> set so
+        /// the routing actually fires.
+        ///
+        /// <para>
+        /// <b>API discipline:</b> this property exposes the processor
+        /// for state-level <c>Undo()</c> / <c>ClearUndoHistory()</c> —
+        /// but NOT for opening transaction scopes. Per plan §6.2 scopes
+        /// are obtainable from a model
+        /// (<see cref="TransactableModelTypeBase.OpenTransaction"/>),
+        /// not from a state, so writes inside the scope can't
+        /// accidentally cross state boundaries.
+        /// </para>
+        /// </summary>
+        public IUndoableTransactionProcessor Transactions { get; }
+
+        /// <summary>
         /// The per-state model resolver. Populated by the coordinated
         /// fork (step 8) as each model is added to this state's graph;
         /// holders read through it via <see cref="ITrackerStateContext.Resolve"/>
@@ -89,6 +112,7 @@ namespace EmoTracker.Data.Sessions
         {
             mName = name;
             Scripts = new ScriptManager();
+            Transactions = new LocalTransactionProcessorWithUndo();
         }
 
         /// <inheritdoc />
