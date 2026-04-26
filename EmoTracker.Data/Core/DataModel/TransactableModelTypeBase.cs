@@ -144,6 +144,11 @@ namespace EmoTracker.Data.Core.DataModel
                         // captured reference cannot be mutated by callers later.
                         MutableData.SetValue(propertyName, resultValue);
 
+                        // Phase 7.11 polish: mark the owning state as dirty
+                        // so the tab strip shows a modified marker. Cleared
+                        // by the save / load paths.
+                        (OwnerState as Sessions.TrackerState)?.MarkDirty();
+
                         onTransactionProcessed?.Invoke(resultValue);
 
                         NotifyPropertyChanged(propertyName);

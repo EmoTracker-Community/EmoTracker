@@ -138,6 +138,22 @@ namespace EmoTracker.Data.Sessions
         /// </summary>
         public SessionSettings Settings { get; }
 
+        // Phase 7.11 polish: dirty-tracking. The tab strip surfaces a
+        // modified marker (•) when this flag is true; cleared by
+        // <see cref="MarkClean"/> after save/load.
+        bool mIsDirty;
+        public bool IsDirty
+        {
+            get => mIsDirty;
+            internal set { SetProperty(ref mIsDirty, value); }
+        }
+
+        /// <summary>Phase 7.11: mark this state as having unsaved changes.</summary>
+        public void MarkDirty() { IsDirty = true; }
+
+        /// <summary>Phase 7.11: clear the dirty marker (call on save/load).</summary>
+        public void MarkClean() { IsDirty = false; }
+
         /// <summary>
         /// The per-state model resolver. Populated by the coordinated
         /// fork (step 8) as each model is added to this state's graph;
@@ -506,6 +522,13 @@ namespace EmoTracker.Data.Sessions
             copy.Settings.PinLocationsOnItemCapture = this.Settings.PinLocationsOnItemCapture;
             copy.Settings.MapEnabled = this.Settings.MapEnabled;
             copy.Settings.SwapLeftRight = this.Settings.SwapLeftRight;
+
+            // ---- Phase 7.11 polish: a freshly-forked state isn't dirty.
+            // The transactable writes during the fork pipeline (e.g.
+            // OnForked side effects, layout content stamping) set the
+            // dirty flag — clear it here so the modified marker only
+            // appears for user-driven mutations.
+            copy.MarkClean();
 
             // ---- ScriptManager fork (with extended bridges) ----------------
             // copy.Scripts was constructed by the TrackerState ctor without

@@ -41,16 +41,26 @@
                                 <MenuItem Header="Close" Click="OnContextClose" Tag="{Binding}" />
                             </ContextMenu>
                         </Border.ContextMenu>
-                        <Grid ColumnDefinitions="*,Auto"
+                        <Grid ColumnDefinitions="Auto,*,Auto"
                               VerticalAlignment="Center">
+                            <!-- Phase 7.11 polish: modified-marker dot, visible
+                                 only when this state has unsaved changes. -->
                             <TextBlock Grid.Column="0"
+                                       Text="•"
+                                       Foreground="#FFB454"
+                                       FontSize="14"
+                                       LineHeight="11"
+                                       Margin="0,0,4,0"
+                                       VerticalAlignment="Center"
+                                       IsVisible="{Binding IsDirty}" />
+                            <TextBlock Grid.Column="1"
                                        Text="{Binding Name, FallbackValue='(unnamed)'}"
                                        Foreground="#CCCCCC"
                                        FontSize="11"
                                        VerticalAlignment="Center"
                                        MaxWidth="160"
                                        TextTrimming="CharacterEllipsis" />
-                            <Button Grid.Column="1"
+                            <Button Grid.Column="2"
                                     Content="✕"
                                     FontSize="9"
                                     Margin="6,0,0,0"

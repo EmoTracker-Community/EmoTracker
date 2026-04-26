@@ -1061,6 +1061,9 @@ defaultSaveDataPath)
                 if (bResult)
                 {
                     mCurrentSavePath = path;
+                    // Phase 7.11 polish: clear the modified marker on the
+                    // active state once the save succeeds.
+                    PrimaryState?.MarkClean();
 
                     PushMarkdownNotification(NotificationType.Message, string.Format(
     @"### Progress Saved
@@ -1105,6 +1108,9 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             }))
             {
                 AcquireLayouts();
+                // Phase 7.11 polish: a freshly-loaded state isn't dirty
+                // — clear the modified marker for the active state.
+                PrimaryState?.MarkClean();
                 return true;
             }
 
@@ -1232,6 +1238,15 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             // coordinated fork is what makes additional states useful for
             // multi-session-tracking scenarios.
             RebindActivePackageInstanceFromSingletons();
+
+            // Phase 7.11 polish: a freshly-loaded pack isn't dirty —
+            // clear the marker on every active state. (Transactable
+            // writes during pack-load via init.lua mark the state dirty;
+            // we clear here once load is complete so the user only sees
+            // dirty when THEIR mutations are unsaved.)
+            foreach (var pi in mPackageInstances)
+                foreach (var kvp in pi.States)
+                    kvp.Value.MarkClean();
 
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
 
