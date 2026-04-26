@@ -222,7 +222,10 @@ namespace EmoTracker.Data.Locations
                 if (AlwaysVisible)
                     return true;
 
-                if (!ForceVisibilityRules.Empty && ForceVisibilityRules.AccessibilityForVisibility == AccessibilityLevel.Normal)
+                // Phase 7.2: rule evaluation against this MapLocation's owning state.
+                var state = this.OwnerState as Sessions.TrackerState;
+
+                if (!ForceVisibilityRules.Empty && ForceVisibilityRules.GetAccessibilityForVisibility(state) == AccessibilityLevel.Normal)
                     return true;
 
                 return false;
@@ -236,10 +239,13 @@ namespace EmoTracker.Data.Locations
                 if (AlwaysVisible)
                     return false;
 
-                if (!ForceInvisibilityRules.Empty && ForceInvisibilityRules.AccessibilityForVisibility == AccessibilityLevel.Normal)
+                // Phase 7.2: rule evaluation against this MapLocation's owning state.
+                var state = this.OwnerState as Sessions.TrackerState;
+
+                if (!ForceInvisibilityRules.Empty && ForceInvisibilityRules.GetAccessibilityForVisibility(state) == AccessibilityLevel.Normal)
                     return true;
 
-                if (!RestrictVisibilityRules.Empty && RestrictVisibilityRules.AccessibilityForVisibility != AccessibilityLevel.Normal)
+                if (!RestrictVisibilityRules.Empty && RestrictVisibilityRules.GetAccessibilityForVisibility(state) != AccessibilityLevel.Normal)
                     return true;
 
                 return false;

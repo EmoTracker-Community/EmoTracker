@@ -440,6 +440,13 @@ namespace EmoTracker.Data.Sessions
                 modelIdentityMap[map] = forkedMap;
             }
 
+            // ---- Per-state AccessibilityRule cache seeding (Phase 7.2) -----
+            // Deep-copy the source's cache into the fork so the fork starts
+            // pre-warmed with the source's evaluations, avoiding cold-start
+            // re-evaluation on first refresh. Subsequent mutations diverge
+            // independently — fork mutations clear only fork's cache.
+            copy.Locations.SeedRuleCacheFromFork(this.Locations);
+
             // ---- ScriptManager fork (with extended bridges) ----------------
             // copy.Scripts was constructed by the TrackerState ctor without
             // a Lua interpreter; we bootstrap one here and then drive the

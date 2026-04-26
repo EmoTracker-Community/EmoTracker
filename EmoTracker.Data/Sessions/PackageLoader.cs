@@ -103,7 +103,8 @@ namespace EmoTracker.Data.Sessions
 
             try
             {
-                AccessibilityRule.ClearCaches();
+                // Phase 7.2: per-state rule cache clear (replaces static AccessibilityRule.ClearCaches).
+                target.Locations.RuleCache.Clear();
 
                 OnPackageLoadStarting?.Invoke(null, evtArgs);
 
@@ -142,7 +143,8 @@ namespace EmoTracker.Data.Sessions
             }
             finally
             {
-                AccessibilityRule.ClearCaches();
+                // Phase 7.2: per-state rule cache clear.
+                target.Locations.RuleCache.Clear();
                 target.Items.BuildCodeIndex();
 
                 mInProgress = false;

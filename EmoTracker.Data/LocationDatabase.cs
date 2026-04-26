@@ -121,8 +121,44 @@ namespace EmoTracker.Data
             get { return mPinnedLocations; }
         }
 
+        // Phase 7.2: per-state accessibility-rule cache. Lives here so it
+        // shares the LocationDatabase's lifetime (one per state) and is
+        // reachable from rule consumers via state.Locations.RuleCache.
+        // Cloned on TrackerState.Fork via SeedRuleCacheFromFork so the fork
+        // starts pre-warmed with the source's evaluations.
+        readonly Locations.AccessibilityRuleCache mRuleCache = new Locations.AccessibilityRuleCache();
+        internal Locations.AccessibilityRuleCache RuleCache => mRuleCache;
+
         public LocationDatabase()
         {
+            // Phase 7.2: keep the per-instance cache enabled flag in sync
+            // with the process-wide AccessibilityRule.EnableCache toggle,
+            // so a unit test (or the legacy debug setting) that flips that
+            // global propagates to this state's cache.
+            mRuleCache.Enabled = Locations.AccessibilityRule.EnableCache;
+            Locations.AccessibilityRule.EnableCacheChanged += OnEnableCacheChanged;
+        }
+
+        void OnEnableCacheChanged(bool enabled)
+        {
+            mRuleCache.Enabled = enabled;
+        }
+
+        /// <summary>
+        /// Phase 7.2: seed this database's rule cache from a source
+        /// database's cache (used at <c>TrackerState.Fork</c> time so the
+        /// fork starts pre-warmed and avoids cold-start re-evaluation).
+        /// </summary>
+        internal void SeedRuleCacheFromFork(LocationDatabase source)
+        {
+            if (source == null) return;
+            mRuleCache.Clear();
+            var clone = source.mRuleCache.CloneForFork();
+            // Adopt the cloned entries by replaying — we don't expose
+            // bulk-set on the cache type; entries are public via Put.
+            // The cache class deliberately keeps mEntries private to avoid
+            // callers reaching past the API. Use a small adoption helper:
+            mRuleCache.AdoptFrom(clone);
         }
 
         public void Reset()
@@ -397,7 +433,8 @@ namespace EmoTracker.Data
                                 mPendingRefreshCount = 0;
                                 bRefreshedAccessibility = true;
 
-                                AccessibilityRule.ClearCaches();
+                                // Phase 7.2: per-state cache clear (was static AccessibilityRule.ClearCaches).
+                                mRuleCache.Clear();
                                 this.State?.Scripts.ClearExpressionCache();
 
                                 // Phase 5 step 5: route the standard-callback through the
@@ -435,7 +472,8 @@ namespace EmoTracker.Data
             }
             else
             {
-                AccessibilityRule.ClearCaches();
+                // Phase 7.2: per-state cache clear.
+                mRuleCache.Clear();
                 ++mPendingRefreshCount;
             }
         }

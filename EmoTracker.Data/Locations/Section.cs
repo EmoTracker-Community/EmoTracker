@@ -454,18 +454,21 @@ namespace EmoTracker.Data.Locations
             var owner = Owner;
             if (owner == null) return;
 
+            // Phase 7.2: rule evaluation context = the section's owning state.
+            var state = this.OwnerState as Sessions.TrackerState;
+
             if (GateItem != null)
             {
-                mCachedGateAccessibility = Min(owner.BaseAccessibilityLevel, GateAccessibilityRules.AccessibilityWithoutModifiers);
+                mCachedGateAccessibility = Min(owner.BaseAccessibilityLevel, GateAccessibilityRules.GetAccessibilityWithoutModifiers(state));
 
                 if (GateItem.ProvidesCode(GateItemCode) > 0)
                     mCachedGateAccessibility = AccessibilityLevel.Normal;
             }
 
             if (CapturedItem != null)
-                mCachedAccessibility = Min(owner.BaseAccessibilityLevel, AccessibilityRules.AccessibilityWithoutModifiers);
+                mCachedAccessibility = Min(owner.BaseAccessibilityLevel, AccessibilityRules.GetAccessibilityWithoutModifiers(state));
             else
-                mCachedAccessibility = Min(owner.BaseAccessibilityLevel, AccessibilityRules.Accessibility);
+                mCachedAccessibility = Min(owner.BaseAccessibilityLevel, AccessibilityRules.GetAccessibility(state));
 
             if (mCachedAccessibility >= AccessibilityLevel.Inspect &&
                 GateItem != null &&
@@ -487,10 +490,10 @@ namespace EmoTracker.Data.Locations
                     AccessibilityLevel _unused = AccessibilityLevel.Normal;
                     // Phase 7.1: prefer the owning state's ItemDatabase. ProviderCountForCode
                     // takes an out arg so we can't `?.` through it cleanly; null-guard manually.
-                    var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
+                    var itemDb = state?.Items;
                     uint providedCount = itemDb != null ? itemDb.ProviderCountForCode(code, out _unused) : 0u;
 
-                    AccessibilityLevel bypassLevel = (!GateBypassRules.Empty && providedCount >= (count - localCount)) ? GateBypassRules.AccessibilityWithoutModifiers : AccessibilityLevel.None;
+                    AccessibilityLevel bypassLevel = (!GateBypassRules.Empty && providedCount >= (count - localCount)) ? GateBypassRules.GetAccessibilityWithoutModifiers(state) : AccessibilityLevel.None;
                     AccessibilityLevel gateLevel = (providedCount >= count && GateAccessibilityLevel >= AccessibilityLevel.Unlockable) ? GateAccessibilityLevel : AccessibilityLevel.None;
 
                     if (bypassLevel <= AccessibilityLevel.SequenceBreak && gateLevel >= AccessibilityLevel.SequenceBreak)
@@ -500,7 +503,7 @@ namespace EmoTracker.Data.Locations
                 }
             }
 
-            mbCachedVisibilty = (VisibilityRules.AccessibilityForVisibility >= AccessibilityLevel.Normal);
+            mbCachedVisibilty = (VisibilityRules.GetAccessibilityForVisibility(state) >= AccessibilityLevel.Normal);
 
             NotifyPropertyChanged("AccessibilityLevel");
             NotifyPropertyChanged("GateAccessibilityLevel");

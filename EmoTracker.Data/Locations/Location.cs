@@ -303,7 +303,9 @@ namespace EmoTracker.Data.Locations
             AccessibilityLevel prevBaseAccessibility = mCachedBaseAccessibility;
             AccessibilityLevel prevAccessibility = mCachedAccessibility;
 
-            mCachedBaseAccessibility = AccessibilityRules.Accessibility;
+            // Phase 7.2: thread state into rule evaluation so the per-state cache is consulted.
+            var __ruleState = this.OwnerState as Sessions.TrackerState;
+            mCachedBaseAccessibility = AccessibilityRules.GetAccessibility(__ruleState);
             if (Parent != null)
                 mCachedBaseAccessibility = Min(mCachedBaseAccessibility, Parent.BaseAccessibilityLevel);
 
