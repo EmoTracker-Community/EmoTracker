@@ -527,28 +527,43 @@ An error occurred while saving. This may be due to anti-virus/malware software p
         // SessionContext.ActiveState to the target before invoking
         // ScriptManager.Load(package), which is when init.lua runs and
         // calls these helpers.
+        // Phase 7.1 fix: thread the active state through to IncrementalLoad
+        // so items/locations/maps get OwnerState stamped at construction
+        // (and registered in state.Resolver) rather than left null. Without
+        // this, items added via Tracker:AddItems from init.lua have null
+        // OwnerState — so their KVMutable [OnChanged] side effects (e.g.
+        // InvalidateAccessibility on Icon change) silently no-op because
+        // `(this.OwnerState as TrackerState)?.Locations` is null.
         public void AddItems(string path)
         {
-            if (ActiveGamePackage != null)
-                (Sessions.SessionContext.ActiveState?.Items).IncrementalLoad(path, ActiveGamePackage);
+            if (ActiveGamePackage == null) return;
+            var state = Sessions.SessionContext.ActiveState;
+            if (state != null)
+                state.Items.IncrementalLoad(path, ActiveGamePackage, bLegacy: false, state: state);
         }
 
         public void AddMaps(string path)
         {
-            if (ActiveGamePackage != null)
-                (Sessions.SessionContext.ActiveState?.Maps).IncrementalLoad(path, ActiveGamePackage);
+            if (ActiveGamePackage == null) return;
+            var state = Sessions.SessionContext.ActiveState;
+            if (state != null)
+                state.Maps.IncrementalLoad(path, ActiveGamePackage, state: state);
         }
 
         public void AddLocations(string path)
         {
-            if (ActiveGamePackage != null)
-                (Sessions.SessionContext.ActiveState?.Locations).IncrementalLoad(path, ActiveGamePackage);
+            if (ActiveGamePackage == null) return;
+            var state = Sessions.SessionContext.ActiveState;
+            if (state != null)
+                state.Locations.IncrementalLoad(path, ActiveGamePackage, bLegacy: false, state: state);
         }
 
         public void AddLayouts(string path)
         {
-            if (ActiveGamePackage != null)
-                (Sessions.SessionContext.ActiveState?.Layouts).IncrementalLoad(path, ActiveGamePackage);
+            if (ActiveGamePackage == null) return;
+            var state = Sessions.SessionContext.ActiveState;
+            if (state != null)
+                state.Layouts.IncrementalLoad(path, ActiveGamePackage);
         }
 
         #endregion

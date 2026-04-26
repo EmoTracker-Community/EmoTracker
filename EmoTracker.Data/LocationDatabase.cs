@@ -567,7 +567,19 @@ namespace EmoTracker.Data
                     section.HostedItemCode = sectionData.GetValue<string>("hosted_item");
                     section.GateItemCode = sectionData.GetValue<string>("gate_item");
 
-                    if (section.ChestCount > 0 || section.HostedItem != null)
+                    // Phase 7.1 fix: gate on the raw HostedItemCode string
+                    // rather than the resolved HostedItem instance. Item
+                    // resolution at parse time can lag behind the location
+                    // parse (item code-index isn't built until BuildCodeIndex
+                    // runs at the end of PackageLoader.LoadInto), and per-state
+                    // OwnerState routing through transactable HostedItemId
+                    // can leave the cache stale until the first explicit read.
+                    // The intent of the original condition was "skip empty
+                    // placeholder sections that have neither chests nor a
+                    // hosted item" — using the JSON-supplied code is the
+                    // correct invariant for that intent and resolves at
+                    // pack-author-time, not runtime.
+                    if (section.ChestCount > 0 || !string.IsNullOrWhiteSpace(section.HostedItemCode))
                         instance.AddSection(section);
                 }
             }
