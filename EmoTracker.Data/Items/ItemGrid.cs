@@ -78,12 +78,19 @@ namespace EmoTracker.Data.Items
 
         void LoadRows(JArray data)
         {
+            // Phase 6 step 11: ItemGrid isn't a ModelTypeBase (no OwnerState),
+            // so it falls back to SessionContext.ActiveState first then the
+            // singleton.
+            var itemDb = Sessions.SessionContext.ActiveState?.Items
+#pragma warning disable CS0618
+                ?? ItemDatabase.Instance;
+#pragma warning restore CS0618
             foreach (JArray rowData in data)
             {
                 ItemList row = new ItemList();
                 foreach (string code in rowData)
                 {
-                    row.Add(ItemDatabase.Instance.FindProvidingItemForCode(code));
+                    row.Add(itemDb.FindProvidingItemForCode(code));
                 }
 
                 AddRow(row);

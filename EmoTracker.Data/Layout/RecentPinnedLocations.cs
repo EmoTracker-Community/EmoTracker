@@ -8,6 +8,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 
+// Phase 6 step 11: this layout element subscribes to the singleton
+// LocationDatabase's PinnedLocations at construction. Same caveat as
+// LastClearedLocation: per-state migration is part of the multi-window
+// UI follow-up.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("recentpins", "recent_pins")]

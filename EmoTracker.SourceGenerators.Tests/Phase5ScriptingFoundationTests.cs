@@ -3,6 +3,10 @@ using EmoTracker.Data.Core.DataModel.SmokeTest;
 using System.Collections.Generic;
 using Xunit;
 
+// Phase 6 step 11: this test file directly exercises the (now-obsolete)
+// ScriptManager.Current accessor to verify the static-current pattern.
+#pragma warning disable CS0618
+
 namespace EmoTracker.SourceGenerators.Tests
 {
     /// <summary>

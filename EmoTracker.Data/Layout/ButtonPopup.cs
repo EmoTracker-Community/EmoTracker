@@ -74,9 +74,15 @@ namespace EmoTracker.Data.Layout
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            // Resolve referenced layout through the singleton at parse time. The
-            // resolved instance's DefinitionId is captured in mLayoutRef.
-            var resolved = LayoutManager.Instance.FindLayout(LayoutKey);
+            // Phase 6 step 11: prefer the owning state's LayoutManager; at
+            // parse time OwnerState may not yet be set, so fall back via
+            // SessionContext / singleton.
+            var layouts = (this.OwnerState as Sessions.TrackerState)?.Layouts
+                ?? Sessions.SessionContext.ActiveState?.Layouts
+#pragma warning disable CS0618
+                ?? LayoutManager.Instance;
+#pragma warning restore CS0618
+            var resolved = layouts.FindLayout(LayoutKey);
             mLayoutRef.Set(resolved);
             return true;
         }

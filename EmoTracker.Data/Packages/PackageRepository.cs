@@ -1,4 +1,5 @@
 ﻿#pragma warning disable SYSLIB0014 // WebClient is obsolete
+#pragma warning disable CS0618    // Phase 6 step 11: ScriptManager.Instance for logging is acceptable
 using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json;

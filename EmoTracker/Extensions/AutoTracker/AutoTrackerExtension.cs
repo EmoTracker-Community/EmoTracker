@@ -12,6 +12,12 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
+// Phase 6 step 11: AutoTracker's ScriptManager.Instance accesses are all
+// pure logging (Output / OutputWarning / OutputException) — the
+// documented "logging-only callsites are an acceptable fallback" case
+// from ScriptManager's [Obsolete] message.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Extensions.AutoTracker
 {
     public class AutoTrackerExtension : ObservableObject, Extension, IMemoryWatchService

@@ -6,6 +6,14 @@ using EmoTracker.Data.Locations;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 
+// Phase 6 step 11: this layout element subscribes to the singleton
+// LocationDatabase's PropertyChanged at construction time (before any
+// state has stamped OwnerState). The full per-state migration of this
+// reactive subscription is part of the multi-window UI follow-up; for
+// now the singleton subscription remains, with the same caveat as
+// Phase 4 §4.6 documented.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data.Layout
 {
     /// <summary>

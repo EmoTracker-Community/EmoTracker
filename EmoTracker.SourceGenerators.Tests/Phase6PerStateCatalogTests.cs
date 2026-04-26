@@ -3,6 +3,12 @@ using EmoTracker.Data.Layout;
 using EmoTracker.Data.Sessions;
 using Xunit;
 
+// Phase 6 step 11: this test file directly exercises the (now-obsolete)
+// static catalog surface to verify the static-current-instance plumbing.
+// Once that plumbing is fully retired (post-Tracker.Reload refactor),
+// these tests are deleted along with the static surface.
+#pragma warning disable CS0618
+
 namespace EmoTracker.SourceGenerators.Tests
 {
     /// <summary>

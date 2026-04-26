@@ -97,8 +97,16 @@ namespace EmoTracker.Data.Items
             // Pre-Phase-2.5 behavior on subsequent pack reloads (re-running
             // ParseDataInternal) is preserved: the ref is updated to point at the
             // newly-resolved item.
-            mItemA.Set(ItemDatabase.Instance.FindProvidingItemForCode(data.GetValue<string>("item_left")) as ToggleItem);
-            mItemB.Set(ItemDatabase.Instance.FindProvidingItemForCode(data.GetValue<string>("item_right")) as ToggleItem);
+            // Phase 6 step 11: at parse time OwnerState may not yet be set
+            // (parse runs before adoption); fall back to SessionContext or
+            // singleton.
+            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
+                ?? Sessions.SessionContext.ActiveState?.Items
+#pragma warning disable CS0618
+                ?? ItemDatabase.Instance;
+#pragma warning restore CS0618
+            mItemA.Set(itemDb.FindProvidingItemForCode(data.GetValue<string>("item_left")) as ToggleItem);
+            mItemB.Set(itemDb.FindProvidingItemForCode(data.GetValue<string>("item_right")) as ToggleItem);
 
             SubscribeSiblingChanges();
 

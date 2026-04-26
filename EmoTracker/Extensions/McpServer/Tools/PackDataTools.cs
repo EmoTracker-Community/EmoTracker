@@ -16,6 +16,33 @@ namespace EmoTracker.Extensions.McpServer.Tools
     [McpServerToolType]
     public class PackDataTools
     {
+        // Phase 6 step 11: app-level helpers resolving the active catalogs
+        // through the primary state, with a singleton fallback for the
+        // pre-pack-load window.
+        static ItemDatabase ActiveItems
+        {
+            get
+            {
+                var primary = ApplicationModel.Instance?.PrimaryState?.Items;
+                if (primary != null) return primary;
+#pragma warning disable CS0618
+                return ItemDatabase.Instance;
+#pragma warning restore CS0618
+            }
+        }
+
+        static LocationDatabase ActiveLocations
+        {
+            get
+            {
+                var primary = ApplicationModel.Instance?.PrimaryState?.Locations;
+                if (primary != null) return primary;
+#pragma warning disable CS0618
+                return LocationDatabase.Instance;
+#pragma warning restore CS0618
+            }
+        }
+
         [McpServerTool(Name = "get_loaded_pack")]
         [Description("Get information about the currently loaded game pack")]
         public static async Task<string> GetLoadedPack()
@@ -59,7 +86,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var items = ItemDatabase.Instance.Items;
+                var items = ActiveItems.Items;
                 if (items == null)
                     return JsonSerializer.Serialize(Array.Empty<object>());
 
@@ -105,7 +132,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var locations = LocationDatabase.Instance.AllLocations;
+                var locations = ActiveLocations.AllLocations;
                 if (locations == null)
                     return JsonSerializer.Serialize(Array.Empty<object>());
 
@@ -148,7 +175,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var items = ItemDatabase.Instance.Items;
+                var items = ActiveItems.Items;
                 if (items == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -192,7 +219,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var item = ItemDatabase.Instance.FindObjectForCode(code) as ITrackableItem;
+                var item = ActiveItems.FindObjectForCode(code) as ITrackableItem;
                 if (item == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -206,7 +233,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var items = ItemDatabase.Instance.Items;
+                var items = ActiveItems.Items;
                 if (items == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -234,7 +261,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 try
                 {
                     ITrackableItem item = null;
-                    foreach (var i in ItemDatabase.Instance.Items)
+                    foreach (var i in ActiveItems.Items)
                     {
                         if (i?.Name != null && i.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                         {
@@ -298,7 +325,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         foreach (var name in nameList)
                         {
                             ITrackableItem found = null;
-                            foreach (var item in ItemDatabase.Instance.Items)
+                            foreach (var item in ActiveItems.Items)
                             {
                                 if (item?.Name != null && item.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                                 {

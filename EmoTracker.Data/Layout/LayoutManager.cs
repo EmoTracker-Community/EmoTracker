@@ -7,6 +7,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
+// Phase 6 step 11: LayoutManager's ScriptManager.Instance accesses are
+// all pure logging.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data.Layout
 {
     /// <summary>
@@ -21,6 +25,7 @@ namespace EmoTracker.Data.Layout
         // ---- Static current-instance plumbing (replaces ObservableSingleton<T>) ----
 
         static LayoutManager mCurrent;
+        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Layouts for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Layouts / ApplicationModel.Instance.PrimaryState?.Layouts otherwise.")]
         public static LayoutManager Current
         {
             get
@@ -30,8 +35,20 @@ namespace EmoTracker.Data.Layout
                 return mCurrent;
             }
         }
+        [System.Obsolete("Phase 6 step 11: state-aware code installs the active state via TrackerState's catalog adoption rather than reassigning Current.")]
         public static void SetCurrent(LayoutManager manager) => mCurrent = manager;
-        public static LayoutManager Instance => Current;
+        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Layouts for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Layouts / ApplicationModel.Instance.PrimaryState?.Layouts otherwise.")]
+        public static LayoutManager Instance
+        {
+            get
+            {
+                // file-level CS0618 disable covers the access here.
+                return Current;
+            }
+        }
+
+        // Phase 6 step 11: back-reference to the owning TrackerState.
+        internal Sessions.TrackerState State { get; set; }
 
         Dictionary<string, LayoutItem> mUidToLayoutItem = new Dictionary<string, LayoutItem>();
         Dictionary<string, Layout> mKeyToLayout = new Dictionary<string, Layout>();

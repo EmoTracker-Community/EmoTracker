@@ -13,6 +13,15 @@ using System;
 using System.IO;
 using System.Linq;
 
+// Phase 6 step 11: Tracker.Reload IS the bootstrap that populates the
+// catalog singletons during pack-load — it runs *before* the primary
+// TrackerState exists. ApplicationModel adopts those just-populated
+// singletons into PrimaryState afterward via
+// RebindActivePackageInstanceFromSingletons. So every catalog access
+// here is the documented bootstrap path; file-level suppression keeps
+// the warnings out of the noise without hiding the migration intent.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data
 {
     public class Tracker : ObservableSingleton<Tracker>, ICodeProvider
@@ -465,7 +474,10 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                     ResetPackageSettings();
 
                     LayoutManager.Instance.Clear();
-                    MapDatabase.Instance.Reset();
+                    // Phase 6 step 11: route catalog Reset through the active
+                    // state when one is installed; otherwise fall back to the
+                    // legacy singleton pattern (initial pre-state pack-load).
+                    (Sessions.SessionContext.ActiveState?.Maps ?? MapDatabase.Instance).Reset();
                     LocationDatabase.Instance.Reset();
                     ItemDatabase.Instance.Reset();
                     ScriptManager.Instance.Reset();
@@ -488,7 +500,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
                             //  Legacy loads - should this be contingent on a flag in the manifest
                             ItemDatabase.Instance.LegacyLoad(mActiveGamePackage);
-                            MapDatabase.Instance.LegacyLoad(mActiveGamePackage);
+                            (Sessions.SessionContext.ActiveState?.Maps ?? MapDatabase.Instance).LegacyLoad(mActiveGamePackage);
                             LocationDatabase.Instance.LegacyLoad(mActiveGamePackage);
                         }
                         ScriptManager.Instance.Output("Package Load Finished");
@@ -524,7 +536,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
         public void AddMaps(string path)
         {
             if (ActiveGamePackage != null)
-                MapDatabase.Instance.IncrementalLoad(path, ActiveGamePackage);
+                (Sessions.SessionContext.ActiveState?.Maps ?? MapDatabase.Instance).IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddLocations(string path)

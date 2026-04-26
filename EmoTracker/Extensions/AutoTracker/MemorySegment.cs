@@ -6,6 +6,9 @@ using EmoTracker.Data.Scripting;
 using NLua;
 using System;
 
+// Phase 6 step 11: ScriptManager.Instance accesses here are pure logging.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Extensions.AutoTracker
 {
     public class MemorySegment : IMemorySegment, IUpdateWithConnector, IDisposable

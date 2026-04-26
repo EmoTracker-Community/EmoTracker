@@ -162,6 +162,12 @@ namespace EmoTracker.Data.Sessions
             Locations = new LocationDatabase();
             Maps = new MapDatabase();
             Layouts = new LayoutManager();
+
+            // Phase 6 step 11: wire each catalog's back-ref so peer-catalog
+            // access from within the catalog (e.g. LocationDatabase calling
+            // MapDatabase) resolves to the same state's instance, not the
+            // ambient singleton.
+            WireCatalogStateBackRefs();
         }
 
         /// <summary>
@@ -198,6 +204,69 @@ namespace EmoTracker.Data.Sessions
             Locations = locations ?? new LocationDatabase();
             Maps = maps ?? new MapDatabase();
             Layouts = layouts ?? new LayoutManager();
+
+            WireCatalogStateBackRefs();
+        }
+
+        // Sets the State back-ref on each catalog so peer access within
+        // the EmoTracker.Data catalog code (e.g. LocationDatabase reaching
+        // MapDatabase) resolves to this state's catalogs rather than the
+        // ambient singleton. Idempotent — safe to call multiple times if
+        // a state is reconstructed (which doesn't happen in practice but
+        // would still be sound).
+        void WireCatalogStateBackRefs()
+        {
+            Items.State = this;
+            Locations.State = this;
+            Maps.State = this;
+            Layouts.State = this;
+        }
+
+        /// <summary>
+        /// Phase 6 step 11: walks every model in this state's catalogs and
+        /// stamps <see cref="ModelTypeBase.OwnerState"/> = this. Called by
+        /// the adoption path in ApplicationModel.RebindActivePackageInstanceFromSingletons
+        /// so the primary state's models route their per-state lookups
+        /// (transaction processor, script manager, peer catalogs) through
+        /// this state rather than fall through to the ambient singletons.
+        ///
+        /// <para>
+        /// The Fork path (step 8) sets OwnerState as it walks; this method
+        /// is for the adoption-from-singletons case where the catalogs
+        /// arrive pre-populated. Idempotent — calling on already-stamped
+        /// models is a no-op.
+        /// </para>
+        ///
+        /// <para>
+        /// Layouts are not yet stamped (step 8 deferred layout fork
+        /// orchestration; LayoutItem hierarchy walks land with that
+        /// follow-up).
+        /// </para>
+        /// </summary>
+        public void StampOwnerStateOnAdoptedModels()
+        {
+            // Items: enumerate the catalog and stamp ModelTypeBase-derived ones.
+            foreach (var item in Items.Items)
+            {
+                if (item is ModelTypeBase mtb)
+                    mtb.OwnerState = this;
+            }
+
+            // Locations: walk the flat AllLocations + each Location's sections.
+            foreach (var loc in Locations.AllLocations)
+            {
+                loc.OwnerState = this;
+                foreach (var sec in loc.Sections)
+                    sec.OwnerState = this;
+            }
+
+            // Maps: each Map + its MapLocations.
+            foreach (var map in Maps.Maps)
+            {
+                map.OwnerState = this;
+                foreach (var ml in map.Locations)
+                    ml.OwnerState = this;
+            }
         }
 
         /// <inheritdoc />

@@ -129,7 +129,12 @@ namespace EmoTracker.Data.Items
         /// </summary>
         public void InvalidateAccessibility()
         {
-            LocationDatabase.Instance.RefeshAccessibility();
+            // Phase 6 step 11: prefer the owning state's LocationDatabase.
+            var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations
+#pragma warning disable CS0618
+                ?? LocationDatabase.Instance;
+#pragma warning restore CS0618
+            locDb.RefeshAccessibility();
         }
 
         // ---------------------------------------------------------- Fork

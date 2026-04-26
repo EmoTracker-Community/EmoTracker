@@ -2,6 +2,12 @@ using EmoTracker.Core.DataModel;
 using EmoTracker.Data.Locations;
 using System;
 
+// Phase 6 step 11: AmbientSingletonModelResolver's whole purpose is to walk
+// the legacy singleton catalogs. It is retired in step 9 (post-step-11)
+// once every ModelTypeBase has its OwnerState stamped and the per-state
+// IndexedModelResolver covers all lookups.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data.Core.DataModel
 {
     /// <summary>

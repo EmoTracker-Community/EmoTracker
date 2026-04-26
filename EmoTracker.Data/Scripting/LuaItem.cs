@@ -9,6 +9,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
+// Phase 6 step 11: LuaItem's ScriptManager.Instance accesses are wrapped
+// pcall logging — they fire on every Lua callback exception. Per-state
+// Lua state lands when each TrackerState allocates its own interpreter
+// (deferred follow-up); for now logging routes through the singleton.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data.Scripting
 {
     [JsonTypeTags("lua"), DisallowCreationFromTag]

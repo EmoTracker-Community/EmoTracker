@@ -5,6 +5,12 @@ using System.Globalization;
 
 using Avalonia.Data.Converters;
 
+// Phase 6 step 11: XAML converters cannot reach the per-state graph from
+// converter context (no holder available). Routing through the singleton
+// LayoutManager is acceptable until the multi-window UI work introduces
+// a converter-context state pointer.
+#pragma warning disable CS0618
+
 namespace EmoTracker.UI.Converters
 {
     public class LayoutReferenceConverter : Singleton<LayoutReferenceConverter>, IValueConverter

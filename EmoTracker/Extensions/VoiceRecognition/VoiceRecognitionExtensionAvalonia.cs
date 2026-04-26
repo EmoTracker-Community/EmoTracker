@@ -34,6 +34,33 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
     public class VoiceRecognitionExtension : ObservableObject, Extension
     {
+        // Phase 6 step 11: helpers resolving the active catalogs through
+        // the primary state, with singleton fallback for the pre-pack-load
+        // window.
+        static ItemDatabase ActiveItems
+        {
+            get
+            {
+                var primary = ApplicationModel.Instance?.PrimaryState?.Items;
+                if (primary != null) return primary;
+#pragma warning disable CS0618
+                return ItemDatabase.Instance;
+#pragma warning restore CS0618
+            }
+        }
+
+        static LocationDatabase ActiveLocations
+        {
+            get
+            {
+                var primary = ApplicationModel.Instance?.PrimaryState?.Locations;
+                if (primary != null) return primary;
+#pragma warning disable CS0618
+                return LocationDatabase.Instance;
+#pragma warning restore CS0618
+            }
+        }
+
         public string Name => "Voice Recognition";
         public string UID => "emotracker_voice_recognition";
         public int Priority => -10000;
@@ -404,18 +431,18 @@ namespace EmoTracker.Extensions.VoiceRecognition
             // Item/location databases are only mutated on the UI thread during pack load,
             // and OnPackageLoaded fires after load completes, so this snapshot is safe.
             var itemSnapshots = new List<(ITrackableItem item, string code, string[] names)>();
-            foreach (var item in ItemDatabase.Instance.Items)
+            foreach (var item in ActiveItems.Items)
             {
                 if (string.IsNullOrWhiteSpace(item.Name)) continue;
-                string code = ItemDatabase.Instance.GetPersistableItemReference(item);
+                string code = ActiveItems.GetPersistableItemReference(item);
                 string[] names = GetItemNameVariants(item).ToArray();
                 itemSnapshots.Add((item, code, names));
             }
 
             var locationSnapshots = new List<(Location location, string locCode, string[] phrases)>();
-            foreach (var location in LocationDatabase.Instance.VisibleLocations)
+            foreach (var location in ActiveLocations.VisibleLocations)
             {
-                string locCode = LocationDatabase.Instance.GetPersistableLocationReference(location);
+                string locCode = ActiveLocations.GetPersistableLocationReference(location);
                 string[] phrases = GetLocationPhrases(location).ToArray();
                 locationSnapshots.Add((location, locCode, phrases));
             }
@@ -590,18 +617,18 @@ namespace EmoTracker.Extensions.VoiceRecognition
         private void BuildCommandMap()
         {
             var itemSnapshots = new List<(ITrackableItem item, string code, string[] names)>();
-            foreach (var item in ItemDatabase.Instance.Items)
+            foreach (var item in ActiveItems.Items)
             {
                 if (string.IsNullOrWhiteSpace(item.Name)) continue;
-                string code = ItemDatabase.Instance.GetPersistableItemReference(item);
+                string code = ActiveItems.GetPersistableItemReference(item);
                 string[] names = GetItemNameVariants(item).ToArray();
                 itemSnapshots.Add((item, code, names));
             }
 
             var locationSnapshots = new List<(Location location, string locCode, string[] phrases)>();
-            foreach (var location in LocationDatabase.Instance.VisibleLocations)
+            foreach (var location in ActiveLocations.VisibleLocations)
             {
-                string locCode = LocationDatabase.Instance.GetPersistableLocationReference(location);
+                string locCode = ActiveLocations.GetPersistableLocationReference(location);
                 string[] phrases = GetLocationPhrases(location).ToArray();
                 locationSnapshots.Add((location, locCode, phrases));
             }
@@ -647,7 +674,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private void ExecuteToggle(string code, bool on)
         {
-            var item = ItemDatabase.Instance.ResolvePersistableItemReference(code);
+            var item = ActiveItems.ResolvePersistableItemReference(code);
             if (item == null) return;
             bool toggled = false;
             if (item is ToggleItem t && t.Active != on) { t.Active = on; toggled = true; }
@@ -657,7 +684,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private void ExecuteAdvanceProgressive(string code, string advanceToken)
         {
-            if (ItemDatabase.Instance.ResolvePersistableItemReference(code) is not ProgressiveItem item) return;
+            if (ActiveItems.ResolvePersistableItemReference(code) is not ProgressiveItem item) return;
             if (advanceToken == "down") { item.Downgrade(); SpeakAsync($"Downgraded {item.Name} by one step"); }
             else if (!string.IsNullOrWhiteSpace(advanceToken)) { item.AdvanceToCode(advanceToken); SpeakAsync($"Set {item.Name} as {advanceToken}"); }
             else { item.Advance(); SpeakAsync($"Upgraded {item.Name} by one step"); }
@@ -665,14 +692,14 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private void ExecuteSetSecondaryCode(string code, string privateCode)
         {
-            if (ItemDatabase.Instance.ResolvePersistableItemReference(code) is not ProgressiveToggleItem item) return;
+            if (ActiveItems.ResolvePersistableItemReference(code) is not ProgressiveToggleItem item) return;
             item.AdvanceToPrivateCode(privateCode);
             SpeakAsync($"Marked {item.Name} as {(string.IsNullOrWhiteSpace(privateCode) ? "the default" : privateCode)}");
         }
 
         private void ExecuteIncrementConsumable(string code)
         {
-            if (ItemDatabase.Instance.ResolvePersistableItemReference(code) is not ConsumableItem item) return;
+            if (ActiveItems.ResolvePersistableItemReference(code) is not ConsumableItem item) return;
             int prev = item.AcquiredCount;
             int delta = item.Increment() - prev;
             if (delta == 1) SpeakAsync($"Added a {item.Name}");
@@ -682,7 +709,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private void ExecuteDecrementConsumable(string code)
         {
-            if (ItemDatabase.Instance.ResolvePersistableItemReference(code) is not ConsumableItem item) return;
+            if (ActiveItems.ResolvePersistableItemReference(code) is not ConsumableItem item) return;
             int prev = item.AcquiredCount;
             int delta = prev - item.Decrement();
             if (delta == 1) SpeakAsync($"Removed a {item.Name}");
@@ -692,7 +719,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private void ExecuteClearLocation(string code)
         {
-            var location = LocationDatabase.Instance.ResolvePersistableLocationReference(code);
+            var location = ActiveLocations.ResolvePersistableLocationReference(code);
             if (location == null) return;
             uint prev = location.AvailableItemCount;
             location.FullClearAllPossible();
@@ -706,7 +733,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private void ExecuteResetLocation(string code)
         {
-            var location = LocationDatabase.Instance.ResolvePersistableLocationReference(code);
+            var location = ActiveLocations.ResolvePersistableLocationReference(code);
             if (location == null) return;
             foreach (var s in location.Sections) s.AvailableChestCount = s.ChestCount;
             SpeakAsync($"Reset {location.Name}");
@@ -714,7 +741,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private void ExecutePinLocation(string code, bool pin)
         {
-            var location = LocationDatabase.Instance.ResolvePersistableLocationReference(code);
+            var location = ActiveLocations.ResolvePersistableLocationReference(code);
             if (location == null) return;
             location.Pinned = pin;
             SpeakAsync(pin ? $"Pinned {location.Name}" : $"Un Pinned {location.Name}");
@@ -722,8 +749,8 @@ namespace EmoTracker.Extensions.VoiceRecognition
 
         private void ExecuteCapture(string itemCode, string locationCode)
         {
-            var item = ItemDatabase.Instance.ResolvePersistableItemReference(itemCode);
-            var location = LocationDatabase.Instance.ResolvePersistableLocationReference(locationCode);
+            var item = ActiveItems.ResolvePersistableItemReference(itemCode);
+            var location = ActiveLocations.ResolvePersistableLocationReference(locationCode);
             if (item == null || location == null) return;
             foreach (var s in location.Sections)
             {

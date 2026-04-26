@@ -14,6 +14,21 @@ namespace EmoTracker.Extensions.McpServer.Tools
     [McpServerToolType]
     public class LuaTools
     {
+        // Phase 6 step 11: app-level helper resolving the active ScriptManager
+        // through the primary state, with a singleton fallback for the
+        // pre-pack-load window.
+        static ScriptManager ActiveScripts
+        {
+            get
+            {
+                var primary = ApplicationModel.Instance?.PrimaryState?.Scripts as ScriptManager;
+                if (primary != null) return primary;
+#pragma warning disable CS0618
+                return ScriptManager.Instance;
+#pragma warning restore CS0618
+            }
+        }
+
         [McpServerTool(Name = "get_console_log")]
         [Description("Read the developer console log output. Returns the most recent log lines.")]
         public static async Task<string> GetConsoleLog(
@@ -21,7 +36,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var logOutput = ScriptManager.Instance.LogOutput;
+                var logOutput = ActiveScripts.LogOutput;
                 if (logOutput == null)
                     return JsonSerializer.Serialize(Array.Empty<object>());
 
@@ -48,10 +63,10 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    if (!ScriptManager.Instance.IsLuaLoaded)
+                    if (!ActiveScripts.IsLuaLoaded)
                         return JsonSerializer.Serialize(new { error = "No Lua environment loaded (no pack active)" });
 
-                    var results = ScriptManager.Instance.ExecuteLuaString(code);
+                    var results = ActiveScripts.ExecuteLuaString(code);
                     if (results == null || results.Length == 0)
                         return JsonSerializer.Serialize(new { results = Array.Empty<string>() });
 
@@ -74,10 +89,10 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    if (!ScriptManager.Instance.IsLuaLoaded)
+                    if (!ActiveScripts.IsLuaLoaded)
                         return JsonSerializer.Serialize(new { error = "No Lua environment loaded (no pack active)" });
 
-                    var value = ScriptManager.Instance.GetLuaGlobal(name);
+                    var value = ActiveScripts.GetLuaGlobal(name);
                     return JsonSerializer.Serialize(new
                     {
                         name,

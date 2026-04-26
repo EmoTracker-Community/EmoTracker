@@ -10,6 +10,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+
+// Phase 6 step 11: file-level suppression for the ScriptManager.Instance
+// logging callsites in LocationDatabase. The Save/Load paths route through
+// `this.State?.Items` (per-state); the rest of the singleton accesses are
+// pure-logging which the [Obsolete] message documents as acceptable.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data
 {
     /// <summary>
@@ -39,6 +46,7 @@ namespace EmoTracker.Data
         /// behavior). Phase 6 reassigns this on state-switch via
         /// <see cref="SetCurrent"/>.
         /// </summary>
+        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Locations for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Locations / ApplicationModel.Instance.PrimaryState?.Locations otherwise.")]
         public static LocationDatabase Current
         {
             get
@@ -66,6 +74,7 @@ namespace EmoTracker.Data
         /// in those controls.
         /// </para>
         /// </summary>
+        [System.Obsolete("Phase 6 step 11: state-aware code installs the active state via TrackerState's catalog adoption rather than reassigning Current.")]
         public static void SetCurrent(LocationDatabase database)
         {
             mCurrent = database;
@@ -74,7 +83,17 @@ namespace EmoTracker.Data
         /// <summary>
         /// Pre-Phase-6 alias for <see cref="Current"/>.
         /// </summary>
-        public static LocationDatabase Instance => Current;
+        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Locations for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Locations / ApplicationModel.Instance.PrimaryState?.Locations otherwise.")]
+        public static LocationDatabase Instance
+        {
+            get
+            {
+                return Current;
+            }
+        }
+
+        // Phase 6 step 11: back-reference to the owning TrackerState.
+        internal Sessions.TrackerState State { get; set; }
 
         public class SuspendRefreshScope : IDisposable
         {
@@ -84,7 +103,7 @@ namespace EmoTracker.Data
             // pre-Phase-6 single-arg ctor shape.
             readonly LocationDatabase mTarget;
 
-            public SuspendRefreshScope() : this(LocationDatabase.Current) { }
+            public SuspendRefreshScope() : this(target: null) { }
 
             public SuspendRefreshScope(LocationDatabase target)
             {
@@ -414,6 +433,15 @@ namespace EmoTracker.Data
             return ScriptManagerHost.Current ?? NullScriptManager.Instance;
         }
 
+        // Phase 6 step 11: peer-catalog access. Prefers the State back-ref
+        // (set when this LocationDatabase was registered with a TrackerState)
+        // and falls back to the active session's MapDatabase. Returns null
+        // in test scenarios where no state context is installed.
+        MapDatabase ActiveMaps()
+        {
+            return State?.Maps ?? Sessions.SessionContext.ActiveState?.Maps;
+        }
+
         internal void RefeshAccessibility(bool bPendingOnly = false)
         {
             if (mSuspendRefreshCount == 0)
@@ -449,7 +477,7 @@ namespace EmoTracker.Data
                                 if (mRoot != null)
                                     mRoot.RefreshAccessibility();
 
-                                MapDatabase.Instance.MarkVisibilityDirty();
+                                ActiveMaps()?.MarkVisibilityDirty();
                             }
                         } // queued PropertyChanged notifications fire here, before AccessibilityUpdated
                     }
@@ -462,7 +490,7 @@ namespace EmoTracker.Data
                         // any rule evaluations triggered by that callback benefit from the cache.
                         // Clearing here negated all caching, reproducing the slow-update symptom
                         // that enable_accessibility_rule_caching was introduced to fix.
-                        MapDatabase.Instance.UpdateVisibilityIfNecessary();
+                        ActiveMaps()?.UpdateVisibilityIfNecessary();
 
                         if (bRefreshedAccessibility)
                         {
@@ -620,7 +648,7 @@ namespace EmoTracker.Data
                     foreach (JObject entry in mapEntries)
                     {
                         //  TODO: We need to improve referencing to support late binding
-                        Map map = MapDatabase.Instance.FindMap(entry.GetValue<string>("map"));
+                        Map map = ActiveMaps()?.FindMap(entry.GetValue<string>("map"));
                         if (map != null)
                         {
                             double x = entry.GetValue<double>("x");
@@ -730,7 +758,12 @@ namespace EmoTracker.Data
                             sectionData["available_chest_count"] = section.AvailableChestCount;
 
                             if (section.CapturedItem != null)
-                                sectionData["captured_item"] = ItemDatabase.Instance.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
+                            {
+                                // Phase 6 step 11: prefer the peer ItemDatabase from this state.
+                                var itemDb = this.State?.Items
+                                    ?? ItemDatabase.Instance;
+                                sectionData["captured_item"] = itemDb.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
+                            }
 
                             sectionDataArray.Add(sectionData);
                         }
@@ -837,7 +870,10 @@ namespace EmoTracker.Data
 
                         string capturedItemRef = sectionData.GetValue<string>("captured_item");
                         {
-                            ITrackableItem captureItem = ItemDatabase.Instance.ResolvePersistableItemReference(capturedItemRef);
+                            // Phase 6 step 11: prefer the peer ItemDatabase from this state.
+                            var itemDb = this.State?.Items
+                                ?? ItemDatabase.Instance;
+                            ITrackableItem captureItem = itemDb.ResolvePersistableItemReference(capturedItemRef);
 
                             if (!string.IsNullOrWhiteSpace(capturedItemRef) && captureItem == null)
                                 return false;

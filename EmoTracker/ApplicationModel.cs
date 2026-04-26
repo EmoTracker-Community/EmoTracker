@@ -309,6 +309,12 @@ namespace EmoTracker
             // single-instance case, mutating the dictionary directly is
             // acceptable; step 8 will revisit when the coordinated fork
             // primitive needs to register multiple states.
+            // Phase 6 step 11: this is THE adoption site — by definition
+            // it runs *before* PrimaryState exists, so it must read from
+            // the static catalogs to capture the singleton instances that
+            // Tracker.Reload populated during pack-load. Every other
+            // callsite migrates to PrimaryState; this one stays.
+#pragma warning disable CS0618 // Phase 6 step 11: bootstrap adoption from singletons
             var primary = new TrackerState(
                 name: "primary",
                 scripts: ScriptManager.Current,
@@ -317,6 +323,7 @@ namespace EmoTracker
                 locations: LocationDatabase.Current,
                 maps: MapDatabase.Current,
                 layouts: LayoutManager.Current);
+#pragma warning restore CS0618
 
             // PackageInstance.CreateState normally allocates a fresh state;
             // for primary-state adoption we go around it via the public
@@ -326,6 +333,20 @@ namespace EmoTracker
             // wasteful but only at pack-load time. Cleaner: add an
             // AdoptPrimaryState method on PackageInstance.
             pi.AdoptAsPrimary(primary);
+
+            // Phase 6 step 11: stamp OwnerState = primary on every model
+            // in the adopted catalogs so per-state lookups (transactions,
+            // script manager, peer catalogs) route through this primary
+            // state rather than ambient fallbacks.
+            primary.StampOwnerStateOnAdoptedModels();
+
+            // Phase 6 step 11: install the active state as the in-Data
+            // fallback for callsites that don't have an OwnerState holder
+            // (e.g. Tracker pack-load paths). The static MapDatabase /
+            // ItemDatabase / etc. shims have been retired; this is how
+            // EmoTracker.Data reaches the active state without going
+            // through ApplicationModel (which it can't reference).
+            EmoTracker.Data.Sessions.SessionContext.ActiveState = primary;
 
             ActivePackageInstance = pi;
         }
@@ -779,17 +800,27 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void GetFilteredCodeAndProvider(ref string code, out ICodeProvider provider)
         {
-            provider = ItemDatabase.Instance;
+            // Phase 6 step 11: route through PrimaryState for the per-state
+            // code lookup. Falls back to singletons for the pre-pack-load
+            // window where PrimaryState is null.
+            var ps = PrimaryState;
+#pragma warning disable CS0618 // legacy fallback before pack-load
+            provider = (ICodeProvider)ps?.Items ?? ItemDatabase.Instance;
+#pragma warning restore CS0618
 
             if (code.StartsWith("@"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = LocationDatabase.Instance;
+#pragma warning disable CS0618 // legacy fallback before pack-load
+                provider = (ICodeProvider)ps?.Locations ?? LocationDatabase.Instance;
+#pragma warning restore CS0618
             }
             else if (code.StartsWith("$"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = ScriptManager.Instance;
+#pragma warning disable CS0618 // legacy fallback before pack-load
+                provider = (ICodeProvider)(ps?.Scripts as ScriptManager) ?? ScriptManager.Instance;
+#pragma warning restore CS0618
             }
         }
 
@@ -864,13 +895,20 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         }
         public void AcquireLayouts()
         {
+            // Phase 6 step 11: layouts come through the primary state, with
+            // a singleton fallback for the pre-pack-load AcquireLayouts
+            // path.
+            LayoutManager layouts = PrimaryState?.Layouts;
+#pragma warning disable CS0618 // legacy fallback if AcquireLayouts is called pre-RebindActivePackageInstanceFromSingletons
+            layouts ??= LayoutManager.Instance;
+#pragma warning restore CS0618
             try
             {
-                BroadcastLayout = LayoutManager.Instance.FindLayout("tracker_broadcast");
-                TrackerLayout = LayoutManager.Instance.FindLayout("tracker_default");
-                TrackerHorizontalLayout = LayoutManager.Instance.FindLayout("tracker_horizontal");
-                TrackerVerticalLayout = LayoutManager.Instance.FindLayout("tracker_vertical");
-                TrackerCaptureItemLayout = LayoutManager.Instance.FindLayout("tracker_capture_item");
+                BroadcastLayout = layouts.FindLayout("tracker_broadcast");
+                TrackerLayout = layouts.FindLayout("tracker_default");
+                TrackerHorizontalLayout = layouts.FindLayout("tracker_horizontal");
+                TrackerVerticalLayout = layouts.FindLayout("tracker_vertical");
+                TrackerCaptureItemLayout = layouts.FindLayout("tracker_capture_item");
             }
             catch (Exception)
             {
@@ -881,12 +919,12 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                 //Added checking for ActiveGamePacakge not being null here. Not sure what this is trying to do maybe be unused at this point
                 if ((TrackerLayout == null && TrackerHorizontalLayout == null && TrackerVerticalLayout == null))
                 {
-                    LayoutManager.Instance.LegacyLoad(Tracker.Instance.ActiveGamePackage);
+                    layouts.LegacyLoad(Tracker.Instance.ActiveGamePackage);
 
-                    TrackerLayout = LayoutManager.Instance.FindLayout("tracker_default");
-                    TrackerHorizontalLayout = LayoutManager.Instance.FindLayout("tracker_horizontal");
-                    TrackerVerticalLayout = LayoutManager.Instance.FindLayout("tracker_vertical");
-                    TrackerCaptureItemLayout = LayoutManager.Instance.FindLayout("tracker_capture_item");
+                    TrackerLayout = layouts.FindLayout("tracker_default");
+                    TrackerHorizontalLayout = layouts.FindLayout("tracker_horizontal");
+                    TrackerVerticalLayout = layouts.FindLayout("tracker_vertical");
+                    TrackerCaptureItemLayout = layouts.FindLayout("tracker_capture_item");
                 }
             }
             catch (Exception)
@@ -898,7 +936,9 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                 if (BroadcastLayout == null)
                 {
                     BroadcastLayout = new Layout();
+#pragma warning disable CS0618 // logging-only access to ScriptManager singleton; per-state logging not a goal
                     ScriptManager.Instance.OutputWarning("Loading legacy broadcast layout data");
+#pragma warning restore CS0618
                     using (new LoggingBlock())
                     {
                         if (Tracker.Instance.ActiveGamePackage != null)
@@ -1389,7 +1429,9 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             mNotificationUpdateTimer.Start();
             mNotifications.CollectionChanged += Notifications_CollectionChanged;
 
+#pragma warning disable CS0618 // Phase 6 step 11: notification service is app-wide infrastructure; install on the singleton
             ScriptManager.Instance.SetNotificationService(this);
+#pragma warning restore CS0618
         }
 
         void ExpireAllNotifications()

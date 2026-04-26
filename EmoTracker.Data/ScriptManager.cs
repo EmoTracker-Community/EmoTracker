@@ -13,6 +13,14 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 
+// Phase 6 step 11: ScriptManager.cs hosts the singleton + the logging /
+// callback infrastructure that legitimately runs on the singleton. The
+// Lua-bridge globals (TrackerScriptInterface, LayoutScriptInterface,
+// LoggingBlock) still reach singletons because Lua bindings are
+// pre-allocated before per-state context exists; per-state Lua lands
+// when each state allocates its own bindings (deferred follow-up).
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data
 {
     class ImageReferenceProvider
@@ -184,6 +192,7 @@ namespace EmoTracker.Data
         /// (matching the pre-Phase-5 ObservableSingleton behavior). Phase 6
         /// reassigns this on state-switch via <see cref="SetCurrent"/>.
         /// </summary>
+        [System.Obsolete("Phase 6 step 11: prefer this.GetScriptManager() for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Scripts / ApplicationModel.Instance.PrimaryState?.Scripts otherwise. Pure-logging callsites (Output / OutputWarning / OutputException) on the singleton are an acceptable fallback for now.")]
         public static ScriptManager Current
         {
             get
@@ -200,6 +209,7 @@ namespace EmoTracker.Data
         /// Passing null lets the next <see cref="Current"/> access lazily
         /// recreate (matches the pre-Phase-5 lazy semantics).
         /// </summary>
+        [System.Obsolete("Phase 6 step 11: state-aware code installs the active state via TrackerState's catalog adoption rather than reassigning Current.")]
         public static void SetCurrent(ScriptManager scriptManager)
         {
             mCurrent = scriptManager;
@@ -211,7 +221,14 @@ namespace EmoTracker.Data
         /// compiling. Phase 6 retires this once UI / extension callsites
         /// are migrated to <see cref="ModelTypeBase.GetScriptManager"/>.
         /// </summary>
-        public static ScriptManager Instance => Current;
+        [System.Obsolete("Phase 6 step 11: prefer this.GetScriptManager() for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Scripts / ApplicationModel.Instance.PrimaryState?.Scripts otherwise. Pure-logging callsites (Output / OutputWarning / OutputException) on the singleton are an acceptable fallback for now.")]
+        public static ScriptManager Instance
+        {
+            get
+            {
+                return Current;
+            }
+        }
 
         public class LogLine
         {

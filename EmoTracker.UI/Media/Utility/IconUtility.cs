@@ -10,6 +10,9 @@ using Avalonia.Media.Imaging;
 using SkiaSharp;
 using System.Collections.Generic;
 
+// Phase 6 step 11: pure logging usage of ScriptManager.Instance.
+#pragma warning disable CS0618
+
 namespace EmoTracker.UI.Media.Utility
 {
     public class IconUtility : ObservableSingleton<IconUtility>

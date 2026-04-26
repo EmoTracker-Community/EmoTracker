@@ -228,7 +228,14 @@ namespace EmoTracker.Data.Locations
                         if (mCapturedItemRef.DefinitionId != commitedId)
                             mCapturedItemRef.Set(commitedId);
                         NotifyPropertyChanged(nameof(CapturedItem));
-                        LocationDatabase.Instance.RefeshAccessibility();
+                        // Phase 6 step 11: prefer the owning state's
+                        // LocationDatabase; fall back to singleton when
+                        // OwnerState hasn't been stamped yet.
+                        var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations
+#pragma warning disable CS0618
+                            ?? LocationDatabase.Instance;
+#pragma warning restore CS0618
+                        locDb.RefeshAccessibility();
                     }, nameof(CapturedItemIdStored));
 
                     if (queued)
@@ -283,7 +290,12 @@ namespace EmoTracker.Data.Locations
         {
             mGateItemRef.Set(GateItemId);
             NotifyPropertyChanged(nameof(GateItem));
-            LocationDatabase.Instance.RefeshAccessibility();
+            // Phase 6 step 11: prefer the owning state's LocationDatabase.
+            var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations
+#pragma warning disable CS0618
+                ?? LocationDatabase.Instance;
+#pragma warning restore CS0618
+            locDb.RefeshAccessibility();
         }
 
         // OnChanged callback for CapturedItemIdStored. Most of the side-effect
@@ -307,7 +319,12 @@ namespace EmoTracker.Data.Locations
 
         void OnHostedItemCodeChanged()
         {
-            HostedItem = ItemDatabase.Instance.FindProvidingItemForCode(HostedItemCode);
+            // Phase 6 step 11: prefer the owning state's ItemDatabase.
+            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
+#pragma warning disable CS0618
+                ?? ItemDatabase.Instance;
+#pragma warning restore CS0618
+            HostedItem = itemDb.FindProvidingItemForCode(HostedItemCode);
         }
 
         [KVMutable]
@@ -316,7 +333,12 @@ namespace EmoTracker.Data.Locations
 
         void OnGateItemCodeChanged()
         {
-            GateItem = ItemDatabase.Instance.FindProvidingItemForCode(GateItemCode);
+            // Phase 6 step 11: prefer the owning state's ItemDatabase.
+            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
+#pragma warning disable CS0618
+                ?? ItemDatabase.Instance;
+#pragma warning restore CS0618
+            GateItem = itemDb.FindProvidingItemForCode(GateItemCode);
         }
 
         // -------- AvailableChestCount: transactable + side-effect cascade ----
@@ -347,7 +369,14 @@ namespace EmoTracker.Data.Locations
                     bool queued = SetTransactableProperty<uint>(value, _ =>
                     {
                         NotifyPropertyChanged(nameof(AvailableChestCount));
-                        LocationDatabase.Instance.RefeshAccessibility();
+                        // Phase 6 step 11: prefer the owning state's
+                        // LocationDatabase; fall back to singleton when
+                        // OwnerState hasn't been stamped yet.
+                        var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations
+#pragma warning disable CS0618
+                            ?? LocationDatabase.Instance;
+#pragma warning restore CS0618
+                        locDb.RefeshAccessibility();
                     }, nameof(AvailableChestCountStored));
 
                     if (queued)
@@ -460,7 +489,12 @@ namespace EmoTracker.Data.Locations
                         count = aggregateGateRequirements[code];
 
                     AccessibilityLevel _unused;
-                    uint providedCount = ItemDatabase.Instance.ProviderCountForCode(code, out _unused);
+                    // Phase 6 step 11: prefer the owning state's ItemDatabase.
+                    var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
+#pragma warning disable CS0618
+                        ?? ItemDatabase.Instance;
+#pragma warning restore CS0618
+                    uint providedCount = itemDb.ProviderCountForCode(code, out _unused);
 
                     AccessibilityLevel bypassLevel = (!GateBypassRules.Empty && providedCount >= (count - localCount)) ? GateBypassRules.AccessibilityWithoutModifiers : AccessibilityLevel.None;
                     AccessibilityLevel gateLevel = (providedCount >= count && GateAccessibilityLevel >= AccessibilityLevel.Unlockable) ? GateAccessibilityLevel : AccessibilityLevel.None;

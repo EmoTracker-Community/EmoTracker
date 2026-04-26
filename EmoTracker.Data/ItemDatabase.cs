@@ -10,6 +10,10 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 
+// Phase 6 step 11: ItemDatabase's internal ScriptManager.Instance
+// accesses are pure logging.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data
 {
     /// <summary>
@@ -37,6 +41,7 @@ namespace EmoTracker.Data
         /// (matching the pre-Phase-6 Singleton lazy-create behavior). Phase 6
         /// reassigns this on state-switch via <see cref="SetCurrent"/>.
         /// </summary>
+        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Items for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Items / ApplicationModel.Instance.PrimaryState?.Items otherwise.")]
         public static ItemDatabase Current
         {
             get
@@ -53,6 +58,7 @@ namespace EmoTracker.Data
         /// Passing null lets the next <see cref="Current"/> access lazily
         /// recreate (matches the pre-Phase-6 lazy semantics).
         /// </summary>
+        [System.Obsolete("Phase 6 step 11: state-aware code installs the active state via TrackerState's catalog adoption rather than reassigning Current.")]
         public static void SetCurrent(ItemDatabase database)
         {
             mCurrent = database;
@@ -62,7 +68,18 @@ namespace EmoTracker.Data
         /// Pre-Phase-6 alias for <see cref="Current"/>. Retained so existing
         /// <c>ItemDatabase.Instance</c> callsites keep compiling.
         /// </summary>
-        public static ItemDatabase Instance => Current;
+        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Items for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Items / ApplicationModel.Instance.PrimaryState?.Items otherwise.")]
+        public static ItemDatabase Instance
+        {
+            get
+            {
+                // file-level CS0618 disable covers the access here.
+                return Current;
+            }
+        }
+
+        // Phase 6 step 11: back-reference to the owning TrackerState.
+        internal Sessions.TrackerState State { get; set; }
 
         ObservableCollection<ITrackableItem> mItems = new ObservableCollection<ITrackableItem>();
         Dictionary<ITrackableItem, int> mItemIndex = new Dictionary<ITrackableItem, int>();

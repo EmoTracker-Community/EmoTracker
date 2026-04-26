@@ -4,6 +4,12 @@ using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
+// Phase 6 step 11: NoteTakingSite is owned by a Location which has
+// OwnerState — but the Save / Load paths run from the LocationDatabase
+// without an obvious holder reference here. Use SessionContext.ActiveState
+// fallback for these uses.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data.Notes
 {
     public class NoteTakingSite : ObservableObject, INoteTaking

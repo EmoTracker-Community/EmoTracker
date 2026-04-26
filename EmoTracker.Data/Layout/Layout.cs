@@ -6,6 +6,10 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
 
+// Phase 6 step 11: Layout's ScriptManager.Instance access here is pure
+// exception logging.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Data.Layout
 {
     /// <summary>

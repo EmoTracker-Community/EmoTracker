@@ -326,7 +326,12 @@ namespace EmoTracker.Extensions.Twitch
                         {
                             Dispatch.BeginInvoke(() =>
                             {
-                                ITrackableItem[] items = ItemDatabase.Instance.FindProvidingItemsForCode(args[0]);
+                                // Phase 6 step 11: route through PrimaryState's ItemDatabase.
+                                var itemsDb = ApplicationModel.Instance?.PrimaryState?.Items
+#pragma warning disable CS0618
+                                    ?? ItemDatabase.Instance;
+#pragma warning restore CS0618
+                                ITrackableItem[] items = itemsDb.FindProvidingItemsForCode(args[0]);
                                 foreach (ITrackableItem item in items)
                                 {
                                     ToggleItem toggle = item as ToggleItem;

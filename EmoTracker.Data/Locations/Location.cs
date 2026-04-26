@@ -127,10 +127,15 @@ namespace EmoTracker.Data.Locations
             {
                 ForceSetTransactableProperty(value, (processedValue) =>
                 {
+                    // Phase 6 step 11: prefer the owning state's LocationDatabase.
+                    var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations
+#pragma warning disable CS0618
+                        ?? LocationDatabase.Instance;
+#pragma warning restore CS0618
                     if (processedValue)
-                        LocationDatabase.Instance.PinLocation(this);
+                        locDb.PinLocation(this);
                     else
-                        LocationDatabase.Instance.UnpinLocation(this);
+                        locDb.UnpinLocation(this);
                 });
             }
         }
@@ -395,10 +400,15 @@ namespace EmoTracker.Data.Locations
                     else
                         mCachedAccessibility = localAccessibility;
 
+                    // Phase 6 step 11: prefer the owning state's ItemDatabase.
+                    var itemDbForGates = (this.OwnerState as Sessions.TrackerState)?.Items
+#pragma warning disable CS0618
+                        ?? ItemDatabase.Instance;
+#pragma warning restore CS0618
                     foreach (var entry in aggregateGateRequirements)
                     {
                         AccessibilityLevel _unused;
-                        if (ItemDatabase.Instance.ProviderCountForCode(entry.Key, out _unused) < entry.Value)
+                        if (itemDbForGates.ProviderCountForCode(entry.Key, out _unused) < entry.Value)
                         {
                             mCachedAccessibility = AccessibilityLevel.Partial;
                             break;
@@ -417,7 +427,14 @@ namespace EmoTracker.Data.Locations
                         Pinned = false;
 
                     if (mCachedBaseAccessibility != prevBaseAccessibility)
-                        LocationDatabase.Instance.LastClearedLocation = this;
+                    {
+                        // Phase 6 step 11: prefer the owning state's LocationDatabase.
+                        var locDbForClear = (this.OwnerState as Sessions.TrackerState)?.Locations
+#pragma warning disable CS0618
+                            ?? LocationDatabase.Instance;
+#pragma warning restore CS0618
+                        locDbForClear.LastClearedLocation = this;
+                    }
                 }
             }
             else

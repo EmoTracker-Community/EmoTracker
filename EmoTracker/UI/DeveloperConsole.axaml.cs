@@ -5,6 +5,11 @@ using EmoTracker.Data;
 using System;
 using System.Collections.Specialized;
 
+// Phase 6 step 11: developer console subscribes to the singleton's log
+// output. This is the unified app-wide log surface; per-state logging
+// isn't a goal.
+#pragma warning disable CS0618
+
 namespace EmoTracker.UI
 {
     public partial class DeveloperConsole : Window

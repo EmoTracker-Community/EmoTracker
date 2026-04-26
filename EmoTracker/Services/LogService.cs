@@ -6,6 +6,12 @@ using Serilog.Core;
 using Serilog.Events;
 using System;
 
+// Phase 6 step 11: this file is the Serilog → developer-console bridge —
+// pure logging, by definition app-wide. The ScriptManager.Instance accesses
+// here are the documented "logging-only callsites are an acceptable
+// fallback" case from the [Obsolete] message on ScriptManager.Current.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Services
 {
     class DeveloperConsoleSink : ILogEventSink
