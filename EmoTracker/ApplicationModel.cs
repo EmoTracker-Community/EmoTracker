@@ -263,6 +263,12 @@ namespace EmoTracker
             Extensions.ExtensionManager.CreateInstance();
             Extensions.ExtensionManager.Instance.Start();
 
+            // Phase 7.4: install the ExtensionManager as the per-state
+            // lifecycle observer so per-state IStateScopedExtension
+            // instances are attached / detached as states are created
+            // / removed on the active PackageInstance.
+            Data.Sessions.StateLifecycle.Observer = Extensions.ExtensionManager.Instance;
+
             //Open up the last active package if set and installed
             bool success;
             string msg;

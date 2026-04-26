@@ -87,6 +87,9 @@ namespace EmoTracker.Data.Sessions
         {
             var state = new TrackerState(name ?? "state_" + (mStates.Count + 1));
             mStates[state.Id] = state;
+            // Phase 7.4: notify the lifecycle observer (typically the
+            // ExtensionManager) so per-state extensions are attached.
+            StateLifecycle.Observer?.OnStateRegistered(state);
             return state;
         }
 
@@ -103,6 +106,9 @@ namespace EmoTracker.Data.Sessions
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             mStates[state.Id] = state;
+            // Phase 7.4: same lifecycle hook as CreateState — adopting a
+            // pre-built state still wants per-state extensions attached.
+            StateLifecycle.Observer?.OnStateRegistered(state);
         }
 
         /// <summary>
@@ -114,6 +120,9 @@ namespace EmoTracker.Data.Sessions
             if (mStates.TryGetValue(stateId, out var state))
             {
                 mStates.Remove(stateId);
+                // Phase 7.4: notify the lifecycle observer BEFORE dispose so
+                // per-state extension cleanup can still query the state.
+                StateLifecycle.Observer?.OnStateUnregistered(state);
                 state.Dispose();
                 return true;
             }
@@ -136,6 +145,11 @@ namespace EmoTracker.Data.Sessions
             // ImmutableData by reference (via Phase 1 fork mechanics);
             // disposing the definitional first would leave dangling
             // references on the live states.
+            // Phase 7.4: notify the lifecycle observer for each state
+            // before disposing, so per-state extensions get a chance to
+            // tear down cleanly.
+            foreach (var state in mStates.Values)
+                StateLifecycle.Observer?.OnStateUnregistered(state);
             foreach (var state in mStates.Values)
                 state.Dispose();
             mStates.Clear();
