@@ -158,5 +158,113 @@ namespace EmoTracker.SourceGenerators.Tests
             IModelResolver asResolver = ctx;
             Assert.Same(smoke, asResolver.Resolve<Phase1SmokeModelType>(smoke.DefinitionId));
         }
+
+        // -------- TrackerState shell --------
+
+        [Fact]
+        public void TrackerState_HasFreshIdentityAndOwnScriptManager()
+        {
+            var stateA = new EmoTracker.Data.Sessions.TrackerState("A");
+            var stateB = new EmoTracker.Data.Sessions.TrackerState("B");
+
+            Assert.NotEqual(Guid.Empty, stateA.Id);
+            Assert.NotEqual(stateA.Id, stateB.Id);
+
+            Assert.Equal("A", stateA.Name);
+            Assert.Equal("B", stateB.Name);
+
+            // Each state owns its own ScriptManager — no sharing.
+            Assert.NotNull(stateA.Scripts);
+            Assert.NotNull(stateB.Scripts);
+            Assert.NotSame(stateA.Scripts, stateB.Scripts);
+        }
+
+        [Fact]
+        public void TrackerState_ImplementsITrackerStateContext_AndResolves()
+        {
+            var state = new EmoTracker.Data.Sessions.TrackerState("test");
+            Assert.IsAssignableFrom<ITrackerStateContext>(state);
+            Assert.IsAssignableFrom<IModelResolver>(state);
+
+            // Empty state has nothing to resolve.
+            Assert.Null(state.Resolve<Phase1SmokeModelType>(Guid.NewGuid()));
+
+            // Register a model via the internal resolver, then resolve via
+            // the public ITrackerStateContext / IModelResolver surface.
+            var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
+            state.Resolver.Register(smoke);
+            Assert.Same(smoke, state.Resolve<Phase1SmokeModelType>(smoke.DefinitionId));
+        }
+
+        [Fact]
+        public void TrackerState_AsOwnerState_RoutesGetModelResolverThroughIt()
+        {
+            var state = new EmoTracker.Data.Sessions.TrackerState();
+            var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
+            smoke.OwnerState = state;
+            state.Resolver.Register(smoke);
+
+            // GetModelResolver returns the state (it IS an IModelResolver),
+            // and resolve through it finds the model.
+            var resolver = smoke.GetModelResolver();
+            Assert.Same(state, resolver);
+            Assert.Same(smoke, resolver.Resolve<Phase1SmokeModelType>(smoke.DefinitionId));
+
+            // Cleanup: drop the OwnerState before the test exits so the
+            // process-shared state machinery isn't left dangling.
+            smoke.OwnerState = null;
+        }
+
+        // -------- PackageInstance container --------
+
+        [Fact]
+        public void PackageInstance_HasFreshDefinitionalAndEmptyStates()
+        {
+            var pi = new EmoTracker.Data.Sessions.PackageInstance();
+
+            // Definitional state is allocated immediately; no live primaries.
+            Assert.NotNull(pi.DefinitionalState);
+            Assert.Equal("__definitional__", pi.DefinitionalState.Name);
+            Assert.Empty(pi.States);
+        }
+
+        [Fact]
+        public void PackageInstance_CreateState_RegistersAndReturns()
+        {
+            var pi = new EmoTracker.Data.Sessions.PackageInstance();
+
+            var stateA = pi.CreateState("Alpha");
+            Assert.Equal("Alpha", stateA.Name);
+            Assert.Single(pi.States);
+            Assert.Same(stateA, pi.GetState(stateA.Id));
+
+            var stateB = pi.CreateState("Beta");
+            Assert.Equal(2, pi.States.Count);
+            Assert.NotEqual(stateA.Id, stateB.Id);
+            Assert.NotSame(stateA, stateB);
+            Assert.NotSame(stateA.Scripts, stateB.Scripts);
+        }
+
+        [Fact]
+        public void PackageInstance_RemoveState_DropsAndDisposes()
+        {
+            var pi = new EmoTracker.Data.Sessions.PackageInstance();
+            var state = pi.CreateState("temporary");
+
+            Assert.Single(pi.States);
+            Assert.True(pi.RemoveState(state.Id));
+            Assert.Empty(pi.States);
+            Assert.Null(pi.GetState(state.Id));
+
+            // Removing again returns false (already gone).
+            Assert.False(pi.RemoveState(state.Id));
+        }
+
+        [Fact]
+        public void PackageInstance_GetState_UnknownId_ReturnsNull()
+        {
+            var pi = new EmoTracker.Data.Sessions.PackageInstance();
+            Assert.Null(pi.GetState(Guid.NewGuid()));
+        }
     }
 }
