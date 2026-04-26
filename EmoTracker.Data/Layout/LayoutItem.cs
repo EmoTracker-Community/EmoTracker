@@ -405,6 +405,22 @@ namespace EmoTracker.Data.Layout
             return copy;
         }
 
+        /// <summary>
+        /// Phase 7 polish: enumerate this layout item's owned <see cref="LayoutItem"/>
+        /// children. Used by <c>TrackerState.Fork</c>'s OwnerState-stamping walk
+        /// so per-fork item / location resolution flows through the fork's
+        /// resolver rather than the source's.
+        /// <para>
+        /// Subclasses with owned children (Container, DockPanel, CanvasPanel,
+        /// ArrayPanel, TabPanel, ButtonPopup, ScrollPanel, ViewBox, etc.)
+        /// override to yield their children. Leaves return empty.
+        /// </para>
+        /// </summary>
+        public virtual System.Collections.Generic.IEnumerable<LayoutItem> EnumerateChildren()
+        {
+            yield break;
+        }
+
         protected override void OnForked(ModelTypeBase source)
         {
             base.OnForked(source);

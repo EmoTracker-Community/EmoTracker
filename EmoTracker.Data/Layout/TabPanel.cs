@@ -177,5 +177,13 @@ namespace EmoTracker.Data.Layout
 
             return copy;
         }
+
+        public override IEnumerable<LayoutItem> EnumerateChildren()
+        {
+            foreach (var t in mTabs)
+            {
+                if (t.Content != null) yield return t.Content;
+            }
+        }
     }
 }

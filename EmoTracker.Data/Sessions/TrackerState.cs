@@ -484,6 +484,11 @@ namespace EmoTracker.Data.Sessions
                 var forkedLayout = (EmoTracker.Data.Layout.Layout)pair.Value.Fork();
                 StampLayoutOwnerStateRecursive(forkedLayout, copy);
                 copy.Layouts.AddLayoutFromFork(pair.Key, forkedLayout);
+                // Phase 7 polish: register the forked layout in this state's
+                // resolver so cross-references to it (e.g. <c>LayoutReference</c>'s
+                // <c>ModelReference&lt;Layout&gt;</c>) resolve through the fork's
+                // own catalog instead of returning null and rendering empty.
+                copy.mResolver.Register(forkedLayout);
             }
 
             // ---- Per-state SessionSettings (Phase 7.3) ---------------------
@@ -526,51 +531,35 @@ namespace EmoTracker.Data.Sessions
         }
 
         // Phase 7 polish: recursively stamp OwnerState on every LayoutItem
-        // in a forked layout tree. Layout.Fork's coordinated walk produces
-        // a tree but doesn't currently set OwnerState (Phase 6 step 8
-        // limitation); this helper closes that gap so per-fork bindings
-        // (via [KVOverridable] storage and ModelReference cross-state
-        // resolution) route through the correct state.
+        // in a forked layout tree. Each LayoutItem subtype exposes its
+        // owned children via the virtual <see cref="LayoutItem.EnumerateChildren"/>;
+        // we recurse through it so all containers (Container, DockPanel,
+        // CanvasPanel, ArrayPanel, TabPanel, ScrollPanel, ViewBox,
+        // GroupBox) are covered. Cross-references (ButtonPopup.Layout,
+        // LayoutReference.Layout, MapPanel.Maps) point at separately-
+        // forked siblings and are NOT walked here — those siblings
+        // (Layouts, Maps) are forked + stamped by their own catalog walks.
         static void StampLayoutOwnerStateRecursive(EmoTracker.Core.DataModel.ModelTypeBase node, TrackerState state)
         {
             if (node == null || state == null) return;
             node.OwnerState = state;
-            // Layouts are LayoutItem subclasses; their children live in a
-            // type-specific collection. We can't walk the children at this
-            // level without knowing each subclass's structure, so we use
-            // reflection-free polymorphism: the LayoutItem.RegisterUniqueID
-            // path already iterates children at parse time. For Phase 7
-            // polish we only stamp the root + every directly-discoverable
-            // node via the public API exposed by individual layout types.
-            // (A more thorough rewrite belongs in Phase 6 step 8 proper.)
-            //
-            // Lightweight tree walk: each layout tree exposes its children
-            // through the EnumerateChildLayoutItems extension below.
-            foreach (var child in EnumerateChildLayoutItemsForFork(node))
-                StampLayoutOwnerStateRecursive(child, state);
-        }
 
-        // Walks the typed child collections on each LayoutItem subclass
-        // we know about. Unrecognised types yield no children — falling
-        // back to "stamp the root only" rather than throwing.
-        static System.Collections.Generic.IEnumerable<EmoTracker.Core.DataModel.ModelTypeBase> EnumerateChildLayoutItemsForFork(EmoTracker.Core.DataModel.ModelTypeBase node)
-        {
+            // Phase 7 polish: ItemGrid layout-items wrap a Data.Items.ItemGrid
+            // which holds resolved item references. After OwnerState is
+            // set we rebuild the grid's rows against THIS state's items so
+            // the items panel renders the right state's catalog.
+            if (node is EmoTracker.Data.Layout.ItemGrid itemGrid)
+                itemGrid.ResolveRowsAgainstOwnerState();
+
             switch (node)
             {
-                case EmoTracker.Data.Layout.Container c:
-                    foreach (var child in c.Items) yield return child;
-                    break;
-                case EmoTracker.Data.Layout.DockPanel dp:
-                    foreach (var child in dp.Children) yield return child;
-                    break;
-                case EmoTracker.Data.Layout.CanvasPanel cp:
-                    foreach (var child in cp.Children) yield return child;
-                    break;
-                case EmoTracker.Data.Layout.ArrayPanel ap:
-                    foreach (var child in ap.Children) yield return child;
-                    break;
                 case EmoTracker.Data.Layout.Layout layout:
-                    if (layout.Root != null) yield return layout.Root;
+                    if (layout.Root != null)
+                        StampLayoutOwnerStateRecursive(layout.Root, state);
+                    break;
+                case EmoTracker.Data.Layout.LayoutItem item:
+                    foreach (var child in item.EnumerateChildren())
+                        StampLayoutOwnerStateRecursive(child, state);
                     break;
             }
         }

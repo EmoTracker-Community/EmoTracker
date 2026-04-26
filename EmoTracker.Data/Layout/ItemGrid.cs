@@ -34,7 +34,10 @@ namespace EmoTracker.Data.Layout
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
             mItemGrid.Clear();
-            mItemGrid.Load(data);
+            // Phase 7 polish: pass `this` as the ModelReference holder so
+            // each cell's <see cref="ModelReference{T}"/> resolves through
+            // OwnerState's resolver per state.
+            mItemGrid.Load(data, this);
 
             //  Process legacy margin settings for old packages
             if (package.LayoutEngineVersion == null || package.LayoutEngineVersion < mMarginFixVersion)
@@ -47,11 +50,22 @@ namespace EmoTracker.Data.Layout
         {
             base.OnForked(source);
             var src = (ItemGrid)source;
-            // Share the wrapped Data.Items.ItemGrid by reference — the inner
-            // type is not yet ModelTypeBase-derived, so per-state forking of
-            // its contents is deferred. Behavior parity with pre-Phase-4
-            // (singleton-shared item references) is preserved.
-            mItemGrid = src.mItemGrid;
+            // Phase 7 polish: build a fresh inner grid with ModelReferences
+            // bound to THIS fork. Targets resolve lazily once OwnerState
+            // is stamped (the fork pipeline does that next).
+            mItemGrid = new Data.Items.ItemGrid();
+            mItemGrid.RebuildForFork(src.mItemGrid, this);
+        }
+
+        /// <summary>
+        /// Phase 7 polish: re-resolve every cell's ModelReference.Target
+        /// once OwnerState has been stamped. Called from the fork
+        /// pipeline's OwnerState walk.
+        /// </summary>
+        public void ResolveRowsAgainstOwnerState()
+        {
+            mItemGrid?.ResolveTargets();
+            NotifyPropertyChanged(nameof(Data));
         }
     }
 }

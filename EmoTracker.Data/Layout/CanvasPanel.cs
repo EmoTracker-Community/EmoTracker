@@ -47,5 +47,10 @@ namespace EmoTracker.Data.Layout
             }
             return copy;
         }
+
+        public override IEnumerable<LayoutItem> EnumerateChildren()
+        {
+            foreach (var c in mChildren) yield return c;
+        }
     }
 }
