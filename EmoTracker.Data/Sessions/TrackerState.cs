@@ -472,6 +472,20 @@ namespace EmoTracker.Data.Sessions
             // independently — fork mutations clear only fork's cache.
             copy.Locations.SeedRuleCacheFromFork(this.Locations);
 
+            // ---- Layouts (Phase 7 polish: deferred from Phase 6 step 8) ----
+            // Walk the source's layouts and fork each into the new state's
+            // LayoutManager. Each forked layout's children are recursively
+            // forked via Layout.Fork's coordinated tree walk; OwnerState is
+            // stamped during InitializeAsForkOf so per-fork mutations land
+            // on the correct state.
+            foreach (var pair in this.Layouts.GetLayoutsForFork())
+            {
+                if (pair.Value == null) continue;
+                var forkedLayout = (EmoTracker.Data.Layout.Layout)pair.Value.Fork();
+                StampLayoutOwnerStateRecursive(forkedLayout, copy);
+                copy.Layouts.AddLayoutFromFork(pair.Key, forkedLayout);
+            }
+
             // ---- Per-state SessionSettings (Phase 7.3) ---------------------
             // Copy each setting value from the source into the fork. The
             // fork's Settings is a fresh ModelTypeBase (its OwnerState =
@@ -509,6 +523,56 @@ namespace EmoTracker.Data.Sessions
             }
 
             return copy;
+        }
+
+        // Phase 7 polish: recursively stamp OwnerState on every LayoutItem
+        // in a forked layout tree. Layout.Fork's coordinated walk produces
+        // a tree but doesn't currently set OwnerState (Phase 6 step 8
+        // limitation); this helper closes that gap so per-fork bindings
+        // (via [KVOverridable] storage and ModelReference cross-state
+        // resolution) route through the correct state.
+        static void StampLayoutOwnerStateRecursive(EmoTracker.Core.DataModel.ModelTypeBase node, TrackerState state)
+        {
+            if (node == null || state == null) return;
+            node.OwnerState = state;
+            // Layouts are LayoutItem subclasses; their children live in a
+            // type-specific collection. We can't walk the children at this
+            // level without knowing each subclass's structure, so we use
+            // reflection-free polymorphism: the LayoutItem.RegisterUniqueID
+            // path already iterates children at parse time. For Phase 7
+            // polish we only stamp the root + every directly-discoverable
+            // node via the public API exposed by individual layout types.
+            // (A more thorough rewrite belongs in Phase 6 step 8 proper.)
+            //
+            // Lightweight tree walk: each layout tree exposes its children
+            // through the EnumerateChildLayoutItems extension below.
+            foreach (var child in EnumerateChildLayoutItemsForFork(node))
+                StampLayoutOwnerStateRecursive(child, state);
+        }
+
+        // Walks the typed child collections on each LayoutItem subclass
+        // we know about. Unrecognised types yield no children — falling
+        // back to "stamp the root only" rather than throwing.
+        static System.Collections.Generic.IEnumerable<EmoTracker.Core.DataModel.ModelTypeBase> EnumerateChildLayoutItemsForFork(EmoTracker.Core.DataModel.ModelTypeBase node)
+        {
+            switch (node)
+            {
+                case EmoTracker.Data.Layout.Container c:
+                    foreach (var child in c.Items) yield return child;
+                    break;
+                case EmoTracker.Data.Layout.DockPanel dp:
+                    foreach (var child in dp.Children) yield return child;
+                    break;
+                case EmoTracker.Data.Layout.CanvasPanel cp:
+                    foreach (var child in cp.Children) yield return child;
+                    break;
+                case EmoTracker.Data.Layout.ArrayPanel ap:
+                    foreach (var child in ap.Children) yield return child;
+                    break;
+                case EmoTracker.Data.Layout.Layout layout:
+                    if (layout.Root != null) yield return layout.Root;
+                    break;
+            }
         }
 
         // Walks the source location tree alongside the fork tree (parallel

@@ -157,14 +157,22 @@ namespace EmoTracker
             if (owningPI == null) return;
 
             // If the active pack is already this PackageInstance's pack,
-            // there's nothing to reload at the singleton level. The
-            // catalogs sit on the new state but XAML bindings won't refire
-            // — same-pack fork content swap is the documented limitation.
+            // we're switching between forks of the same pack. Drive a
+            // layout refresh so TrackerLayout / TrackerHorizontalLayout
+            // PropertyChanged fires, and the LayoutControl re-binds
+            // against the new state's (forked) layouts. Items, locations,
+            // sections in those forked layouts have OwnerState=newState
+            // (Phase 7 polish stamps this during fork) so cross-state
+            // resolution lands correctly.
             if (ReferenceEquals(Tracker.Instance.ActiveGamePackage, owningPI.Package)
                 && ReferenceEquals(Tracker.Instance.ActiveGamePackageVariant, owningPI.ActiveVariant))
             {
                 ActivePackageInstance = owningPI;
                 NotifyPropertyChanged(nameof(PrimaryState));
+                // Re-acquire layouts from the new state and fire
+                // PropertyChanged on the layout properties so the
+                // LayoutControl rebuilds against the fork's layout tree.
+                AcquireLayouts();
                 return;
             }
 
@@ -271,6 +279,15 @@ namespace EmoTracker
         {
             get
             {
+                // Phase 7 polish: prefer the currently-active window's
+                // ActiveState so consumers (AcquireLayouts, MCP tools,
+                // the script bridge) automatically pick up the user's
+                // tab selection. Fall back to the first state in the
+                // active PackageInstance if no window is bound yet
+                // (e.g. during initial pack-load before any UI is up).
+                var ctxState = mCurrentlyActiveWindowContext?.ActiveState;
+                if (ctxState != null)
+                    return ctxState;
                 var pi = mActivePackageInstance;
                 if (pi == null) return null;
                 foreach (var kvp in pi.States)
