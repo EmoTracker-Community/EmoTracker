@@ -9,6 +9,7 @@ using EmoTracker.Data.Layout;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
+using EmoTracker.Data.Sessions;
 using EmoTracker.Extensions;
 using EmoTracker.Notifications;
 using EmoTracker.Services;
@@ -55,6 +56,58 @@ namespace EmoTracker
         private Layout mTrackerHorizontalLayout;
         private Layout mTrackerVerticalLayout;
         private Layout mTrackerCaptureItemLayout;
+
+        // -------- Phase 6 step 7: PackageInstance + PrimaryState ----------
+
+        private PackageInstance mActivePackageInstance;
+
+        /// <summary>
+        /// Phase 6: the currently-active <see cref="PackageInstance"/> —
+        /// owns the definitional state and the live primary
+        /// <see cref="TrackerState"/> instances. Constructed when a pack
+        /// activates (post-load); replaced when a different pack activates;
+        /// null before any pack has been loaded.
+        ///
+        /// <para>
+        /// Lifetime is owned by ApplicationModel, NOT by PackageManager
+        /// (per plan §6.1) — PackageManager handles pack discovery /
+        /// install / resolution; PackageInstance tracks the active
+        /// session of a pack. They communicate only via events.
+        /// </para>
+        /// </summary>
+        public PackageInstance ActivePackageInstance
+        {
+            get { return mActivePackageInstance; }
+            private set { SetProperty(ref mActivePackageInstance, value); NotifyPropertyChanged(nameof(PrimaryState)); }
+        }
+
+        /// <summary>
+        /// Phase 6: the active primary <see cref="TrackerState"/> the UI
+        /// is bound to. Null before any pack is loaded; otherwise the
+        /// first state in <see cref="ActivePackageInstance"/>.States.
+        /// (Phase 6 step 7 establishes one primary; multi-primary support
+        /// is a later enhancement.)
+        ///
+        /// <para>
+        /// Today, <c>PrimaryState.Items</c> / <c>PrimaryState.Locations</c>
+        /// / etc. are the same instances as <c>ItemDatabase.Current</c> /
+        /// <c>LocationDatabase.Current</c> / etc. (the primary state
+        /// "adopts" the singletons populated by pack-load). When step 8
+        /// introduces coordinated <c>TrackerState.Fork()</c>, additional
+        /// states will hold their own catalogs distinct from the primary's.
+        /// </para>
+        /// </summary>
+        public TrackerState PrimaryState
+        {
+            get
+            {
+                var pi = mActivePackageInstance;
+                if (pi == null) return null;
+                foreach (var kvp in pi.States)
+                    return kvp.Value;
+                return null;
+            }
+        }
 
         public string MainWindowTitle
         {
@@ -209,7 +262,72 @@ namespace EmoTracker
                 PushMarkdownNotification(NotificationType.Error, msg);
             }
 
+            // Phase 6 step 7's RebindActivePackageInstanceFromSingletons
+            // fires from Tracker_OnPackageLoadComplete (which runs as a
+            // side effect of LoadDefaultPackage above). No explicit call
+            // needed here.
+
             NotifyPropertyChanged("MainWindowTitle");
+        }
+
+        /// <summary>
+        /// Phase 6 step 7: discards any prior <see cref="ActivePackageInstance"/>
+        /// and constructs a fresh one whose primary state adopts whatever the
+        /// per-state catalog singletons currently hold (the result of the
+        /// preceding pack-load). Idempotent within one pack-load — calling
+        /// twice produces a fresh PackageInstance both times.
+        ///
+        /// <para>
+        /// Called after every pack-load that mutates the singletons
+        /// (LoadDefaultPackage / pack reload / pack switch). The primary
+        /// state's <c>Scripts</c> / <c>Items</c> / <c>Locations</c> /
+        /// <c>Maps</c> / <c>Layouts</c> / <c>Transactions</c> are the
+        /// existing singletons — no re-allocation, no parse re-run.
+        /// </para>
+        /// </summary>
+        void RebindActivePackageInstanceFromSingletons()
+        {
+            // Tear down the previous PackageInstance if any. Per the
+            // step-5-audit doc, TrackerState.Dispose deliberately doesn't
+            // touch the catalogs (LocationDatabase.Reset re-allocates a
+            // root with WPF-only URIs); the singletons survive the
+            // disposal and are re-adopted by the new PrimaryState below.
+            if (mActivePackageInstance != null)
+            {
+                mActivePackageInstance.Dispose();
+                mActivePackageInstance = null;
+            }
+
+            var pi = new PackageInstance(
+                package: Tracker.Instance.ActiveGamePackage,
+                activeVariant: Tracker.Instance.ActiveGamePackageVariant);
+
+            // Adopt the active singletons as the primary state's
+            // collaborators. Calls into PackageInstance.States via the
+            // dictionary index because PackageInstance doesn't yet expose
+            // an "adopt as primary" helper — for the primary-state
+            // single-instance case, mutating the dictionary directly is
+            // acceptable; step 8 will revisit when the coordinated fork
+            // primitive needs to register multiple states.
+            var primary = new TrackerState(
+                name: "primary",
+                scripts: ScriptManager.Current,
+                transactions: TransactionProcessor.Current as IUndoableTransactionProcessor,
+                items: ItemDatabase.Current,
+                locations: LocationDatabase.Current,
+                maps: MapDatabase.Current,
+                layouts: LayoutManager.Current);
+
+            // PackageInstance.CreateState normally allocates a fresh state;
+            // for primary-state adoption we go around it via the public
+            // dictionary access (States is read-only IReadOnlyDictionary,
+            // but the underlying mStates is added to via CreateState).
+            // Simplest path: use CreateState then replace its catalogs —
+            // wasteful but only at pack-load time. Cleaner: add an
+            // AdoptPrimaryState method on PackageInstance.
+            pi.AdoptAsPrimary(primary);
+
+            ActivePackageInstance = pi;
         }
 
         private void ShowBroadcastView(object obj)
@@ -729,6 +847,16 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             IUndoableTransactionProcessor undo = TransactionProcessor.Current as IUndoableTransactionProcessor;
             if (undo != null)
                 undo.ClearUndoHistory();
+
+            // Phase 6 step 7: wrap the just-loaded singleton catalogs into a
+            // PackageInstance + primary TrackerState. Fires for every pack-load
+            // (initial / reload / variant-switch) — anytime the singletons get
+            // repopulated, the wrapping primary state needs to be rebuilt. The
+            // primary state ADOPTS the active singletons; behavior is unchanged
+            // today (PrimaryState.Items == ItemDatabase.Current, etc.). Step 8's
+            // coordinated fork is what makes additional states useful for
+            // multi-session-tracking scenarios.
+            RebindActivePackageInstanceFromSingletons();
 
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
 

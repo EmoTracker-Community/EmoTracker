@@ -144,6 +144,11 @@ namespace EmoTracker.Data.Sessions
         /// Caller is responsible for populating the resolver via the fork
         /// pipeline (step 8) before any cross-reference resolution occurs.
         /// </summary>
+        /// <summary>
+        /// Constructs a fresh TrackerState with brand-new collaborators.
+        /// Used by tests + step 8's coordinated fork (where each fork
+        /// allocates its own catalogs).
+        /// </summary>
         public TrackerState(string name = null)
         {
             mName = name;
@@ -153,6 +158,42 @@ namespace EmoTracker.Data.Sessions
             Locations = new LocationDatabase();
             Maps = new MapDatabase();
             Layouts = new LayoutManager();
+        }
+
+        /// <summary>
+        /// Phase 6 step 7: constructs a TrackerState that <i>adopts</i>
+        /// pre-existing collaborator instances rather than allocating
+        /// fresh ones. Used by <c>ApplicationModel</c> to wrap the
+        /// existing singleton-driven pack-load result into a primary
+        /// state without re-running pack load — the primary state's
+        /// catalogs ARE the active singletons. Step 8's coordinated
+        /// fork still allocates fresh catalogs per fork (using the
+        /// other constructor overload).
+        ///
+        /// <para>
+        /// Any null parameter falls back to a fresh allocation, so
+        /// callers can adopt only the collaborators they care about.
+        /// In the typical step-7 path, every parameter is supplied:
+        /// the primary state takes ownership of every existing
+        /// singleton.
+        /// </para>
+        /// </summary>
+        public TrackerState(
+            string name,
+            ScriptManager scripts,
+            IUndoableTransactionProcessor transactions,
+            ItemDatabase items,
+            LocationDatabase locations,
+            MapDatabase maps,
+            LayoutManager layouts)
+        {
+            mName = name;
+            Scripts = scripts ?? new ScriptManager();
+            Transactions = transactions ?? new LocalTransactionProcessorWithUndo();
+            Items = items ?? new ItemDatabase();
+            Locations = locations ?? new LocationDatabase();
+            Maps = maps ?? new MapDatabase();
+            Layouts = layouts ?? new LayoutManager();
         }
 
         /// <inheritdoc />

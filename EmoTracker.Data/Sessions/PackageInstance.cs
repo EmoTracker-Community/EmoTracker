@@ -91,6 +91,21 @@ namespace EmoTracker.Data.Sessions
         }
 
         /// <summary>
+        /// Phase 6 step 7: registers <paramref name="state"/> as a primary
+        /// state on this PackageInstance, used by ApplicationModel to wrap
+        /// the existing singleton-based pack-load result without
+        /// re-running pack load. Unlike <see cref="CreateState"/> this
+        /// adopts a caller-constructed state (typically built with the
+        /// adopt-the-singletons constructor overload on
+        /// <see cref="TrackerState"/>) rather than allocating a fresh one.
+        /// </summary>
+        public void AdoptAsPrimary(TrackerState state)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            mStates[state.Id] = state;
+        }
+
+        /// <summary>
         /// Removes and disposes the given state. Returns true if a state
         /// was removed.
         /// </summary>
