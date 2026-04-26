@@ -107,6 +107,16 @@ namespace EmoTracker.Data
             }
         }
 
+        /// <summary>
+        /// Phase 6 step 8: appends a Map to this database. Used by
+        /// <c>TrackerState.Fork()</c>'s coordinated walk.
+        /// </summary>
+        internal void AddMapFromFork(Map map)
+        {
+            if (map != null)
+                mMaps.Add(map);
+        }
+
         public Map FindMap(string name)
         {
             if (!string.IsNullOrWhiteSpace(name))

@@ -356,6 +356,31 @@ namespace EmoTracker.Data
             return null;
         }
 
+        /// <summary>
+        /// Phase 6 step 8: appends a Location to this database's
+        /// AllLocations + index. Used by <c>TrackerState.Fork()</c>'s
+        /// coordinated walk to populate the fork's location database
+        /// without re-running pack-load. Internal to the assembly so
+        /// production code goes through the parse path; tests +
+        /// TrackerState see it via <c>InternalsVisibleTo</c>.
+        /// </summary>
+        internal void AddLocationFromFork(Location location)
+        {
+            if (location == null) return;
+            mLocationIndex[location] = mAllLocations.Count;
+            mAllLocations.Add(location);
+        }
+
+        /// <summary>
+        /// Phase 6 step 8: sets <see cref="Root"/> on the fork. Used by
+        /// <c>TrackerState.Fork()</c> after the source's root location is
+        /// forked via Phase 3's coordinated <c>Location.Fork</c>.
+        /// </summary>
+        internal void SetRootFromFork(Location root)
+        {
+            mRoot = root;
+        }
+
         public void PinLocation(Location location)
         {
             if (!mPinnedLocations.Contains(location))

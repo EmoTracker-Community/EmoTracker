@@ -2,8 +2,12 @@ using EmoTracker.Core;
 using EmoTracker.Core.DataModel;
 using EmoTracker.Data.Core.DataModel;
 using EmoTracker.Data.Core.Transactions.Processors;
+using EmoTracker.Data.Items;
 using EmoTracker.Data.Layout;
+using EmoTracker.Data.Locations;
+using EmoTracker.Data.Scripting;
 using System;
+using System.Collections.Generic;
 
 namespace EmoTracker.Data.Sessions
 {
@@ -228,6 +232,163 @@ namespace EmoTracker.Data.Sessions
             Scripts?.Dispose();
             mResolver.Clear();
             base.Dispose();
+        }
+
+        // -------- Phase 6 step 8: coordinated state fork ------------------
+
+        /// <summary>
+        /// Phase 6 step 8: produces a fork of this state with deep-copied
+        /// model graph. The resulting state has its own catalogs (Items /
+        /// Locations / Maps), its own per-state Lua interpreter (deep-cloned
+        /// from this state's via <see cref="LuaStateCloner"/>), its own
+        /// transaction processor and resolver. Each forked model has its
+        /// <see cref="ModelTypeBase.OwnerState"/> set to the fork.
+        ///
+        /// <para>
+        /// Forking sequence — order matters:
+        /// </para>
+        /// <list type="number">
+        ///   <item>Allocate new TrackerState with fresh catalogs.</item>
+        ///   <item>Walk source.Items.Items; <c>item.Fork()</c> each
+        ///         <see cref="ItemBase"/> via Phase 2 mechanics; set
+        ///         OwnerState; register in fork's resolver + ItemDatabase.
+        ///         Build the model identity map (source → fork).</item>
+        ///   <item>Walk source.Locations starting from Root;
+        ///         <c>location.Fork()</c> cascades to sections + children
+        ///         via Phase 3 coordinated fork; set OwnerState on every
+        ///         resulting Location + Section; register in resolver +
+        ///         LocationDatabase. Build identity map entries.</item>
+        ///   <item>Walk source.Maps; <c>map.Fork()</c> cascades to
+        ///         MapLocations via Phase 3; set OwnerState; register.</item>
+        ///   <item>Push the model identity map into Scripts.PendingExtraBridges
+        ///         so the cloner remaps closure upvalues that captured
+        ///         per-state model objects.</item>
+        ///   <item><c>source.Scripts.Fork()</c> → fork's ScriptManager
+        ///         runs <see cref="LuaStateCloner.CloneAll"/> with the
+        ///         extended bridge map; replace fork.Scripts with the new
+        ///         instance.</item>
+        ///   <item>Walk LuaItems on the fork; for each, call the fork
+        ///         ScriptManager's <c>RewireForkedLuaItem</c> to redirect
+        ///         the LuaItem's NLua field references through the fork's
+        ///         interpreter.</item>
+        /// </list>
+        ///
+        /// <para>
+        /// <b>Step-8 limitation — Layouts deferred:</b> the layout catalog
+        /// fork is not yet wired (Phase 4's UID registration via
+        /// <c>LayoutItem.RegisterUniqueID</c> and the fork's interaction
+        /// with the singleton-LayoutManager registration model is more
+        /// involved). The fork's <see cref="Layouts"/> remains empty until
+        /// a follow-up extends this orchestrator. For state forks that
+        /// don't depend on per-state layout overrides, this is acceptable;
+        /// the primary state's Layouts continue to work via the singleton
+        /// shim from step 5.
+        /// </para>
+        /// </summary>
+        public TrackerState Fork(string name = null)
+        {
+            var copy = new TrackerState(name ?? ("fork_" + Id.ToString().Substring(0, 8)));
+
+            // Identity map: source-side reference → fork-side counterpart.
+            // Populated as we walk the catalogs; passed to ScriptManager.Fork
+            // as bridge-map extras so closure upvalues capturing models get
+            // remapped at clone time.
+            var modelIdentityMap = new Dictionary<object, object>();
+
+            // ---- Items ------------------------------------------------------
+            foreach (var item in this.Items.Items)
+            {
+                if (!(item is ItemBase srcItemBase)) continue;
+                var forkedItem = (ItemBase)srcItemBase.Fork();
+                forkedItem.OwnerState = copy;
+                copy.Items.RegisterItem(forkedItem);
+                copy.mResolver.Register(forkedItem);
+                modelIdentityMap[srcItemBase] = forkedItem;
+            }
+            copy.Items.BuildCodeIndex();
+
+            // ---- Locations + Sections (coordinated tree walk) --------------
+            // Phase 3 Location.Fork cascades to sections + child locations
+            // via the owned-subtree pattern. We fork the source's root and
+            // then descend the resulting tree to register every node.
+            if (this.Locations.Root != null)
+            {
+                var forkedRoot = (Location)this.Locations.Root.Fork();
+                RegisterLocationTreeOnFork(this.Locations.Root, forkedRoot, copy, modelIdentityMap);
+                copy.Locations.SetRootFromFork(forkedRoot);
+            }
+
+            // ---- Maps -------------------------------------------------------
+            // Phase 3 Map.Fork cascades to MapLocations.
+            foreach (var map in this.Maps.Maps)
+            {
+                var forkedMap = (Map)map.Fork();
+                forkedMap.OwnerState = copy;
+                copy.Maps.AddMapFromFork(forkedMap);
+                copy.mResolver.Register(forkedMap);
+                modelIdentityMap[map] = forkedMap;
+            }
+
+            // ---- ScriptManager fork (with extended bridges) ----------------
+            // copy.Scripts was constructed by the TrackerState ctor without
+            // a Lua interpreter; we bootstrap one here and then drive the
+            // cloner directly so the bridge map can include the model
+            // identity entries built above. We bypass ScriptManager.Fork's
+            // OnForked-runs-cloner-with-fixed-6-bridges shape because
+            // step 8's whole point is to extend that map with per-state
+            // model objects.
+            copy.Scripts.BootstrapInterpreter();
+            copy.Scripts.RunCloneFrom(this.Scripts, modelIdentityMap);
+
+            // ---- LuaItem rewire (Phase 5 step 7 wiring) --------------------
+            foreach (var pair in modelIdentityMap)
+            {
+                if (pair.Key is LuaItem srcLua && pair.Value is LuaItem forkLua)
+                {
+                    copy.Scripts.RewireForkedLuaItem(forkLua, srcLua);
+                }
+            }
+
+            return copy;
+        }
+
+        // Walks the source location tree alongside the fork tree (parallel
+        // structure thanks to Phase 3's coordinated Location.Fork) and
+        // registers each fork-side Location + Section on the new state.
+        // Produces (source → fork) identity-map entries for every node.
+        static void RegisterLocationTreeOnFork(
+            Location srcLoc, Location forkLoc, TrackerState forkState,
+            Dictionary<object, object> identityMap)
+        {
+            forkLoc.OwnerState = forkState;
+            forkState.Locations.AddLocationFromFork(forkLoc);
+            forkState.mResolver.Register(forkLoc);
+            identityMap[srcLoc] = forkLoc;
+
+            // Sections — walked in parallel with the source's mSections so
+            // we can build per-section identity-map entries.
+            using (var srcEnum = srcLoc.Sections.GetEnumerator())
+            using (var forkEnum = forkLoc.Sections.GetEnumerator())
+            {
+                while (srcEnum.MoveNext() && forkEnum.MoveNext())
+                {
+                    var srcSection = srcEnum.Current;
+                    var forkSection = forkEnum.Current;
+                    forkSection.OwnerState = forkState;
+                    forkState.mResolver.Register(forkSection);
+                    identityMap[srcSection] = forkSection;
+                }
+            }
+
+            // Children — recurse.
+            using (var srcEnum = srcLoc.Children.GetEnumerator())
+            using (var forkEnum = forkLoc.Children.GetEnumerator())
+            {
+                while (srcEnum.MoveNext() && forkEnum.MoveNext())
+                {
+                    RegisterLocationTreeOnFork(srcEnum.Current, forkEnum.Current, forkState, identityMap);
+                }
+            }
         }
     }
 }

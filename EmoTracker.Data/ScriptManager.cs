@@ -952,6 +952,13 @@ end
         /// </summary>
         internal LuaStateCloner ForkCloner { get; private set; }
 
+        // Phase 6 step 8: extra bridge-identity entries to merge into the
+        // bridge map during the next OnForked. Set by TrackerState.Fork so
+        // closure upvalues that captured the source state's per-state model
+        // instances (Items / Locations / Maps / etc.) get remapped to the
+        // fork's instances at clone time. Consumed (cleared) by OnForked.
+        internal IReadOnlyDictionary<object, object> PendingExtraBridges { get; set; }
+
         /// <summary>
         /// Phase 5: produces a fork of this manager whose Lua interpreter
         /// is a deep copy of this manager's live Lua state. The fork's
@@ -1044,6 +1051,24 @@ end
             AddBridgeMapping(bridgeMap, src.mLua, mLua, "ScriptHost");
             AddBridgeMapping(bridgeMap, src.mLua, mLua, "ImageReference");
 
+            // Phase 6 step 8: merge extra bridge-identity entries — typically
+            // (sourceModel → forkModel) pairs that TrackerState.Fork built
+            // while walking the source's catalogs. Closures whose upvalues
+            // captured a per-state model object (e.g. a pack-author closure
+            // that holds a specific Item reference) get remapped to the
+            // fork's corresponding model at clone time, satisfying plan
+            // §5.9's "closures capturing per-state model objects" risk.
+            if (PendingExtraBridges != null)
+            {
+                foreach (var kvp in PendingExtraBridges)
+                {
+                    if (!bridgeMap.ContainsKey(kvp.Key))
+                        bridgeMap[kvp.Key] = kvp.Value;
+                }
+                // Consume — pending bridges are single-use per fork.
+                PendingExtraBridges = null;
+            }
+
             ForkCloner = new LuaStateCloner(src.mLua, mLua, bridgeMap, OutputWarning);
             ForkCloner.CloneAll();
         }
@@ -1062,6 +1087,50 @@ end
             {
                 map[srcVal] = dstVal;
             }
+        }
+
+        /// <summary>
+        /// Phase 6 step 8: drives the cloner explicitly with a caller-
+        /// supplied additional bridge-identity map. Used by
+        /// <c>TrackerState.Fork()</c> which needs to extend the standard
+        /// 6-bridge map with (sourceModel → forkModel) entries built
+        /// during the catalog walk so closure upvalues capturing
+        /// per-state model objects are remapped at clone time.
+        ///
+        /// <para>
+        /// Prerequisite: <see cref="BootstrapInterpreter"/> has been
+        /// called on this manager. The standard 6-bridge map is built
+        /// from this manager's bridge globals (Tracker, Layout, etc.) +
+        /// <paramref name="source"/>'s; <paramref name="extraBridges"/>
+        /// entries are merged on top.
+        /// </para>
+        /// </summary>
+        internal void RunCloneFrom(ScriptManager source, IReadOnlyDictionary<object, object> extraBridges)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (mLua == null)
+                throw new InvalidOperationException("BootstrapInterpreter must be called before RunCloneFrom");
+            if (source.mLua == null) return; // nothing to clone
+
+            var bridgeMap = new Dictionary<object, object>();
+            AddBridgeMapping(bridgeMap, source.mLua, mLua, "Tracker");
+            AddBridgeMapping(bridgeMap, source.mLua, mLua, "Layout");
+            AddBridgeMapping(bridgeMap, source.mLua, mLua, "AccessibilityLevel");
+            AddBridgeMapping(bridgeMap, source.mLua, mLua, "NotificationType");
+            AddBridgeMapping(bridgeMap, source.mLua, mLua, "ScriptHost");
+            AddBridgeMapping(bridgeMap, source.mLua, mLua, "ImageReference");
+
+            if (extraBridges != null)
+            {
+                foreach (var kvp in extraBridges)
+                {
+                    if (!bridgeMap.ContainsKey(kvp.Key))
+                        bridgeMap[kvp.Key] = kvp.Value;
+                }
+            }
+
+            ForkCloner = new LuaStateCloner(source.mLua, mLua, bridgeMap, OutputWarning);
+            ForkCloner.CloneAll();
         }
 
         /// <summary>

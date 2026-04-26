@@ -66,6 +66,26 @@ namespace EmoTracker.Data.Layout
             mKeyToLayout.Clear();
         }
 
+        /// <summary>
+        /// Phase 6 step 8: registers a forked layout under
+        /// <paramref name="key"/> in this manager's lookup. Used by
+        /// <c>TrackerState.Fork()</c>'s coordinated walk.
+        /// </summary>
+        internal void AddLayoutFromFork(string key, Layout layout)
+        {
+            if (string.IsNullOrEmpty(key) || layout == null) return;
+            mKeyToLayout[key] = layout;
+        }
+
+        /// <summary>
+        /// Phase 6 step 8: enumerates the (key, layout) pairs registered
+        /// in this manager so the fork walk can iterate them.
+        /// </summary>
+        internal IEnumerable<KeyValuePair<string, Layout>> GetLayoutsForFork()
+        {
+            return mKeyToLayout;
+        }
+
         public bool IncrementalLoad(string path, IGamePackage package)
         {
             ScriptManager.Instance.Output("Loading Layouts: {0}", path);
