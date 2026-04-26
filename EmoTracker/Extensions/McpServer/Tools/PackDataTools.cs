@@ -26,7 +26,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 var primary = ApplicationModel.Instance?.PrimaryState?.Items;
                 if (primary != null) return primary;
 #pragma warning disable CS0618
-                return ItemDatabase.Instance;
+                return ApplicationModel.Instance?.PrimaryState?.Items;
 #pragma warning restore CS0618
             }
         }
@@ -38,7 +38,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 var primary = ApplicationModel.Instance?.PrimaryState?.Locations;
                 if (primary != null) return primary;
 #pragma warning disable CS0618
-                return LocationDatabase.Instance;
+                return ApplicationModel.Instance?.PrimaryState?.Locations;
 #pragma warning restore CS0618
             }
         }

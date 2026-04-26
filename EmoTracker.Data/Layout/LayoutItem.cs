@@ -346,11 +346,8 @@ namespace EmoTracker.Data.Layout
         protected virtual void RegisterUniqueID(string uniqueID)
         {
             // Phase 6 step 11: prefer the owning state's LayoutManager.
-            var layouts = (this.OwnerState as Sessions.TrackerState)?.Layouts
-#pragma warning disable CS0618
-                ?? LayoutManager.Instance;
-#pragma warning restore CS0618
-            layouts.RegisterLayoutItemForUID(uniqueID, this);
+            var layouts = (this.OwnerState as Sessions.TrackerState)?.Layouts;
+            layouts?.RegisterLayoutItemForUID(uniqueID, this);
         }
 
         /// <summary>

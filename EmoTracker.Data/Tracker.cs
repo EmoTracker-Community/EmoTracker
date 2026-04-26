@@ -58,9 +58,9 @@ namespace EmoTracker.Data
 #if False
             if (package != null && package.FlaggedAsUnsafe)
             {
-                if (ScriptManager.Instance.NotificationService != null)
+                if (Sessions.SessionContext.ActiveState?.Scripts.NotificationService != null)
                 {
-                    ScriptManager.Instance.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Warning,
+                    Sessions.SessionContext.ActiveState?.Scripts.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Warning,
 @"### Potentially Unsafe Package Loaded
 
 The active game package uses potentially unsafe scripting functionality, which allows it to access your filesystem, can expose user information, and more.
@@ -187,8 +187,8 @@ The active game package uses potentially unsafe scripting functionality, which a
                 root["auto_unpin_locations_on_clear"] = ApplicationSettings.Instance.AutoUnpinLocationsOnClear;
                 root["pin_locations_on_item_capture"] = ApplicationSettings.Instance.PinLocationsOnItemCapture;
 
-                ItemDatabase.Instance.Save(root);
-                LocationDatabase.Instance.Save(root);
+                Sessions.SessionContext.ActiveState?.Items.Save(root);
+                Sessions.SessionContext.ActiveState?.Locations.Save(root);
 
                 if (dataAction != null)
                     dataAction(root);
@@ -208,9 +208,9 @@ The active game package uses potentially unsafe scripting functionality, which a
                 }
                 catch
                 {
-                    if (ScriptManager.Instance.NotificationService != null)
+                    if (Sessions.SessionContext.ActiveState?.Scripts.NotificationService != null)
                     {
-                        ScriptManager.Instance.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Error,
+                        Sessions.SessionContext.ActiveState?.Scripts.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Error,
 @"### Couldn't Save Progress
 
 An error occurred while saving. This may be due to anti-virus/malware software protecting your chosen save directory over-aggressively.
@@ -229,7 +229,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
             try
             {
-                ScriptManager.Instance.Output("Loading save game \"{0}\"", path);
+                Sessions.SessionContext.ActiveState?.Scripts.Output("Loading save game \"{0}\"", path);
                 (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.StartLoadingSaveFile);
 
                 using (StreamReader reader = new StreamReader(path))
@@ -261,10 +261,13 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                     else
                         ActiveGamePackage = package;
 
-                    if (!ItemDatabase.Instance.Load(root))
+                    var loadTarget = Sessions.SessionContext.ActiveState
+                        ?? throw new InvalidOperationException("LoadProgress called before SessionContext.ActiveState was installed");
+
+                    if (!loadTarget.Items.Load(root))
                         return false;
 
-                    if (!LocationDatabase.Instance.Load(root))
+                    if (!loadTarget.Locations.Load(root))
                         return false;
 
                     ApplicationSettings.Instance.IgnoreAllLogic = root.GetValue<bool>("ignore_all_logic", false);
@@ -282,15 +285,15 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             }
             catch (Exception ex)
             {
-                ScriptManager.Instance.OutputError("Error encountered while loading save game");
-                ScriptManager.Instance.OutputException(ex);
+                Sessions.SessionContext.ActiveState?.Scripts.OutputError("Error encountered while loading save game");
+                Sessions.SessionContext.ActiveState?.Scripts.OutputException(ex);
             }
             finally
             {
                 (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.FinishLoadingSaveFile);
                 (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.PackReady);
 
-                ScriptManager.Instance.Output("Finished loading save game \"{0}\"", path);
+                Sessions.SessionContext.ActiveState?.Scripts.Output("Finished loading save game \"{0}\"", path);
 
                 SuspendPackReadyEvent = false;
             }
@@ -305,17 +308,17 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
         private void GetFilteredCodeAndProvider(ref string code, out ICodeProvider provider)
         {
-            provider = ItemDatabase.Instance;
+            provider = Sessions.SessionContext.ActiveState?.Items;
 
             if (code.StartsWith("@"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = LocationDatabase.Instance;
+                provider = Sessions.SessionContext.ActiveState?.Locations;
             }
             else if (code.StartsWith("$"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = ScriptManager.Instance;
+                provider = Sessions.SessionContext.ActiveState?.Scripts;
             }
         }
 
@@ -399,7 +402,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                 {
                     if (s != null)
                     {
-                        ScriptManager.Instance.Output("Loading package settings");
+                        Sessions.SessionContext.ActiveState?.Scripts.Output("Loading package settings");
                         using (new LoggingBlock())
                         {
                             try
@@ -413,7 +416,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                                     if (spec != null)
                                         DisabledImageFilterSpec = spec;
 
-                                    LocationDatabase.Instance.ParseLocationVisualProperties(root, LocationDatabase.Instance.Root, mActiveGamePackage);
+                                    Sessions.SessionContext.ActiveState?.Locations.ParseLocationVisualProperties(root, Sessions.SessionContext.ActiveState?.Locations.Root, mActiveGamePackage);
 
                                     AccessibilityRule.EnableCache = root.GetValue<bool>("enable_accessibility_rule_caching", true);
 
@@ -422,7 +425,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                             }
                             catch (Exception e)
                             {
-                                ScriptManager.Instance.OutputException(e);
+                                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
                             }
                         }
                     } 
@@ -430,7 +433,7 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
                 if (!bLoadedSettings)
                 {
-                    ScriptManager.Instance.OutputWarning("Loading legacy package settings from tracker_layout.json");
+                    Sessions.SessionContext.ActiveState?.Scripts.OutputWarning("Loading legacy package settings from tracker_layout.json");
                     using (new LoggingBlock())
                     {
                         try
@@ -444,12 +447,12 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                                 if (spec != null)
                                     DisabledImageFilterSpec = spec;
 
-                                LocationDatabase.Instance.ParseLocationVisualProperties(root, LocationDatabase.Instance.Root, mActiveGamePackage);
+                                Sessions.SessionContext.ActiveState?.Locations.ParseLocationVisualProperties(root, Sessions.SessionContext.ActiveState?.Locations.Root, mActiveGamePackage);
                             }
                         }
                         catch (Exception e)
                         {
-                            ScriptManager.Instance.OutputException(e);
+                            Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
                         }
                     }
                 }
@@ -527,25 +530,25 @@ An error occurred while saving. This may be due to anti-virus/malware software p
         public void AddItems(string path)
         {
             if (ActiveGamePackage != null)
-                (Sessions.SessionContext.ActiveState?.Items ?? ItemDatabase.Instance).IncrementalLoad(path, ActiveGamePackage);
+                (Sessions.SessionContext.ActiveState?.Items).IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddMaps(string path)
         {
             if (ActiveGamePackage != null)
-                (Sessions.SessionContext.ActiveState?.Maps ?? MapDatabase.Instance).IncrementalLoad(path, ActiveGamePackage);
+                (Sessions.SessionContext.ActiveState?.Maps).IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddLocations(string path)
         {
             if (ActiveGamePackage != null)
-                (Sessions.SessionContext.ActiveState?.Locations ?? LocationDatabase.Instance).IncrementalLoad(path, ActiveGamePackage);
+                (Sessions.SessionContext.ActiveState?.Locations).IncrementalLoad(path, ActiveGamePackage);
         }
 
         public void AddLayouts(string path)
         {
             if (ActiveGamePackage != null)
-                (Sessions.SessionContext.ActiveState?.Layouts ?? LayoutManager.Instance).IncrementalLoad(path, ActiveGamePackage);
+                (Sessions.SessionContext.ActiveState?.Layouts).IncrementalLoad(path, ActiveGamePackage);
         }
 
         #endregion

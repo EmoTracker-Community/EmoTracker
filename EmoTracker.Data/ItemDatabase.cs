@@ -10,74 +10,19 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 
-// Phase 6 step 11: ItemDatabase's internal ScriptManager.Instance
-// accesses are pure logging.
-#pragma warning disable CS0618
-
 namespace EmoTracker.Data
 {
     /// <summary>
-    /// Phase 6 step 5: <see cref="ItemDatabase"/> is no longer a strict
-    /// <c>Singleton&lt;T&gt;</c>; it's a regular instantiable class so each
-    /// <c>TrackerState</c> can hold one. The static <see cref="Current"/>
-    /// property tracks "the active primary" instance, defaulting to a single
-    /// lazily-created instance for pre-Phase-6 callers; Phase 6's
-    /// <c>ApplicationModel</c> reassigns it on state-switch.
-    ///
-    /// <para>
-    /// <see cref="Instance"/> remains as a transitional alias for
-    /// <see cref="Current"/> so the existing 43 <c>ItemDatabase.Instance</c>
-    /// callsites continue to work unchanged.
-    /// </para>
+    /// Phase 7.1: <see cref="ItemDatabase"/> is per-state. Each
+    /// <c>TrackerState</c> owns one. There is no global accessor — code
+    /// reaches an <c>ItemDatabase</c> via the holder's
+    /// <see cref="ModelTypeBase.OwnerState"/> (for model code) or via
+    /// <c>ApplicationModel.Instance.PrimaryState.Items</c> /
+    /// <c>Sessions.SessionContext.ActiveState.Items</c> (for app-level
+    /// code without a holder).
     /// </summary>
     public class ItemDatabase : ICodeProvider
     {
-        // ---- Static current-instance plumbing (replaces Singleton<T>) ----
-
-        static ItemDatabase mCurrent;
-
-        /// <summary>
-        /// The currently-active ItemDatabase. Lazily created on first access
-        /// (matching the pre-Phase-6 Singleton lazy-create behavior). Phase 6
-        /// reassigns this on state-switch via <see cref="SetCurrent"/>.
-        /// </summary>
-        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Items for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Items / ApplicationModel.Instance.PrimaryState?.Items otherwise.")]
-        public static ItemDatabase Current
-        {
-            get
-            {
-                if (mCurrent == null)
-                    mCurrent = new ItemDatabase();
-                return mCurrent;
-            }
-        }
-
-        /// <summary>
-        /// Replace the active <see cref="Current"/>. Phase 6 uses this on
-        /// pack-load / state-switch; pre-Phase-6 callers should not reassign.
-        /// Passing null lets the next <see cref="Current"/> access lazily
-        /// recreate (matches the pre-Phase-6 lazy semantics).
-        /// </summary>
-        [System.Obsolete("Phase 6 step 11: state-aware code installs the active state via TrackerState's catalog adoption rather than reassigning Current.")]
-        public static void SetCurrent(ItemDatabase database)
-        {
-            mCurrent = database;
-        }
-
-        /// <summary>
-        /// Pre-Phase-6 alias for <see cref="Current"/>. Retained so existing
-        /// <c>ItemDatabase.Instance</c> callsites keep compiling.
-        /// </summary>
-        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Items for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Items / ApplicationModel.Instance.PrimaryState?.Items otherwise.")]
-        public static ItemDatabase Instance
-        {
-            get
-            {
-                // file-level CS0618 disable covers the access here.
-                return Current;
-            }
-        }
-
         // Phase 6 step 11: back-reference to the owning TrackerState.
         internal Sessions.TrackerState State { get; set; }
 
@@ -183,9 +128,9 @@ namespace EmoTracker.Data
             bool bSuccess = false;
 
             if (bLegacy)
-                ScriptManager.Instance.OutputWarning("Loading legacy items");
+                this.State?.Scripts.OutputWarning("Loading legacy items");
             else
-                ScriptManager.Instance.Output("Loading Items: {0}", path);
+                this.State?.Scripts.Output("Loading Items: {0}", path);
 
             using (new LoggingBlock())
             {
@@ -212,7 +157,7 @@ namespace EmoTracker.Data
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                 }
             }
 
@@ -375,7 +320,7 @@ namespace EmoTracker.Data
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                 }
             }
 
@@ -396,7 +341,7 @@ namespace EmoTracker.Data
                         item = ResolvePersistableItemReference(itemData.GetValue<string>("item_reference"), true);
                         if (item != null)
                         {
-                            ScriptManager.Instance.OutputWarning("Item index consistency issue found (and allowed) for reference \"{0}\" while loading a save. Ensure that items are loaded/created in a consistent order.", itemData.GetValue<string>("item_reference"));
+                            this.State?.Scripts.OutputWarning("Item index consistency issue found (and allowed) for reference \"{0}\" while loading a save. Ensure that items are loaded/created in a consistent order.", itemData.GetValue<string>("item_reference"));
                         }
 
                         if (item == null)

@@ -48,11 +48,8 @@ namespace EmoTracker.Data.Layout
             // is captured in mDataRef so cross-state resolution flows through
             // the per-state resolver afterward.
             var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
-                ?? Sessions.SessionContext.ActiveState?.Items
-#pragma warning disable CS0618
-                ?? ItemDatabase.Instance;
-#pragma warning restore CS0618
-            var resolved = itemDb.FindProvidingItemForCode(data.GetValue<string>("item"));
+                ?? Sessions.SessionContext.ActiveState?.Items;
+            var resolved = itemDb?.FindProvidingItemForCode(data.GetValue<string>("item"));
             mDataRef.Set(resolved);
             return true;
         }

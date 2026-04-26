@@ -7,9 +7,9 @@ using Serilog.Events;
 using System;
 
 // Phase 6 step 11: this file is the Serilog → developer-console bridge —
-// pure logging, by definition app-wide. The ScriptManager.Instance accesses
+// pure logging, by definition app-wide. The ApplicationModel.Instance?.PrimaryState?.Scripts accesses
 // here are the documented "logging-only callsites are an acceptable
-// fallback" case from the [Obsolete] message on ScriptManager.Current.
+// fallback" case from the [Obsolete] message on ApplicationModel.Instance?.PrimaryState?.Scripts.
 #pragma warning disable CS0618
 
 namespace EmoTracker.Services
@@ -44,14 +44,14 @@ namespace EmoTracker.Services
                 case LogEventLevel.Information:
                     Core.Services.Dispatch.BeginInvoke(() =>
                     {
-                        ScriptManager.Instance.Output(message);
+                        ApplicationModel.Instance?.PrimaryState?.Scripts.Output(message);
                     });
                     break;
 
                 case LogEventLevel.Warning:
                     Core.Services.Dispatch.BeginInvoke(() =>
                     {
-                        ScriptManager.Instance.OutputWarning(message);
+                        ApplicationModel.Instance?.PrimaryState?.Scripts.OutputWarning(message);
                     });
                     break;
 
@@ -59,7 +59,7 @@ namespace EmoTracker.Services
                 case LogEventLevel.Fatal:
                     Core.Services.Dispatch.BeginInvoke(() =>
                     {
-                        ScriptManager.Instance.OutputError(message);
+                        ApplicationModel.Instance?.PrimaryState?.Scripts.OutputError(message);
                     });
                     break;
             }
@@ -68,7 +68,7 @@ namespace EmoTracker.Services
             {
                 Core.Services.Dispatch.BeginInvoke(() =>
                 {
-                    ScriptManager.Instance.OutputException(logEvent.Exception);
+                    ApplicationModel.Instance?.PrimaryState?.Scripts.OutputException(logEvent.Exception);
                 });
             }
         }

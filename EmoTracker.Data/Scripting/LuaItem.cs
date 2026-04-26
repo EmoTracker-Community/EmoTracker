@@ -9,7 +9,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-// Phase 6 step 11: LuaItem's ScriptManager.Instance accesses are wrapped
+// Phase 6 step 11: LuaItem's Sessions.SessionContext.ActiveState?.Scripts accesses are wrapped
 // pcall logging — they fire on every Lua callback exception. Per-state
 // Lua state lands when each TrackerState allocates its own interpreter
 // (deferred follow-up); for now logging routes through the singleton.
@@ -161,7 +161,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
             }
         }
 
@@ -178,7 +178,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
             }
 
             return false;
@@ -198,7 +198,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
             }
         }
 
@@ -216,7 +216,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
             }
         }
 
@@ -233,7 +233,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
             }
 
             return 0;
@@ -286,7 +286,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
             }
 
             return false;
@@ -307,7 +307,7 @@ namespace EmoTracker.Data.Scripting
                         }                        
                         catch (Exception e)
                         {                        
-                            ScriptManager.Instance.OutputException(e);
+                            Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
                         }
                     }
 
@@ -320,7 +320,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
             }
 
             return false;
@@ -337,7 +337,7 @@ namespace EmoTracker.Data.Scripting
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
                 }
 
             }, key);
@@ -355,7 +355,7 @@ namespace EmoTracker.Data.Scripting
         /// <see cref="ScriptManager"/> that owns this LuaItem's
         /// interpreter — i.e. the manager whose <c>mLua</c> contains the
         /// LuaTable / LuaFunction this item's reference fields point at.
-        /// In Phase 5 this is the singleton <see cref="ScriptManager.Current"/>
+        /// In Phase 5 this is the singleton <see cref="Sessions.SessionContext.ActiveState?.Scripts"/>
         /// for items in the source state and the rewire-bound fork
         /// manager for forked items (set by
         /// <see cref="ScriptManager.RewireForkedLuaItem"/>).
@@ -373,19 +373,18 @@ namespace EmoTracker.Data.Scripting
         /// </para>
         ///
         /// <para>
-        /// Falls back to <see cref="ScriptManager.Current"/> when the
+        /// Falls back to <see cref="Sessions.SessionContext.ActiveState?.Scripts"/> when the
         /// holder-aware path returns the no-op
         /// <c>NullScriptManager</c> (test scenarios where
         /// <c>ScriptManagerHost.Current</c> isn't installed) — same
         /// observable behavior as the pre-Phase-5
-        /// <c>ScriptManager.Instance</c> lazy-create.
+        /// <c>Sessions.SessionContext.ActiveState?.Scripts</c> lazy-create.
         /// </para>
         /// </summary>
         ScriptManager GetCallbackScriptManager()
         {
             return mOwnerScriptManager
-                ?? (this.GetScriptManager() as ScriptManager)
-                ?? ScriptManager.Current;
+                ?? (this.GetScriptManager() as ScriptManager);
         }
 
         /// <summary>

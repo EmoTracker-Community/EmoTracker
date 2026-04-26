@@ -78,11 +78,8 @@ namespace EmoTracker.Data.Layout
             // parse time OwnerState may not yet be set, so fall back via
             // SessionContext / singleton.
             var layouts = (this.OwnerState as Sessions.TrackerState)?.Layouts
-                ?? Sessions.SessionContext.ActiveState?.Layouts
-#pragma warning disable CS0618
-                ?? LayoutManager.Instance;
-#pragma warning restore CS0618
-            var resolved = layouts.FindLayout(LayoutKey);
+                ?? Sessions.SessionContext.ActiveState?.Layouts;
+            var resolved = layouts?.FindLayout(LayoutKey);
             mLayoutRef.Set(resolved);
             return true;
         }

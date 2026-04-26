@@ -31,12 +31,12 @@ namespace EmoTracker.Data.Layout
 
         public LastClearedLocation()
         {
-            LocationDatabase.Instance.PropertyChanged += Instance_PropertyChanged;
+            Sessions.SessionContext.ActiveState?.Locations.PropertyChanged += Instance_PropertyChanged;
         }
 
         public override void Dispose()
         {
-            LocationDatabase.Instance.PropertyChanged -= Instance_PropertyChanged;
+            Sessions.SessionContext.ActiveState?.Locations.PropertyChanged -= Instance_PropertyChanged;
             base.Dispose();
         }
 
@@ -47,7 +47,7 @@ namespace EmoTracker.Data.Layout
 
         public Location Location
         {
-            get { return LocationDatabase.Instance.LastClearedLocation; }
+            get { return Sessions.SessionContext.ActiveState?.Locations.LastClearedLocation; }
         }
 
         protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)

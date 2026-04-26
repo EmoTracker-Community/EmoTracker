@@ -26,7 +26,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 var primary = ApplicationModel.Instance?.PrimaryState?.Locations;
                 if (primary != null) return primary;
 #pragma warning disable CS0618 // legacy fallback; pre-pack-load no PrimaryState exists
-                return LocationDatabase.Instance;
+                return ApplicationModel.Instance?.PrimaryState?.Locations;
 #pragma warning restore CS0618
             }
         }

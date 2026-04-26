@@ -7,46 +7,17 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-// Phase 6 step 11: LayoutManager's ScriptManager.Instance accesses are
-// all pure logging.
-#pragma warning disable CS0618
-
 namespace EmoTracker.Data.Layout
 {
     /// <summary>
-    /// Phase 6 step 5: <see cref="LayoutManager"/> is now a regular
-    /// instantiable <see cref="ObservableObject"/> (was
-    /// <c>ObservableSingleton&lt;T&gt;</c>) so each <c>TrackerState</c>
-    /// holds one. <see cref="Instance"/> aliases <see cref="Current"/>
-    /// for the existing 20 callsites.
+    /// Phase 7.1: <see cref="LayoutManager"/> is per-state. Each
+    /// <c>TrackerState</c> owns one. Reach via the holder's
+    /// <see cref="ModelTypeBase.OwnerState"/>, or via
+    /// <c>ApplicationModel.Instance.PrimaryState.Layouts</c> /
+    /// <c>Sessions.SessionContext.ActiveState.Layouts</c>.
     /// </summary>
     public class LayoutManager : ObservableObject
     {
-        // ---- Static current-instance plumbing (replaces ObservableSingleton<T>) ----
-
-        static LayoutManager mCurrent;
-        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Layouts for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Layouts / ApplicationModel.Instance.PrimaryState?.Layouts otherwise.")]
-        public static LayoutManager Current
-        {
-            get
-            {
-                if (mCurrent == null)
-                    mCurrent = new LayoutManager();
-                return mCurrent;
-            }
-        }
-        [System.Obsolete("Phase 6 step 11: state-aware code installs the active state via TrackerState's catalog adoption rather than reassigning Current.")]
-        public static void SetCurrent(LayoutManager manager) => mCurrent = manager;
-        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Layouts for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Layouts / ApplicationModel.Instance.PrimaryState?.Layouts otherwise.")]
-        public static LayoutManager Instance
-        {
-            get
-            {
-                // file-level CS0618 disable covers the access here.
-                return Current;
-            }
-        }
-
         // Phase 6 step 11: back-reference to the owning TrackerState.
         internal Sessions.TrackerState State { get; set; }
 
@@ -105,7 +76,7 @@ namespace EmoTracker.Data.Layout
 
         public bool IncrementalLoad(string path, IGamePackage package)
         {
-            ScriptManager.Instance.Output("Loading Layouts: {0}", path);
+            this.State?.Scripts.Output("Loading Layouts: {0}", path);
             using (new LoggingBlock())
             {
                 try
@@ -138,7 +109,7 @@ namespace EmoTracker.Data.Layout
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                     return false;
                 }
             }
@@ -148,7 +119,7 @@ namespace EmoTracker.Data.Layout
         {
             if(package == null) { return false; }
 
-            ScriptManager.Instance.OutputWarning("Loading legacy layout data");
+            this.State?.Scripts.OutputWarning("Loading legacy layout data");
             using (new LoggingBlock())
             {
                 try
@@ -182,7 +153,7 @@ namespace EmoTracker.Data.Layout
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                     return false;
                 }
             }

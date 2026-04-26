@@ -55,11 +55,8 @@ namespace EmoTracker.Data.Items
                 if (!string.IsNullOrWhiteSpace(mConsumedCode))
                 {
                     // Phase 6 step 11: prefer the owning state's ItemDatabase.
-                    var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
-#pragma warning disable CS0618
-                        ?? ItemDatabase.Instance;
-#pragma warning restore CS0618
-                    ConsumableItem provider = itemDb.FindProvidingItemForCode(mConsumedCode) as ConsumableItem;
+                    var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
+                    ConsumableItem provider = itemDb?.FindProvidingItemForCode(mConsumedCode) as ConsumableItem;
                     if (provider != null)
                     {
                         if (!Active && value)

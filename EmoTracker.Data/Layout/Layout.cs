@@ -6,7 +6,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
 
-// Phase 6 step 11: Layout's ScriptManager.Instance access here is pure
+// Phase 6 step 11: Layout's Sessions.SessionContext.ActiveState?.Scripts access here is pure
 // exception logging.
 #pragma warning disable CS0618
 
@@ -55,7 +55,7 @@ namespace EmoTracker.Data.Layout
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputException(e);
+                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
             }
 
             return false;

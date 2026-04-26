@@ -12,7 +12,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
-// Phase 6 step 11: AutoTracker's ScriptManager.Instance accesses are all
+// Phase 6 step 11: AutoTracker's ApplicationModel.Instance?.PrimaryState?.Scripts accesses are all
 // pure logging (Output / OutputWarning / OutputException) — the
 // documented "logging-only callsites are an acceptable fallback" case
 // from ScriptManager's [Obsolete] message.
@@ -193,8 +193,8 @@ namespace EmoTracker.Extensions.AutoTracker
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputError("Error occurred during raw byte read via AutoTracker");
-                ScriptManager.Instance.OutputException(e);
+                ApplicationModel.Instance?.PrimaryState?.Scripts.OutputError("Error occurred during raw byte read via AutoTracker");
+                ApplicationModel.Instance?.PrimaryState?.Scripts.OutputException(e);
             }
 
             return defaultVal;
@@ -218,8 +218,8 @@ namespace EmoTracker.Extensions.AutoTracker
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputError("Error occurred during raw word read via AutoTracker");
-                ScriptManager.Instance.OutputException(e);
+                ApplicationModel.Instance?.PrimaryState?.Scripts.OutputError("Error occurred during raw word read via AutoTracker");
+                ApplicationModel.Instance?.PrimaryState?.Scripts.OutputException(e);
             }
 
             return defaultVal;
@@ -361,8 +361,8 @@ namespace EmoTracker.Extensions.AutoTracker
 
         public void Start()
         {
-            ScriptManager.Instance.SetGlobalObject("AutoTracker", this);
-            ScriptManager.Instance.SetMemoryWatchService(this);
+            ApplicationModel.Instance?.PrimaryState?.Scripts.SetGlobalObject("AutoTracker", this);
+            ApplicationModel.Instance?.PrimaryState?.Scripts.SetMemoryWatchService(this);
 
             mUpdateTimer = new System.Timers.Timer(30);
             mUpdateTimer.Elapsed += (s, e) => UpdateMemoryHooks(s, e);

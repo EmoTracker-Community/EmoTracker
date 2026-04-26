@@ -81,7 +81,7 @@ namespace EmoTracker.Data.Notes
                             {
                                 try
                                 {
-                                    string persistableItemRef = ItemDatabase.Instance.GetPersistableItemReference(item);
+                                    string persistableItemRef = Sessions.SessionContext.ActiveState?.Items.GetPersistableItemReference(item);
                                     if (!string.IsNullOrWhiteSpace(persistableItemRef))
                                         itemsArray.Add(JToken.FromObject(persistableItemRef));
                                 }
@@ -126,7 +126,7 @@ namespace EmoTracker.Data.Notes
                         {
                             foreach (string itemRef in itemsArray)
                             {
-                                ITrackableItem item = ItemDatabase.Instance.ResolvePersistableItemReference(itemRef);
+                                ITrackableItem item = Sessions.SessionContext.ActiveState?.Items.ResolvePersistableItemReference(itemRef);
                                 if (item != null)
                                     note.AddItem(item);
                             }

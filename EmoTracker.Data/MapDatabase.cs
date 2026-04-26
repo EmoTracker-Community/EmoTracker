@@ -9,58 +9,18 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 
-// Phase 6 step 11: MapDatabase's internal ScriptManager.Instance accesses
-// are pure logging.
-#pragma warning disable CS0618
-
 namespace EmoTracker.Data
 {
     /// <summary>
-    /// Phase 6 step 5: <see cref="MapDatabase"/> is now a regular
-    /// instantiable <see cref="ObservableObject"/>. Each
-    /// <c>TrackerState</c> holds one. <see cref="Instance"/> aliases
-    /// <see cref="Current"/> for the existing 9 callsites.
-    ///
-    /// <para>
-    /// Phase 6 step 11 (partial): the static <c>Current</c> / <c>Instance</c>
-    /// shim is marked <see cref="System.ObsoleteAttribute"/> as a
-    /// migration nudge. Full deletion requires refactoring
-    /// <c>Tracker.Reload</c> to write into <c>SessionContext.ActiveState</c>'s
-    /// catalogs rather than the static — deferred to a follow-up commit.
-    /// </para>
+    /// Phase 7.1: <see cref="MapDatabase"/> is per-state. Each
+    /// <c>TrackerState</c> owns one. Reach via the holder's
+    /// <see cref="ModelTypeBase.OwnerState"/>, or via
+    /// <c>ApplicationModel.Instance.PrimaryState.Maps</c> /
+    /// <c>Sessions.SessionContext.ActiveState.Maps</c>.
     /// </summary>
     public class MapDatabase : ObservableObject
     {
-        // ---- Static current-instance plumbing (replaces ObservableSingleton<T>) ----
-
-        static MapDatabase mCurrent;
-
-        [System.Obsolete("Phase 6: prefer (this.OwnerState as TrackerState)?.Maps for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Maps otherwise.")]
-        public static MapDatabase Current
-        {
-            get
-            {
-                if (mCurrent == null)
-                    mCurrent = new MapDatabase();
-                return mCurrent;
-            }
-        }
-        [System.Obsolete("Phase 6: state-aware code installs the active state via TrackerState's catalog adoption rather than reassigning Current.")]
-        public static void SetCurrent(MapDatabase database) => mCurrent = database;
-
-        [System.Obsolete("Phase 6: prefer (this.OwnerState as TrackerState)?.Maps for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Maps otherwise.")]
-        public static MapDatabase Instance
-        {
-            get
-            {
-                return Current;
-            }
-        }
-
-        // Phase 6 step 11: back-reference to the owning TrackerState (set by
-        // TrackerState's adopt-existing-instances ctor in step 7 + the
-        // fresh-instances ctor in step 8). Used for peer-catalog access
-        // from within EmoTracker.Data.
+        // Phase 6 step 11: back-reference to the owning TrackerState.
         internal Sessions.TrackerState State { get; set; }
 
         ObservableCollection<Map> mMaps = new ObservableCollection<Map>();
@@ -86,7 +46,7 @@ namespace EmoTracker.Data
             if (mMaps.Count > 0)
                 return true;
 
-            ScriptManager.Instance.OutputWarning("Loading Legacy Maps");
+            this.State?.Scripts.OutputWarning("Loading Legacy Maps");
             using (new LoggingBlock())
             {
                 return IncrementalLoad("maps.json", package);
@@ -95,7 +55,7 @@ namespace EmoTracker.Data
 
         internal bool IncrementalLoad(string path, IGamePackage package)
         {
-            ScriptManager.Instance.Output("Loading Maps: {0}", path);
+            this.State?.Scripts.Output("Loading Maps: {0}", path);
             using (new LoggingBlock())
             {
                 try
@@ -121,7 +81,7 @@ namespace EmoTracker.Data
                         }
                         else
                         {
-                            ScriptManager.Instance.Output("File not found");
+                            this.State?.Scripts.Output("File not found");
                         }
                     }
 
@@ -129,7 +89,7 @@ namespace EmoTracker.Data
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                     return false;
                 }
             }

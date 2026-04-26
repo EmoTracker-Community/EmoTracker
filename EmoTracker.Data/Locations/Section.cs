@@ -70,7 +70,7 @@ namespace EmoTracker.Data.Locations
             // GetScriptManager() override (Phase 6) returns the owning state's
             // ScriptManager — and the Lua callback fires against that state's
             // interpreter. Today GetScriptManager() returns the same singleton
-            // ScriptManager.Instance pointed at, so observable behavior is
+            // Sessions.SessionContext.ActiveState?.Scripts pointed at, so observable behavior is
             // unchanged; only the indirection point is in place.
             PropertyChanging += (sender, e) =>
             {
@@ -231,11 +231,8 @@ namespace EmoTracker.Data.Locations
                         // Phase 6 step 11: prefer the owning state's
                         // LocationDatabase; fall back to singleton when
                         // OwnerState hasn't been stamped yet.
-                        var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations
-#pragma warning disable CS0618
-                            ?? LocationDatabase.Instance;
-#pragma warning restore CS0618
-                        locDb.RefeshAccessibility();
+                        var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
+                        locDb?.RefeshAccessibility();
                     }, nameof(CapturedItemIdStored));
 
                     if (queued)
@@ -291,11 +288,8 @@ namespace EmoTracker.Data.Locations
             mGateItemRef.Set(GateItemId);
             NotifyPropertyChanged(nameof(GateItem));
             // Phase 6 step 11: prefer the owning state's LocationDatabase.
-            var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations
-#pragma warning disable CS0618
-                ?? LocationDatabase.Instance;
-#pragma warning restore CS0618
-            locDb.RefeshAccessibility();
+            var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
+            locDb?.RefeshAccessibility();
         }
 
         // OnChanged callback for CapturedItemIdStored. Most of the side-effect
@@ -320,11 +314,8 @@ namespace EmoTracker.Data.Locations
         void OnHostedItemCodeChanged()
         {
             // Phase 6 step 11: prefer the owning state's ItemDatabase.
-            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
-#pragma warning disable CS0618
-                ?? ItemDatabase.Instance;
-#pragma warning restore CS0618
-            HostedItem = itemDb.FindProvidingItemForCode(HostedItemCode);
+            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
+            HostedItem = itemDb?.FindProvidingItemForCode(HostedItemCode);
         }
 
         [KVMutable]
@@ -334,11 +325,8 @@ namespace EmoTracker.Data.Locations
         void OnGateItemCodeChanged()
         {
             // Phase 6 step 11: prefer the owning state's ItemDatabase.
-            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
-#pragma warning disable CS0618
-                ?? ItemDatabase.Instance;
-#pragma warning restore CS0618
-            GateItem = itemDb.FindProvidingItemForCode(GateItemCode);
+            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
+            GateItem = itemDb?.FindProvidingItemForCode(GateItemCode);
         }
 
         // -------- AvailableChestCount: transactable + side-effect cascade ----
@@ -372,11 +360,8 @@ namespace EmoTracker.Data.Locations
                         // Phase 6 step 11: prefer the owning state's
                         // LocationDatabase; fall back to singleton when
                         // OwnerState hasn't been stamped yet.
-                        var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations
-#pragma warning disable CS0618
-                            ?? LocationDatabase.Instance;
-#pragma warning restore CS0618
-                        locDb.RefeshAccessibility();
+                        var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
+                        locDb?.RefeshAccessibility();
                     }, nameof(AvailableChestCountStored));
 
                     if (queued)
@@ -488,13 +473,11 @@ namespace EmoTracker.Data.Locations
                     if (aggregateGateRequirements.ContainsKey(code))
                         count = aggregateGateRequirements[code];
 
-                    AccessibilityLevel _unused;
-                    // Phase 6 step 11: prefer the owning state's ItemDatabase.
-                    var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
-#pragma warning disable CS0618
-                        ?? ItemDatabase.Instance;
-#pragma warning restore CS0618
-                    uint providedCount = itemDb.ProviderCountForCode(code, out _unused);
+                    AccessibilityLevel _unused = AccessibilityLevel.Normal;
+                    // Phase 7.1: prefer the owning state's ItemDatabase. ProviderCountForCode
+                    // takes an out arg so we can't `?.` through it cleanly; null-guard manually.
+                    var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
+                    uint providedCount = itemDb != null ? itemDb.ProviderCountForCode(code, out _unused) : 0u;
 
                     AccessibilityLevel bypassLevel = (!GateBypassRules.Empty && providedCount >= (count - localCount)) ? GateBypassRules.AccessibilityWithoutModifiers : AccessibilityLevel.None;
                     AccessibilityLevel gateLevel = (providedCount >= count && GateAccessibilityLevel >= AccessibilityLevel.Unlockable) ? GateAccessibilityLevel : AccessibilityLevel.None;

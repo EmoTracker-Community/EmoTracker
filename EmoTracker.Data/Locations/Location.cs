@@ -128,14 +128,11 @@ namespace EmoTracker.Data.Locations
                 ForceSetTransactableProperty(value, (processedValue) =>
                 {
                     // Phase 6 step 11: prefer the owning state's LocationDatabase.
-                    var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations
-#pragma warning disable CS0618
-                        ?? LocationDatabase.Instance;
-#pragma warning restore CS0618
+                    var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
                     if (processedValue)
-                        locDb.PinLocation(this);
+                        locDb?.PinLocation(this);
                     else
-                        locDb.UnpinLocation(this);
+                        locDb?.UnpinLocation(this);
                 });
             }
         }
@@ -401,10 +398,7 @@ namespace EmoTracker.Data.Locations
                         mCachedAccessibility = localAccessibility;
 
                     // Phase 6 step 11: prefer the owning state's ItemDatabase.
-                    var itemDbForGates = (this.OwnerState as Sessions.TrackerState)?.Items
-#pragma warning disable CS0618
-                        ?? ItemDatabase.Instance;
-#pragma warning restore CS0618
+                    var itemDbForGates = (this.OwnerState as Sessions.TrackerState)?.Items;
                     foreach (var entry in aggregateGateRequirements)
                     {
                         AccessibilityLevel _unused;
@@ -429,10 +423,7 @@ namespace EmoTracker.Data.Locations
                     if (mCachedBaseAccessibility != prevBaseAccessibility)
                     {
                         // Phase 6 step 11: prefer the owning state's LocationDatabase.
-                        var locDbForClear = (this.OwnerState as Sessions.TrackerState)?.Locations
-#pragma warning disable CS0618
-                            ?? LocationDatabase.Instance;
-#pragma warning restore CS0618
+                        var locDbForClear = (this.OwnerState as Sessions.TrackerState)?.Locations;
                         locDbForClear.LastClearedLocation = this;
                     }
                 }

@@ -79,7 +79,7 @@ namespace EmoTracker.Data
         }
         public Location RootLocation
         {
-            get { return LocationDatabase.Instance.Root; }
+            get { return Sessions.SessionContext.ActiveState?.Locations.Root; }
         }
 
         #region -- Backwards Compatibility (Temp) --
@@ -116,12 +116,12 @@ namespace EmoTracker.Data
     {
         public Layout.Layout FindLayout(string key)
         {
-            return Layout.LayoutManager.Instance.FindLayout(key);
+            return Sessions.SessionContext.ActiveState?.Layouts?.FindLayout(key);
         }
 
         public Layout.LayoutItem FindElement(string uid)
         {
-            return Layout.LayoutManager.Instance.FindElement(uid);
+            return Sessions.SessionContext.ActiveState?.Layouts?.FindElement(uid);
         }
 
         public string GetColorForAccessibility(AccessibilityLevel accessibility)
@@ -153,14 +153,16 @@ namespace EmoTracker.Data
 
     public class LoggingBlock : IDisposable
     {
+        readonly ScriptManager mScripts;
         public LoggingBlock()
         {
-            ScriptManager.Instance.LogIndent++;
+            mScripts = Sessions.SessionContext.ActiveState?.Scripts;
+            if (mScripts != null) mScripts.LogIndent++;
         }
 
         public void Dispose()
         {
-            ScriptManager.Instance.LogIndent--;
+            if (mScripts != null) mScripts.LogIndent--;
         }
     }
 
@@ -174,62 +176,22 @@ namespace EmoTracker.Data
     ///
     /// <para>
     /// <see cref="Instance"/> remains as a transitional alias for
-    /// <see cref="Current"/> so the existing ~97 <c>ScriptManager.Instance</c>
+    /// <see cref="Current"/> so the existing ~97 <c>Sessions.SessionContext.ActiveState?.Scripts</c>
     /// callsites continue to work unchanged. New holder-aware code should
     /// prefer <see cref="ModelTypeBase.GetScriptManager"/> where a model
     /// reference is available, so per-state routing falls into place
     /// automatically once Phase 6 lands.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Phase 7.1: <see cref="ScriptManager"/> is per-state. Each
+    /// <c>TrackerState</c> owns one. Reach via the holder's
+    /// <see cref="ModelTypeBase.GetScriptManager"/>, or via
+    /// <c>ApplicationModel.Instance.PrimaryState.Scripts</c> /
+    /// <c>Sessions.SessionContext.ActiveState.Scripts</c>.
+    /// </summary>
     public class ScriptManager : ModelTypeBase, ICodeProvider, IScriptManager
     {
-        // ---- Static current-instance plumbing (replaces ObservableSingleton) ----
-
-        static ScriptManager mCurrent;
-
-        /// <summary>
-        /// The currently-active ScriptManager. Lazily created on first access
-        /// (matching the pre-Phase-5 ObservableSingleton behavior). Phase 6
-        /// reassigns this on state-switch via <see cref="SetCurrent"/>.
-        /// </summary>
-        [System.Obsolete("Phase 6 step 11: prefer this.GetScriptManager() for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Scripts / ApplicationModel.Instance.PrimaryState?.Scripts otherwise. Pure-logging callsites (Output / OutputWarning / OutputException) on the singleton are an acceptable fallback for now.")]
-        public static ScriptManager Current
-        {
-            get
-            {
-                if (mCurrent == null)
-                    mCurrent = new ScriptManager();
-                return mCurrent;
-            }
-        }
-
-        /// <summary>
-        /// Replace the active <see cref="Current"/>. Phase 6 uses this on
-        /// pack-load / state-switch; callers should not reassign in Phase 5.
-        /// Passing null lets the next <see cref="Current"/> access lazily
-        /// recreate (matches the pre-Phase-5 lazy semantics).
-        /// </summary>
-        [System.Obsolete("Phase 6 step 11: state-aware code installs the active state via TrackerState's catalog adoption rather than reassigning Current.")]
-        public static void SetCurrent(ScriptManager scriptManager)
-        {
-            mCurrent = scriptManager;
-        }
-
-        /// <summary>
-        /// Pre-Phase-5 alias for <see cref="Current"/>. Retained so the
-        /// ~97 existing <c>ScriptManager.Instance</c> callsites keep
-        /// compiling. Phase 6 retires this once UI / extension callsites
-        /// are migrated to <see cref="ModelTypeBase.GetScriptManager"/>.
-        /// </summary>
-        [System.Obsolete("Phase 6 step 11: prefer this.GetScriptManager() for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Scripts / ApplicationModel.Instance.PrimaryState?.Scripts otherwise. Pure-logging callsites (Output / OutputWarning / OutputException) on the singleton are an acceptable fallback for now.")]
-        public static ScriptManager Instance
-        {
-            get
-            {
-                return Current;
-            }
-        }
-
         public class LogLine
         {
             public string Text { get; set; }
@@ -519,10 +481,10 @@ end
             LuaException luaException = e as LuaException;
             if (jsonException != null)
             {
-                ScriptManager.Instance.OutputError("JSON Parse Error");
+                Sessions.SessionContext.ActiveState?.Scripts.OutputError("JSON Parse Error");
                 using (new LoggingBlock())
                 {
-                    ScriptManager.Instance.OutputError(jsonException.Message);
+                    Sessions.SessionContext.ActiveState?.Scripts.OutputError(jsonException.Message);
 
                     if (!string.IsNullOrWhiteSpace(jsonException.HelpLink))
                         OutputError("  For more information, see: {0}", jsonException.HelpLink);
@@ -530,10 +492,10 @@ end
             }
             else if (luaException != null)
             {
-                ScriptManager.Instance.OutputError("Lua Execution Error");
+                Sessions.SessionContext.ActiveState?.Scripts.OutputError("Lua Execution Error");
                 using (new LoggingBlock())
                 {
-                    ScriptManager.Instance.OutputError(luaException.Message);
+                    Sessions.SessionContext.ActiveState?.Scripts.OutputError(luaException.Message);
                 }
             }
             else
@@ -786,7 +748,7 @@ end
 
         /// <summary>
         /// Pre-Phase-5 nested enum, retained verbatim so the existing
-        /// <c>ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.X, ...)</c>
+        /// <c>Sessions.SessionContext.ActiveState?.Scripts.InvokeStandardCallback(ScriptManager.StandardCallback.X, ...)</c>
         /// callsites keep compiling. Values mirror
         /// <see cref="EmoTracker.Core.DataModel.StandardCallback"/> exactly
         /// (same names, same order); the <see cref="IScriptManager"/>
@@ -811,7 +773,7 @@ end
         /// after casting between the Core-side and Data-side enums (which
         /// have identical underlying values). New holder-aware callsites
         /// (model.GetScriptManager().InvokeStandardCallback(...)) flow
-        /// through this surface; legacy <c>ScriptManager.Instance.InvokeStandardCallback</c>
+        /// through this surface; legacy <c>Sessions.SessionContext.ActiveState?.Scripts.InvokeStandardCallback</c>
         /// callers go straight to the public overload.
         /// </summary>
         void IScriptManager.InvokeStandardCallback(EmoTracker.Core.DataModel.StandardCallback callback, params object[] args)
@@ -951,9 +913,8 @@ end
             // SessionContext.ActiveState before invoking the script that
             // called this). Falls back to the singleton for tests that
             // use ScriptManager standalone.
-            var itemDb = Sessions.SessionContext.ActiveState?.Items
-                ?? ItemDatabase.Instance;
-            itemDb.RegisterItem(item);
+            var itemDb = Sessions.SessionContext.ActiveState?.Items;
+            itemDb?.RegisterItem(item);
             return item;
         }
 

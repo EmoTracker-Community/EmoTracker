@@ -1,15 +1,15 @@
 using EmoTracker.Core;
 using EmoTracker.Data.Layout;
+using EmoTracker.Data.Sessions;
 using System;
 using System.Globalization;
 
 using Avalonia.Data.Converters;
 
-// Phase 6 step 11: XAML converters cannot reach the per-state graph from
-// converter context (no holder available). Routing through the singleton
-// LayoutManager is acceptable until the multi-window UI work introduces
-// a converter-context state pointer.
-#pragma warning disable CS0618
+// Phase 7.1: XAML converters route through the active state's
+// LayoutManager via SessionContext. Per-window scoping arrives in
+// Phase 7.6 (the converter currently picks up whichever window is
+// active globally).
 
 namespace EmoTracker.UI.Converters
 {
@@ -17,12 +17,14 @@ namespace EmoTracker.UI.Converters
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
+            var layouts = SessionContext.ActiveState?.Layouts;
+            if (layouts == null) return null;
+
             if (value != null)
             {
                 try
                 {
-                    string layoutName = value.ToString();
-                    return LayoutManager.Instance.FindLayout(layoutName);
+                    return layouts?.FindLayout(value.ToString());
                 }
                 catch { }
             }
@@ -31,8 +33,7 @@ namespace EmoTracker.UI.Converters
             {
                 try
                 {
-                    string layoutName = parameter.ToString();
-                    return LayoutManager.Instance.FindLayout(layoutName);
+                    return layouts?.FindLayout(parameter.ToString());
                 }
                 catch { }
             }

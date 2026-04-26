@@ -26,14 +26,14 @@ namespace EmoTracker.Data.Layout
 
         public RecentPinnedLocations()
         {
-            INotifyCollectionChanged ncc = LocationDatabase.Instance.PinnedLocations as INotifyCollectionChanged;
+            INotifyCollectionChanged ncc = Sessions.SessionContext.ActiveState?.Locations.PinnedLocations as INotifyCollectionChanged;
             if (ncc != null)
                 ncc.CollectionChanged += Ncc_CollectionChanged;
         }
 
         public override void Dispose()
         {
-            INotifyCollectionChanged ncc = LocationDatabase.Instance.PinnedLocations as INotifyCollectionChanged;
+            INotifyCollectionChanged ncc = Sessions.SessionContext.ActiveState?.Locations.PinnedLocations as INotifyCollectionChanged;
             if (ncc != null)
                 ncc.CollectionChanged -= Ncc_CollectionChanged;
 
@@ -62,7 +62,7 @@ namespace EmoTracker.Data.Layout
             mDisplayLocations.Clear();
 
             int idx = 0;
-            foreach (Location location in LocationDatabase.Instance.PinnedLocations)
+            foreach (Location location in Sessions.SessionContext.ActiveState?.Locations.PinnedLocations)
             {
                 mDisplayLocations.Add(location);
 

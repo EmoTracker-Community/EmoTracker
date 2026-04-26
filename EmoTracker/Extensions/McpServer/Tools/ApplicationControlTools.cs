@@ -166,10 +166,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var locations = ApplicationModel.Instance?.PrimaryState?.Locations?.AllLocations
-#pragma warning disable CS0618
-                        ?? LocationDatabase.Instance.AllLocations;
-#pragma warning restore CS0618
+                    var locations = ApplicationModel.Instance?.PrimaryState?.Locations?.AllLocations;
                     if (locations == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No locations loaded" });
 
@@ -255,10 +252,8 @@ namespace EmoTracker.Extensions.McpServer.Tools
 
         private static ITrackableItem FindItemByName(string name)
         {
-            var items = ApplicationModel.Instance?.PrimaryState?.Items?.Items
-#pragma warning disable CS0618
-                ?? ItemDatabase.Instance.Items;
-#pragma warning restore CS0618
+            var items = ApplicationModel.Instance?.PrimaryState?.Items?.Items;
+            if (items == null) return null;
             foreach (var item in items)
             {
                 if (item?.Name != null &&

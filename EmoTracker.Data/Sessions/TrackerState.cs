@@ -102,7 +102,7 @@ namespace EmoTracker.Data.Sessions
         /// <summary>
         /// Per-state item database. Owns the items, sections, etc. that
         /// appear in this state's UI. Phase 6 step 5: each state has its
-        /// own; the static <see cref="ItemDatabase.Current"/> aliases the
+        /// own; the static <see cref="Sessions.SessionContext.ActiveState?.Items"/> aliases the
         /// active state's instance once <c>ApplicationModel</c> wires up
         /// the state-switch path in step 7.
         /// </summary>
@@ -267,7 +267,7 @@ namespace EmoTracker.Data.Sessions
             // Phase 6 step 10 fix: also register each item in the IndexedModelResolver
             // so primary-state ModelReference<T>.Target lookups (which now go through
             // GetModelResolver() → state.Resolve()) actually find the model. Pre-step-9
-            // those lookups walked ItemDatabase.Instance.Items via the now-deleted
+            // those lookups walked Sessions.SessionContext.ActiveState?.Items.Items via the now-deleted
             // AmbientSingletonModelResolver; post-step-9 the resolver IS the index, and
             // adoption must keep it populated.
             foreach (var item in Items.Items)

@@ -65,11 +65,8 @@ namespace EmoTracker.Data
                 {
                     // Phase 6 step 11: app-wide setting — refresh on the
                     // active state's LocationDatabase.
-                    var locDb = Sessions.SessionContext.ActiveState?.Locations
-#pragma warning disable CS0618
-                        ?? LocationDatabase.Instance;
-#pragma warning restore CS0618
-                    locDb.RefeshAccessibility();
+                    var locDb = Sessions.SessionContext.ActiveState?.Locations;
+                    locDb?.RefeshAccessibility();
                 }
             }
         }

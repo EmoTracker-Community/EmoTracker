@@ -57,11 +57,8 @@ namespace EmoTracker.Data.Layout
             // is captured in mLayoutRef so cross-state resolution flows
             // through the per-state resolver afterward.
             var layouts = (this.OwnerState as Sessions.TrackerState)?.Layouts
-                ?? Sessions.SessionContext.ActiveState?.Layouts
-#pragma warning disable CS0618
-                ?? LayoutManager.Instance;
-#pragma warning restore CS0618
-            var resolved = layouts.FindLayout(Key);
+                ?? Sessions.SessionContext.ActiveState?.Layouts;
+            var resolved = layouts?.FindLayout(Key);
             mLayoutRef.Set(resolved);
             return true;
         }

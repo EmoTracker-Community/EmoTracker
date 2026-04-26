@@ -95,15 +95,9 @@ namespace EmoTracker.SourceGenerators.Tests
             Assert.Equal((int)StandardCallback.LocationUpdated, (int)EmoTracker.Data.ScriptManager.StandardCallback.LocationUpdated);
         }
 
-        [Fact]
-        public void ScriptManager_InstanceAliasesCurrent()
-        {
-            // Pre-Phase-5 callers used ScriptManager.Instance; Phase 5 makes
-            // ScriptManager constructible (no longer a strict
-            // ObservableSingleton<>) but the Instance alias forwards to
-            // Current so all ~97 existing callsites keep working.
-            Assert.Same(EmoTracker.Data.ScriptManager.Current, EmoTracker.Data.ScriptManager.Instance);
-        }
+        // Phase 7.1: ScriptManager.Current / .Instance retired. The test
+        // that asserted they aliased each other (Phase 5 era) is no longer
+        // applicable — ScriptManager is now per-state via TrackerState.
 
         [Fact]
         public void NullScriptManager_FallbackUsedWhenHostUnset_NoOpsCleanly()

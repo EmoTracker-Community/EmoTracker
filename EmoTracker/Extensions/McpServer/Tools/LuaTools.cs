@@ -24,7 +24,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 var primary = ApplicationModel.Instance?.PrimaryState?.Scripts as ScriptManager;
                 if (primary != null) return primary;
 #pragma warning disable CS0618
-                return ScriptManager.Instance;
+                return ApplicationModel.Instance?.PrimaryState?.Scripts;
 #pragma warning restore CS0618
             }
         }

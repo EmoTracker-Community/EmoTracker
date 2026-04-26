@@ -11,109 +11,42 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 
-// Phase 6 step 11: file-level suppression for the ScriptManager.Instance
-// logging callsites in LocationDatabase. The Save/Load paths route through
-// `this.State?.Items` (per-state); the rest of the singleton accesses are
-// pure-logging which the [Obsolete] message documents as acceptable.
-#pragma warning disable CS0618
-
 namespace EmoTracker.Data
 {
     /// <summary>
-    /// Phase 6 step 5: <see cref="LocationDatabase"/> is no longer a strict
-    /// <c>ObservableSingleton&lt;T&gt;</c>; it's a regular instantiable
-    /// <see cref="ObservableObject"/> so each <c>TrackerState</c> can hold one.
-    /// The static <see cref="Current"/> property tracks "the active primary"
-    /// instance, defaulting to a single lazily-created instance for
-    /// pre-Phase-6 callers; Phase 6's <c>ApplicationModel</c> reassigns it
-    /// on state-switch.
-    ///
-    /// <para>
-    /// <see cref="Instance"/> remains as a transitional alias for
-    /// <see cref="Current"/> so the existing 55 <c>LocationDatabase.Instance</c>
-    /// callsites continue to work unchanged.
-    /// </para>
+    /// Phase 7.1: <see cref="LocationDatabase"/> is per-state. Each
+    /// <c>TrackerState</c> owns one. Reach via the holder's
+    /// <see cref="ModelTypeBase.OwnerState"/>, or via
+    /// <c>ApplicationModel.Instance.PrimaryState.Locations</c> /
+    /// <c>Sessions.SessionContext.ActiveState.Locations</c>.
     /// </summary>
     public class LocationDatabase : ObservableObject, ICodeProvider
     {
-        // ---- Static current-instance plumbing (replaces ObservableSingleton<T>) ----
-
-        static LocationDatabase mCurrent;
-
-        /// <summary>
-        /// The currently-active LocationDatabase. Lazily created on first
-        /// access (matching the pre-Phase-6 ObservableSingleton lazy-create
-        /// behavior). Phase 6 reassigns this on state-switch via
-        /// <see cref="SetCurrent"/>.
-        /// </summary>
-        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Locations for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Locations / ApplicationModel.Instance.PrimaryState?.Locations otherwise.")]
-        public static LocationDatabase Current
-        {
-            get
-            {
-                if (mCurrent == null)
-                    mCurrent = new LocationDatabase();
-                return mCurrent;
-            }
-        }
-
-        /// <summary>
-        /// Replace the active <see cref="Current"/>. Phase 6 uses this on
-        /// state-switch.
-        ///
-        /// <para>
-        /// <b>Caveat — XAML <c>x:Static</c> bindings:</b> several controls
-        /// in <c>LayoutControl.axaml</c> /
-        /// <c>GroupedLocationListControl.axaml</c> bind via
-        /// <c>{x:Static data:LocationDatabase.Instance}</c>; Avalonia
-        /// resolves these once at load and won't re-fire when this property
-        /// is reassigned. Phase 6 step 7+ (when the UI rebinds through
-        /// <c>ApplicationModel.PrimaryState.Locations</c>) is where those
-        /// callsites get fixed; until then, callers reassigning this for
-        /// runtime state-switching scenarios should expect stale bindings
-        /// in those controls.
-        /// </para>
-        /// </summary>
-        [System.Obsolete("Phase 6 step 11: state-aware code installs the active state via TrackerState's catalog adoption rather than reassigning Current.")]
-        public static void SetCurrent(LocationDatabase database)
-        {
-            mCurrent = database;
-        }
-
-        /// <summary>
-        /// Pre-Phase-6 alias for <see cref="Current"/>.
-        /// </summary>
-        [System.Obsolete("Phase 6 step 11: prefer (this.OwnerState as TrackerState)?.Locations for ModelTypeBase holders, or Sessions.SessionContext.ActiveState?.Locations / ApplicationModel.Instance.PrimaryState?.Locations otherwise.")]
-        public static LocationDatabase Instance
-        {
-            get
-            {
-                return Current;
-            }
-        }
-
         // Phase 6 step 11: back-reference to the owning TrackerState.
         internal Sessions.TrackerState State { get; set; }
 
         public class SuspendRefreshScope : IDisposable
         {
             // Phase 6 step 5: capture the target LocationDatabase at construction
-            // so a SetCurrent swap mid-scope doesn't push on one instance and pop
-            // on another. Defaults to the active Current — preserves the
-            // pre-Phase-6 single-arg ctor shape.
+            // so a state-switch mid-scope doesn't push on one instance and pop
+            // on another.
+            // Phase 7.1: parameterless ctor targets SessionContext.ActiveState's
+            // LocationDatabase if installed; otherwise the scope is a no-op
+            // (for unit tests that construct TrackerStates without going
+            // through ApplicationModel's SessionContext install).
             readonly LocationDatabase mTarget;
 
             public SuspendRefreshScope() : this(target: null) { }
 
             public SuspendRefreshScope(LocationDatabase target)
             {
-                mTarget = target ?? LocationDatabase.Current;
-                mTarget.PushSuspendRefresh();
+                mTarget = target ?? Sessions.SessionContext.ActiveState?.Locations;
+                mTarget?.PushSuspendRefresh();
             }
 
             public virtual void Dispose()
             {
-                mTarget.PopSuspendRefresh();
+                mTarget?.PopSuspendRefresh();
             }
         }
 
@@ -148,7 +81,7 @@ namespace EmoTracker.Data
         {
             if (mSuspendRefreshCount <= 0)
             {
-                ScriptManager.Instance.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
+                this.State?.Scripts.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
                 System.Diagnostics.Debug.Fail("PopSuspendRefresh: underflow — more Pops than Pushes");
                 return;
             }
@@ -246,9 +179,9 @@ namespace EmoTracker.Data
         internal bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false)
         {
             if (bLegacy)
-                ScriptManager.Instance.OutputWarning("Loading legacy locations");
+                this.State?.Scripts.OutputWarning("Loading legacy locations");
             else
-                ScriptManager.Instance.Output("Loading Locations: {0}", path);
+                this.State?.Scripts.Output("Loading Locations: {0}", path);
 
             using (new LoggingBlock())
             {
@@ -273,13 +206,13 @@ namespace EmoTracker.Data
                         }
                         else
                         {
-                            ScriptManager.Instance.Output("File not found");
+                            this.State?.Scripts.Output("File not found");
                         }
                     }
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                 }
                 finally
                 {
@@ -465,7 +398,7 @@ namespace EmoTracker.Data
                                 bRefreshedAccessibility = true;
 
                                 AccessibilityRule.ClearCaches();
-                                ScriptManager.Instance.ClearExpressionCache();
+                                this.State?.Scripts.ClearExpressionCache();
 
                                 // Phase 5 step 5: route the standard-callback through the
                                 // holder-aware path. mRoot is a Location (ModelTypeBase),
@@ -760,9 +693,8 @@ namespace EmoTracker.Data
                             if (section.CapturedItem != null)
                             {
                                 // Phase 6 step 11: prefer the peer ItemDatabase from this state.
-                                var itemDb = this.State?.Items
-                                    ?? ItemDatabase.Instance;
-                                sectionData["captured_item"] = itemDb.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
+                                var itemDb = this.State?.Items;
+                                sectionData["captured_item"] = itemDb?.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
                             }
 
                             sectionDataArray.Add(sectionData);
@@ -871,9 +803,8 @@ namespace EmoTracker.Data
                         string capturedItemRef = sectionData.GetValue<string>("captured_item");
                         {
                             // Phase 6 step 11: prefer the peer ItemDatabase from this state.
-                            var itemDb = this.State?.Items
-                                ?? ItemDatabase.Instance;
-                            ITrackableItem captureItem = itemDb.ResolvePersistableItemReference(capturedItemRef);
+                            var itemDb = this.State?.Items;
+                            ITrackableItem captureItem = itemDb?.ResolvePersistableItemReference(capturedItemRef);
 
                             if (!string.IsNullOrWhiteSpace(capturedItemRef) && captureItem == null)
                                 return false;

@@ -130,11 +130,8 @@ namespace EmoTracker.Data.Items
             // parse time OwnerState may not yet be set, so fall back via
             // SessionContext / singleton.
             var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
-                ?? Sessions.SessionContext.ActiveState?.Items
-#pragma warning disable CS0618
-                ?? ItemDatabase.Instance;
-#pragma warning restore CS0618
-            BaseItem = itemDb.FindProvidingItemForCode(data.GetValue<string>("base_item"));
+                ?? Sessions.SessionContext.ActiveState?.Items;
+            BaseItem = itemDb?.FindProvidingItemForCode(data.GetValue<string>("base_item"));
 
             string disabledImgMods = data.GetValue<string>("disabled_img_spec");
             disabledImgMods = data.GetValue<string>("disabled_img_mods", disabledImgMods);

@@ -81,16 +81,13 @@ namespace EmoTracker.Data.Items
             // Phase 6 step 11: ItemGrid isn't a ModelTypeBase (no OwnerState),
             // so it falls back to SessionContext.ActiveState first then the
             // singleton.
-            var itemDb = Sessions.SessionContext.ActiveState?.Items
-#pragma warning disable CS0618
-                ?? ItemDatabase.Instance;
-#pragma warning restore CS0618
+            var itemDb = Sessions.SessionContext.ActiveState?.Items;
             foreach (JArray rowData in data)
             {
                 ItemList row = new ItemList();
                 foreach (string code in rowData)
                 {
-                    row.Add(itemDb.FindProvidingItemForCode(code));
+                    row.Add(itemDb?.FindProvidingItemForCode(code));
                 }
 
                 AddRow(row);

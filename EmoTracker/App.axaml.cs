@@ -32,13 +32,11 @@ namespace EmoTracker
             // after each pack-load.
             Core.DataModel.ModelResolver.Current = new Data.Core.DataModel.PrimaryStateModelResolver();
 
-            // Phase 5: register the active script manager so ModelTypeBase.GetScriptManager()
-            // (and the holder-aware standard-callback dispatch path) can find it without
-            // taking a hard dependency on the concrete ScriptManager type from Core.
-            // Phase 6 swaps this out per-state.
-#pragma warning disable CS0618 // Phase 6 step 11: bootstrap install of singleton ScriptManager as the host fallback
-            Core.DataModel.ScriptManagerHost.Current = Data.ScriptManager.Current;
-#pragma warning restore CS0618
+            // Phase 7.1: register the per-state ScriptManager as the host
+            // for ModelTypeBase.GetScriptManager() fallbacks. ApplicationModel
+            // pre-allocates the primary state in its ctor, so this is safe
+            // to read here.
+            Core.DataModel.ScriptManagerHost.Current = ApplicationModel.Instance?.PrimaryState?.Scripts;
 
             Core.Services.Backends.LogService.SetServiceBackend(new Services.LogService());
             Core.Services.Backends.DispatchService.SetServiceBackend(new Services.DispatchService());
