@@ -578,7 +578,35 @@ end
                 mLua = null;
             }
 
+            // ForkCloner holds Lua-side helpers on its mSource interpreter;
+            // when this manager is the source, mLua is now closed and any
+            // future Resolve() call would NRE on the closed interpreter.
+            // Drop the cloner so callers see "no clone happened" rather
+            // than crashing.
+            ForkCloner = null;
+
+            // mExpressionCache is a per-state cache of provider-count
+            // results keyed on Lua-callable codes. After Reset the codes
+            // would resolve through a fresh interpreter; drop stale
+            // entries (per plan §5.9, the cloner inherits an empty cache
+            // on fork via field initializer — keep that semantic on Reset
+            // too).
+            mExpressionCache.Clear();
+
             ClearLogOutput();
+        }
+
+        /// <summary>
+        /// Disposes the manager — currently a thin wrapper over
+        /// <see cref="Reset"/>. Future per-state managers in Phase 6
+        /// will also tear down their bridge instances, memory-watch
+        /// registrations, etc.; the override is here as the lifecycle
+        /// hook those changes will plug into.
+        /// </summary>
+        public override void Dispose()
+        {
+            Reset();
+            base.Dispose();
         }
 
         /// <summary>
@@ -948,10 +976,35 @@ end
             // Definition-tier state: share by reference per plan §5.2 — these
             // are pack-defined values that are constant across the fork
             // family.
+            //
+            // mGlobals is the externally-injected globals dict (populated
+            // via SetGlobalObject during pack load). Shared-by-reference is
+            // intentional: pack-load-time injections are constant across
+            // forks. Note this means SetGlobalObject called on a fork
+            // post-construction also mutates the source's view — that's
+            // not per-state isolation. SetGlobalObject is intended for
+            // pack-load-time use only; runtime per-state global mutation
+            // goes through ExecuteLuaString or direct mLua[k] = v on the
+            // fork's interpreter.
+            //
+            // mMemoryService is shared by reference. The watch
+            // registrations a pack made (via AddMemoryWatch) on the source
+            // continue to fire against the source's interpreter — they're
+            // not re-registered on the fork. Plan §5.6 says watches should
+            // be per-state; that lifecycle work is deferred to Phase 6
+            // alongside per-state TrackerState which owns the watch
+            // registration / deregistration story.
             mPackage = src.mPackage;
             mGlobals = src.mGlobals;
             mMemoryService = src.mMemoryService;
             mNotificationService = src.mNotificationService;
+
+            // mExpressionCache — per plan §5.9, a forked manager's cache
+            // starts empty rather than copying the source's. The field
+            // initializer on the new ScriptManager instance already gives
+            // us an empty Dictionary, so no explicit clear is needed; this
+            // comment marks the intentional "empty on fork" choice so
+            // future readers don't add a copy here.
 
             // Allocate a fresh interpreter on this fork and run the
             // scaffolding bootstrap (system Lua, bridge globals, sandbox).
@@ -1058,14 +1111,17 @@ end
         public void RewireForkedLuaItem(LuaItem destination, LuaItem source)
         {
             if (destination == null) throw new ArgumentNullException(nameof(destination));
+            if (source == null) throw new ArgumentNullException(nameof(source));
             if (ForkCloner == null) return;
 
-            // Hand the destination its source-side references first so
-            // RewireWithCloner has values to map, then run the cloner
-            // resolve over them. Two-step keeps RewireWithCloner agnostic
-            // about how the verbatim copy got there — Phase 6 may evolve
-            // this to e.g. take the references via parameters.
-            destination.RewireWithCloner(ForkCloner);
+            // RewireWithCloner reads each of the 9 reference fields off
+            // source, runs them through the cloner, and assigns the
+            // destination clone onto destination. It also pins
+            // destination.mOwnerScriptManager = this so fork-side callback
+            // invocations (OnLeftClick / Save / etc.) execute against
+            // this fork's interpreter rather than the source's
+            // _safe_call wrapper.
+            destination.RewireWithCloner(ForkCloner, source, this);
         }
     }
 }

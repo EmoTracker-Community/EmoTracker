@@ -100,5 +100,52 @@ namespace EmoTracker.SourceGenerators.Tests
             // Current so all ~97 existing callsites keep working.
             Assert.Same(EmoTracker.Data.ScriptManager.Current, EmoTracker.Data.ScriptManager.Instance);
         }
+
+        [Fact]
+        public void NullScriptManager_FallbackUsedWhenHostUnset_NoOpsCleanly()
+        {
+            // When ScriptManagerHost.Current is null (typical of unit-test
+            // scenarios where app startup hasn't run), GetScriptManager()
+            // returns the no-op fallback. Callsites that fire standard
+            // callbacks via holder.GetScriptManager().InvokeStandardCallback
+            // stay safe rather than NRE'ing on a null host.
+            var prior = ScriptManagerHost.Current;
+            try
+            {
+                ScriptManagerHost.Current = null;
+
+                var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
+                var resolved = smoke.GetScriptManager();
+                Assert.NotNull(resolved);
+                Assert.Same(NullScriptManager.Instance, resolved);
+
+                // Invoking on the null fallback is a no-op — doesn't throw.
+                resolved.InvokeStandardCallback(StandardCallback.AccessibilityUpdated);
+                resolved.InvokeStandardCallback(StandardCallback.LocationUpdating, "any", "args");
+            }
+            finally
+            {
+                ScriptManagerHost.Current = prior;
+            }
+        }
+
+        [Fact]
+        public void ScriptManager_Reset_ClearsForkCloner()
+        {
+            // ForkCloner holds Lua-side helpers on the source's mLua. After
+            // Reset, mLua is closed — calling cloner.Resolve() would NRE
+            // on the closed interpreter. Reset must drop the cloner so
+            // post-reset state is consistent.
+            var src = new EmoTracker.Data.ScriptManager();
+            src.BootstrapInterpreter();
+            src.ExecuteLuaString("test = { x = 1 }");
+
+            var fork = (EmoTracker.Data.ScriptManager)src.Fork();
+            Assert.NotNull(fork.ForkCloner);
+
+            fork.Reset();
+            Assert.Null(fork.ForkCloner);
+            Assert.False(fork.IsLuaLoaded);
+        }
     }
 }

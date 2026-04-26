@@ -151,7 +151,7 @@ namespace EmoTracker.Data.Scripting
             try
             {
                 if (AdvanceToCodeFunc != null)
-                    ScriptManager.Instance.SafeCall(AdvanceToCodeFunc, this, code);
+                    GetCallbackScriptManager().SafeCall(AdvanceToCodeFunc, this, code);
             }
             catch (Exception e)
             {
@@ -165,7 +165,7 @@ namespace EmoTracker.Data.Scripting
             {
                 if (CanProvideCodeFunc != null)
                 {
-                    object[] result = ScriptManager.Instance.SafeCall(CanProvideCodeFunc, this, code);
+                    object[] result = GetCallbackScriptManager().SafeCall(CanProvideCodeFunc, this, code);
                     if (result != null && result.Length > 0)
                         return Convert.ToBoolean(result.First());
                 }
@@ -186,7 +186,7 @@ namespace EmoTracker.Data.Scripting
                 {
                     using (new LocationDatabase.SuspendRefreshScope())
                     {
-                        ScriptManager.Instance.SafeCall(OnLeftClickFunc, this);
+                        GetCallbackScriptManager().SafeCall(OnLeftClickFunc, this);
                     }
                 }
             }
@@ -204,7 +204,7 @@ namespace EmoTracker.Data.Scripting
                 {
                     using (new LocationDatabase.SuspendRefreshScope())
                     {
-                        ScriptManager.Instance.SafeCall(OnRightClickFunc, this);
+                        GetCallbackScriptManager().SafeCall(OnRightClickFunc, this);
                     }
                 }
             }
@@ -220,7 +220,7 @@ namespace EmoTracker.Data.Scripting
             {
                 if (ProvidesCodeFunc != null)
                 {
-                    object[] result = ScriptManager.Instance.SafeCall(ProvidesCodeFunc, this, code);
+                    object[] result = GetCallbackScriptManager().SafeCall(ProvidesCodeFunc, this, code);
                     if (result != null && result.Length > 0)
                         return Convert.ToUInt32(result.First());
                 }
@@ -243,7 +243,7 @@ namespace EmoTracker.Data.Scripting
             {
                 if (SaveFunc != null)
                 {
-                    object[] results = ScriptManager.Instance.SafeCall(SaveFunc, this);
+                    object[] results = GetCallbackScriptManager().SafeCall(SaveFunc, this);
                     if (results != null && results.Length > 0)
                     {
                         LuaTable saveData = results.First() as LuaTable;
@@ -305,7 +305,7 @@ namespace EmoTracker.Data.Scripting
                         }
                     }
 
-                    object[] results = ScriptManager.Instance.SafeCall(LoadFunc, this, dataMap);
+                    object[] results = GetCallbackScriptManager().SafeCall(LoadFunc, this, dataMap);
                     if (results != null && results.Length > 0)
                         return Convert.ToBoolean(results.First());
 
@@ -327,7 +327,7 @@ namespace EmoTracker.Data.Scripting
                 try
                 {
                     if (PropertyChangedFunc != null)
-                        ScriptManager.Instance.SafeCall(PropertyChangedFunc, this, key, v);
+                        GetCallbackScriptManager().SafeCall(PropertyChangedFunc, this, key, v);
                 }
                 catch (Exception e)
                 {
@@ -345,75 +345,111 @@ namespace EmoTracker.Data.Scripting
         // -------- Phase 5 fork plumbing -----------------------------------
 
         /// <summary>
+        /// Phase 5 callback dispatch helper. Returns the
+        /// <see cref="ScriptManager"/> that owns this LuaItem's
+        /// interpreter — i.e. the manager whose <c>mLua</c> contains the
+        /// LuaTable / LuaFunction this item's reference fields point at.
+        /// In Phase 5 this is the singleton <see cref="ScriptManager.Current"/>
+        /// for items in the source state and the rewire-bound fork
+        /// manager for forked items (set by
+        /// <see cref="ScriptManager.RewireForkedLuaItem"/>).
+        ///
+        /// <para>
+        /// Why this routing matters: invoking a fork-side
+        /// <see cref="LuaFunction"/> through the source's
+        /// <c>_safe_call</c> wrapper is a cross-interpreter operation
+        /// that NLua doesn't reliably handle. The
+        /// <see cref="GetScriptManager"/> override (Phase 6 per-state)
+        /// or the explicit owner set by
+        /// <see cref="ScriptManager.RewireForkedLuaItem"/> guarantees
+        /// the SafeCall happens in the same interpreter the
+        /// LuaFunction lives in.
+        /// </para>
+        ///
+        /// <para>
+        /// Falls back to <see cref="ScriptManager.Current"/> when the
+        /// holder-aware path returns the no-op
+        /// <c>NullScriptManager</c> (test scenarios where
+        /// <c>ScriptManagerHost.Current</c> isn't installed) — same
+        /// observable behavior as the pre-Phase-5
+        /// <c>ScriptManager.Instance</c> lazy-create.
+        /// </para>
+        /// </summary>
+        ScriptManager GetCallbackScriptManager()
+        {
+            return mOwnerScriptManager
+                ?? (this.GetScriptManager() as ScriptManager)
+                ?? ScriptManager.Current;
+        }
+
+        /// <summary>
+        /// Owner-pinned ScriptManager for fork bookkeeping. Set by
+        /// <see cref="ScriptManager.RewireForkedLuaItem"/> when this
+        /// item is forked, so fork-side callback invocations resolve
+        /// through the fork's interpreter rather than the source's
+        /// (or the singleton's) <c>_safe_call</c>. Null on items in
+        /// the source state, where the singleton fallback is correct.
+        /// </summary>
+        ScriptManager mOwnerScriptManager;
+
+        /// <summary>
         /// Phase 5: when a <see cref="LuaItem"/> is forked, its 9 NLua
         /// reference fields (<see cref="ItemState"/> + 8 LuaFunction
-        /// callbacks) are copied verbatim from the source. This leaves
-        /// the fork temporarily holding orphan references into the
-        /// source's interpreter — calling <see cref="OnLeftClick"/> at
-        /// this point would resolve through the source's mLua, which
-        /// is incorrect for per-state isolation.
+        /// callbacks) are deliberately left null on the destination
+        /// rather than copied verbatim from the source. The fork's
+        /// fields are populated by
+        /// <see cref="EmoTracker.Data.ScriptManager.RewireForkedLuaItem"/>,
+        /// which the orchestrator (Phase 6's TrackerState fork; in
+        /// Phase 5 the tests + future migration helpers) MUST call
+        /// after <see cref="ScriptManager.Fork"/> populates the cloner.
+        ///
         /// <para>
-        /// The fork orchestrator (Phase 6's TrackerState fork; in
-        /// Phase 5 the tests + future migration helpers) MUST follow up
-        /// by calling <see cref="EmoTracker.Data.ScriptManager.RewireForkedLuaItem"/>
-        /// on the fork's <see cref="ScriptManager"/>, passing this
-        /// item and the source. That method runs each field through
-        /// the cloner's <see cref="LuaStateCloner.Resolve"/> path and
-        /// rebinds the fork's references to the destination interpreter's
-        /// clones.
-        /// </para>
-        /// <para>
-        /// Why this two-step shape (verbatim copy + explicit rewire)
-        /// rather than rewiring inside <c>OnForked</c> directly?
-        /// At <c>OnForked</c> time the fork's owning <c>ScriptManager</c>
-        /// — and therefore the cloner — isn't reachable from a plain
-        /// <see cref="ItemBase.Fork"/> call. The orchestrator that knows
-        /// about both the source and destination managers is the right
-        /// place to wire the rewire; <c>OnForked</c>'s job is just to
-        /// keep the fork's fields non-null so the rewire has values to
-        /// remap.
+        /// Why null-default rather than copy-verbatim? A copy-verbatim
+        /// fork holds source-interpreter references; if the rewire
+        /// step is forgotten, callback invocations either silently fire
+        /// on the wrong state's interpreter (wrong data mutated) or
+        /// fail with a cross-interpreter NLua error. Null-default lets
+        /// the existing null-checks in <see cref="OnLeftClick"/> /
+        /// <see cref="ProvidesCode"/> / etc. silently no-op until
+        /// rewire happens — orphan-free by construction.
         /// </para>
         /// </summary>
         protected override void OnForked(ModelTypeBase source)
         {
             base.OnForked(source);
-            var src = (LuaItem)source;
-
-            // Copy NLua reference fields verbatim — they point at the
-            // source's interpreter at this point. RewireForkedLuaItem
-            // (called by the orchestrator after ScriptManager.Fork
-            // populates the cloner) replaces them with destination clones.
-            mItemState = src.mItemState;
-            mOnLeftClick = src.mOnLeftClick;
-            mOnRightClick = src.mOnRightClick;
-            mProvidesCode = src.mProvidesCode;
-            mCanProvideCode = src.mCanProvideCode;
-            mAdvanceToCode = src.mAdvanceToCode;
-            mSave = src.mSave;
-            mLoad = src.mLoad;
-            mPropertyChanged = src.mPropertyChanged;
+            // Reference fields stay null on the destination. The
+            // RewireForkedLuaItem orchestration step assigns them via
+            // ForkCloner.Resolve(source.X). Until then, the fork's
+            // callback methods (OnLeftClick / etc.) silently no-op via
+            // their existing null checks.
         }
 
         /// <summary>
-        /// Internal rewire entry point invoked by <see cref="ScriptManager.RewireForkedLuaItem"/>.
-        /// Walks every NLua reference field through the supplied cloner and
-        /// replaces it with the destination clone. After this returns, the
-        /// fork's references all point at the fork's interpreter — calls to
-        /// <see cref="OnLeftClick"/> etc. fire on the right state.
+        /// Internal rewire entry point invoked by
+        /// <see cref="ScriptManager.RewireForkedLuaItem"/>. Reads each
+        /// of the 9 reference fields off <paramref name="source"/> (the
+        /// LuaItem being forked from) through the supplied
+        /// <paramref name="cloner"/>, assigning the destination clone
+        /// to this instance's matching field. Also records the fork's
+        /// owning ScriptManager so subsequent
+        /// <see cref="OnLeftClick"/> / <see cref="Save"/> / etc. fire
+        /// against the right interpreter.
         /// </summary>
-        internal void RewireWithCloner(LuaStateCloner cloner)
+        internal void RewireWithCloner(LuaStateCloner cloner, LuaItem source, ScriptManager ownerScriptManager)
         {
-            if (cloner == null) return;
+            if (cloner == null || source == null) return;
 
-            mItemState = cloner.Resolve(mItemState);
-            mOnLeftClick = cloner.Resolve(mOnLeftClick);
-            mOnRightClick = cloner.Resolve(mOnRightClick);
-            mProvidesCode = cloner.Resolve(mProvidesCode);
-            mCanProvideCode = cloner.Resolve(mCanProvideCode);
-            mAdvanceToCode = cloner.Resolve(mAdvanceToCode);
-            mSave = cloner.Resolve(mSave);
-            mLoad = cloner.Resolve(mLoad);
-            mPropertyChanged = cloner.Resolve(mPropertyChanged);
+            mItemState        = cloner.Resolve(source.mItemState);
+            mOnLeftClick      = cloner.Resolve(source.mOnLeftClick);
+            mOnRightClick     = cloner.Resolve(source.mOnRightClick);
+            mProvidesCode     = cloner.Resolve(source.mProvidesCode);
+            mCanProvideCode   = cloner.Resolve(source.mCanProvideCode);
+            mAdvanceToCode    = cloner.Resolve(source.mAdvanceToCode);
+            mSave             = cloner.Resolve(source.mSave);
+            mLoad             = cloner.Resolve(source.mLoad);
+            mPropertyChanged  = cloner.Resolve(source.mPropertyChanged);
+
+            mOwnerScriptManager = ownerScriptManager;
         }
     }
 }

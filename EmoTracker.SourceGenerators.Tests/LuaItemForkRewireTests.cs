@@ -51,14 +51,19 @@ namespace EmoTracker.SourceGenerators.Tests
             var forkSm = (ScriptManager)srcSm.Fork();
             Assert.NotNull(forkSm.ForkCloner);
 
-            // 3. Fork the item (OnForked copies refs verbatim — they
-            //    still point at the source's interpreter at this point).
+            // 3. Fork the item — Phase 5 contract: OnForked deliberately
+            //    leaves the destination's NLua reference fields null.
+            //    Until rewire, the fork's ItemState / OnLeftClickFunc /
+            //    etc. are null; existing null checks in OnLeftClick / etc.
+            //    silently no-op rather than firing on the wrong state.
             var forkItem = (LuaItem)srcItem.Fork();
-            Assert.NotNull(forkItem.ItemState);
-            Assert.NotNull(forkItem.OnLeftClickFunc);
+            Assert.Null(forkItem.ItemState);
+            Assert.Null(forkItem.OnLeftClickFunc);
 
-            // 4. Rewire — replaces the verbatim copies with destination
-            //    clones via ForkCloner.Resolve().
+            // 4. Rewire — populates the fork's references from the source
+            //    via ForkCloner.Resolve(). Also pins the fork's owner
+            //    ScriptManager so OnLeftClick et al. invoke through the
+            //    fork's interpreter.
             forkSm.RewireForkedLuaItem(forkItem, srcItem);
 
             // Both fields are still non-null and now point at the FORK's
@@ -99,30 +104,79 @@ namespace EmoTracker.SourceGenerators.Tests
         }
 
         [Fact]
-        public void Fork_LuaItem_OnForked_CopiesRefsVerbatim_BeforeRewire()
+        public void Fork_LuaItem_OnForked_LeavesRefsNullUntilRewire()
         {
-            // OnForked alone (without RewireForkedLuaItem) leaves the
-            // fork holding source-side references — non-null, but pointing
-            // at the orphan source interpreter. Document this transient
-            // state so callers know the rewire step is required for
-            // correct cross-interpreter behavior.
+            // Phase 5 contract: OnForked deliberately does NOT copy the
+            // source's NLua reference fields onto the destination. The
+            // fork starts with ItemState / OnLeftClickFunc / etc. all
+            // null; RewireForkedLuaItem populates them via
+            // ForkCloner.Resolve.
+            //
+            // Why null-default rather than copy-verbatim? Copy-verbatim
+            // would leave the fork holding source-interpreter references;
+            // calling them via OnLeftClick would either silently fire
+            // against the wrong state's interpreter or NLua-error on the
+            // cross-interpreter call. Null-default + the existing null
+            // checks in OnLeftClick / Save / etc. silently no-op until
+            // rewire happens — orphan-free by construction.
             var srcSm = new ScriptManager();
             srcSm.BootstrapInterpreter();
             srcSm.ExecuteLuaString("state = { v = 1 }");
 
             var srcItem = new LuaItem();
             srcItem.ItemState = (LuaTable)srcSm.GetLuaGlobal("state");
+            srcItem.OnLeftClickFunc = (LuaFunction)srcSm.ExecuteLuaString("return function() end")[0];
 
             var forkItem = (LuaItem)srcItem.Fork();
 
-            // Before rewire: forkItem.ItemState is the SAME source-side
-            // wrapper (verbatim copy in OnForked).
-            Assert.NotNull(forkItem.ItemState);
-            // Mutating via the fork's reference here mutates the SOURCE's
-            // table, since both still point at the source interpreter's
-            // state table.
-            forkItem.ItemState["v"] = 99L;
-            Assert.Equal(99L, Convert.ToInt64(srcItem.ItemState["v"]));
+            // Pre-rewire: fork's reference fields are null.
+            Assert.Null(forkItem.ItemState);
+            Assert.Null(forkItem.OnLeftClickFunc);
+
+            // Calling fork's OnLeftClick is safe — silently no-ops via
+            // the existing null check.
+            forkItem.OnLeftClick();
+
+            // And the source is untouched.
+            Assert.Equal(1L, Convert.ToInt64(srcItem.ItemState["v"]));
+        }
+
+        [Fact]
+        public void Fork_LuaItem_OnLeftClick_PostRewire_FiresOnForkInterpreter()
+        {
+            // The headline correctness test for the SafeCall-routing fix.
+            // forkItem.OnLeftClick() previously routed through
+            // ScriptManager.Instance.SafeCall (the singleton's
+            // _safe_call wrapper) — a cross-interpreter call when the
+            // OnLeftClickFunc is a fork-side LuaFunction. Post-fix:
+            // GetCallbackScriptManager() returns the fork's manager, so
+            // SafeCall happens in the same interpreter as the function.
+            var srcSm = new ScriptManager();
+            srcSm.BootstrapInterpreter();
+
+            srcSm.ExecuteLuaString(@"
+                state = { count = 5 }
+                bump_via_click = function() state.count = state.count + 1 end
+            ");
+
+            var srcItem = new LuaItem();
+            srcItem.ItemState = (LuaTable)srcSm.GetLuaGlobal("state");
+            srcItem.OnLeftClickFunc = (LuaFunction)srcSm.GetLuaGlobal("bump_via_click");
+
+            var forkSm = (ScriptManager)srcSm.Fork();
+            var forkItem = (LuaItem)srcItem.Fork();
+            forkSm.RewireForkedLuaItem(forkItem, srcItem);
+
+            // Invoke the high-level callback on the fork — uses the
+            // ScriptManager.Instance.SafeCall code path that previously
+            // would have routed through the singleton's interpreter
+            // (cross-interpreter on a fork-side LuaFunction = NLua break
+            // or wrong-state mutation).
+            forkItem.OnLeftClick();
+
+            // Fork's count went 5 -> 6; source's stayed at 5.
+            Assert.Equal(6L, Convert.ToInt64(forkItem.ItemState["count"]));
+            Assert.Equal(5L, Convert.ToInt64(srcItem.ItemState["count"]));
         }
 
         [Fact]
