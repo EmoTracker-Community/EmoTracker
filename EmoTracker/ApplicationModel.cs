@@ -866,7 +866,9 @@ defaultSaveDataPath)
             tcs?.TrySetResult(null);
         }
 
-        private bool SaveProgress(string path)
+        // Phase 7.10: exposed to BundleService for per-state save round-trips.
+        // (Pre-Phase-7 was private; visibility widened, signature unchanged.)
+        public bool SaveProgress(string path)
         {
             if (!CanSave(null))
                 return false;
@@ -921,7 +923,8 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             return false;
         }
 
-        private bool LoadProgress(string path)
+        // Phase 7.10: exposed to BundleService for per-state load round-trips.
+        public bool LoadProgress(string path)
         {
             if (Tracker.Instance.LoadProgress(path, (JObject root) =>
             {

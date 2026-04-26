@@ -1,0 +1,95 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:local="clr-namespace:EmoTracker"
+             xmlns:sessions="clr-namespace:EmoTracker.Data.Sessions;assembly=EmoTracker.Data"
+             xmlns:packages="clr-namespace:EmoTracker.Data.Packages;assembly=EmoTracker.Data"
+             x:Class="EmoTracker.UI.StateManagerControl"
+             Name="StateManagerRoot"
+             mc:Ignorable="d">
+
+    <ToggleButton Name="StateManagerToggle"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  Padding="6,2"
+                  ToolTip.Tip="Manage tracker states">
+        <ToggleButton.Content>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="&#x25BC;" FontSize="9" VerticalAlignment="Center" Foreground="#9E9E9E" />
+                <TextBlock Text="{Binding #StateManagerRoot.ActiveStateLabel}"
+                           FontSize="11" VerticalAlignment="Center"
+                           Foreground="#E0E0E0" />
+            </StackPanel>
+        </ToggleButton.Content>
+
+        <Popup IsOpen="{Binding IsChecked, ElementName=StateManagerToggle, Mode=TwoWay}"
+               Placement="Top"
+               PlacementTarget="{Binding ElementName=StateManagerToggle}">
+            <Border BorderBrush="#444" BorderThickness="1"
+                    Background="#FF212121" CornerRadius="4"
+                    Padding="8" MinWidth="280" MaxWidth="380"
+                    BoxShadow="2 2 12 0 #99000000">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Loaded Packs" FontWeight="Bold"
+                               Foreground="#BBBBBB" FontSize="11" />
+
+                    <ItemsControl ItemsSource="{Binding PackageInstances, Source={x:Static local:ApplicationModel.Instance}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="sessions:PackageInstance">
+                                <Border BorderBrush="#333" BorderThickness="0,0,0,1"
+                                        Padding="2,4">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding Package.DisplayName, FallbackValue='(unloaded)'}"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#DDDDDD" FontSize="11" />
+                                        <ItemsControl ItemsSource="{Binding States}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto"
+                                                          Margin="8,2,0,2">
+                                                        <TextBlock Text="{Binding Value.Name, FallbackValue='(unnamed)'}"
+                                                                   Grid.Column="0"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="#CCCCCC" FontSize="11" />
+                                                        <Button Content="Switch" Grid.Column="1"
+                                                                Margin="2,0" Padding="4,0" FontSize="10"
+                                                                Click="OnSwitchToState"
+                                                                Tag="{Binding Value}" />
+                                                        <Button Content="New Window" Grid.Column="2"
+                                                                Margin="2,0" Padding="4,0" FontSize="10"
+                                                                Click="OnOpenStateInNewWindow"
+                                                                Tag="{Binding Value}" />
+                                                        <Button Content="Close" Grid.Column="3"
+                                                                Margin="2,0" Padding="4,0" FontSize="10"
+                                                                Click="OnCloseState"
+                                                                Tag="{Binding Value}" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Content="+ New state from this pack"
+                                                Margin="8,2,0,0" Padding="4,1" FontSize="10"
+                                                HorizontalAlignment="Left"
+                                                Click="OnCreateAdditionalState"
+                                                Tag="{Binding}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Text="Actions" FontWeight="Bold"
+                               Foreground="#BBBBBB" FontSize="11" Margin="0,4,0,0" />
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <Button Content="Save Bundle…" Padding="6,2" FontSize="10"
+                                Click="OnSaveBundle" />
+                        <Button Content="Load Bundle…" Padding="6,2" FontSize="10"
+                                Click="OnLoadBundle" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+    </ToggleButton>
+
+</UserControl>

@@ -89,6 +89,8 @@
             <!-- App buttons (left) -->
             <StackPanel HorizontalAlignment="Left" Orientation="Horizontal"
                         VerticalAlignment="Center" Margin="5,2">
+                <!-- Phase 7.7: state manager popup -->
+                <ui:StateManagerControl Margin="0,0,4,0" />
                 <Button Name="SettingsButton" Width="24" Background="Transparent"
                         BorderThickness="0" Padding="0" VerticalContentAlignment="Center"
                         ToolTip.Tip="Settings">
