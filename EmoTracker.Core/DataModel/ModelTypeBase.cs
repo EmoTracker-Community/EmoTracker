@@ -126,16 +126,45 @@ namespace EmoTracker.Core.DataModel
         }
 
         /// <summary>
+        /// Phase 6: the owning <see cref="ITrackerStateContext"/> for this
+        /// model — null when no state has claimed ownership (e.g., during
+        /// definitional construction before <c>PackageInstance</c> wires
+        /// up the definitional state). Set by the fork pipeline; never
+        /// mutates after a model is in a live state.
+        ///
+        /// <para>
+        /// The back-reference eliminates the need for a thread-local
+        /// "current state" indirection: a model's transaction routing,
+        /// resolver lookup, and (Phase 5) script-callback dispatch all
+        /// read directly from <see cref="OwnerState"/>. This holds the
+        /// design invariant <i>"transactions on a model are handled
+        /// exclusively by the state that owns it"</i> by construction —
+        /// there's no ambient context to leak across state boundaries.
+        /// </para>
+        ///
+        /// <para>
+        /// Setter is <c>public</c> for now; the fork pipeline in
+        /// <c>EmoTracker.Data.Sessions.TrackerState</c> is the only
+        /// intended caller. A future refinement could lock this down via
+        /// <c>InternalsVisibleTo</c> from <c>EmoTracker.Core</c> to
+        /// <c>EmoTracker.Data</c> if discipline ever slips, but for now
+        /// the doc-comment + grep-for-callsites is sufficient.
+        /// </para>
+        /// </summary>
+        public ITrackerStateContext OwnerState { get; set; }
+
+        /// <summary>
         /// Returns the <see cref="IModelResolver"/> that <see cref="ModelReference{T}"/>
-        /// holders on this instance should resolve through. Default implementation
-        /// returns the global ambient resolver (<see cref="ModelResolver.Current"/>);
-        /// per-state model graphs introduced by the state-lifecycle phase override
-        /// this to point at their state's own resolver, so cross-references
-        /// naturally chase the holder's state without rewiring on every call site.
+        /// holders on this instance should resolve through. Phase 6 overrides:
+        /// when <see cref="OwnerState"/> is non-null the state IS the resolver
+        /// (<see cref="ITrackerStateContext"/> inherits <see cref="IModelResolver"/>),
+        /// so cross-references chase the holder's state automatically. Falls back
+        /// to <see cref="ModelResolver.Current"/> for models that haven't yet been
+        /// claimed by a state (e.g., during definitional pack load).
         /// </summary>
         public virtual IModelResolver GetModelResolver()
         {
-            return ModelResolver.Current;
+            return OwnerState ?? ModelResolver.Current;
         }
 
         /// <summary>
