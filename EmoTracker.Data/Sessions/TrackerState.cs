@@ -246,26 +246,43 @@ namespace EmoTracker.Data.Sessions
         public void StampOwnerStateOnAdoptedModels()
         {
             // Items: enumerate the catalog and stamp ModelTypeBase-derived ones.
+            // Phase 6 step 10 fix: also register each item in the IndexedModelResolver
+            // so primary-state ModelReference<T>.Target lookups (which now go through
+            // GetModelResolver() → state.Resolve()) actually find the model. Pre-step-9
+            // those lookups walked ItemDatabase.Instance.Items via the now-deleted
+            // AmbientSingletonModelResolver; post-step-9 the resolver IS the index, and
+            // adoption must keep it populated.
             foreach (var item in Items.Items)
             {
                 if (item is ModelTypeBase mtb)
+                {
                     mtb.OwnerState = this;
+                    mResolver.Register(mtb);
+                }
             }
 
             // Locations: walk the flat AllLocations + each Location's sections.
             foreach (var loc in Locations.AllLocations)
             {
                 loc.OwnerState = this;
+                mResolver.Register(loc);
                 foreach (var sec in loc.Sections)
+                {
                     sec.OwnerState = this;
+                    mResolver.Register(sec);
+                }
             }
 
             // Maps: each Map + its MapLocations.
             foreach (var map in Maps.Maps)
             {
                 map.OwnerState = this;
+                mResolver.Register(map);
                 foreach (var ml in map.Locations)
+                {
                     ml.OwnerState = this;
+                    mResolver.Register(ml);
+                }
             }
         }
 
