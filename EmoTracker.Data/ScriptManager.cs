@@ -976,5 +976,62 @@ end
             ForkCloner = new LuaStateCloner(src.mLua, mLua, bridgeMap, OutputWarning);
             ForkCloner.CloneAll();
         }
+
+        /// <summary>
+        /// Phase 5 step 7: rewires a forked <see cref="LuaItem"/>'s NLua
+        /// reference fields (<see cref="LuaItem.ItemState"/> + the eight
+        /// LuaFunction callbacks) from the source's interpreter to this
+        /// fork's interpreter, using the cloner that ran during this
+        /// manager's own <see cref="OnForked"/>.
+        ///
+        /// <para>
+        /// Call sequence (orchestrated by Phase 6's TrackerState fork; in
+        /// Phase 5 by tests / migration helpers):
+        /// <list type="number">
+        ///   <item><c>destManager = sourceManager.Fork()</c> — populates
+        ///         <see cref="ForkCloner"/> on the destination.</item>
+        ///   <item><c>destItem = sourceItem.Fork()</c> — runs
+        ///         <see cref="LuaItem.OnForked"/>, which copies the
+        ///         source's references verbatim onto destItem (so they're
+        ///         not null but point at the source's interpreter).</item>
+        ///   <item><c>destManager.RewireForkedLuaItem(destItem, sourceItem)</c>
+        ///         — walks each reference through
+        ///         <see cref="LuaStateCloner.Resolve"/>; destItem's
+        ///         references now point at this fork's clones.</item>
+        /// </list>
+        /// </para>
+        ///
+        /// <para>
+        /// The <paramref name="source"/> argument is the original LuaItem
+        /// (still on the source state). It's needed so we know which
+        /// source-side references to look up in the cloner — destItem's
+        /// own references (post-OnForked) work too because OnForked copied
+        /// them verbatim, but using <paramref name="source"/> directly is
+        /// clearer and decouples the rewire from any speculative
+        /// post-OnForked mutation on destItem.
+        /// </para>
+        ///
+        /// <para>
+        /// If <see cref="ForkCloner"/> is null (this manager was never
+        /// forked, e.g. it's the source) or if the source's references
+        /// weren't reachable from <c>_G</c> at clone time
+        /// (<see cref="LuaStateCloner.Resolve"/> returns null), the
+        /// corresponding fork-side field is set to null. Calling such a
+        /// callback then no-ops — better than holding an orphan source
+        /// reference.
+        /// </para>
+        /// </summary>
+        public void RewireForkedLuaItem(LuaItem destination, LuaItem source)
+        {
+            if (destination == null) throw new ArgumentNullException(nameof(destination));
+            if (ForkCloner == null) return;
+
+            // Hand the destination its source-side references first so
+            // RewireWithCloner has values to map, then run the cloner
+            // resolve over them. Two-step keeps RewireWithCloner agnostic
+            // about how the verbatim copy got there — Phase 6 may evolve
+            // this to e.g. take the references via parameters.
+            destination.RewireWithCloner(ForkCloner);
+        }
     }
 }

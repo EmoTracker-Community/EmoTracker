@@ -1,4 +1,5 @@
 ﻿using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.Items;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
@@ -11,7 +12,7 @@ using System.Linq;
 namespace EmoTracker.Data.Scripting
 {
     [JsonTypeTags("lua"), DisallowCreationFromTag]
-    public class LuaItem : ItemBase
+    public partial class LuaItem : ItemBase
     {
         LuaTable mItemState;
 
@@ -339,6 +340,80 @@ namespace EmoTracker.Data.Scripting
         public object Get(string key, bool forceReadFromOpenTransaction = false)
         {
             return GetTransactableProperty<object>(key, forceReadFromOpenTransaction);
+        }
+
+        // -------- Phase 5 fork plumbing -----------------------------------
+
+        /// <summary>
+        /// Phase 5: when a <see cref="LuaItem"/> is forked, its 9 NLua
+        /// reference fields (<see cref="ItemState"/> + 8 LuaFunction
+        /// callbacks) are copied verbatim from the source. This leaves
+        /// the fork temporarily holding orphan references into the
+        /// source's interpreter — calling <see cref="OnLeftClick"/> at
+        /// this point would resolve through the source's mLua, which
+        /// is incorrect for per-state isolation.
+        /// <para>
+        /// The fork orchestrator (Phase 6's TrackerState fork; in
+        /// Phase 5 the tests + future migration helpers) MUST follow up
+        /// by calling <see cref="EmoTracker.Data.ScriptManager.RewireForkedLuaItem"/>
+        /// on the fork's <see cref="ScriptManager"/>, passing this
+        /// item and the source. That method runs each field through
+        /// the cloner's <see cref="LuaStateCloner.Resolve"/> path and
+        /// rebinds the fork's references to the destination interpreter's
+        /// clones.
+        /// </para>
+        /// <para>
+        /// Why this two-step shape (verbatim copy + explicit rewire)
+        /// rather than rewiring inside <c>OnForked</c> directly?
+        /// At <c>OnForked</c> time the fork's owning <c>ScriptManager</c>
+        /// — and therefore the cloner — isn't reachable from a plain
+        /// <see cref="ItemBase.Fork"/> call. The orchestrator that knows
+        /// about both the source and destination managers is the right
+        /// place to wire the rewire; <c>OnForked</c>'s job is just to
+        /// keep the fork's fields non-null so the rewire has values to
+        /// remap.
+        /// </para>
+        /// </summary>
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (LuaItem)source;
+
+            // Copy NLua reference fields verbatim — they point at the
+            // source's interpreter at this point. RewireForkedLuaItem
+            // (called by the orchestrator after ScriptManager.Fork
+            // populates the cloner) replaces them with destination clones.
+            mItemState = src.mItemState;
+            mOnLeftClick = src.mOnLeftClick;
+            mOnRightClick = src.mOnRightClick;
+            mProvidesCode = src.mProvidesCode;
+            mCanProvideCode = src.mCanProvideCode;
+            mAdvanceToCode = src.mAdvanceToCode;
+            mSave = src.mSave;
+            mLoad = src.mLoad;
+            mPropertyChanged = src.mPropertyChanged;
+        }
+
+        /// <summary>
+        /// Internal rewire entry point invoked by <see cref="ScriptManager.RewireForkedLuaItem"/>.
+        /// Walks every NLua reference field through the supplied cloner and
+        /// replaces it with the destination clone. After this returns, the
+        /// fork's references all point at the fork's interpreter — calls to
+        /// <see cref="OnLeftClick"/> etc. fire on the right state.
+        /// </summary>
+        internal void RewireWithCloner(LuaStateCloner cloner)
+        {
+            if (cloner == null) return;
+
+            mItemState = cloner.Resolve(mItemState);
+            mOnLeftClick = cloner.Resolve(mOnLeftClick);
+            mOnRightClick = cloner.Resolve(mOnRightClick);
+            mProvidesCode = cloner.Resolve(mProvidesCode);
+            mCanProvideCode = cloner.Resolve(mCanProvideCode);
+            mAdvanceToCode = cloner.Resolve(mAdvanceToCode);
+            mSave = cloner.Resolve(mSave);
+            mLoad = cloner.Resolve(mLoad);
+            mPropertyChanged = cloner.Resolve(mPropertyChanged);
         }
     }
 }
