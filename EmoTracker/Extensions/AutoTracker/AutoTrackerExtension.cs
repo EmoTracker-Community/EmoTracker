@@ -1,590 +1,148 @@
 using EmoTracker.Core;
-using EmoTracker.Core.DataModel;
-using EmoTracker.Core.Services;
-using EmoTracker.Data;
 using EmoTracker.Data.AutoTracking;
-using EmoTracker.Data.Packages;
-using EmoTracker.Data.Scripting;
+using EmoTracker.Data.Sessions;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Threading.Tasks;
-
-// Phase 6 step 11: AutoTracker's ApplicationModel.Instance?.PrimaryState?.Scripts accesses are all
-// pure logging (Output / OutputWarning / OutputException) — the
-// documented "logging-only callsites are an acceptable fallback" case
-// from ScriptManager's [Obsolete] message.
-#pragma warning disable CS0618
+using System.Linq;
 
 namespace EmoTracker.Extensions.AutoTracker
 {
-    public class AutoTrackerExtension : ObservableObject, Extension, IMemoryWatchService
+    /// <summary>
+    /// Phase 7.4: <see cref="AutoTrackerExtension"/> is now a factory.
+    /// Discovered by <see cref="ExtensionManager"/>'s reflection scan as
+    /// the app-wide auto-tracking <see cref="Extension"/>; per-state
+    /// runtimes are constructed via <see cref="CreateForState"/> when a
+    /// <see cref="TrackerState"/> registers, and disposed when it
+    /// unregisters.
+    ///
+    /// <para>
+    /// The factory exposes <i>UI-binding-friendly</i> proxy properties
+    /// (<see cref="Connected"/>, <see cref="Error"/>, <see cref="ActiveProvider"/>,
+    /// <see cref="SelectedProvider"/>, <see cref="ApplicableProviders"/>,
+    /// commands) that forward to the currently-active state's
+    /// <see cref="AutoTrackerInstance"/>. Switching the active state
+    /// (window tab switch, primary swap, etc.) re-points the proxy at
+    /// the new instance and fires PropertyChanged on every forwarded
+    /// property — existing XAML bindings against
+    /// <c>AutoTrackerExtension</c>-typed DataContexts continue to work
+    /// without modification.
+    /// </para>
+    /// </summary>
+    public class AutoTrackerExtension : ObservableObject, Extension, IStateScopedExtensionFactory
     {
-        #region -- Extension --
-
-        public string Name { get { return "Auto Tracking"; } }
-
-        public string UID { get { return "emotracker_auto_tracking"; } }
-
-        public int Priority { get { return -100; } }
+        public string Name => "Auto Tracking";
+        public string UID => "emotracker_auto_tracking";
+        public int Priority => -100;
 
         public object StatusBarControl
         {
-            get
-            {
-                return new AutoTrackerExtensionView { DataContext = this };
-            }
+            get { return new AutoTrackerExtensionView { DataContext = this }; }
         }
-
-        public void OnPackageUnloaded()
-        {
-            StopAutoTracking();
-            Clear();
-            Error = false;
-        }
-
-        public void OnPackageLoaded()
-        {
-            if (Tracker.Instance.ActiveGamePackage != null)
-                ActivePlatform = Tracker.Instance.ActiveGamePackage.Platform;
-
-            NotifyPropertyChanged("Active");
-        }
-
-        public bool Active
-        {
-            get { return mApplicableProviders.Count > 0 && mActiveMemoryUpdates.Count > 0; }
-        }
-
-        bool mbError = false;
-        public bool Error
-        {
-            get { return mbError; }
-            private set { SetProperty(ref mbError, value); }
-        }
-
-        #endregion
-
-        #region -- Provider Management --
-
-        bool mbConnected = false;
-        public bool Connected
-        {
-            get { return mbConnected; }
-            private set { SetProperty(ref mbConnected, value); }
-        }
-
-        GamePlatform mActivePlatform;
-        public GamePlatform ActivePlatform
-        {
-            get { return mActivePlatform; }
-            private set
-            {
-                if (SetProperty(ref mActivePlatform, value))
-                {
-                    mApplicableProviders.Clear();
-
-                    if (Tracker.Instance.ActiveGamePackage != null)
-                    {
-                        var providers = AutoTrackingProviderRegistry.Instance.GetProvidersForPack(Tracker.Instance.ActiveGamePackage);
-                        foreach (var provider in providers)
-                        {
-                            mApplicableProviders.Add(provider);
-                        }
-                    }
-                }
-            }
-        }
-
-        ObservableCollection<IAutoTrackingProvider> mApplicableProviders = new ObservableCollection<IAutoTrackingProvider>();
-        public IEnumerable<IAutoTrackingProvider> ApplicableProviders
-        {
-            get { return mApplicableProviders; }
-        }
-
-        IAutoTrackingProvider mSelectedProvider;
-        public IAutoTrackingProvider SelectedProvider
-        {
-            get { return mSelectedProvider; }
-            private set
-            {
-                var prev = mSelectedProvider;
-                if (SetProperty(ref mSelectedProvider, value))
-                {
-                    if (prev != null)
-                        prev.AvailableDevicesChanged -= SelectedProvider_AvailableDevicesChanged;
-
-                    if (mSelectedProvider != null)
-                        mSelectedProvider.AvailableDevicesChanged += SelectedProvider_AvailableDevicesChanged;
-
-                    InvalidateCommandAvailability();
-                }
-            }
-        }
-
-        private void SelectedProvider_AvailableDevicesChanged(object sender, EventArgs e)
-        {
-            // Auto-select first device if the previously selected one is gone or none was chosen
-            if (SelectedProvider != null && SelectedProvider.DefaultDevice == null && SelectedProvider.AvailableDevices.Count > 0)
-                SelectedProvider.DefaultDevice = SelectedProvider.AvailableDevices[0];
-
-            Dispatch.BeginInvoke(() =>
-            {
-                InvalidateCommandAvailability();
-                NotifyPropertyChanged(nameof(SelectedProvider));
-            });
-        }
-
-        IAutoTrackingProvider mActiveProvider;
-        public IAutoTrackingProvider ActiveProvider
-        {
-            get { return mActiveProvider; }
-            private set
-            {
-                Connected = false;
-                WaitForPendingMemoryUpdate();
-
-                IAutoTrackingProvider prev = mActiveProvider;
-                if (SetProperty(ref mActiveProvider, value))
-                {
-                    if (prev != null)
-                    {
-                        prev.ConnectionStatusChanged -= ActiveProvider_ConnectionStatusChanged;
-                        prev.DisconnectAsync().GetAwaiter().GetResult();
-                    }
-
-                    if (mActiveProvider != null)
-                    {
-                        Connected = mActiveProvider.IsConnected;
-                        mActiveProvider.ConnectionStatusChanged += ActiveProvider_ConnectionStatusChanged;
-                    }
-
-                    InvalidateCommandAvailability();
-                }
-            }
-        }
-
-        public IAutoTrackingProvider ActiveConnector => ActiveProvider;
-
-        private void ActiveProvider_ConnectionStatusChanged(object sender, bool connected)
-        {
-            if (mActiveProvider != null)
-            {
-                Connected = connected;
-            }
-        }
-
-        #endregion
-
-        #region -- Raw Read API --
-
-        public byte ReadU8(ulong address, byte defaultVal = 0)
-        {
-            try
-            {
-                if (ActiveProvider != null && Connected)
-                {
-                    byte val = defaultVal;
-                    if (ActiveProvider.Read8(address, out val))
-                        return val;
-                }
-            }
-            catch (Exception e)
-            {
-                ApplicationModel.Instance?.PrimaryState?.Scripts.OutputError("Error occurred during raw byte read via AutoTracker");
-                ApplicationModel.Instance?.PrimaryState?.Scripts.OutputException(e);
-            }
-
-            return defaultVal;
-        }
-
-        public sbyte Read8(ulong address, sbyte defaultVal = 0)
-        {
-            return unchecked((sbyte)ReadU8(address, unchecked((byte)defaultVal)));
-        }
-
-        public ushort ReadU16(ulong address, ushort defaultVal = 0)
-        {
-            try
-            {
-                if (ActiveProvider != null && Connected)
-                {
-                    ushort val = defaultVal;
-                    if (ActiveProvider.Read16(address, out val))
-                        return val;
-                }
-            }
-            catch (Exception e)
-            {
-                ApplicationModel.Instance?.PrimaryState?.Scripts.OutputError("Error occurred during raw word read via AutoTracker");
-                ApplicationModel.Instance?.PrimaryState?.Scripts.OutputException(e);
-            }
-
-            return defaultVal;
-        }
-
-        public short Read16(ulong address, short defaultVal = 0)
-        {
-            return unchecked((short)ReadU16(address, unchecked((ushort)defaultVal)));
-        }
-
-        #endregion
-
-        #region -- Commands --
-
-        DelegateCommand mStartCommand;
-        DelegateCommand mStopCommand;
-        DelegateCommand mSetProviderCommand;
-        DelegateCommand mSetDeviceCommand;
-
-        public DelegateCommand StartCommand
-        {
-            get { return mStartCommand; }
-            set { SetProperty(ref mStartCommand, value); }
-        }
-
-        public DelegateCommand StopCommand
-        {
-            get { return mStopCommand; }
-            set { SetProperty(ref mStopCommand, value); }
-        }
-
-        public DelegateCommand SetProviderCommand
-        {
-            get { return mSetProviderCommand; }
-            set { SetProperty(ref mSetProviderCommand, value); }
-        }
-
-        public DelegateCommand SetDeviceCommand
-        {
-            get { return mSetDeviceCommand; }
-            set { SetProperty(ref mSetDeviceCommand, value); }
-        }
-
-        void InvalidateCommandAvailability()
-        {
-            StartCommand.RaiseCanExecuteChanged();
-            StopCommand.RaiseCanExecuteChanged();
-        }
-
-        private async void SetProvider(object obj)
-        {
-            IAutoTrackingProvider provider = obj as IAutoTrackingProvider;
-            if (provider != null)
-            {
-                SelectedProvider = provider;
-                await provider.RefreshDevicesAsync();
-
-                // Auto-select first device if none selected
-                if (provider.DefaultDevice == null && provider.AvailableDevices.Count > 0)
-                {
-                    provider.DefaultDevice = provider.AvailableDevices[0];
-                }
-
-                InvalidateCommandAvailability();
-                NotifyPropertyChanged(nameof(SelectedProvider));
-            }
-        }
-
-        private void SetDevice(object obj)
-        {
-            IAutoTrackingDevice device = obj as IAutoTrackingDevice;
-            if (device != null && SelectedProvider != null)
-            {
-                SelectedProvider.DefaultDevice = device;
-
-                if (CanStartAutoTracking())
-                    StartAutoTracking();
-            }
-        }
-
-        private bool CanStopAutoTracking(object obj = null)
-        {
-            return ActiveProvider != null;
-        }
-
-        private void StopAutoTracking(object obj = null)
-        {
-            WaitForPendingMemoryUpdate();
-
-            bool bWasActive = ActiveProvider != null;
-            ActiveProvider = null;
-
-            if (bWasActive)
-                (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.AutoTrackerStopped);
-        }
-
-        private bool CanStartAutoTracking(object obj = null)
-        {
-            return ActiveProvider == null && SelectedProvider != null && SelectedProvider.DefaultDevice != null;
-        }
-
-        private async void StartAutoTracking(object obj = null)
-        {
-            if (CanStartAutoTracking(obj))
-            {
-                if (SelectedProvider != null)
-                {
-                    //  Force mark all memory updates as dirty to ensure they update
-                    foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
-                    {
-                        update.MarkDirty();
-                    }
-
-                    try
-                    {
-                        await SelectedProvider.ConnectAsync();
-                        ActiveProvider = SelectedProvider;
-
-                        (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.AutoTrackerStarted);
-                    }
-                    catch
-                    {
-                    }
-                }
-            }
-        }
-
-        #endregion
 
         public AutoTrackerExtension()
         {
-            StartCommand = new DelegateCommand(StartAutoTracking, CanStartAutoTracking);
-            StopCommand = new DelegateCommand(StopAutoTracking, CanStopAutoTracking);
-            SetProviderCommand = new DelegateCommand(SetProvider);
-            SetDeviceCommand = new DelegateCommand(SetDevice);
+            // Subscribe to PrimaryState changes so we can re-route the
+            // proxy to whichever state is currently active.
+            ApplicationModel.Instance.PropertyChanged += OnAppModelPropertyChanged;
         }
 
-        System.Timers.Timer mUpdateTimer;
-
-        public void Start()
+        // Per-state-extension factory hook.
+        public IStateScopedExtension CreateForState(TrackerState state)
         {
-            ApplicationModel.Instance?.PrimaryState?.Scripts.SetGlobalObject("AutoTracker", this);
-            ApplicationModel.Instance?.PrimaryState?.Scripts.SetMemoryWatchService(this);
-
-            mUpdateTimer = new System.Timers.Timer(30);
-            mUpdateTimer.Elapsed += (s, e) => UpdateMemoryHooks(s, e);
-            mUpdateTimer.AutoReset = true;
-            mUpdateTimer.Start();
+            return new AutoTrackerInstance(state);
         }
 
-        Task mActiveUpdateTask = null;
+        // Legacy Extension lifecycle — the heavy lifting moved to per-state
+        // instances. These no-ops keep the framework's app-wide hook chain
+        // intact for non-state-scoped extensions.
+        public void Start() { }
+        public void Stop() { }
+        public void OnPackageLoaded() { }
+        public void OnPackageUnloaded() { }
+        public JToken SerializeToJson() => null;
+        public bool DeserializeFromJson(JToken token) => true;
 
-        private bool HasPendingMemoryUpdate()
-        {
-            return mActiveUpdateTask != null;
-        }
+        // ---------- Active-state proxy ------------------------------------
 
-        public void WaitForPendingMemoryUpdate()
+        AutoTrackerInstance mSubscribedInstance;
+
+        /// <summary>
+        /// The per-state <see cref="AutoTrackerInstance"/> bound to the
+        /// currently-active <see cref="TrackerState"/>, or null if no
+        /// state is active. Re-evaluates each access; UI bindings
+        /// against this property's get-only inner state get
+        /// PropertyChanged from the proxy when the active instance
+        /// changes (we forward).
+        /// </summary>
+        public AutoTrackerInstance ActiveInstance
         {
-            if (mActiveUpdateTask != null)
+            get
             {
-                mActiveUpdateTask.Wait(1000);
-            }
-
-            mActiveUpdateTask = null;
-        }
-
-        private void UpdateMemoryHooks(object sender, EventArgs e)
-        {
-            DateTime now = DateTime.Now;
-
-            if (HasPendingMemoryUpdate())
-                return;
-
-            if (ActiveProvider != null && Connected)
-            {
-                foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
-                {
-                    if (update.ShouldUpdate(now))
-                    {
-                        PushPendingMemoryUpdate(update);
-                    }
-                }
-
-                PackageManager.Game game = null;
-                if (Tracker.Instance.ActiveGamePackage != null)
-                {
-                    PackageManager.Game gameInstance = PackageManager.Instance.FindGame(Tracker.Instance.ActiveGamePackage.Game);
-                    if (gameInstance != PackageManager.Instance.DefaultGame)
-                        game = gameInstance;
-                }
-
-                var providerInstance = ActiveProvider;
-
-                //  Detect disconnection — stop autotracking automatically
-                if (providerInstance != null && !providerInstance.IsConnected)
-                {
-                    Dispatch.BeginInvoke(() => StopAutoTracking());
-                    Error = true;
-                    return;
-                }
-
-                mActiveUpdateTask = Task.Run(() =>
-                {
-                    bool bError = false;
-
-                    try
-                    {
-                        int countAtStart = GetPendingMemoryUpdateCount();
-
-                        Stopwatch sw = new Stopwatch();
-                        sw.Start();
-
-                        int count = 0;
-                        while (count < countAtStart && sw.ElapsedMilliseconds < 30)
-                        {
-                            IUpdateWithConnector update = PopPendingMemoryUpdate();
-                            if (update != null)
-                            {
-                                if (update.UpdateWithConnector(providerInstance, game) != MemoryUpdateResult.Success)
-                                    bError = true;
-
-                                ++count;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        Dispatch.BeginInvoke(() =>
-                        {
-                            Error = bError;
-                            mActiveUpdateTask = null;
-                        });
-                    }
-                });
+                var state = ApplicationModel.Instance?.PrimaryState;
+                if (state == null) return null;
+                return ExtensionManager.Instance.GetStateScopedExtension<AutoTrackerInstance>(state);
             }
         }
 
-        public void Stop()
+        void OnAppModelPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            StopAutoTracking();
-
-            if (mUpdateTimer != null)
+            if (e.PropertyName == nameof(ApplicationModel.PrimaryState)
+                || e.PropertyName == nameof(ApplicationModel.CurrentlyActiveWindowContext))
             {
-                mUpdateTimer.Stop();
-                mUpdateTimer.Dispose();
-                mUpdateTimer = null;
+                ResubscribeActiveInstance();
             }
         }
 
-        public JToken SerializeToJson()
+        void ResubscribeActiveInstance()
         {
-            return null;
-        }
-
-        public bool DeserializeFromJson(JToken token)
-        {
-            return true;
-        }
-
-        List<IUpdateWithConnector> mActiveMemoryUpdates = new List<IUpdateWithConnector>();
-
-        public IMemorySegment AddMemoryWatch(string name, ulong startAddress, ulong length, Func<IMemorySegment, bool> callback, Action<IMemorySegment> disposeCallback, int period)
-        {
-            lock (this)
+            // Drop subscription to the previous instance.
+            if (mSubscribedInstance != null)
             {
-                MemorySegment segment = new MemorySegment(name, startAddress, length, callback, disposeCallback, period);
-                mActiveMemoryUpdates.Add(segment);
-                NotifyPropertyChanged("Active");
-
-                return segment;
+                mSubscribedInstance.PropertyChanged -= OnInstancePropertyChanged;
+                mSubscribedInstance = null;
             }
+            // Subscribe to the new active instance.
+            var inst = ActiveInstance;
+            mSubscribedInstance = inst;
+            if (inst != null)
+                inst.PropertyChanged += OnInstancePropertyChanged;
+
+            // Fire PropertyChanged on every proxied property so any UI
+            // bound to the factory rebinds against the new instance.
+            NotifyPropertyChanged(nameof(Connected));
+            NotifyPropertyChanged(nameof(Error));
+            NotifyPropertyChanged(nameof(Active));
+            NotifyPropertyChanged(nameof(ActiveProvider));
+            NotifyPropertyChanged(nameof(SelectedProvider));
+            NotifyPropertyChanged(nameof(ApplicableProviders));
+            NotifyPropertyChanged(nameof(StartCommand));
+            NotifyPropertyChanged(nameof(StopCommand));
+            NotifyPropertyChanged(nameof(SetProviderCommand));
+            NotifyPropertyChanged(nameof(SetDeviceCommand));
+            NotifyPropertyChanged(nameof(ActiveInstance));
         }
 
-        public void RemoveMemoryWatch(IMemorySegment segmentBase)
+        void OnInstancePropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            lock (this)
-            {
-                MemorySegment segment = segmentBase as MemorySegment;
-                if (segment != null && mActiveMemoryUpdates.Contains(segment))
-                {
-                    mActiveMemoryUpdates.Remove(segment);
-                    segment.Dispose();
-                }
-            }
+            // Forward verbatim — same property names on the proxy.
+            NotifyPropertyChanged(e.PropertyName);
         }
 
-        public MemoryTimer AddMemoryTimer(string name, Func<IAutoTrackingProvider, PackageManager.Game, bool> callback, int period)
-        {
-            lock (this)
-            {
-                MemoryTimer timer = new MemoryTimer(name, callback, period);
-                mActiveMemoryUpdates.Add(timer);
-                NotifyPropertyChanged("Active");
+        // ---------- Forwarded UI-binding properties -----------------------
 
-                return timer;
-            }
-        }
+        public bool Connected => ActiveInstance?.Connected ?? false;
+        public bool Error => ActiveInstance?.Error ?? false;
+        public bool Active => ActiveInstance?.Active ?? false;
 
-        public void RemoveMemoryTimer(MemoryTimer timer)
-        {
-            lock (this)
-            {
-                if (timer != null && mActiveMemoryUpdates.Contains(timer))
-                {
-                    mActiveMemoryUpdates.Remove(timer);
-                    DisposeObject(timer);
-                }
-            }
-        }
+        public IAutoTrackingProvider ActiveProvider => ActiveInstance?.ActiveProvider;
+        public IAutoTrackingProvider SelectedProvider => ActiveInstance?.SelectedProvider;
+        public IEnumerable<IAutoTrackingProvider> ApplicableProviders
+            => ActiveInstance?.ApplicableProviders ?? Enumerable.Empty<IAutoTrackingProvider>();
 
-        Queue<IUpdateWithConnector> mPendingMemoryUpdateTasks = new Queue<IUpdateWithConnector>();
-
-        void PushPendingMemoryUpdate(IUpdateWithConnector update)
-        {
-            lock (mPendingMemoryUpdateTasks)
-            {
-                if (!mPendingMemoryUpdateTasks.Contains(update))
-                {
-                    mPendingMemoryUpdateTasks.Enqueue(update);
-                }
-            }
-        }
-
-        int GetPendingMemoryUpdateCount()
-        {
-            lock (mPendingMemoryUpdateTasks)
-            {
-                return mPendingMemoryUpdateTasks.Count;
-            }
-        }
-
-        IUpdateWithConnector PopPendingMemoryUpdate()
-        {
-            lock (mPendingMemoryUpdateTasks)
-            {
-                try
-                {
-                    if (mPendingMemoryUpdateTasks.Count > 0)
-                        return mPendingMemoryUpdateTasks.Dequeue();
-                    else
-                        return null;
-                }
-                catch
-                {
-                    return null;
-                }
-            }
-        }
-
-        void Clear()
-        {
-            WaitForPendingMemoryUpdate();
-
-            lock (this)
-            {
-                mPendingMemoryUpdateTasks.Clear();
-
-                DisposeCollection(mActiveMemoryUpdates);
-                mActiveMemoryUpdates.Clear();
-            }
-        }
+        public DelegateCommand StartCommand => ActiveInstance?.StartCommand;
+        public DelegateCommand StopCommand => ActiveInstance?.StopCommand;
+        public DelegateCommand SetProviderCommand => ActiveInstance?.SetProviderCommand;
+        public DelegateCommand SetDeviceCommand => ActiveInstance?.SetDeviceCommand;
     }
 }
