@@ -205,8 +205,26 @@ namespace EmoTracker.Data.Sessions
             Maps = maps ?? new MapDatabase();
             Layouts = layouts ?? new LayoutManager();
 
+            // Phase 6 step 10 fix: when ANY collaborator was adopted from
+            // an outside source (the singleton-adoption path used by
+            // ApplicationModel.RebindActivePackageInstanceFromSingletons),
+            // skip the disposal cascade in our Dispose. Otherwise the old
+            // primary state's teardown closes the just-re-bootstrapped
+            // singleton ScriptManager's Lua interpreter, leaving the
+            // newly-adopted PrimaryState pointing at a singleton with a
+            // closed mLua — which manifests as NRE in
+            // ScriptManager.InvokeStandardCallback and ProviderCountForCode
+            // when sections fire their PropertyChanging/Changed callbacks.
+            mAdoptedCollaborators =
+                scripts != null || transactions != null || items != null
+                || locations != null || maps != null || layouts != null;
+
             WireCatalogStateBackRefs();
         }
+
+        // True iff this state was constructed via the adoption ctor and
+        // must NOT dispose its (shared) collaborators on teardown.
+        readonly bool mAdoptedCollaborators;
 
         // Sets the State back-ref on each catalog so peer access within
         // the EmoTracker.Data catalog code (e.g. LocationDatabase reaching
@@ -315,7 +333,14 @@ namespace EmoTracker.Data.Sessions
         /// </summary>
         public override void Dispose()
         {
-            Scripts?.Dispose();
+            // Phase 6 step 10 fix: skip Scripts disposal when this state
+            // adopted its collaborators from outside (the singleton path).
+            // The collaborators outlive the state and must not have their
+            // resources torn down here — Tracker.Reload's own ScriptManager
+            // Reset/Load cycle is the canonical lifecycle for the singleton's
+            // Lua interpreter.
+            if (!mAdoptedCollaborators)
+                Scripts?.Dispose();
             mResolver.Clear();
             base.Dispose();
         }

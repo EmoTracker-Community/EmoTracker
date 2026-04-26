@@ -375,6 +375,69 @@ namespace EmoTracker.SourceGenerators.Tests
             state.Dispose();
         }
 
+        // -------- Adoption disposal contract (the runtime regression) ------
+
+        [Fact]
+        public void AdoptedState_Dispose_DoesNotTearDownSharedCollaborators()
+        {
+            // Plan §6.7 invariant + step-10 runtime regression: when a
+            // TrackerState is constructed via the adoption ctor (as
+            // ApplicationModel.RebindActivePackageInstanceFromSingletons
+            // does on every pack-load and reload), its collaborators are
+            // shared with the legacy singletons + with subsequent adopted
+            // states. Disposing such a state must NOT tear those
+            // collaborators down — otherwise the next pack-load's primary
+            // state adopts the same singleton ScriptManager whose
+            // mLua got closed during the previous teardown, which
+            // surfaces as NRE in InvokeStandardCallback / ProviderCountForCode
+            // the moment a section fires its property-change callbacks.
+            var sharedScripts = new ScriptManager();
+            sharedScripts.BootstrapInterpreter();
+            Assert.True(sharedScripts.IsLuaLoaded);
+
+            var sharedItems = new ItemDatabase();
+            var sharedLocations = new LocationDatabase();
+            var sharedMaps = new MapDatabase();
+            var sharedLayouts = new EmoTracker.Data.Layout.LayoutManager();
+            var sharedTx = new EmoTracker.Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo();
+
+            var adopted = new TrackerState(
+                name: "primary",
+                scripts: sharedScripts,
+                transactions: sharedTx,
+                items: sharedItems,
+                locations: sharedLocations,
+                maps: sharedMaps,
+                layouts: sharedLayouts);
+
+            adopted.Dispose();
+
+            // The shared ScriptManager survives — its Lua interpreter
+            // is still alive, ready for the next adoption cycle.
+            Assert.True(sharedScripts.IsLuaLoaded);
+
+            // Cleanup the actually-owned resource.
+            sharedScripts.Dispose();
+        }
+
+        [Fact]
+        public void NonAdoptedState_Dispose_TearsDownItsOwnScripts()
+        {
+            // The complement: when a TrackerState is constructed fresh
+            // (no adoption parameters), it owns its collaborators and
+            // Dispose tears them down — including closing the Lua
+            // interpreter on its ScriptManager.
+            var state = new TrackerState("fresh");
+            state.Scripts.BootstrapInterpreter();
+            Assert.True(state.Scripts.IsLuaLoaded);
+
+            var ownedScripts = state.Scripts;
+            state.Dispose();
+
+            // Fresh state's Scripts was owned, so disposal closed its mLua.
+            Assert.False(ownedScripts.IsLuaLoaded);
+        }
+
         [Fact]
         public void StateOwnedItem_DependentPropertiesFire_OnTransactableWrite()
         {
