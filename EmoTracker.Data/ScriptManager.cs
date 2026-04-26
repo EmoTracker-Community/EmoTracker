@@ -965,16 +965,50 @@ end
             // bootstrapped interpreter as-is.
             if (src.mLua == null) return;
 
-            // Build the bridge identity map. In Phase 5 the bridges are
-            // still singletons (TrackerScriptInterface.Instance etc.), so
-            // src and dst hand the SAME C# object reference back. The map
-            // is empty for now; Phase 6's per-state bridges populate it
-            // with src.bridge → dst.bridge entries so closure upvalues
-            // capturing the source's bridges get remapped to the fork's.
+            // Build the bridge identity map: source.bridge → destination.bridge
+            // for every C# bridge global ScriptManager binds. In Phase 5 the
+            // bridges are still singletons, so each entry is just an identity
+            // mapping (src.Tracker == dst.Tracker because both pull from
+            // TrackerScriptInterface.Instance). Populating the map is still
+            // the right thing for two reasons:
+            //
+            //   1. The cloner's CloneValue path warns when it falls through
+            //      to "passing through reference" for unrecognized userdata.
+            //      Without bridge entries, every closure that captures a
+            //      bridge as an upvalue emits a noisy warning. With entries,
+            //      the bridge-map lookup short-circuits cleanly.
+            //
+            //   2. Phase 6's per-state bridges will replace each
+            //      TrackerScriptInterface.Instance with a state-bound
+            //      instance — at which point src.Tracker ≠ dst.Tracker and
+            //      this map's entries become the meaningful remap. The
+            //      wiring point is in place from Phase 5 onward.
             var bridgeMap = new Dictionary<object, object>();
+            AddBridgeMapping(bridgeMap, src.mLua, mLua, "Tracker");
+            AddBridgeMapping(bridgeMap, src.mLua, mLua, "Layout");
+            AddBridgeMapping(bridgeMap, src.mLua, mLua, "AccessibilityLevel");
+            AddBridgeMapping(bridgeMap, src.mLua, mLua, "NotificationType");
+            AddBridgeMapping(bridgeMap, src.mLua, mLua, "ScriptHost");
+            AddBridgeMapping(bridgeMap, src.mLua, mLua, "ImageReference");
 
             ForkCloner = new LuaStateCloner(src.mLua, mLua, bridgeMap, OutputWarning);
             ForkCloner.CloneAll();
+        }
+
+        // Helper: read the same-named global from src's and dst's interpreters
+        // and add the (srcValue → dstValue) entry to the bridge map. No-op
+        // if either side is null (the bridge isn't installed for some
+        // reason). When src and dst hold the same C# reference (Phase 5's
+        // singleton case), the map entry is identity — harmless and
+        // satisfies the cloner's bridge-lookup short-circuit.
+        static void AddBridgeMapping(Dictionary<object, object> map, Lua src, Lua dst, string globalName)
+        {
+            object srcVal = src[globalName];
+            object dstVal = dst[globalName];
+            if (srcVal != null && dstVal != null && !map.ContainsKey(srcVal))
+            {
+                map[srcVal] = dstVal;
+            }
         }
 
         /// <summary>
