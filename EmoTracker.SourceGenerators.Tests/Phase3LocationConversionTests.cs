@@ -319,21 +319,58 @@ namespace EmoTracker.SourceGenerators.Tests
             Assert.Null(section.GateItem);
         }
 
-        // -------- ModelReference + AmbientSingletonModelResolver ------------
+        // -------- ModelReference + PrimaryStateModelResolver ----------------
 
         [Fact]
-        public void AmbientSingletonModelResolver_DoesNotResolveUnknownGuid()
+        public void PrimaryStateModelResolver_DoesNotResolveUnknownGuid()
         {
-            var resolver = new AmbientSingletonModelResolver();
-            var result = resolver.Resolve<Location>(Guid.NewGuid());
-            Assert.Null(result);
+            // Phase 6 step 9: PrimaryStateModelResolver replaces the
+            // AmbientSingletonModelResolver. With no active state set, it
+            // returns null for any lookup.
+            var prior = EmoTracker.Data.Sessions.SessionContext.ActiveState;
+            try
+            {
+                EmoTracker.Data.Sessions.SessionContext.ActiveState = null;
+                var resolver = new PrimaryStateModelResolver();
+                var result = resolver.Resolve<Location>(Guid.NewGuid());
+                Assert.Null(result);
+            }
+            finally
+            {
+                EmoTracker.Data.Sessions.SessionContext.ActiveState = prior;
+            }
         }
 
         [Fact]
-        public void AmbientSingletonModelResolver_ReturnsNullOnEmptyGuid()
+        public void PrimaryStateModelResolver_ReturnsNullOnEmptyGuid()
         {
-            var resolver = new AmbientSingletonModelResolver();
+            var resolver = new PrimaryStateModelResolver();
             Assert.Null(resolver.Resolve<Location>(Guid.Empty));
+        }
+
+        [Fact]
+        public void PrimaryStateModelResolver_DelegatesToActiveState()
+        {
+            // With an active state holding a registered model, the resolver
+            // hits the state's IndexedModelResolver and returns that model.
+            var prior = EmoTracker.Data.Sessions.SessionContext.ActiveState;
+            try
+            {
+                var state = new EmoTracker.Data.Sessions.TrackerState("test");
+                var loc = new Location();
+                state.Resolver.Register(loc);
+                EmoTracker.Data.Sessions.SessionContext.ActiveState = state;
+
+                var resolver = new PrimaryStateModelResolver();
+                Assert.Same(loc, resolver.Resolve<Location>(loc.DefinitionId));
+
+                // Unknown id still returns null even with a populated state.
+                Assert.Null(resolver.Resolve<Location>(Guid.NewGuid()));
+            }
+            finally
+            {
+                EmoTracker.Data.Sessions.SessionContext.ActiveState = prior;
+            }
         }
 
         // -------- SectionChestsProxyItem retrofit (Phase 2.5 deferred) ------

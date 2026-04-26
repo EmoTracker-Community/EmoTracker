@@ -23,10 +23,14 @@ namespace EmoTracker
             Data.Core.Transactions.TransactionProcessor.SetTransactionProcessor(
                 new Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo());
 
-            // Install the data-model-v2 ambient cross-model reference resolver. Bridges
-            // ModelReference<T>.Target lookups to the singleton ItemDatabase / Tracker /
-            // LocationDatabase graph until per-state resolvers land in the state-lifecycle phase.
-            Core.DataModel.ModelResolver.Current = new Data.Core.DataModel.AmbientSingletonModelResolver();
+            // Install the data-model-v2 ambient cross-model reference resolver.
+            // Phase 6 step 9: routes ModelReference<T>.Target lookups through
+            // SessionContext.ActiveState's per-state IndexedModelResolver
+            // (O(1) lookup) — replaces the Phase 2.5 AmbientSingletonModelResolver
+            // which linear-scanned the legacy singleton catalogs. ApplicationModel
+            // populates SessionContext.ActiveState in RebindActivePackageInstanceFromSingletons
+            // after each pack-load.
+            Core.DataModel.ModelResolver.Current = new Data.Core.DataModel.PrimaryStateModelResolver();
 
             // Phase 5: register the active script manager so ModelTypeBase.GetScriptManager()
             // (and the holder-aware standard-callback dispatch path) can find it without

@@ -13,12 +13,13 @@ namespace EmoTracker.Data.Core.DataModel
     /// sections, maps, layouts, layout elements with UIDs, etc.).
     ///
     /// <para>
-    /// Replaces the Phase 2.5 <see cref="AmbientSingletonModelResolver"/>'s
-    /// linear-scan-the-singleton-catalogs shape: the ambient resolver works
-    /// for one global graph but doesn't compose across states. The indexed
-    /// resolver gives each state its own DefinitionId → instance map and
-    /// answers <c>Resolve&lt;T&gt;(Guid)</c> in O(1), with the right
-    /// instance for the right state.
+    /// Replaces the Phase 2.5 <c>AmbientSingletonModelResolver</c>'s
+    /// linear-scan-the-singleton-catalogs shape (retired in Phase 6 step 9):
+    /// the ambient resolver worked for one global graph but didn't compose
+    /// across states. The indexed resolver gives each state its own
+    /// DefinitionId → instance map and answers
+    /// <c>Resolve&lt;T&gt;(Guid)</c> in O(1), with the right instance for
+    /// the right state.
     /// </para>
     ///
     /// <para>
