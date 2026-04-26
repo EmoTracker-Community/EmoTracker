@@ -204,6 +204,93 @@ namespace EmoTracker.Extensions.McpServer.Tools
             });
         }
 
+        // Phase 7 XAML migration testing: spawn a fork tab on the active
+        // window so cross-tab content swap can be exercised.
+        [McpServerTool(Name = "create_fork_tab")]
+        [Description("Phase 7 testing: create a fork of the active state and add it as a tab on the active window. Returns the new state's id.")]
+        public static async Task<string> CreateForkTab()
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var app = ApplicationModel.Instance;
+                    var ctx = app.CurrentlyActiveWindowContext;
+                    if (ctx == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "No active window context" });
+
+                    var pi = app.PackageInstances.FirstOrDefault(p => p.Package != null);
+                    if (pi == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "No PackageInstance with a loaded pack" });
+
+                    var fork = app.CreateAdditionalState(pi);
+                    ctx.AddState(fork, makeActive: true);
+                    app.OnActiveStateSwitched(fork);
+
+                    return JsonSerializer.Serialize(new { success = true, stateId = fork.Id.ToString(), name = fork.Name, openTabs = ctx.OpenStates.Count });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+                }
+            });
+        }
+
+        [McpServerTool(Name = "switch_to_tab")]
+        [Description("Phase 7 testing: switch to a different tab on the active window by state id. Lists open tab ids on success.")]
+        public static async Task<string> SwitchToTab(
+            [Description("State id (Guid string) of the tab to activate")] string stateId)
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    if (!Guid.TryParse(stateId, out var id))
+                        return JsonSerializer.Serialize(new { success = false, error = "Invalid Guid" });
+                    var app = ApplicationModel.Instance;
+                    var ctx = app.CurrentlyActiveWindowContext;
+                    if (ctx == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "No active window" });
+                    var target = ctx.OpenStates.FirstOrDefault(s => s.Id == id);
+                    if (target == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "State not in open tabs" });
+                    ctx.ActiveState = target;
+                    app.OnActiveStateSwitched(target);
+                    return JsonSerializer.Serialize(new { success = true, activeStateId = target.Id.ToString() });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+                }
+            });
+        }
+
+        [McpServerTool(Name = "list_tabs")]
+        [Description("Phase 7 testing: list every open tab on every window with state id, name, and which is active.")]
+        public static async Task<string> ListTabs()
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var app = ApplicationModel.Instance;
+                    var windows = new List<object>();
+                    foreach (var w in app.Windows)
+                    {
+                        var tabs = new List<object>();
+                        foreach (var s in w.OpenStates)
+                            tabs.Add(new { id = s.Id.ToString(), name = s.Name, active = ReferenceEquals(s, w.ActiveState) });
+                        windows.Add(new { windowId = w.Id.ToString(), tabs });
+                    }
+                    return JsonSerializer.Serialize(new { activeWindowId = app.CurrentlyActiveWindowContext?.Id.ToString(), windows });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { error = ex.Message });
+                }
+            });
+        }
+
         [McpServerTool(Name = "shutdown")]
         [Description("Trigger a normal shutdown of the application by closing the main window")]
         public static async Task<string> Shutdown()

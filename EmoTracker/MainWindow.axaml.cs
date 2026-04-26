@@ -72,6 +72,13 @@ namespace EmoTracker
             this.Activated += (_, __) => ApplicationModel.Instance.CurrentlyActiveWindowContext = WindowContext;
             this.Closed += (_, __) => ApplicationModel.Instance.UnregisterWindow(WindowContext);
 
+            // Phase 7 XAML migration: drive per-window layout refresh from
+            // this window's WindowContext.ActiveState changes (rather than
+            // the previously-used global ApplicationModel.TrackerLayout
+            // slot, which couldn't differentiate between multiple windows).
+            WindowContext.PropertyChanged += OnWindowContextPropertyChanged;
+            EmoTracker.Data.Sessions.PackageLoader.OnPackageLoadComplete += OnAnyPackageLoadComplete;
+
             if (ApplicationSettings.Instance.InitialWidth >= 0.0)
                 Width = ApplicationSettings.Instance.InitialWidth;
             if (ApplicationSettings.Instance.InitialHeight >= 0.0)
@@ -475,11 +482,49 @@ namespace EmoTracker
             double h = Bounds.Height > 0 ? Bounds.Height : Height;
             double w = Bounds.Width > 0 ? Bounds.Width : Width;
             bool vertical = h > w;
-            var layout = vertical
-                ? ApplicationModel.Instance.TrackerVerticalLayout
-                : ApplicationModel.Instance.TrackerHorizontalLayout;
+
+            // Phase 7 XAML migration: pull layouts from THIS window's
+            // active state, not the global ApplicationModel.TrackerXxxLayout
+            // slot. This makes per-window content selection work — each
+            // window renders the layouts of its own active state, even
+            // when multiple windows exist or tabs from different packs
+            // are mixed.
+            EmoTracker.Data.Layout.Layout layout = null;
+            var layouts = WindowContext?.ActiveState?.Layouts;
+            if (layouts != null)
+            {
+                layout = vertical
+                    ? layouts.FindLayout("tracker_vertical") ?? layouts.FindLayout("tracker_default")
+                    : layouts.FindLayout("tracker_horizontal") ?? layouts.FindLayout("tracker_default");
+            }
+            // Fallback to ApplicationModel global slot if this window's
+            // state isn't fully populated yet (early-startup race).
+            if (layout == null)
+            {
+                layout = vertical
+                    ? ApplicationModel.Instance.TrackerVerticalLayout
+                    : ApplicationModel.Instance.TrackerHorizontalLayout;
+            }
             if (TrackerLayout != null)
                 TrackerLayout.DataContext = layout;
+        }
+
+        // Phase 7 XAML migration: forward WindowContext.ActiveState
+        // changes into a layout refresh on this window.
+        private void OnWindowContextPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(WindowContext.ActiveState))
+                RefreshTrackerLayout();
+        }
+
+        // When any pack-load completes, if this window's active state was
+        // the load target, refresh layout (its Layouts are now populated).
+        private void OnAnyPackageLoadComplete(object sender, EmoTracker.Data.Sessions.PackageLoader.PackageLoadEventArgs e)
+        {
+            if (e?.Target != null && ReferenceEquals(e.Target, WindowContext?.ActiveState))
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(RefreshTrackerLayout);
+            }
         }
 
         protected override void OnSizeChanged(SizeChangedEventArgs e)

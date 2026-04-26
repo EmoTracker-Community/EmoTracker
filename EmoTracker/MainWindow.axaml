@@ -17,7 +17,7 @@
         Background="#111111"
         MinWidth="220" MinHeight="61"
         Width="1280" Height="960"
-        Title="{Binding MainWindowTitle, Source={x:Static local:ApplicationModel.Instance}}"
+        Title="{Binding #HostWindow.WindowContext.WindowTitle}"
         Topmost="{Binding AlwaysOnTop, Source={x:Static data:ApplicationSettings.Instance}}">
 
 <Grid RowDefinitions="Auto,*,Auto">
@@ -38,9 +38,11 @@
                 <ui:LayoutControl x:Name="TrackerLayout" />
             </LayoutTransformControl>
 
-            <!-- No-package placeholder: visible only when no package is active -->
+            <!-- Phase 7 XAML migration: per-window placeholder visibility.
+                 No-package placeholder is shown when this window's active
+                 state has no pack loaded. -->
             <Grid Background="#080808" IsHitTestVisible="False" Name="NoPackagePlaceholder"
-                  IsVisible="{Binding ActiveGamePackage, Source={x:Static data:Tracker.Instance}, Converter={x:Static converters:NullToTrueConverter.Instance}}">
+                  IsVisible="{Binding #HostWindow.WindowContext.ActiveGamePackage, Converter={x:Static converters:NullToTrueConverter.Instance}}">
                 <TextBlock Foreground="WhiteSmoke"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextWrapping="Wrap" Margin="15"
@@ -117,12 +119,13 @@
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding AlwaysOnTop, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 <Separator />
+                                <!-- Phase 7 XAML migration: per-window active state's Settings -->
                                 <MenuItem Header="Enable Map"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding MapEnabled, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.MapEnabled, Mode=TwoWay}" />
                                 <MenuItem Header="Swap Left/Right"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding SwapLeftRight, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.SwapLeftRight, Mode=TwoWay}" />
                                 <Separator />
                                 <MenuItem Header="Map DPI Awareness"
                                           ToggleType="CheckBox"
@@ -131,25 +134,28 @@
                                 <MenuItem Header="Reset Layout Scale" Command="{Binding ResetLayoutScaleCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+D0" />
                             </MenuItem>
                             <MenuItem Header="Tracking">
+                                <!-- Phase 7 XAML migration: the six per-state toggles route
+                                     through this window's WindowContext.ActiveState.Settings.
+                                     PromptOnRefreshClose stays app-wide (it's a UI behavior). -->
                                 <MenuItem Header="Always Allow Chest Manipulation"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding AlwaysAllowClearing, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.AlwaysAllowClearing, Mode=TwoWay}" />
                                 <MenuItem Header="Ignore All Logic"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding IgnoreAllLogic, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.IgnoreAllLogic, Mode=TwoWay}" />
                                 <MenuItem Header="Prompt When Refreshing/Closing"
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding PromptOnRefreshClose, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 <MenuItem Header="Show All Locations" InputGesture="F11"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding DisplayAllLocations, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.DisplayAllLocations, Mode=TwoWay}" />
                                 <Separator />
                                 <MenuItem Header="Pin Locations on Item Capture"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding PinLocationsOnItemCapture, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.PinLocationsOnItemCapture, Mode=TwoWay}" />
                                 <MenuItem Header="Unpin Locations when Cleared"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding AutoUnpinLocationsOnClear, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.AutoUnpinLocationsOnClear, Mode=TwoWay}" />
                                 <Separator />
                                 <MenuItem Header="Reload" Command="{Binding RefreshCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F5" />
                             </MenuItem>

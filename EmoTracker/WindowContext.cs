@@ -42,7 +42,73 @@ namespace EmoTracker
         public TrackerState ActiveState
         {
             get => mActiveState;
-            set => SetProperty(ref mActiveState, value);
+            set
+            {
+                if (SetProperty(ref mActiveState, value))
+                {
+                    // Phase 7 XAML migration: derived properties refresh.
+                    NotifyPropertyChanged(nameof(ActivePackageInstance));
+                    NotifyPropertyChanged(nameof(ActiveGamePackage));
+                    NotifyPropertyChanged(nameof(WindowTitle));
+                    NotifyPropertyChanged(nameof(HasActiveState));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Phase 7 XAML migration: the <see cref="PackageInstance"/>
+        /// owning this window's active state, or null. Surfaces enough
+        /// pack info for per-window bindings (placeholder visibility,
+        /// title) without forcing each consumer to walk
+        /// <c>ApplicationModel.PackageInstances</c>.
+        /// </summary>
+        public PackageInstance ActivePackageInstance
+        {
+            get
+            {
+                var state = mActiveState;
+                if (state == null) return null;
+                foreach (var pi in EmoTracker.ApplicationModel.Instance.PackageInstances)
+                {
+                    if (pi.States.ContainsKey(state.Id))
+                        return pi;
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Phase 7 XAML migration: the active pack's IGamePackage, or null.
+        /// Used by the "no package loaded" placeholder in <c>MainWindow</c>.
+        /// </summary>
+        public EmoTracker.Data.IGamePackage ActiveGamePackage
+            => ActivePackageInstance?.Package;
+
+        /// <summary>True iff <see cref="ActiveState"/> is non-null.</summary>
+        public bool HasActiveState => mActiveState != null;
+
+        /// <summary>
+        /// Phase 7 XAML migration: the window title — pack name + variant
+        /// for this window's active state, falling back to the app title.
+        /// </summary>
+        public string WindowTitle
+        {
+            get
+            {
+                var pi = ActivePackageInstance;
+                if (pi?.Package == null)
+                    return string.Format("EmoTracker {0}", EmoTracker.Core.ApplicationVersion.Current);
+
+                var pkg = pi.Package;
+                var variant = pi.ActiveVariant;
+                if (variant != null)
+                    return string.Format("EmoTracker {0}  ::  {1} | {2}",
+                        EmoTracker.Core.ApplicationVersion.Current,
+                        pkg.DisplayName, variant.DisplayName);
+                return string.Format("EmoTracker {0}  ::  {1}",
+                    EmoTracker.Core.ApplicationVersion.Current,
+                    pkg.DisplayName);
+            }
         }
 
         // Optional back-ref to the host Window. Set by the window during

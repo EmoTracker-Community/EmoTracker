@@ -85,7 +85,32 @@ namespace EmoTracker
         public WindowContext CurrentlyActiveWindowContext
         {
             get { return mCurrentlyActiveWindowContext; }
-            internal set { SetProperty(ref mCurrentlyActiveWindowContext, value); }
+            internal set
+            {
+                var prev = mCurrentlyActiveWindowContext;
+                if (SetProperty(ref mCurrentlyActiveWindowContext, value))
+                {
+                    // Phase 7 XAML migration: PrimaryState is dynamic (it
+                    // tracks CurrentlyActiveWindowContext.ActiveState). When
+                    // the active window changes, PrimaryState changes too —
+                    // fire PropertyChanged so XAML bindings against
+                    // {Binding PrimaryState.X, Source={x:Static AppModel}}
+                    // rebind. Subscribe to the new context's ActiveState
+                    // changes so tab switches within the active window
+                    // also fire PrimaryState changed.
+                    if (prev != null)
+                        prev.PropertyChanged -= OnActiveWindowContextPropertyChanged;
+                    if (value != null)
+                        value.PropertyChanged += OnActiveWindowContextPropertyChanged;
+                    NotifyPropertyChanged(nameof(PrimaryState));
+                }
+            }
+        }
+
+        void OnActiveWindowContextPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(WindowContext.ActiveState))
+                NotifyPropertyChanged(nameof(PrimaryState));
         }
 
         // Phase 7.6: register a window's context. Called by the

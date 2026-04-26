@@ -136,7 +136,14 @@ namespace EmoTracker.Core.DataModel
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
             this.ImmutableData = source.ImmutableData;
+            // Phase 7 polish: snapshot the source's mutable state at fork
+            // time so forks are TRULY independent of subsequent source
+            // mutations. Without this Flatten, the COW parent-chain would
+            // leak source-side writes into forks via fall-through reads.
+            // The Phase 1 plan reserved Flatten as an explicit op; we use
+            // it here to make the multi-state-isolation goal hold.
             this.MutableData = new MutableKeyValueStore(source.MutableData);
+            this.MutableData.Flatten();
             this.OnForked(source);
         }
 
