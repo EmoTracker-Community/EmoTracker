@@ -29,7 +29,11 @@ namespace EmoTracker.Data.Locations
         /// </summary>
         public AccessibilityLevel GetAccessibility(Sessions.TrackerState state)
         {
-            if (ApplicationSettings.Instance.IgnoreAllLogic)
+            // Phase 7.3: prefer per-state IgnoreAllLogic; fall back to the
+            // app-wide forwarder (which itself reads through to active state
+            // when one is present).
+            bool ignoreLogic = state?.Settings?.IgnoreAllLogic ?? ApplicationSettings.Instance.IgnoreAllLogic;
+            if (ignoreLogic)
                 return AccessibilityLevel.Normal;
 
             if (mRules.Count == 0)
@@ -48,7 +52,11 @@ namespace EmoTracker.Data.Locations
 
         public AccessibilityLevel GetAccessibilityWithoutModifiers(Sessions.TrackerState state)
         {
-            if (ApplicationSettings.Instance.IgnoreAllLogic)
+            // Phase 7.3: prefer per-state IgnoreAllLogic; fall back to the
+            // app-wide forwarder (which itself reads through to active state
+            // when one is present).
+            bool ignoreLogic = state?.Settings?.IgnoreAllLogic ?? ApplicationSettings.Instance.IgnoreAllLogic;
+            if (ignoreLogic)
                 return AccessibilityLevel.Normal;
 
             if (mRules.Count == 0)

@@ -259,7 +259,10 @@ namespace EmoTracker.Data.Locations
                 int numClearedSections = 0;
                 foreach (Section s in Sections)
                 {
-                    if (AlwaysAllowChestManipulation || s.AccessibilityLevel >= AccessibilityLevel.Unlockable || ApplicationSettings.Instance.AlwaysAllowClearing)
+                    // Phase 7.3: per-state AlwaysAllowClearing.
+                    bool alwaysAllow = (this.OwnerState as Sessions.TrackerState)?.Settings?.AlwaysAllowClearing
+                                       ?? ApplicationSettings.Instance.AlwaysAllowClearing;
+                    if (AlwaysAllowChestManipulation || s.AccessibilityLevel >= AccessibilityLevel.Unlockable || alwaysAllow)
                     {
                         if (s.Visible)
                         {

@@ -83,7 +83,10 @@ namespace EmoTracker.Data.Items
                 var s = Section;
                 if (s != null && s.Visible)
                 {
-                    if (ApplicationSettings.Instance.AlwaysAllowClearing || s.AccessibilityLevel != AccessibilityLevel.None)
+                    // Phase 7.3: per-state AlwaysAllowClearing.
+                    bool alwaysAllow = (this.OwnerState as Sessions.TrackerState)?.Settings?.AlwaysAllowClearing
+                                       ?? ApplicationSettings.Instance.AlwaysAllowClearing;
+                    if (alwaysAllow || s.AccessibilityLevel != AccessibilityLevel.None)
                         return true;
                 }
 

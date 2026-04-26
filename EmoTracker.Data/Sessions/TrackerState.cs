@@ -130,6 +130,15 @@ namespace EmoTracker.Data.Sessions
         public LayoutManager Layouts { get; }
 
         /// <summary>
+        /// Phase 7.3: per-state user-toggleable settings (IgnoreAllLogic,
+        /// DisplayAllLocations, AlwaysAllowClearing, AutoUnpinLocationsOnClear,
+        /// PinLocationsOnItemCapture, MapEnabled, SwapLeftRight). These
+        /// previously lived on <see cref="ApplicationSettings"/> and were
+        /// process-wide; they now follow the state on Fork.
+        /// </summary>
+        public SessionSettings Settings { get; }
+
+        /// <summary>
         /// The per-state model resolver. Populated by the coordinated
         /// fork (step 8) as each model is added to this state's graph;
         /// holders read through it via <see cref="ITrackerStateContext.Resolve"/>
@@ -162,6 +171,12 @@ namespace EmoTracker.Data.Sessions
             Locations = new LocationDatabase();
             Maps = new MapDatabase();
             Layouts = new LayoutManager();
+
+            // Phase 7.3: per-state SessionSettings. OwnerState is set after
+            // the state is otherwise wired so OnChanged hooks (e.g. on
+            // IgnoreAllLogic) can resolve OwnerState back-references.
+            Settings = new SessionSettings();
+            Settings.OwnerState = this;
 
             // Phase 6 step 11: wire each catalog's back-ref so peer-catalog
             // access from within the catalog (e.g. LocationDatabase calling
@@ -218,6 +233,16 @@ namespace EmoTracker.Data.Sessions
             mAdoptedCollaborators =
                 scripts != null || transactions != null || items != null
                 || locations != null || maps != null || layouts != null;
+
+            // Phase 7.3: per-state settings. The adoption ctor seeds from
+            // ApplicationSettings.Instance's current values so a primary
+            // state adopting the singletons inherits the user's already-
+            // loaded preferences. (Pre-Phase-7 saves wrote these into
+            // ApplicationSettings.json; reading back at startup populates
+            // those fields, and adopting the seeds them onto this state.)
+            Settings = new SessionSettings();
+            Settings.OwnerState = this;
+            ApplicationSettings.Instance.SeedIntoSession(Settings);
 
             WireCatalogStateBackRefs();
         }
@@ -446,6 +471,22 @@ namespace EmoTracker.Data.Sessions
             // re-evaluation on first refresh. Subsequent mutations diverge
             // independently — fork mutations clear only fork's cache.
             copy.Locations.SeedRuleCacheFromFork(this.Locations);
+
+            // ---- Per-state SessionSettings (Phase 7.3) ---------------------
+            // Copy each setting value from the source into the fork. The
+            // fork's Settings is a fresh ModelTypeBase (its OwnerState =
+            // copy is already set in the ctor), and per-key COW on
+            // MutableData would normally let us share the source's KV
+            // store via InitializeAsForkOf — but tying the lifecycle to
+            // ItemBase.Fork's machinery here is more boilerplate than just
+            // copying the seven scalar bools, so we bulk-copy directly.
+            copy.Settings.IgnoreAllLogic = this.Settings.IgnoreAllLogic;
+            copy.Settings.DisplayAllLocations = this.Settings.DisplayAllLocations;
+            copy.Settings.AlwaysAllowClearing = this.Settings.AlwaysAllowClearing;
+            copy.Settings.AutoUnpinLocationsOnClear = this.Settings.AutoUnpinLocationsOnClear;
+            copy.Settings.PinLocationsOnItemCapture = this.Settings.PinLocationsOnItemCapture;
+            copy.Settings.MapEnabled = this.Settings.MapEnabled;
+            copy.Settings.SwapLeftRight = this.Settings.SwapLeftRight;
 
             // ---- ScriptManager fork (with extended bridges) ----------------
             // copy.Scripts was constructed by the TrackerState ctor without

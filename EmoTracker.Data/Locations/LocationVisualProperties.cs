@@ -94,7 +94,9 @@ namespace EmoTracker.Data.Locations
                 if (parent != null)
                     return parent.AutoUnpinOnClear;
 
-                return ApplicationSettings.Instance.AutoUnpinLocationsOnClear;
+                // Phase 7.3: prefer the owning state's per-state setting.
+                return (this.OwnerState as Sessions.TrackerState)?.Settings?.AutoUnpinLocationsOnClear
+                       ?? ApplicationSettings.Instance.AutoUnpinLocationsOnClear;
             }
             set
             {
