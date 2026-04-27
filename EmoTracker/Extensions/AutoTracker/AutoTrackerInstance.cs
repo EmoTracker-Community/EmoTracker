@@ -72,12 +72,10 @@ namespace EmoTracker.Extensions.AutoTracker
             // current ActiveGamePackage if any.
             PackageLoader.OnPackageLoadComplete += OnAnyPackageLoadComplete;
 
-            // Seed providers if a pack is already loaded.
-            // Phase 7.1 stamps OwnerPackageInstance reachability via the
-            // walk; for simplicity we use Tracker.Instance singleton's
-            // package which mirrors the active primary state's pack.
-            if (Tracker.Instance.ActiveGamePackage != null)
-                ActivePlatform = Tracker.Instance.ActiveGamePackage.Platform;
+            // Seed providers if a pack is already loaded — read pack info
+            // from the active primary state via ApplicationModel.
+            if (ApplicationModel.Instance.ActiveGamePackage != null)
+                ActivePlatform = ApplicationModel.Instance.ActiveGamePackage.Platform;
 
             // Boot the polling timer.
             BootTimer();
@@ -143,9 +141,9 @@ namespace EmoTracker.Extensions.AutoTracker
                 {
                     mApplicableProviders.Clear();
 
-                    if (Tracker.Instance.ActiveGamePackage != null)
+                    if (ApplicationModel.Instance.ActiveGamePackage != null)
                     {
-                        var providers = AutoTrackingProviderRegistry.Instance.GetProvidersForPack(Tracker.Instance.ActiveGamePackage);
+                        var providers = AutoTrackingProviderRegistry.Instance.GetProvidersForPack(ApplicationModel.Instance.ActiveGamePackage);
                         foreach (var provider in providers)
                             mApplicableProviders.Add(provider);
                     }
@@ -396,9 +394,9 @@ namespace EmoTracker.Extensions.AutoTracker
                 }
 
                 PackageManager.Game game = null;
-                if (Tracker.Instance.ActiveGamePackage != null)
+                if (ApplicationModel.Instance.ActiveGamePackage != null)
                 {
-                    PackageManager.Game gameInstance = PackageManager.Instance.FindGame(Tracker.Instance.ActiveGamePackage.Game);
+                    PackageManager.Game gameInstance = PackageManager.Instance.FindGame(ApplicationModel.Instance.ActiveGamePackage.Game);
                     if (gameInstance != PackageManager.Instance.DefaultGame)
                         game = gameInstance;
                 }

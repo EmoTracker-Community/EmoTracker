@@ -38,7 +38,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     var target = ApplicationModel.Instance.PrimaryState;
                     if (target == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No active TrackerState" });
-                    bool result = Tracker.Instance.SaveProgress(target, savePath);
+                    bool result = target.SaveProgress(savePath);
                     return JsonSerializer.Serialize(new { success = result, path = savePath });
                 }
                 catch (Exception ex)
@@ -69,7 +69,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     var target = ApplicationModel.Instance.PrimaryState;
                     if (target == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No active TrackerState" });
-                    bool result = Tracker.Instance.LoadProgress(target, loadPath);
+                    bool result = target.LoadProgress(loadPath);
                     return JsonSerializer.Serialize(new { success = result, path = loadPath });
                 }
                 catch (Exception ex)

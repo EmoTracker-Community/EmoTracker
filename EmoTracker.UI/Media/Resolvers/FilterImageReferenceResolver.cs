@@ -27,10 +27,10 @@ namespace EmoTracker.UI.Media.Resolvers
             // chain entirely in SKBitmap space, then convert back once.
             SKBitmap baseSK = Utility.IconUtility.ToSkBitmapForFilter(baseImg);
             if (baseSK == null)
-                return Utility.IconUtility.ApplyFilterSpecToImage(Tracker.Instance.ActiveGamePackage, baseImg, concreteRef.Filter);
+                return Utility.IconUtility.ApplyFilterSpecToImage(EmoTracker.Data.Sessions.ActiveSession.Primary?.Package, baseImg, concreteRef.Filter);
 
             baseSK = Utility.IconUtility.ApplyFilterSpecToSKBitmap(
-                Tracker.Instance.ActiveGamePackage, baseSK, concreteRef.Filter);
+                EmoTracker.Data.Sessions.ActiveSession.Primary?.Package, baseSK, concreteRef.Filter);
 
             return Utility.IconUtility.FinalizeToAvalonia(baseSK);
         }

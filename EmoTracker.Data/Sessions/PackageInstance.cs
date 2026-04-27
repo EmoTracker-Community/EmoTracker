@@ -42,25 +42,19 @@ namespace EmoTracker.Data.Sessions
     {
         readonly TrackerState mDefinitionalState;
         readonly Dictionary<Guid, TrackerState> mStates = new Dictionary<Guid, TrackerState>();
-        readonly IGamePackage mPackage;
-        readonly IGamePackageVariant mActiveVariant;
 
         /// <summary>
-        /// The pack this instance wraps. Null in tests that construct a
-        /// PackageInstance without a real pack — the Phase 6 step-3
-        /// shell allows this; production callers always supply one.
+        /// The pack metadata (Package + ActiveVariant) is held on each
+        /// <see cref="TrackerState"/> directly — see
+        /// <see cref="TrackerState.Package"/>. Read it from the
+        /// state(s) inside this instance rather than from the
+        /// PackageInstance itself.
         /// </summary>
-        public IGamePackage Package => mPackage;
-
-        /// <summary>The active variant of the pack (e.g. ALttPR's "standard" vs. "keysanity").</summary>
-        public IGamePackageVariant ActiveVariant => mActiveVariant;
 
         /// <summary>
         /// The model graph as initialized by the package-load process —
         /// items, locations, maps, layouts, scripts. Never used for
-        /// interaction; new states are produced by forking this state
-        /// (step 8). For step 3 it's a fresh empty TrackerState waiting
-        /// for the parse-phase population.
+        /// interaction; new states are produced by forking this state.
         /// </summary>
         public TrackerState DefinitionalState => mDefinitionalState;
 
@@ -70,10 +64,8 @@ namespace EmoTracker.Data.Sessions
         /// </summary>
         public IReadOnlyDictionary<Guid, TrackerState> States => mStates;
 
-        public PackageInstance(IGamePackage package = null, IGamePackageVariant activeVariant = null)
+        public PackageInstance()
         {
-            mPackage = package;
-            mActiveVariant = activeVariant;
             mDefinitionalState = new TrackerState("__definitional__");
         }
 

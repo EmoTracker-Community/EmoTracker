@@ -49,11 +49,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var pack = Tracker.Instance.ActiveGamePackage;
+                var pack = ApplicationModel.Instance.ActiveGamePackage;
                 if (pack == null)
                     return JsonSerializer.Serialize(new { loaded = false });
 
-                var variant = Tracker.Instance.ActiveGamePackageVariant;
+                var variant = ApplicationModel.Instance.ActiveGamePackageVariant;
                 var variants = pack.AvailableVariants?.Select(v => new
                 {
                     uniqueId = v.UniqueID,

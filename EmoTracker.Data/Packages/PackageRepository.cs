@@ -290,9 +290,10 @@ namespace EmoTracker.Data.Packages
             {
 
                 //duck: this maybe should be moved to the application model fucntion?
-                if (Tracker.Instance.IsActivePackage(mUID))
+                var primary = Sessions.ActiveSession.Primary;
+                if (primary != null && primary.IsActivePackage(mUID))
                 {
-                    Tracker.Instance.ActiveGamePackage = null;
+                    primary.ActivatePackage(null, null);
                 }
 
                 PackageManager.Instance.Rescan();
@@ -339,7 +340,7 @@ namespace EmoTracker.Data.Packages
                     if (!string.IsNullOrWhiteSpace(path) && File.Exists(path) && new FileInfo(path).Length > 0)
                     {
                         bool bIsFirstInstalledPackage = PackageManager.Instance.InstalledPackages.Count() == 0;
-                        bool bExistingIsActive = ExistingPackage == Tracker.Instance.ActiveGamePackage;
+                        bool bExistingIsActive = ExistingPackage == Sessions.ActiveSession.Primary?.Package;
 
                         if (ExistingPackage != null)
                             ExistingPackage.Source.ReleaseStorage();
@@ -373,23 +374,18 @@ namespace EmoTracker.Data.Packages
                         // Refresh our installed package
                         ExistingPackage = PackageManager.Instance.FindInstalledPackage(UID);
 
-                        if (bIsFirstInstalledPackage)
+                        var primary = Sessions.ActiveSession.Primary;
+                        if (bIsFirstInstalledPackage && primary != null)
                         {
-                            if (ExistingPackage.AvailableVariants.Count() > 0)
-                                Tracker.Instance.ActiveGamePackageVariant = ExistingPackage.AvailableVariants.First();
-                            else
-                                Tracker.Instance.ActiveGamePackage = ExistingPackage;
+                            var variant = ExistingPackage.AvailableVariants.Count() > 0
+                                ? ExistingPackage.AvailableVariants.First()
+                                : null;
+                            primary.ActivatePackage(ExistingPackage, variant);
                         }
-                        else if (bExistingIsActive && ExistingPackage != null)
+                        else if (bExistingIsActive && ExistingPackage != null && primary != null)
                         {
                             IGamePackageVariant variant = ExistingPackage.FindVariant(ApplicationSettings.Instance.LastActivePackageVariant) ?? ExistingPackage.AvailableVariants.FirstOrDefault();
-
-                            if (variant != null)
-                                Tracker.Instance.ActiveGamePackageVariant = variant;
-                            else
-                                Tracker.Instance.ActiveGamePackage = ExistingPackage;
-
-                            Tracker.Instance.Reload();
+                            primary.ActivatePackage(ExistingPackage, variant);
                         }
 
                         return;

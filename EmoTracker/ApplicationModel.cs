@@ -193,8 +193,8 @@ namespace EmoTracker
             // sections in those forked layouts have OwnerState=newState
             // (Phase 7 polish stamps this during fork) so cross-state
             // resolution lands correctly.
-            if (ReferenceEquals(Tracker.Instance.ActiveGamePackage, owningPI.Package)
-                && ReferenceEquals(Tracker.Instance.ActiveGamePackageVariant, owningPI.ActiveVariant))
+            if (ReferenceEquals(PrimaryState?.Package, newState.Package)
+                && ReferenceEquals(PrimaryState?.ActiveVariant, newState.ActiveVariant))
             {
                 ActivePackageInstance = owningPI;
                 NotifyPropertyChanged(nameof(PrimaryState));
@@ -212,11 +212,12 @@ namespace EmoTracker
             // init.lua against the singletons; none of that is what we
             // want for a tab swap. Instead, just point ambient slots at
             // the destination's pack so XAML bindings against
-            // Tracker.Instance.ActiveGamePackage refire.
+            // ActiveGamePackage refire.
             ActivePackageInstance = owningPI;
             Core.Services.Dispatch.BeginInvoke(() =>
             {
-                Tracker.Instance.UpdatePackageInfoWithoutReload(owningPI.Package, owningPI.ActiveVariant);
+                // Pack metadata travels with the state; nothing to update on
+                // the app side beyond fanning out PropertyChanged.
                 AcquireLayouts();
             });
         }
@@ -335,13 +336,13 @@ namespace EmoTracker
             {
                 string title = string.Format("EmoTracker {0}", ApplicationVersion.Current);
 
-                if (Tracker.Instance.ActiveGamePackage != null && Tracker.Instance.ActiveGamePackageVariant != null)
+                if (ActiveGamePackage != null && ActiveGamePackageVariant != null)
                 {
-                    title = string.Format("{0}  ::  {1} | {2}", title, Tracker.Instance.ActiveGamePackage.DisplayName, Tracker.Instance.ActiveGamePackageVariant.DisplayName);
+                    title = string.Format("{0}  ::  {1} | {2}", title, ActiveGamePackage.DisplayName, ActiveGamePackageVariant.DisplayName);
                 }
-                else if (Tracker.Instance.ActiveGamePackage != null)
+                else if (ActiveGamePackage != null)
                 {
-                    title = string.Format("{0}  ::  {1}", title, Tracker.Instance.ActiveGamePackage.DisplayName);
+                    title = string.Format("{0}  ::  {1}", title, ActiveGamePackage.DisplayName);
 
                 }
 
@@ -412,7 +413,7 @@ namespace EmoTracker
             // and EmoTracker.UI code can reach the currently-active primary
             // state without consulting an ambient slot. Each resolver
             // evaluates the relevant state on call rather than caching one.
-            EmoTracker.Data.Tracker.Instance.ResolveReloadTarget = () => PrimaryState;
+            EmoTracker.Data.Sessions.ActiveSession.PrimaryStateResolver = () => PrimaryState;
             EmoTracker.Data.ApplicationSettings.ActiveSessionSettingsResolver = () => PrimaryState?.Settings;
             EmoTracker.UI.Converters.LayoutReferenceConverter.ActiveLayoutsResolver = () => PrimaryState?.Layouts;
 
@@ -421,8 +422,11 @@ namespace EmoTracker
             // pack-script-driven notifications.
             PrimaryState?.Scripts?.SetNotificationService(this);
 
-            Tracker.Instance.OnPackageLoadStarting += Tracker_OnPackageLoadStarting;
-            Tracker.Instance.OnPackageLoadComplete += Tracker_OnPackageLoadComplete;
+            // Subscribe to PackageLoader's static events so the app-wide
+            // side effects (image cache clear, layout refresh, extension
+            // notifications) fire on every pack-load against any state.
+            PackageLoader.OnPackageLoadStarting += OnPackageLoadStartingHandler;
+            PackageLoader.OnPackageLoadComplete += OnPackageLoadCompleteHandler;
 
             RefreshCommand = new AsyncDelegateCommand(RefreshHandler);
             ResetUserDataCommand = new DelegateCommand(ResetUserDataHandler);
@@ -506,7 +510,7 @@ namespace EmoTracker
             bool success;
             string msg;
 
-            (success, msg) = Tracker.Instance.LoadDefaultPackage();
+            (success, msg) = LoadDefaultPackage();
 
             if (!string.IsNullOrWhiteSpace(msg))
             {
@@ -539,7 +543,7 @@ namespace EmoTracker
         /// </summary>
         void PreallocatePrimaryState()
         {
-            mActivePackageInstance = new PackageInstance(package: null, activeVariant: null);
+            mActivePackageInstance = new PackageInstance();
 
             var primary = new TrackerState(
                 name: "primary",
@@ -579,7 +583,7 @@ namespace EmoTracker
         {
             if (package == null) throw new ArgumentNullException(nameof(package));
 
-            var pi = new PackageInstance(package, variant);
+            var pi = new PackageInstance();
 
             // Allocate a fresh primary state with brand-new catalogs.
             var primary = new TrackerState(
@@ -592,7 +596,8 @@ namespace EmoTracker
                 layouts: new LayoutManager());
             pi.AdoptAsPrimary(primary);
 
-            // Drive the package load into this state.
+            // Drive the package load into this state. PackageLoader.LoadInto
+            // sets the state's Package/ActiveVariant on the way through.
             EmoTracker.Data.Sessions.PackageLoader.LoadInto(primary, package, variant);
 
             mPackageInstances.Add(pi);
@@ -637,63 +642,20 @@ namespace EmoTracker
         }
 
         /// <summary>
-        /// Phase 7.1: replaces <see cref="ActivePackageInstance"/> with a
-        /// fresh <see cref="PackageInstance"/> capturing the just-loaded
-        /// pack's metadata. The primary <see cref="TrackerState"/> is
-        /// preserved across pack-loads (its catalogs were reset + populated
-        /// in-place by <see cref="PackageLoader.LoadInto"/>); only the
-        /// PackageInstance shell — which holds the pack/variant references
-        /// — is replaced.
-        ///
-        /// <para>
-        /// The previous <c>RebindActivePackageInstanceFromSingletons</c>
-        /// (Phase 6 §6.10.2) constructed a brand-new TrackerState that
-        /// adopted whatever was in the catalog static shims, then ran
-        /// <c>StampOwnerStateOnAdoptedModels</c> to populate the resolver.
-        /// PackageLoader does both jobs now (the population happens before
-        /// this method runs, with OwnerState + resolver registration baked
-        /// into the load orchestration), so this method is small.
-        /// </para>
-        ///
-        /// <para>
-        /// We do <i>not</i> dispose the old <c>PackageInstance</c> — its
-        /// dictionary contains the same <c>TrackerState</c> reference that
-        /// the new PI now holds, and disposing the old PI would tear the
-        /// state down. The old PI becomes a garbage object whose state
-        /// reference is shed; GC reclaims it.
-        /// </para>
+        /// Notifies UI bindings that pack metadata on the active state may
+        /// have changed. The state itself owns its
+        /// <see cref="TrackerState.Package"/> / <see cref="TrackerState.ActiveVariant"/>
+        /// fields (set by <see cref="PackageLoader.LoadInto"/>), so the
+        /// only thing this method does is fan out a
+        /// <c>NotifyPropertyChanged(PrimaryState)</c> for any binding that
+        /// reads through the active-pack getters that surface metadata.
         /// </summary>
-        void RebindActivePackageInstanceFromSingletons()
+        void OnActivePackageMetadataChanged()
         {
-            // Capture the current primary state (still alive, just had its
-            // catalogs reset+populated by PackageLoader.LoadInto).
-            var primary = mActivePackageInstance?.States.Values.FirstOrDefault();
-            if (primary == null)
-            {
-                // Defensive: PreallocatePrimaryState should have run during
-                // ctor. If we got here without one, allocate now.
+            if (mActivePackageInstance == null)
                 PreallocatePrimaryState();
-                primary = mActivePackageInstance.States.Values.First();
-            }
 
-            var pi = new PackageInstance(
-                package: Tracker.Instance.ActiveGamePackage,
-                activeVariant: Tracker.Instance.ActiveGamePackageVariant);
-            pi.AdoptAsPrimary(primary);
-
-            // Note: SessionContext.ActiveState is unchanged — same primary
-            // state, just a new PackageInstance wrapping it. Per plan
-            // §7.6, this becomes per-WindowContext.
-
-            // Phase 7.5: swap the old PI out of the collection for the new
-            // one (same primary state, different shell metadata).
-            var oldIndex = mActivePackageInstance != null ? mPackageInstances.IndexOf(mActivePackageInstance) : -1;
-            if (oldIndex >= 0)
-                mPackageInstances[oldIndex] = pi;
-            else
-                mPackageInstances.Add(pi);
-
-            ActivePackageInstance = pi;
+            NotifyPropertyChanged(nameof(PrimaryState));
         }
 
         private void ShowBroadcastView(object obj)
@@ -808,35 +770,35 @@ namespace EmoTracker
 
         private void OpenPackOverrideFolderHandler(object obj)
         {
-            if (Tracker.Instance.ActiveGamePackage != null && !string.IsNullOrWhiteSpace(Tracker.Instance.ActiveGamePackage.OverridePath))
+            if (ActiveGamePackage != null && !string.IsNullOrWhiteSpace(ActiveGamePackage.OverridePath))
             {
                 try
                 {
-                    Directory.CreateDirectory(Tracker.Instance.ActiveGamePackage.OverridePath);
+                    Directory.CreateDirectory(ActiveGamePackage.OverridePath);
                 }
                 catch { };
 
-                if (Directory.Exists(Tracker.Instance.ActiveGamePackage.OverridePath))
-                    WindowService.Instance.OpenFolder(Tracker.Instance.ActiveGamePackage.OverridePath);
+                if (Directory.Exists(ActiveGamePackage.OverridePath))
+                    WindowService.Instance.OpenFolder(ActiveGamePackage.OverridePath);
                 else
                     PushMarkdownNotification(NotificationType.Error, string.Format(
 @"### Cannot open override folder
 Failed to find or create the active pack's override folder at `{0}`.
 
 Make sure you have available disk space and permissions for the selected location.",
-Tracker.Instance.ActiveGamePackage.OverridePath)
+ActiveGamePackage.OverridePath)
 );
             }
         }
 
         private void ExportPackageOverrideHandler(object obj)
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (ActiveGamePackage != null)
             {
                 string filename = obj as string;
                 if (!string.IsNullOrWhiteSpace(filename))
                 {
-                    GamePackage package = Tracker.Instance.ActiveGamePackage as GamePackage;
+                    GamePackage package = ActiveGamePackage as GamePackage;
                     if (package != null)
                     {
                         package.ExportUserOverride(filename);
@@ -886,7 +848,7 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
         private async void ResetUserDataHandler(object param)
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (ActiveGamePackage != null)
             {
                 if (ApplicationSettings.Instance.PromptOnRefreshClose)
                 {
@@ -895,7 +857,7 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
                         return;
                 }
 
-                Tracker.Instance.ActiveGamePackage.ResetUserOverrides();
+                ActiveGamePackage.ResetUserOverrides();
                 Reload();
             }
 
@@ -911,12 +873,11 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
                 if (package != null)
                 {
-                    Tracker.Instance.ActiveGamePackageVariant = null;
-                    Tracker.Instance.ActiveGamePackage = package;
+                    ActivatePackage(package, null);
                 }
                 else if (variant != null)
                 {
-                    Tracker.Instance.ActiveGamePackageVariant = variant;
+                    ActivatePackage(variant.Package, variant);
                 }
             });
         }
@@ -986,7 +947,7 @@ Tracker.Instance.ActiveGamePackage.OverridePath)
 
         private bool CanSave(object obj)
         {
-            return Tracker.Instance.ActiveGamePackage != null;
+            return ActiveGamePackage != null;
         }
 
         private void SaveHandler(object obj, TaskCompletionSource<object> tcs)
@@ -1043,7 +1004,7 @@ defaultSaveDataPath)
 
             try
             {
-                bool bResult = Tracker.Instance.SaveProgress(target, path, (JObject root) =>
+                bool bResult = target.SaveProgress(path, (JObject root) =>
                 {
                     root["main_window_width"] = WindowService.Instance.MainWindowWidth;
                     root["main_window_height"] = WindowService.Instance.MainWindowHeight;
@@ -1100,7 +1061,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             var target = PrimaryState;
             if (target == null) return false;
 
-            if (Tracker.Instance.LoadProgress(target, path, (JObject root) =>
+            if (target.LoadProgress(path, (JObject root) =>
             {
                 WindowService.Instance.MainWindowWidth = root.GetValue<double>("main_window_width", WindowService.Instance.MainWindowWidth);
                 WindowService.Instance.MainWindowHeight = root.GetValue<double>("main_window_height", WindowService.Instance.MainWindowHeight);
@@ -1134,9 +1095,9 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private bool CanOpenPackageDocumentation(object obj = null)
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (ActiveGamePackage != null)
             {
-                PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(Tracker.Instance.ActiveGamePackage.UniqueID);
+                PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(ActiveGamePackage.UniqueID);
                 if (entry != null && !string.IsNullOrWhiteSpace(entry.DocumentationURL))
                     return true;
             }
@@ -1146,9 +1107,9 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         private void OpenPackageDocumentation(object obj = null)
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (ActiveGamePackage != null)
             {
-                PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(Tracker.Instance.ActiveGamePackage.UniqueID);
+                PackageRepositoryEntry entry = PackageManager.Instance.FindRepositoryEntry(ActiveGamePackage.UniqueID);
                 if (entry != null && !string.IsNullOrWhiteSpace(entry.DocumentationURL))
                     WindowService.Instance.OpenUrl(entry.DocumentationURL);
             }
@@ -1207,9 +1168,103 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         public void Reload()
         {
             ExpireAllNotifications();
-            Tracker.Instance.Reload();
+            PrimaryState?.Reload();
         }
-        private void Tracker_OnPackageLoadStarting(object sender, EventArgs e)
+
+        // ---- Phase 7.1.g: app-wide pack-load orchestration ----------------
+        // Tracker singleton is gone; ApplicationModel is the entry point for
+        // pack activation against the primary state.
+
+        /// <summary>
+        /// Activates <paramref name="package"/> (with optional
+        /// <paramref name="variant"/>) on the primary state, triggering a
+        /// reload. Replaces the legacy
+        /// <c>ActiveGamePackage = X</c> setter pattern.
+        /// </summary>
+        public void ActivatePackage(IGamePackage package, IGamePackageVariant variant = null)
+        {
+            PrimaryState?.ActivatePackage(package, variant);
+        }
+
+        /// <summary>True iff the primary state's active pack has the given UID.</summary>
+        public bool IsActivePackage(string uniqueId) => PrimaryState?.IsActivePackage(uniqueId) ?? false;
+
+        /// <summary>The active pack on the primary state.</summary>
+        public IGamePackage ActiveGamePackage => PrimaryState?.Package;
+
+        /// <summary>The active variant on the primary state.</summary>
+        public IGamePackageVariant ActiveGamePackageVariant => PrimaryState?.ActiveVariant;
+
+        /// <summary>The pack's <c>DisabledImageFilterSpec</c> on the primary state.</summary>
+        public string DisabledImageFilterSpec => PrimaryState?.DisabledImageFilterSpec ?? "grayscale, dim";
+
+        /// <summary>The pack's <c>AllowResize</c> on the primary state.</summary>
+        public bool AllowResize => PrimaryState?.AllowResize ?? true;
+
+        /// <summary>
+        /// App-wide event fired before any pack-load (against any state).
+        /// Subscribers do NOT need to filter by target state — the legacy
+        /// behaviour was app-wide.
+        /// </summary>
+        public event EventHandler PackageLoadStarting;
+
+        /// <summary>
+        /// App-wide event fired after any pack-load (against any state)
+        /// completes.
+        /// </summary>
+        public event EventHandler PackageLoadComplete;
+
+        /// <summary>
+        /// Loads the user's last-used pack (or command-line override),
+        /// falling back to defaults when the requested variant doesn't
+        /// exist. Returns success + an optional warning message about
+        /// fallback behaviour.
+        /// </summary>
+        public (bool, string) LoadDefaultPackage()
+        {
+            string loadpack = string.IsNullOrEmpty(ApplicationSettings.Instance.CommandLinePackage)
+                ? ApplicationSettings.Instance.LastActivePackage
+                : ApplicationSettings.Instance.CommandLinePackage;
+            string loadvar = string.IsNullOrEmpty(ApplicationSettings.Instance.CommandLinePackageVariant)
+                ? ApplicationSettings.Instance.LastActivePackageVariant
+                : ApplicationSettings.Instance.CommandLinePackageVariant;
+
+            var package = PackageManager.Instance.FindInstalledPackage(loadpack);
+            if (package == null)
+                return (true, string.Empty);
+
+            IGamePackageVariant variant = null;
+            bool found = false;
+            if (package.AvailableVariants != null)
+            {
+                if (!string.IsNullOrWhiteSpace(loadvar))
+                {
+                    foreach (var v in package.AvailableVariants)
+                    {
+                        if (string.Equals(v.UniqueID, loadvar, StringComparison.Ordinal))
+                        {
+                            variant = v;
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (variant == null)
+                    variant = package.AvailableVariants.FirstOrDefault();
+            }
+
+            ActivatePackage(package, variant);
+
+            if (!found && !string.IsNullOrWhiteSpace(loadvar))
+            {
+                if (variant != null)
+                    return (false, $"### Package Variant {loadvar} not found, loading default variant `{variant.UniqueID}` for {loadpack}");
+                return (false, $"### Package Variant {loadvar} not found, loading default pack for {loadpack}");
+            }
+            return (true, string.Empty);
+        }
+
+        private void OnPackageLoadStartingHandler(object sender, PackageLoader.PackageLoadEventArgs e)
         {
             //  Undo history should not propagate across package reloads, and should also not include
             //  fields being set during load
@@ -1225,8 +1280,10 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             mPreviousNotifications.Clear();
 
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
+
+            PackageLoadStarting?.Invoke(this, EventArgs.Empty);
         }
-        private void Tracker_OnPackageLoadComplete(object sender, EventArgs e)
+        private void OnPackageLoadCompleteHandler(object sender, PackageLoader.PackageLoadEventArgs e)
         {
             ExtensionManager.Instance.OnPackageLoaded();
             AcquireLayouts();
@@ -1235,15 +1292,12 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             //  fields being set during load
             (PrimaryState?.Transactions as IUndoableTransactionProcessor)?.ClearUndoHistory();
 
-            // Phase 6 step 7: wrap the just-loaded singleton catalogs into a
-            // PackageInstance + primary TrackerState. Fires for every pack-load
-            // (initial / reload / variant-switch) — anytime the singletons get
-            // repopulated, the wrapping primary state needs to be rebuilt. The
-            // primary state ADOPTS the active singletons; behavior is unchanged
-            // today (PrimaryState.Items == ApplicationModel.Instance?.PrimaryState?.Items, etc.). Step 8's
-            // coordinated fork is what makes additional states useful for
-            // multi-session-tracking scenarios.
-            RebindActivePackageInstanceFromSingletons();
+            // Pack metadata is now stored on the TrackerState itself
+            // (PackageLoader.LoadInto sets it during load); the
+            // PackageInstance is just a state container. We fire one
+            // PropertyChanged on PrimaryState so UI bindings against the
+            // active state's pack/variant refresh.
+            OnActivePackageMetadataChanged();
 
             // Phase 7.11 polish: a freshly-loaded pack isn't dirty —
             // clear the marker on every active state. (Transactable
@@ -1257,6 +1311,8 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
 
             WindowService.Instance.FocusMainWindow();
+
+            PackageLoadComplete?.Invoke(this, EventArgs.Empty);
         }
         public void AcquireLayouts()
         {
@@ -1284,7 +1340,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                 //Added checking for ActiveGamePacakge not being null here. Not sure what this is trying to do maybe be unused at this point
                 if ((TrackerLayout == null && TrackerHorizontalLayout == null && TrackerVerticalLayout == null))
                 {
-                    layouts?.LegacyLoad(Tracker.Instance.ActiveGamePackage);
+                    layouts?.LegacyLoad(ActiveGamePackage);
 
                     TrackerLayout = layouts?.FindLayout("tracker_default");
                     TrackerHorizontalLayout = layouts?.FindLayout("tracker_horizontal");
@@ -1308,8 +1364,8 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                     primaryScripts?.OutputWarning("Loading legacy broadcast layout data");
                     using (new LoggingBlock(primaryScripts))
                     {
-                        if (Tracker.Instance.ActiveGamePackage != null)
-                            BroadcastLayout.Load(Tracker.Instance.ActiveGamePackage.Open("broadcast_layout.json"), Tracker.Instance.ActiveGamePackage);
+                        if (ActiveGamePackage != null)
+                            BroadcastLayout.Load(ActiveGamePackage.Open("broadcast_layout.json"), ActiveGamePackage);
                     }
                 }
             }

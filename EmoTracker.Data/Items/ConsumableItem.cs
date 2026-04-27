@@ -58,7 +58,7 @@ namespace EmoTracker.Data.Items
                     UpdateBadgeAndIcon();
                     // Phase 6 step 11: prefer the owning state's LocationDatabase.
                     var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
-                    locDb?.RefeshAccessibility();
+                    locDb?.RefreshAccessibility();
                 });
             }
         }
@@ -75,7 +75,7 @@ namespace EmoTracker.Data.Items
                     UpdateBadgeAndIcon();
                     // Phase 6 step 11: prefer the owning state's LocationDatabase.
                     var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
-                    locDb?.RefeshAccessibility();
+                    locDb?.RefreshAccessibility();
                 });
             }
         }

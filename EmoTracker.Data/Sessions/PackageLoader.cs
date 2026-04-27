@@ -101,75 +101,85 @@ namespace EmoTracker.Data.Sessions
 
             var evtArgs = new PackageLoadEventArgs(target, package, variant);
 
-            using (new LocationDatabase.SuspendRefreshScope(target.Locations))
-            {                    
-                try
+            try
+            {
+                target.Locations.PushSuspendRefresh();
+
+                // Pack metadata travels with the state — stamp it before
+                // any consumer (init.lua, layout binding) reads it.
+                target.SetPackInfo(package, variant);
+
+                // Phase 7.2: per-state rule cache clear (replaces static AccessibilityRule.ClearCaches).
+                target.Locations.RuleCache.Clear();
+
+                OnPackageLoadStarting?.Invoke(null, evtArgs);
+
+                // Phase 7.1.g: reset pack-driven UI flags on the target state
+                // so the pack's settings.json values overwrite stale ones.
+                ResetPackageSettings(target);
+
+                target.Layouts.Clear();
+                target.Maps.Reset();
+                target.Locations.Reset();
+                target.Items.Reset();
+                target.Scripts.Reset();
+
+                ApplicationColors.Instance.LoadColors();
+
+                if (package != null)
                 {
-                    // Phase 7.2: per-state rule cache clear (replaces static AccessibilityRule.ClearCaches).
-                    target.Locations.RuleCache.Clear();
-
-                    OnPackageLoadStarting?.Invoke(null, evtArgs);
-
-                    // Reset state-affecting flags on Tracker if it's still around.
-                    // (Phase 7.1 keeps Tracker for backwards compat; 7.1.g deletes it.)
-                    ResetPackageSettings();
-
-                    target.Layouts.Clear();
-                    target.Maps.Reset();
-                    target.Locations.Reset();
-                    target.Items.Reset();
-                    target.Scripts.Reset();
-
-                    ApplicationColors.Instance.LoadColors();
-
-                    if (package != null)
+                    target.Scripts.Output("Beginning Package Load");
+                    using (new LoggingBlock(target.Scripts))
                     {
-                        target.Scripts.Output("Beginning Package Load");
-                        using (new LoggingBlock(target.Scripts))
-                        {
-                            target.Scripts.Output(string.Format("Package: {0}", package.UniqueID));
-                            if (variant != null)
-                                target.Scripts.Output(string.Format("Variant: {0}", variant.UniqueID));
+                        target.Scripts.Output(string.Format("Package: {0}", package.UniqueID));
+                        if (variant != null)
+                            target.Scripts.Output(string.Format("Variant: {0}", variant.UniqueID));
 
-                            LoadPackageSettings(target, package);
+                        LoadPackageSettings(target, package);
 
-                            target.Scripts.Load(package);
+                        target.Scripts.Load(package);
 
-                            // Legacy loads — should this be contingent on a flag in the manifest?
-                            target.Items.LegacyLoad(package, target);
-                            target.Maps.LegacyLoad(package, target);
-                            target.Locations.LegacyLoad(package, target);
-                        }
-                        target.Scripts.Output("Package Load Finished");
+                        // Legacy loads — should this be contingent on a flag in the manifest?
+                        target.Items.LegacyLoad(package, target);
+                        target.Maps.LegacyLoad(package, target);
+                        target.Locations.LegacyLoad(package, target);
                     }
+                    target.Scripts.Output("Package Load Finished");
                 }
-                finally
+            }
+            finally
+            {
+                // Defensive: each pre-Pop step is wrapped so a throw inside
+                // RuleCache.Clear() or BuildCodeIndex() cannot strand the
+                // suspend count above zero (which would leave the
+                // LocationDatabase permanently suspended and cause the
+                // accessibility-not-updating symptom we hunted earlier).
+                try { target.Locations.RuleCache.Clear(); }
+                catch (Exception e) { target.Scripts?.OutputException(e); }
+
+                try { target.Items.BuildCodeIndex(); }
+                catch (Exception e) { target.Scripts?.OutputException(e); }
+
+                target.Locations.PopSuspendRefresh();
+
+                mInProgress = false;
+
+                OnPackageLoadComplete?.Invoke(null, evtArgs);
+
+                if (!suspendPackReadyEvent)
                 {
-                    // Phase 7.2: per-state rule cache clear.
-                    target.Locations.RuleCache.Clear();
-                    target.Items.BuildCodeIndex();
-
-                    mInProgress = false;
-
-                    OnPackageLoadComplete?.Invoke(null, evtArgs);
-
-                    if (!suspendPackReadyEvent)
-                    {
-                        ((IScriptManager)target.Scripts)?.InvokeStandardCallback(StandardCallback.PackReady);
-                    }
+                    ((IScriptManager)target.Scripts)?.InvokeStandardCallback(StandardCallback.PackReady);
                 }
             }
         }
 
-        // Mirrors Tracker.ResetPackageSettings (still on Tracker through 7.1.g).
-        // Keeps the AllowResize / DisabledImageFilterSpec defaults installed
-        // on the Tracker singleton; once Tracker is deleted, these move to
-        // PackageInstance / SessionSettings.
-        static void ResetPackageSettings()
+        // Phase 7.1.g: pack-driven UI flags now live on the per-state
+        // TrackerState. Reset them at the start of each load to defaults
+        // so a pack reload picks up the pack's settings.json fresh.
+        static void ResetPackageSettings(TrackerState target)
         {
-            // Tracker's existing helper is private; duplicating the two assignments.
-            Tracker.Instance.AllowResize = true;
-            Tracker.Instance.DisabledImageFilterSpec = TrackerDefaults.DisabledImageFilterSpec;
+            target.AllowResize = true;
+            target.DisabledImageFilterSpec = TrackerDefaults.DisabledImageFilterSpec;
         }
 
         // Mirrors Tracker.LoadPackageSettings, but operates on the target's
@@ -191,11 +201,11 @@ namespace EmoTracker.Data.Sessions
                             using (StreamReader reader = new StreamReader(s))
                             {
                                 JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
-                                Tracker.Instance.AllowResize = root.GetValue<bool>("allow_resize", true);
+                                target.AllowResize = root.GetValue<bool>("allow_resize", true);
 
                                 string spec = root.GetValue<string>("disabled_image_filter", null);
                                 if (spec != null)
-                                    Tracker.Instance.DisabledImageFilterSpec = spec;
+                                    target.DisabledImageFilterSpec = spec;
 
                                 target.Locations.ParseLocationVisualProperties(root, target.Locations.Root, package);
 
@@ -225,10 +235,10 @@ namespace EmoTracker.Data.Sessions
                             using (StreamReader reader = new StreamReader(s))
                             {
                                 JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
-                                Tracker.Instance.AllowResize = root.GetValue<bool>("allow_resize", true);
+                                target.AllowResize = root.GetValue<bool>("allow_resize", true);
                                 string spec = root.GetValue<string>("disabled_image_filter", null);
                                 if (spec != null)
-                                    Tracker.Instance.DisabledImageFilterSpec = spec;
+                                    target.DisabledImageFilterSpec = spec;
 
                                 target.Locations.ParseLocationVisualProperties(root, target.Locations.Root, package);
                             }

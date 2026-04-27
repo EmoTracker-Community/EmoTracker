@@ -54,7 +54,7 @@ namespace EmoTracker
             ApplicationModel.Instance.Initialize();
             DataContext = ApplicationModel.Instance;
             ApplicationModel.Instance.PropertyChanged += Instance_PropertyChanged;
-            Tracker.Instance.PropertyChanged += Tracker_PropertyChanged;
+            ApplicationModel.Instance.PropertyChanged += AllowResizePropertyChanged;
 
             // Phase 7.6: register with the app's window collection. The
             // first window seeds its WindowContext with the active primary
@@ -265,7 +265,7 @@ namespace EmoTracker
                 });
             }
 
-            if (Tracker.Instance.ActiveGamePackage == package)
+            if (ApplicationModel.Instance.ActiveGamePackage == package)
             {
                 panel.Children.Add(new Border
                 {
@@ -292,7 +292,7 @@ namespace EmoTracker
             var panel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
             panel.Children.Add(new Avalonia.Controls.TextBlock { Text = variant.DisplayName, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
 
-            if (Tracker.Instance.ActiveGamePackageVariant == variant)
+            if (ApplicationModel.Instance.ActiveGamePackageVariant == variant)
             {
                 panel.Children.Add(new Border
                 {
@@ -449,15 +449,16 @@ namespace EmoTracker
             base.OnClosing(e);
         }
 
-        private void Tracker_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        private void AllowResizePropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Tracker.AllowResize))
+            if (e.PropertyName == nameof(ApplicationModel.AllowResize)
+                || e.PropertyName == nameof(ApplicationModel.PrimaryState))
                 UpdateResizeMode();
         }
 
         private void UpdateResizeMode()
         {
-            if (!Tracker.Instance.AllowResize)
+            if (!ApplicationModel.Instance.AllowResize)
             {
                 CanResize = false;
                 SizeToContent = SizeToContent.WidthAndHeight;

@@ -1,3 +1,4 @@
+using EmoTracker.Data;
 using EmoTracker.Data.Sessions;
 using Newtonsoft.Json.Linq;
 using System;
@@ -38,10 +39,26 @@ namespace EmoTracker
             var packageInstancesArray = new JArray();
             foreach (var pi in ApplicationModel.Instance.PackageInstances)
             {
-                if (pi.Package == null) continue;   // skip empty pre-allocated PI
+                // Pack metadata lives on the per-state objects now. Pull it
+                // from the first live primary state in the PI; if there's
+                // no state with a Package set, this is a pre-allocated
+                // empty PI — skip.
+                IGamePackage piPackage = null;
+                IGamePackageVariant piVariant = null;
+                foreach (var kvp in pi.States)
+                {
+                    if (kvp.Value.Package != null)
+                    {
+                        piPackage = kvp.Value.Package;
+                        piVariant = kvp.Value.ActiveVariant;
+                        break;
+                    }
+                }
+                if (piPackage == null) continue;
+
                 var piObj = new JObject();
-                piObj["packUID"] = pi.Package.UniqueID;
-                piObj["variantUID"] = pi.ActiveVariant?.UniqueID;
+                piObj["packUID"] = piPackage.UniqueID;
+                piObj["variantUID"] = piVariant?.UniqueID;
 
                 var statesArray = new JArray();
                 foreach (var kvp in pi.States)

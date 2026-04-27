@@ -20,7 +20,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var pack = Tracker.Instance.ActiveGamePackage;
+                var pack = ApplicationModel.Instance.ActiveGamePackage;
                 if (pack == null)
                     return JsonSerializer.Serialize(new { error = "No pack loaded" });
 
@@ -47,7 +47,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var pack = Tracker.Instance.ActiveGamePackage;
+                    var pack = ApplicationModel.Instance.ActiveGamePackage;
                     if (pack == null)
                         return JsonSerializer.Serialize(new { error = "No pack loaded" });
 
@@ -80,11 +80,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var pack = Tracker.Instance.ActiveGamePackage;
+                    var pack = ApplicationModel.Instance.ActiveGamePackage;
                     if (pack == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No pack loaded" });
 
-                    Tracker.Instance.Reload();
+                    ApplicationModel.Instance.Reload();
                     return JsonSerializer.Serialize(new { success = true, packName = pack.DisplayName });
                 }
                 catch (Exception ex)

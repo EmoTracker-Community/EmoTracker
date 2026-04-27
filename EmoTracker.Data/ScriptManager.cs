@@ -52,28 +52,28 @@ namespace EmoTracker.Data
 
         public void AddItems(string path)
         {
-            var pkg = Tracker.Instance.ActiveGamePackage;
+            var pkg = mState.Package;
             if (pkg == null) return;
             mState.Items.IncrementalLoad(path, pkg, bLegacy: false, state: mState);
         }
 
         public void AddMaps(string path)
         {
-            var pkg = Tracker.Instance.ActiveGamePackage;
+            var pkg = mState.Package;
             if (pkg == null) return;
             mState.Maps.IncrementalLoad(path, pkg, state: mState);
         }
 
         public void AddLocations(string path)
         {
-            var pkg = Tracker.Instance.ActiveGamePackage;
+            var pkg = mState.Package;
             if (pkg == null) return;
             mState.Locations.IncrementalLoad(path, pkg, bLegacy: false, state: mState);
         }
 
         public void AddLayouts(string path)
         {
-            var pkg = Tracker.Instance.ActiveGamePackage;
+            var pkg = mState.Package;
             if (pkg == null) return;
             mState.Layouts.IncrementalLoad(path, pkg);
         }
@@ -112,7 +112,7 @@ namespace EmoTracker.Data
 
         public string ActiveVariantUID
         {
-            get { return Tracker.Instance.ActiveVariantUID; }
+            get { return mState.ActiveVariantUID; }
         }
 
         public Location RootLocation

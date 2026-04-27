@@ -192,12 +192,12 @@ namespace EmoTracker.UI
                         bool firstActivation =
                             ApplicationModel.Instance.PackageInstances.Count == 0
                             || (ApplicationModel.Instance.PackageInstances.Count == 1
-                                && ApplicationModel.Instance.PackageInstances[0].Package == null);
+                                && !ApplicationModel.Instance.PackageInstances[0].States.Values.Any(s => s.Package != null));
                         if (firstActivation)
                         {
-                            // Load via the existing singleton Tracker flow.
-                            Tracker.Instance.ActiveGamePackageVariant = null;
-                            Tracker.Instance.ActiveGamePackage = pkg;
+                            // First-pack activation: drive through ApplicationModel
+                            // which routes into the primary state's pack-load.
+                            ApplicationModel.Instance.ActivatePackage(pkg, null);
                         }
                         else
                         {

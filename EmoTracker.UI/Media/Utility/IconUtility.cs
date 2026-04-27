@@ -475,7 +475,7 @@ namespace EmoTracker.UI.Media.Utility
                             }
                         }
                         else if (mod.StartsWith("@disabled", StringComparison.OrdinalIgnoreCase))
-                            bmp = ApplyFilterSpecToSKBitmap(package, bmp, Tracker.Instance.DisabledImageFilterSpec);
+                            bmp = ApplyFilterSpecToSKBitmap(package, bmp, EmoTracker.Data.Sessions.ActiveSession.Primary?.DisabledImageFilterSpec ?? "grayscale, dim");
 
                         // Dispose the intermediate bitmap if a new one was produced
                         if (bmp != prev)
@@ -730,7 +730,7 @@ namespace EmoTracker.UI.Media.Utility
                         else if (mod.StartsWith("saturation", StringComparison.OrdinalIgnoreCase))
                             image = IconUtility.AdjustSaturation(package, image, args);
                         else if (mod.StartsWith("@disabled", StringComparison.OrdinalIgnoreCase))
-                            image = IconUtility.ApplyFilterSpecToImage(package, image, Tracker.Instance.DisabledImageFilterSpec);
+                            image = IconUtility.ApplyFilterSpecToImage(package, image, EmoTracker.Data.Sessions.ActiveSession.Primary?.DisabledImageFilterSpec ?? "grayscale, dim");
                     }
                 }
             }

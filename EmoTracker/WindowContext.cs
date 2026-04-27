@@ -80,9 +80,11 @@ namespace EmoTracker
         /// <summary>
         /// Phase 7 XAML migration: the active pack's IGamePackage, or null.
         /// Used by the "no package loaded" placeholder in <c>MainWindow</c>.
+        /// Pack metadata lives on the active <see cref="TrackerState"/>
+        /// itself — read it through the state.
         /// </summary>
         public EmoTracker.Data.IGamePackage ActiveGamePackage
-            => ActivePackageInstance?.Package;
+            => mActiveState?.Package;
 
         /// <summary>True iff <see cref="ActiveState"/> is non-null.</summary>
         public bool HasActiveState => mActiveState != null;
@@ -95,12 +97,11 @@ namespace EmoTracker
         {
             get
             {
-                var pi = ActivePackageInstance;
-                if (pi?.Package == null)
+                var pkg = mActiveState?.Package;
+                if (pkg == null)
                     return string.Format("EmoTracker {0}", EmoTracker.Core.ApplicationVersion.Current);
 
-                var pkg = pi.Package;
-                var variant = pi.ActiveVariant;
+                var variant = mActiveState?.ActiveVariant;
                 if (variant != null)
                     return string.Format("EmoTracker {0}  ::  {1} | {2}",
                         EmoTracker.Core.ApplicationVersion.Current,

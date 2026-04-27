@@ -238,7 +238,7 @@ namespace EmoTracker.Data.Locations
                         // LocationDatabase; fall back to singleton when
                         // OwnerState hasn't been stamped yet.
                         var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
-                        locDb?.RefeshAccessibility();
+                        locDb?.RefreshAccessibility();
                     }, nameof(CapturedItemIdStored));
 
                     if (queued)
@@ -295,7 +295,7 @@ namespace EmoTracker.Data.Locations
             NotifyPropertyChanged(nameof(GateItem));
             // Phase 6 step 11: prefer the owning state's LocationDatabase.
             var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
-            locDb?.RefeshAccessibility();
+            locDb?.RefreshAccessibility();
         }
 
         // OnChanged callback for CapturedItemIdStored. Most of the side-effect
@@ -367,7 +367,7 @@ namespace EmoTracker.Data.Locations
                         // LocationDatabase; fall back to singleton when
                         // OwnerState hasn't been stamped yet.
                         var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
-                        locDb?.RefeshAccessibility();
+                        locDb?.RefreshAccessibility();
                     }, nameof(AvailableChestCountStored));
 
                     if (queued)
@@ -427,7 +427,7 @@ namespace EmoTracker.Data.Locations
             {
                 foreach (AccessibilityRule.CodeRule code in rule.Codes)
                 {
-                    Section dependentSection = Tracker.Instance.FindObjectForCode(this.OwnerState as Sessions.TrackerState, code.mCode) as Section;
+                    Section dependentSection = (this.OwnerState as Sessions.TrackerState)?.FindObjectForCode(code.mCode) as Section;
                     if (dependentSection != null)
                         dependentSection.ComputeGateDependencies(aggregateGateRequirements, false);
                 }
@@ -437,7 +437,7 @@ namespace EmoTracker.Data.Locations
             {
                 foreach (AccessibilityRule.CodeRule code in rule.Codes)
                 {
-                    Section dependentSection = Tracker.Instance.FindObjectForCode(this.OwnerState as Sessions.TrackerState, code.mCode) as Section;
+                    Section dependentSection = (this.OwnerState as Sessions.TrackerState)?.FindObjectForCode(code.mCode) as Section;
                     if (dependentSection != null)
                         dependentSection.ComputeGateDependencies(aggregateGateRequirements, false);
                 }

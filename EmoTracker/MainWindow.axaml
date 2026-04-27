@@ -262,7 +262,7 @@
                     Width="12" Height="12"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="0,0,2,1"
-                    IsVisible="{Binding AllowResize, Source={x:Static data:Tracker.Instance}}">
+                    IsVisible="{Binding AllowResize, Source={x:Static local:ApplicationModel.Instance}}">
                 <!-- Three diagonal dot lines -->
                 <Line StartPoint="10,2" EndPoint="2,10" Stroke="#555555" StrokeThickness="1"/>
                 <Line StartPoint="10,5" EndPoint="5,10" Stroke="#555555" StrokeThickness="1"/>

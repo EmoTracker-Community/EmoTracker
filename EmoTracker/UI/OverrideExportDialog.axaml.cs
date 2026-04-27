@@ -111,9 +111,9 @@ namespace EmoTracker.UI
         {
             mFileRecords = new List<FileRecord>();
 
-            if (Tracker.Instance.ActiveGamePackage != null)
+            if (ApplicationModel.Instance.ActiveGamePackage != null)
             {
-                foreach (string file in Tracker.Instance.ActiveGamePackage.Source.Files)
+                foreach (string file in ApplicationModel.Instance.ActiveGamePackage.Source.Files)
                 {
                     mFileRecords.Add(new FileRecord(file));
                 }
@@ -130,7 +130,7 @@ namespace EmoTracker.UI
 
         private async Task LoadFileIconsAsync()
         {
-            var package = Tracker.Instance.ActiveGamePackage;
+            var package = ApplicationModel.Instance.ActiveGamePackage;
             if (package == null) return;
 
             foreach (var record in mFileRecords)
@@ -191,7 +191,7 @@ namespace EmoTracker.UI
             {
                 if (record.ExportOverride)
                 {
-                    Tracker.Instance.ActiveGamePackage?.ExportUserOverride(record.Path);
+                    ApplicationModel.Instance.ActiveGamePackage?.ExportUserOverride(record.Path);
                     Close();
                 }
             }

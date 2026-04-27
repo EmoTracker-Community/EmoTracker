@@ -394,7 +394,8 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 try
                 {
                     var target = ApplicationModel.Instance.PrimaryState;
-                    var count = Tracker.Instance.ProviderCountForCode(target, code, out AccessibilityLevel maxAccessibility);
+                    AccessibilityLevel maxAccessibility = AccessibilityLevel.None;
+                    uint count = target?.ProviderCountForCode(code, out maxAccessibility) ?? 0;
                     return JsonSerializer.Serialize(new
                     {
                         code,

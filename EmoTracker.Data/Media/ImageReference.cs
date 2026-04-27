@@ -240,7 +240,7 @@ namespace EmoTracker.Data.Media
 
         public static ImageReference FromPackRelativePath(string path, string filter = null)
         {
-            return FromPackRelativePath(Tracker.Instance.ActiveGamePackage, path, filter);
+            return FromPackRelativePath(Sessions.ActiveSession.Primary?.Package, path, filter);
         }
 
         public static ImageReference FromPackRelativePath(IGamePackage package, string path, string filter = null)

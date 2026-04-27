@@ -110,7 +110,7 @@ namespace EmoTracker.Data.Sessions
             // the per-state replacement for the legacy callback in
             // ApplicationSettings.IgnoreAllLogic's setter.
             var state = OwnerState as TrackerState;
-            state?.Locations.RefeshAccessibility();
+            state?.Locations.RefreshAccessibility();
         }
 
         // ----------- Fork support ---------------------------------------------

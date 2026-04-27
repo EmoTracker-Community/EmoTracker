@@ -93,7 +93,9 @@ namespace EmoTracker.Data.Items
             {
                 var local = MutableData.GetValue<string>(nameof(DisabledImageFilterSpec), null);
                 if (local != null) return local;
-                return Tracker.Instance.DisabledImageFilterSpec;
+                return (this.OwnerState as Sessions.TrackerState)?.DisabledImageFilterSpec
+                    ?? Sessions.ActiveSession.Primary?.DisabledImageFilterSpec
+                    ?? "grayscale, dim";
             }
             set
             {
@@ -138,7 +140,7 @@ namespace EmoTracker.Data.Items
         {
             // Phase 6 step 11: prefer the owning state's LocationDatabase.
             var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
-            locDb?.RefeshAccessibility();
+            locDb?.RefreshAccessibility();
         }
 
         // ---------------------------------------------------------- Fork

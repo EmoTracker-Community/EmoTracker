@@ -26,7 +26,31 @@ namespace EmoTracker.Data.Items
         public SectionChestsProxyItem()
         {
             mSectionRef = new ModelReference<Section>(this);
-            Tracker.Instance.PropertyChanged += Tracker_PropertyChanged;
+            // AlwaysAllowClearing lives on the per-state SessionSettings;
+            // we subscribe in ParseDataInternal (when OwnerState is set)
+            // and re-subscribe in OnForked.
+        }
+
+        Sessions.SessionSettings mSubscribedSettings;
+        void RewireSettingsSubscription()
+        {
+            if (mSubscribedSettings != null)
+            {
+                mSubscribedSettings.PropertyChanged -= Settings_PropertyChanged;
+                mSubscribedSettings = null;
+            }
+            var settings = (this.OwnerState as Sessions.TrackerState)?.Settings;
+            if (settings != null)
+            {
+                settings.PropertyChanged += Settings_PropertyChanged;
+                mSubscribedSettings = settings;
+            }
+        }
+
+        private void Settings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Sessions.SessionSettings.AlwaysAllowClearing))
+                RefreshState();
         }
 
         public Section Section
@@ -51,12 +75,6 @@ namespace EmoTracker.Data.Items
                 NotifyPropertyChanged();
                 RefreshState();
             }
-        }
-
-        private void Tracker_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == "AlwaysAllowClearing")
-                RefreshState();
         }
 
         private void Section_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -152,7 +170,8 @@ namespace EmoTracker.Data.Items
             // Resolve through the owning state so the ref points at this
             // state's Section. OwnerState must be set before parse.
             var ownerState = this.OwnerState as Sessions.TrackerState;
-            Section = Tracker.Instance.FindObjectForCode(ownerState, data.GetValue<string>("section")) as Section;
+            Section = ownerState?.FindObjectForCode(data.GetValue<string>("section")) as Section;
+            RewireSettingsSubscription();
         }
 
         protected override void OnForked(ModelTypeBase source)
@@ -178,6 +197,9 @@ namespace EmoTracker.Data.Items
                 resolved.PropertyChanged += Section_PropertyChanged;
                 mSubscribedSection = resolved;
             }
+
+            // Re-subscribe to the fork's per-state settings.
+            RewireSettingsSubscription();
         }
     }
 }

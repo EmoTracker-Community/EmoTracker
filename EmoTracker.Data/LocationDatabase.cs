@@ -56,15 +56,6 @@ namespace EmoTracker.Data
         public bool SuspendRefresh
         {
             get { return mSuspendRefreshCount > 0; }
-            set
-            {
-                // Legacy compatibility: direct assignment is discouraged.
-                // Prefer SuspendRefreshScope for reentrant-safe scoping.
-                if (value)
-                    PushSuspendRefresh();
-                else
-                    PopSuspendRefresh();
-            }
         }
 
         internal void PushSuspendRefresh()
@@ -83,9 +74,10 @@ namespace EmoTracker.Data
 
             --mSuspendRefreshCount;
 
-            if (mSuspendRefreshCount == 0)
+            if (mSuspendRefreshCount <= 0)
             {
-                RefeshAccessibility(bPendingOnly: true);
+                mSuspendRefreshCount = 0;
+                RefreshAccessibility(bPendingOnly: true);
             }
         }
 
@@ -252,7 +244,7 @@ namespace EmoTracker.Data
                     PopSuspendRefresh();
                 }
 
-                RefeshAccessibility();
+                RefreshAccessibility();
             }
 
             return true;
@@ -406,9 +398,9 @@ namespace EmoTracker.Data
             return State?.Maps;
         }
 
-        internal void RefeshAccessibility(bool bPendingOnly = false)
+        internal void RefreshAccessibility(bool bPendingOnly = false)
         {
-            if (mSuspendRefreshCount == 0)
+            if (!SuspendRefresh)
             {
                 if (!bPendingOnly)
                     ++mPendingRefreshCount;

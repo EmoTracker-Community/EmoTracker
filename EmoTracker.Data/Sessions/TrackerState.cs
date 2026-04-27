@@ -38,7 +38,7 @@ namespace EmoTracker.Data.Sessions
     /// reversible.
     /// </para>
     /// </summary>
-    public sealed class TrackerState : ObservableObject, ITrackerStateContext
+    public sealed partial class TrackerState : ObservableObject, ITrackerStateContext
     {
         readonly IndexedModelResolver mResolver = new IndexedModelResolver();
         readonly Guid mId = Guid.NewGuid();
@@ -60,6 +60,47 @@ namespace EmoTracker.Data.Sessions
         {
             get => mName;
             set { SetProperty(ref mName, value); }
+        }
+
+        // Pack metadata: which package and variant this state was loaded
+        // with. Set by the load orchestrator (PackageLoader for fresh
+        // loads, the Tracker.Reload path for in-place reloads). Mutates
+        // when a state's pack/variant changes — UI bindings observe via
+        // INPC.
+        IGamePackage mPackage;
+        IGamePackageVariant mActiveVariant;
+
+        /// <summary>
+        /// The pack this state has loaded. Null before any pack-load
+        /// has run against it.
+        /// </summary>
+        public IGamePackage Package
+        {
+            get => mPackage;
+            internal set { SetProperty(ref mPackage, value); }
+        }
+
+        /// <summary>
+        /// The active variant of <see cref="Package"/>. Null when the
+        /// pack has no variant or none has been chosen.
+        /// </summary>
+        public IGamePackageVariant ActiveVariant
+        {
+            get => mActiveVariant;
+            internal set { SetProperty(ref mActiveVariant, value); }
+        }
+
+        /// <summary>
+        /// Updates pack metadata in one shot, raising INPC for both
+        /// properties only when a change actually occurs. Called by
+        /// <c>PackageLoader.LoadInto</c> at the end of a successful load
+        /// so UI bindings against the active state's <see cref="Package"/>
+        /// / <see cref="ActiveVariant"/> refresh correctly.
+        /// </summary>
+        internal void SetPackInfo(IGamePackage package, IGamePackageVariant variant)
+        {
+            Package = package;
+            ActiveVariant = variant;
         }
 
         /// <summary>

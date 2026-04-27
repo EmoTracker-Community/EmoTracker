@@ -80,13 +80,13 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         var v = pack.FindVariant(variant);
                         if (v != null)
                         {
-                            Tracker.Instance.ActiveGamePackageVariant = v;
+                            ApplicationModel.Instance.ActivatePackage(pack, v);
                             return JsonSerializer.Serialize(new { success = true, variant = v.DisplayName });
                         }
                         return JsonSerializer.Serialize(new { success = false, error = "Variant not found" });
                     }
 
-                    Tracker.Instance.ActiveGamePackage = pack;
+                    ApplicationModel.Instance.ActivatePackage(pack, null);
                     return JsonSerializer.Serialize(new { success = true });
                 }
                 catch (Exception ex)
@@ -219,7 +219,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (ctx == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No active window context" });
 
-                    var pi = app.PackageInstances.FirstOrDefault(p => p.Package != null);
+                    var pi = app.PackageInstances.FirstOrDefault(p => p.States.Values.Any(s => s.Package != null));
                     if (pi == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No PackageInstance with a loaded pack" });
 

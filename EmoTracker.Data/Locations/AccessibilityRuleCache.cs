@@ -13,7 +13,7 @@ namespace EmoTracker.Data.Locations
     /// <see cref="AccessibilityLevel"/> + provider count for that code in the
     /// owning state. It is populated lazily during rule evaluation
     /// (<see cref="AccessibilityRule.GetAccessibilityLevel"/>) and cleared
-    /// wholesale by <see cref="LocationDatabase.RefeshAccessibility"/> at the
+    /// wholesale by <see cref="LocationDatabase.RefreshAccessibility"/> at the
     /// top of each refresh sweep so a single sweep sees a coherent snapshot
     /// of provider counts.
     /// </para>
