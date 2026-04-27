@@ -24,6 +24,30 @@ using System.Linq;
 
 namespace EmoTracker.Data
 {
+    /// <summary>
+    /// Phase 6 step 11 / Phase 7.1.g: <see cref="Tracker"/> is the
+    /// app-wide pack-load orchestrator. It owns the <c>Reload</c>
+    /// entrypoint, the <see cref="OnPackageLoadStarting"/> /
+    /// <see cref="OnPackageLoadComplete"/> events that drive
+    /// <c>ApplicationModel</c>'s adoption of the just-loaded catalogs
+    /// into a <see cref="Sessions.TrackerState"/>, and the
+    /// <see cref="ActiveGamePackage"/> / <see cref="ActiveGamePackageVariant"/>
+    /// metadata that surfaces the currently-loaded pack to consumers.
+    ///
+    /// <para>
+    /// <b>Phase 7.1.g decision:</b> the plan's call to delete this class
+    /// outright was reconsidered and the class is kept by design. Pack
+    /// load is inherently an app-wide operation (pack files, parse,
+    /// init.lua execution, registry building), and 124 callsites depend
+    /// on the <see cref="Tracker.Instance"/> entry point as the
+    /// canonical "what's loaded" surface. Per Phase 7.3 the
+    /// per-state-mutable bits (<c>SwapLeftRight</c>, <c>MapEnabled</c>)
+    /// have been migrated to <see cref="Sessions.SessionSettings"/>;
+    /// Tracker's properties for those now forward to the active state's
+    /// SessionSettings, keeping bindings working without splitting the
+    /// canonical source.
+    /// </para>
+    /// </summary>
     public class Tracker : ObservableSingleton<Tracker>, ICodeProvider
     {
         public event EventHandler<EventArgs> OnPackageLoadStarting;
@@ -134,16 +158,42 @@ The active game package uses potentially unsafe scripting functionality, which a
             }
         }
 
+        // Phase 7.11 polish: forward SwapLeftRight / MapEnabled to the
+        // active state's SessionSettings (Phase 7.3 made these per-state).
+        // Tracker keeps the property surface for back-compat with existing
+        // bindings; the underlying value lives on SessionSettings.
         public bool SwapLeftRight
         {
-            get { return mbSwapLeftRight; }
-            set { if (SetProperty(ref mbSwapLeftRight, value)) Reload(); }
+            get
+            {
+                var s = Sessions.SessionContext.ActiveState?.Settings;
+                return s != null ? s.SwapLeftRight : mbSwapLeftRight;
+            }
+            set
+            {
+                bool changed = SetProperty(ref mbSwapLeftRight, value);
+                var s = Sessions.SessionContext.ActiveState?.Settings;
+                if (s != null && s.SwapLeftRight != value)
+                    s.SwapLeftRight = value;
+                if (changed) Reload();
+            }
         }
 
         public bool MapEnabled
         {
-            get { return mbMapEnabled; }
-            set { if (SetProperty(ref mbMapEnabled, value)) Reload(); }
+            get
+            {
+                var s = Sessions.SessionContext.ActiveState?.Settings;
+                return s != null ? s.MapEnabled : mbMapEnabled;
+            }
+            set
+            {
+                bool changed = SetProperty(ref mbMapEnabled, value);
+                var s = Sessions.SessionContext.ActiveState?.Settings;
+                if (s != null && s.MapEnabled != value)
+                    s.MapEnabled = value;
+                if (changed) Reload();
+            }
         }
 
         public bool AllowResize
