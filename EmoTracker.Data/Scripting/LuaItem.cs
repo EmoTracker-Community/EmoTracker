@@ -327,12 +327,24 @@ namespace EmoTracker.Data.Scripting
 
         public bool Set(string key, object value)
         {
-            return SetTransactableProperty(value, (v) =>
+            // If Lua hands us a data-model object (Item, Location, Section, ...)
+            // store a fork-safe ModelReference rather than the raw C# reference.
+            // Storing the raw reference would pin the source state's instance into
+            // every fork's MutableData via the COW boundary deep-copy — fork
+            // mutations on the same key would still see the original state's
+            // object. ModelReference carries only the DefinitionId across the
+            // boundary; resolution at Get-time chases the calling LuaItem's
+            // own state's resolver (see ResolveStoredValue below).
+            object storeValue = value is ModelTypeBase mt
+                ? (object)new ModelReference<ModelTypeBase>(this, mt)
+                : value;
+
+            return SetTransactableProperty(storeValue, (v) =>
             {
                 try
                 {
                     if (PropertyChangedFunc != null)
-                        GetCallbackScriptManager().SafeCall(PropertyChangedFunc, this, key, v);
+                        GetCallbackScriptManager().SafeCall(PropertyChangedFunc, this, key, ResolveStoredValue(v));
                 }
                 catch (Exception e)
                 {
@@ -344,7 +356,36 @@ namespace EmoTracker.Data.Scripting
 
         public object Get(string key, bool forceReadFromOpenTransaction = false)
         {
-            return GetTransactableProperty<object>(key, forceReadFromOpenTransaction);
+            return ResolveStoredValue(GetTransactableProperty<object>(key, forceReadFromOpenTransaction));
+        }
+
+        /// <summary>
+        /// Unwraps a stored value: if it is a <see cref="ModelReference{T}"/>
+        /// (placed there by <see cref="Set(string, object)"/> when Lua handed
+        /// us a model object), resolves it through THIS LuaItem's current
+        /// <see cref="ModelTypeBase.GetModelResolver"/> and returns the
+        /// resolved instance. All other values pass through unchanged.
+        ///
+        /// <para>
+        /// Resolution uses <c>this.GetModelResolver()</c> rather than
+        /// <c>mref.Target</c> because <see cref="ModelReference{T}.DeepCopy"/>
+        /// (invoked on the COW boundary when <see cref="ModelTypeBase.MutableData"/>
+        /// is forked) preserves the original holder back-reference. A fork's
+        /// deep-copied ModelReference therefore has <c>mHolder</c> pointing at
+        /// the SOURCE LuaItem; resolving through <c>mref.Target</c> would
+        /// chase the source state's resolver and return the source state's
+        /// instance. Resolving through <c>this</c> guarantees the fork sees
+        /// its own state's instance.
+        /// </para>
+        /// </summary>
+        object ResolveStoredValue(object value)
+        {
+            if (value is ModelReference<ModelTypeBase> mref)
+            {
+                if (mref.IsEmpty) return null;
+                return this.GetModelResolver()?.Resolve<ModelTypeBase>(mref.DefinitionId);
+            }
+            return value;
         }
 
         // -------- Phase 5 fork plumbing -----------------------------------

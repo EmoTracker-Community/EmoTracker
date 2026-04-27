@@ -434,6 +434,7 @@ namespace EmoTracker.Data
                 {
                     bool bRefreshedAccessibility = false;
 
+
                     try
                     {
                         mbInRefresh = true;

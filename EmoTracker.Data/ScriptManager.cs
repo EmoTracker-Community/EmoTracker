@@ -132,33 +132,29 @@ namespace EmoTracker.Data
             get { return mState.Locations.Root; }
         }
 
-        #region -- Backwards Compatibility (Temp) --
-
         public bool DisplayAllLocations
         {
-            get { return ApplicationSettings.Instance.DisplayAllLocations; }
-            set { ApplicationSettings.Instance.DisplayAllLocations = value; }
+            get { return mState.Settings.DisplayAllLocations; }
+            set { mState.Settings.DisplayAllLocations = value; }
         }
 
         public bool AlwaysAllowClearing
         {
-            get { return ApplicationSettings.Instance.AlwaysAllowClearing; }
-            set { ApplicationSettings.Instance.AlwaysAllowClearing = value; }
+            get { return mState.Settings.AlwaysAllowClearing; }
+            set { mState.Settings.AlwaysAllowClearing = value; }
         }
 
         public bool PinLocationsOnItemCapture
         {
-            get { return ApplicationSettings.Instance.PinLocationsOnItemCapture; }
-            set { ApplicationSettings.Instance.PinLocationsOnItemCapture = value; }
+            get { return mState.Settings.PinLocationsOnItemCapture; }
+            set { mState.Settings.PinLocationsOnItemCapture = value; }
         }
 
         public bool AutoUnpinLocationsOnClear
         {
-            get { return ApplicationSettings.Instance.AutoUnpinLocationsOnClear; }
-            set { ApplicationSettings.Instance.AutoUnpinLocationsOnClear = value; }
+            get { return mState.Settings.AutoUnpinLocationsOnClear; }
+            set { mState.Settings.AutoUnpinLocationsOnClear = value; }
         }
-
-        #endregion
 
     }
 
@@ -280,6 +276,81 @@ function print(...)
 function _safe_call(fn, ...)
     local args = table.pack(...)
     return xpcall(function() return fn(table.unpack(args, 1, args.n)) end, debug.traceback)
+end
+
+-- Note: __et_proxy_cache is intentionally NOT initialized here —
+-- having it here would land it in the cloner's destination-baseline
+-- name set and the fork would start with an empty cache.  Instead
+-- __et_wrap_model_ref lazy-creates it, so the source's populated
+-- cache (with cloned proxies and cloned LuaModelRefs) deep-copies
+-- across fork like any other user global; the fork ends up with a
+-- pre-warmed cache that resolves into the fork's graph.
+
+-- Metatable installed on every model proxy. Resolution happens on
+-- every member access through the underlying LuaModelRef so forks
+-- (which carry their own LuaModelRef pointing at the fork's resolver)
+-- see the fork's instances.  See ScriptManager.WrapAsLuaProxy for the
+-- C#-side construction.
+__et_model_proxy_meta = {
+    __index = function(t, k)
+        local target = t.__model_ref:Resolve()
+        if target == nil then return nil end
+        local v = target[k]
+        -- Method binding fix-up: `proxy:Method(...)` desugars to
+        -- `proxy.Method(proxy, ...)`. NLua-bound C# methods expect the
+        -- C# instance as `self`, not the proxy table, so wrap functions
+        -- in a thunk that re-resolves and substitutes the live target.
+        -- Re-resolution is cheap (same resolver, same id) and ensures
+        -- the call lands on the most-recently-active instance even if
+        -- the resolver's graph was swapped between `__index` and the
+        -- subsequent call.
+        if type(v) == 'function' then
+            return function(_, ...)
+                local live = t.__model_ref:Resolve()
+                if live == nil then return nil end
+                return live[k](live, ...)
+            end
+        end
+        return v
+    end,
+    __newindex = function(t, k, v)
+        local target = t.__model_ref:Resolve()
+        if target ~= nil then
+            target[k] = v
+        end
+    end,
+    __eq = function(a, b)
+        if a == nil or b == nil then return false end
+        local aRef = rawget(a, '__model_ref')
+        local bRef = rawget(b, '__model_ref')
+        if aRef == nil or bRef == nil then return false end
+        return aRef.DefinitionIdString == bRef.DefinitionIdString
+    end,
+    __tostring = function(t)
+        local target = t.__model_ref:Resolve()
+        if target ~= nil then return tostring(target) end
+        return 'ModelProxy(<unresolved>)'
+    end,
+}
+
+-- C#-callable helper: looks up an existing proxy by its DefinitionId
+-- string in __et_proxy_cache, or creates a new metatabled proxy table
+-- pointing at <modelRef>.  The cache lookup is what makes
+--   local a = Tracker:FindObjectForCode('foo')
+--   local b = Tracker:FindObjectForCode('foo')
+--   assert(a == b)            -- raw == works (same table)
+--   __et_proxy_cache[id] = a  -- a is usable as a table key
+-- behave as a pack-author would naively expect.
+function __et_wrap_model_ref(modelRef, defIdString)
+    if modelRef == nil or defIdString == nil or defIdString == '' then
+        return nil
+    end
+    if __et_proxy_cache == nil then __et_proxy_cache = {} end
+    local existing = __et_proxy_cache[defIdString]
+    if existing ~= nil then return existing end
+    local proxy = setmetatable({__model_ref = modelRef}, __et_model_proxy_meta)
+    __et_proxy_cache[defIdString] = proxy
+    return proxy
 end
  ";
 
@@ -992,6 +1063,55 @@ end
                 mNotificationService.PushMarkdownNotification(type, markdown, timeout);
         }
 
+        /// <summary>
+        /// Wraps <paramref name="target"/> in a fork-safe Lua proxy table
+        /// (a metatabled <see cref="LuaTable"/> whose <c>__index</c> /
+        /// <c>__newindex</c> resolve through a <see cref="LuaModelRef"/> on
+        /// every access). Returns the same proxy table for repeated calls
+        /// against the same target on the same state, so Lua scripts can
+        /// rely on raw <c>==</c> identity and use proxies as table keys.
+        ///
+        /// <para>
+        /// On fork, the <see cref="LuaStateCloner"/> visits every proxy
+        /// reachable from <c>_G</c> (including the per-state proxy cache)
+        /// and synthesizes a fresh <see cref="LuaModelRef"/> bound to the
+        /// destination state's resolver — so the fork's proxies resolve
+        /// into the fork's own model graph without any pack-script
+        /// involvement.
+        /// </para>
+        ///
+        /// <para>
+        /// Returns null if <paramref name="target"/> is null, the manager
+        /// has no Lua interpreter loaded, or the target has no
+        /// <see cref="ModelTypeBase.DefinitionId"/> (which would mean we
+        /// have no stable identity to remap on fork).
+        /// </para>
+        /// </summary>
+        [NLua.LuaHide]
+        public LuaTable WrapAsLuaProxy(ModelTypeBase target)
+        {
+            if (target == null) return null;
+            if (mLua == null) return null;
+            if (target.DefinitionId == Guid.Empty) return null;
+
+            // Resolver: prefer this manager's owning state (each state
+            // resolves its own graph), fall back to the model's owner
+            // state if the manager isn't yet bound (atypical).
+            var resolver = (this.OwnerState as IModelResolver)
+                ?? (target.OwnerState as IModelResolver);
+            if (resolver == null) return null;
+
+            var modelRef = new LuaModelRef(resolver, target.DefinitionId);
+
+            using (var wrapFunc = mLua["__et_wrap_model_ref"] as LuaFunction)
+            {
+                if (wrapFunc == null) return null;
+                var result = wrapFunc.Call(modelRef, modelRef.DefinitionIdString);
+                if (result == null || result.Length == 0) return null;
+                return result[0] as LuaTable;
+            }
+        }
+
         public LuaItem CreateLuaItem()
         {
             LuaItem item = new LuaItem();
@@ -1144,7 +1264,13 @@ end
                 PendingExtraBridges = null;
             }
 
-            ForkCloner = new LuaStateCloner(src.mLua, mLua, bridgeMap, OutputWarning);
+            // Pass the destination state as the cloner's resolver so any
+            // LuaModelRef instances embedded in cloned proxy tables (built
+            // by ScriptManager.WrapAsLuaProxy on the source) get rebound to
+            // resolve into the fork's model graph.
+            ForkCloner = new LuaStateCloner(
+                src.mLua, mLua, bridgeMap, OutputWarning,
+                destinationResolver: this.OwnerState as IModelResolver);
             ForkCloner.CloneAll();
         }
 
@@ -1204,7 +1330,12 @@ end
                 }
             }
 
-            ForkCloner = new LuaStateCloner(source.mLua, mLua, bridgeMap, OutputWarning);
+            // Same resolver routing as OnForked — see comment there. Both
+            // entry points feed pack-script captures of model proxies
+            // through to the fork's resolver.
+            ForkCloner = new LuaStateCloner(
+                source.mLua, mLua, bridgeMap, OutputWarning,
+                destinationResolver: this.OwnerState as IModelResolver);
             ForkCloner.CloneAll();
         }
 

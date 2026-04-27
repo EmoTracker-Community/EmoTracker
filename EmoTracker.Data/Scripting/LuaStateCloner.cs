@@ -1,3 +1,4 @@
+using EmoTracker.Core.DataModel;
 using NLua;
 using System;
 using System.Collections.Generic;
@@ -25,6 +26,13 @@ namespace EmoTracker.Data.Scripting
         readonly Lua mDestination;
         readonly IReadOnlyDictionary<object, object> mBridgeIdentityMap;
         readonly Action<string> mWarn;
+        // Optional: resolver to bind every cloned LuaModelRef against on the
+        // destination. When null, the cloner falls through to passing the
+        // source's LuaModelRef instances by reference — which leaves the
+        // fork's proxies resolving into the SOURCE state's graph and is
+        // almost never what callers want. ScriptManager.OnForked /
+        // RunCloneFrom always pass the destination state.
+        readonly IModelResolver mDestinationResolver;
 
         // Identity map: source-side reference-typed Lua values → destination.
         // Keyed by an integer id assigned via a Lua-side helper table
@@ -97,12 +105,14 @@ namespace EmoTracker.Data.Scripting
             Lua source,
             Lua destination,
             IReadOnlyDictionary<object, object> bridgeIdentityMap = null,
-            Action<string> warn = null)
+            Action<string> warn = null,
+            IModelResolver destinationResolver = null)
         {
             mSource = source ?? throw new ArgumentNullException(nameof(source));
             mDestination = destination ?? throw new ArgumentNullException(nameof(destination));
             mBridgeIdentityMap = bridgeIdentityMap ?? new Dictionary<object, object>();
             mWarn = warn ?? (_ => { });
+            mDestinationResolver = destinationResolver;
 
             // Snapshot the destination's pristine _G so we know which names
             // are stdlib / pre-injected and shouldn't be cloned from source.
@@ -528,6 +538,33 @@ end
             // by default object equality on the bridge wrapper.
             if (mBridgeIdentityMap.TryGetValue(sourceValue, out var bridgeValue))
                 return bridgeValue;
+
+            // LuaModelRef remap (opt-in proxy path; see ScriptManager.WrapAsLuaProxy).
+            if (sourceValue is LuaModelRef srcModelRef)
+            {
+                if (mDestinationResolver != null)
+                    return srcModelRef.WithResolver(mDestinationResolver);
+                mWarn("LuaStateCloner: cloning a LuaModelRef without a destinationResolver; fork proxies will resolve into the source state.");
+                return srcModelRef;
+            }
+
+            // ModelTypeBase auto-remap (defensive — usually the bridge map
+            // above already handles known catalog entries; this catches any
+            // ModelTypeBase-derived captures that weren't seeded into the
+            // bridge map for whatever reason).
+            if (sourceValue is EmoTracker.Core.DataModel.ModelTypeBase srcModel)
+            {
+                if (mDestinationResolver != null && srcModel.DefinitionId != Guid.Empty)
+                {
+                    var destModel = mDestinationResolver.Resolve<EmoTracker.Core.DataModel.ModelTypeBase>(srcModel.DefinitionId);
+                    if (destModel != null)
+                        return destModel;
+                    mWarn(string.Format(
+                        "LuaStateCloner: model {0} (DefinitionId {1}) not present in destination resolver; passing source reference through.",
+                        srcModel.GetType().FullName, srcModel.DefinitionId));
+                }
+                return sourceValue;
+            }
 
             // Tables: recursive clone with cycle preservation. The id map
             // assigns a stable integer per Lua-level reference; if we've

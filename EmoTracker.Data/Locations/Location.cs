@@ -633,11 +633,26 @@ namespace EmoTracker.Data.Locations
                 forkedSection.SetOwner(copy);
                 copy.mSections.Add(forkedSection);
             }
-            // Children second; rewire each child's Parent to the new fork.
+            // Children second. Only rewire forkedChild.Parent when the
+            // source child's Parent actually IS this — i.e., the natural
+            // tree-structural parent. When pack-load uses a "parent"
+            // JSON override (LocationDatabase.IncrementalLoad
+            // unconditionally appends top-level locations to mRoot.mChildren
+            // even when their explicit Parent was redirected via
+            // parentOverride), the source child's Parent is some other
+            // location; OnForked already carried the correct Parent
+            // DefinitionId via mParentRef.ForFork(this), and the
+            // post-fork resolver registration will resolve it to the
+            // right fork-side instance on first read. Setting Parent =
+            // copy unconditionally would clobber that override and
+            // collapse the location's BaseAccessibility into the wrong
+            // ancestor's, producing wrong accessibility cascades after
+            // the first refresh on the fork.
             foreach (var child in this.mChildren)
             {
                 var forkedChild = (Location)child.Fork(destOwnerState);
-                forkedChild.Parent = copy;
+                if (ReferenceEquals(child.Parent, this))
+                    forkedChild.Parent = copy;
                 copy.mChildren.Add(forkedChild);
             }
 
