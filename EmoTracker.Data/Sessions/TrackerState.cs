@@ -525,7 +525,71 @@ namespace EmoTracker.Data.Sessions
                 }
             }
 
+            // ---- Phase 7.1.h diagnostic: dump source vs fork accessibility -
+            // Temporary diagnostic to compare source's evaluated section
+            // accessibility against the fork's inherited values, so we can
+            // tell whether the all-red / partial-red CodeTracker symptom
+            // comes from a source-side mis-evaluation, a Section.OnForked
+            // inheritance gap, or fork-side post-fork divergence. Writes
+            // to /tmp/codetracker_fork_trace.log; remove once the bug is
+            // localized.
+            try
+            {
+                DumpForkTrace(this, copy);
+            }
+            catch { /* defensive */ }
+
             return copy;
+        }
+
+        static void DumpForkTrace(TrackerState src, TrackerState fork)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"==== Fork trace {DateTime.Now:HH:mm:ss.fff} ====");
+            sb.AppendLine($"src state id={src.Id}, fork id={fork.Id}");
+            sb.AppendLine($"src.RuleCache.Count={src.Locations?.RuleCache.Count}");
+            sb.AppendLine($"fork.RuleCache.Count={fork.Locations?.RuleCache.Count}");
+
+            // Walk both trees in parallel via the resolver. Compare cached
+            // accessibility for each section.
+            sb.AppendLine("--- Sections (src level | fork level | section name) ---");
+            int total = 0, mismatches = 0;
+            if (src.Locations?.Root != null && fork.Locations?.Root != null)
+                WalkSections(src.Locations.Root, fork.Locations.Root, sb, ref total, ref mismatches);
+            sb.AppendLine($"--- total sections compared: {total}, mismatches: {mismatches} ---");
+
+            try
+            {
+                System.IO.File.AppendAllText("/tmp/codetracker_fork_trace.log", sb.ToString());
+            }
+            catch { /* defensive */ }
+        }
+
+        static void WalkSections(Location srcLoc, Location forkLoc, System.Text.StringBuilder sb, ref int total, ref int mismatches)
+        {
+            using (var srcEnum = srcLoc.Sections.GetEnumerator())
+            using (var forkEnum = forkLoc.Sections.GetEnumerator())
+            {
+                while (srcEnum.MoveNext() && forkEnum.MoveNext())
+                {
+                    total++;
+                    var s = srcEnum.Current;
+                    var f = forkEnum.Current;
+                    var srcLevel = s.AccessibilityLevel;
+                    var forkLevel = f.AccessibilityLevel;
+                    var marker = (srcLevel == forkLevel) ? "  " : "**";
+                    if (srcLevel != forkLevel) mismatches++;
+                    sb.AppendLine($"{marker} {srcLevel,-15} | {forkLevel,-15} | {s.Name ?? "(unnamed)"}");
+                }
+            }
+            using (var srcEnum = srcLoc.Children.GetEnumerator())
+            using (var forkEnum = forkLoc.Children.GetEnumerator())
+            {
+                while (srcEnum.MoveNext() && forkEnum.MoveNext())
+                {
+                    WalkSections(srcEnum.Current, forkEnum.Current, sb, ref total, ref mismatches);
+                }
+            }
         }
 
         // Walks a freshly-forked layout tree and registers each LayoutItem
