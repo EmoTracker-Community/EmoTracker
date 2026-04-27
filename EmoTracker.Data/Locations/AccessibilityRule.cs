@@ -40,9 +40,16 @@ namespace EmoTracker.Data.Locations
 
         static uint GetProviderCountForCode(string code, Sessions.TrackerState state, out AccessibilityLevel maxAccessibility)
         {
-            // Phase 7.2: lookup goes through the per-state cache first, then
-            // falls through to the state's ItemDatabase. Cache misses are
-            // populated on the way out.
+            // Phase 7.2 / 7.1.h fix: lookup goes through the per-state cache
+            // first, then through the state-level ICodeProvider dispatcher
+            // (state.ProviderCountForCode), which routes `@`-prefixed codes
+            // to LocationDatabase, `$`-prefixed codes to ScriptManager (Lua
+            // accessibility functions), and bare codes to ItemDatabase.
+            // The Phase 7.2 refactor mistakenly hard-routed every lookup
+            // through state.Items, which silently returned 0 for `@` and
+            // `$` codes — making rules like "ow_vanilla_1b,@OW Castle Courtyard"
+            // (and any pack with Lua-driven accessibility, e.g. CodeTracker)
+            // evaluate to None for everything.
             var cache = state?.Locations?.RuleCache;
 
             if (sbEnableCache && cache != null && cache.TryGet(code, out var cachedLevel, out var cachedCount))
@@ -51,17 +58,14 @@ namespace EmoTracker.Data.Locations
                 return cachedCount;
             }
 
-            // ICodeProvider for the lookup is the state's items. State may
-            // be null in edge cases (rule evaluation outside any live
-            // state), in which case we treat the code as unprovided.
-            ICodeProvider provider = state?.Items;
-            if (provider == null)
+            if (state == null)
             {
                 maxAccessibility = AccessibilityLevel.None;
                 return 0;
             }
 
-            uint count = provider.ProviderCountForCode(code, out maxAccessibility);
+            // Dispatch via the state's ICodeProvider — handles @ / $ prefixes.
+            uint count = state.ProviderCountForCode(code, out maxAccessibility);
 
             if (sbEnableCache && cache != null)
                 cache.Put(code, maxAccessibility, count);
