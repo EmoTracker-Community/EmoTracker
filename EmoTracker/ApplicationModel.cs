@@ -1173,28 +1173,6 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             NotifyPropertyChanged(nameof(PrimaryState));
 
-            // Phase 7.1.h: re-evaluate accessibility against the fork's own
-            // catalogs + Lua interpreter. Section.OnForked copies source's
-            // mCachedAccessibility verbatim, but pack-script-driven Lua
-            // callbacks (tracker_on_accessibility_updated, LuaItem.ProvidesCode)
-            // run against THIS state's interpreter — and pack scripts often
-            // mutate item / section state from within those callbacks. A
-            // fresh refresh on the fork makes those callbacks fire on the
-            // fork's interpreter, with the fork's items as the lookup
-            // backing, producing values that match what the user would see
-            // after the first user-driven mutation. Inheriting source's
-            // values verbatim left some sections showing stale evaluations
-            // computed against source's interpreter before pack-script
-            // callbacks fully converged.
-            try
-            {
-                primary.Locations.RefreshAccessibility();
-            }
-            catch (Exception ex)
-            {
-                primary.Scripts?.OutputException(ex);
-            }
-
             // Now that PrimaryState is non-null, run the deferred app-level
             // package-loaded side effects (extensions, layouts, etc.).
             FirePackageLoadedFanout();
