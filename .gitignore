@@ -49,6 +49,7 @@ CodeCoverage/
 
 # Claude Code local settings
 .claude/*.local.*
+.claude/*.lock
 
 # MSBuild Binary and Structured Log
 *.binlog
