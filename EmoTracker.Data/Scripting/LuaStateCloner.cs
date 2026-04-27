@@ -608,8 +608,20 @@ end
             // Copy upvalues, cloning each value. Upvalues are 1-indexed in
             // Lua; debug.getupvalue returns (name, value) and debug.setupvalue
             // takes (function, index, value).
+            //
+            // Special-case _ENV: when an upvalue's name is "_ENV", substitute
+            // the destination's _G directly. This bypasses CloneValue's
+            // seed-based remap (which has been observed to fail across NLua
+            // wrapper-identity boundaries), and also handles closures that
+            // captured _ENV by reference but where the captured value's
+            // C# wrapper identity differs from any wrapper we've seeded.
+            // The freshly load()'d destination function already has _ENV set
+            // to dest._G by default — we re-set it explicitly here to
+            // overwrite the no-op default that we'd otherwise produce by
+            // running CloneValue on the source's _G.
             for (int i = 1; i <= nups; i++)
             {
+                string upvalueName;
                 object upvalueValue;
                 using (var getUpvalFunc = (LuaFunction)mSource["__et_cloner_get_upvalue"])
                 {
@@ -622,18 +634,31 @@ end
                         // initial state.
                         continue;
                     }
+                    upvalueName = upResult[0] as string;
                     upvalueValue = upResult[1];
                 }
 
                 object clonedUpvalue;
-                try
+                if (upvalueName == "_ENV")
                 {
-                    clonedUpvalue = CloneValue(upvalueValue);
+                    // Use destination's _G directly. Don't CloneValue —
+                    // its seed-based path produces dest._G but only when
+                    // CloneValue resolves the source._G's wrapper identity
+                    // through GetSourceId, which has shown empirically to
+                    // not always hit. Going direct is safer.
+                    clonedUpvalue = mDestination["_G"];
                 }
-                catch (Exception ex)
+                else
                 {
-                    mWarn(string.Format("LuaStateCloner: failed to clone upvalue {0} of '{1}': {2}", i, sourceName, ex.Message));
-                    continue;
+                    try
+                    {
+                        clonedUpvalue = CloneValue(upvalueValue);
+                    }
+                    catch (Exception ex)
+                    {
+                        mWarn(string.Format("LuaStateCloner: failed to clone upvalue {0} of '{1}': {2}", i, sourceName, ex.Message));
+                        continue;
+                    }
                 }
 
                 using (var setUpvalFunc = (LuaFunction)mDestination["__et_cloner_set_upvalue"])
