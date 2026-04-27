@@ -52,7 +52,9 @@ namespace EmoTracker.Extensions.Twitch
         DefaultPermissions mDefaultPermissions = DefaultPermissions.Moderator;
         ConnectionState mConnectionState = ConnectionState.Disconnected;
         DisconnectReason mDisconnectReason = DisconnectReason.Unknown;
-        object mStatusControl;
+        // Note: no longer cached. Avalonia visuals are single-parent, so
+        // each MainWindow that binds StatusBarControl needs its own
+        // instance — see the getter.
         TwitchClient mClient;
         bool mbActive = false;
 
@@ -85,7 +87,7 @@ namespace EmoTracker.Extensions.Twitch
         {
             get
             {
-                return mbActive ? mStatusControl : null;
+                return mbActive ? new TwitchStatusIndicator() { DataContext = this } : null;
             }
         }
 
@@ -126,7 +128,6 @@ namespace EmoTracker.Extensions.Twitch
             ConnectCommand = new DelegateCommand(ConnectExecute, ConnectCanExecute);
             DisconnectCommand = new DelegateCommand(DisconnectExecute, DisconnectCanExecute);
 
-            mStatusControl = new TwitchStatusIndicator() { DataContext = this };
         }
 
         private bool DisconnectCanExecute(object obj)

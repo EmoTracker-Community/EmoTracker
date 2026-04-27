@@ -139,17 +139,113 @@ namespace EmoTracker
         /// Phase 7.6 / 7.9: spawn a new TrackerWindow hosting only
         /// <paramref name="state"/>, moving the state out of
         /// <paramref name="sourceCtx"/>. Returns the new window's context.
+        ///
+        /// <para>
+        /// <paramref name="screenPosition"/> (optional) places the new
+        /// window at a specific screen point — used by the tab tear-off
+        /// flow so the new window appears under the user's cursor.
+        /// When null, the window uses the platform default.
+        /// </para>
         /// </summary>
-        public WindowContext OpenStateInNewWindow(WindowContext sourceCtx, TrackerState state)
+        public WindowContext OpenStateInNewWindow(WindowContext sourceCtx, TrackerState state, Avalonia.PixelPoint? screenPosition = null)
         {
             if (state == null) return null;
             sourceCtx?.RemoveState(state);
+
             // seedWithPrimaryState=false: tear-off windows start empty;
             // we add only the torn-off state below.
             var newWindow = new MainWindow(seedWithPrimaryState: false);
+            if (screenPosition.HasValue)
+            {
+                newWindow.WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.Manual;
+                newWindow.Position = screenPosition.Value;
+            }
             newWindow.WindowContext.AddState(state);
             newWindow.Show();
+
+            // Activate so the new window comes to the foreground after a
+            // tear-off — without this, on some platforms the just-spawned
+            // window can end up behind the source window (Z-order is
+            // determined by the OS at Show time, and the source window has
+            // focus from the pointer-released event).
+            try { newWindow.Activate(); } catch { /* defensive */ }
             return newWindow.WindowContext;
+        }
+
+        /// <summary>
+        /// Promotes another live window to be the desktop's
+        /// <see cref="Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime.MainWindow"/>
+        /// before <paramref name="closing"/> shuts.
+        ///
+        /// <para>
+        /// Why: <c>App.axaml.cs</c> sets
+        /// <see cref="Avalonia.Controls.ShutdownMode.OnMainWindowClose"/>
+        /// — closing the lifetime's MainWindow tears down the entire
+        /// process. When the user merges the original (= main) window
+        /// into a tear-off, or closes/empties out the original via tab
+        /// drag, we want the OTHER live window(s) to keep the app alive.
+        /// Reassigning <c>desktop.MainWindow</c> to one of them before
+        /// the original closes converts the close into a normal window
+        /// close instead of an app shutdown.
+        /// </para>
+        ///
+        /// <para>
+        /// No-op if <paramref name="closing"/> isn't the current
+        /// <c>MainWindow</c>, or if no other live window exists (in
+        /// which case shutting down on the close is correct).
+        /// </para>
+        /// </summary>
+        public void PromoteAlternativeMainWindowIfNeeded(Avalonia.Controls.Window closing)
+        {
+            if (closing == null) return;
+            try
+            {
+                if (!(Avalonia.Application.Current?.ApplicationLifetime
+                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop))
+                    return;
+                if (!ReferenceEquals(desktop.MainWindow, closing))
+                    return;
+
+                foreach (var ctx in mWindows)
+                {
+                    if (ctx.OwnerWindow is Avalonia.Controls.Window other
+                        && !ReferenceEquals(other, closing))
+                    {
+                        desktop.MainWindow = other;
+                        return;
+                    }
+                }
+            }
+            catch { /* defensive */ }
+        }
+
+        /// <summary>
+        /// Tear-off helper: returns the <see cref="WindowContext"/> whose
+        /// owning window's screen-space bounds contain
+        /// <paramref name="screenPoint"/>, or null if the point is outside
+        /// every live EmoTracker window. Used by the tab strip's
+        /// release-time drop logic to decide between "dock into existing
+        /// window" and "spawn a new window at this point".
+        /// </summary>
+        public WindowContext FindWindowContextAtScreenPoint(Avalonia.PixelPoint screenPoint)
+        {
+            foreach (var ctx in mWindows)
+            {
+                if (ctx.OwnerWindow is Avalonia.Controls.Window w)
+                {
+                    try
+                    {
+                        var pos = w.Position;
+                        var width = (int)w.Bounds.Width;
+                        var height = (int)w.Bounds.Height;
+                        if (screenPoint.X >= pos.X && screenPoint.X <= pos.X + width
+                            && screenPoint.Y >= pos.Y && screenPoint.Y <= pos.Y + height)
+                            return ctx;
+                    }
+                    catch { /* defensive */ }
+                }
+            }
+            return null;
         }
 
         /// <summary>
@@ -611,26 +707,29 @@ namespace EmoTracker
             NotifyPropertyChanged(nameof(PrimaryState));
         }
 
+        // ShowBroadcastView routes to the currently-active MainWindow,
+        // each of which owns its own per-window BroadcastView (see
+        // MainWindow.ShowBroadcastView). This is the F2 / menu entry
+        // point: the user gets a broadcast feed for the window they're
+        // currently looking at, following its active tab.
         private void ShowBroadcastView(object obj)
         {
-            if (mBroadcastView == null)
-            {
-                mBroadcastView = new BroadcastView();
-                mBroadcastView.Closing += (_, _) => mBroadcastView = null;
-
-                // Show without an owner so the broadcast view is an independent
-                // top-level window.  Passing the main window as owner causes the
-                // OS to force the broadcast view above the main window at all times.
-                mBroadcastView.Show();
-            }
-            else
-            {
-                mBroadcastView.Activate();
-            }
+            var ctx = mCurrentlyActiveWindowContext ?? mWindows.FirstOrDefault();
+            if (ctx?.OwnerWindow is MainWindow mw)
+                mw.ShowBroadcastView();
         }
 
-        public BroadcastView BroadcastView => mBroadcastView;
-        private BroadcastView mBroadcastView;
+        // Surfaces "the broadcast view to use" for callsites that don't
+        // know which window to ask (e.g., the screenshot tools). Returns
+        // the active window's broadcast view if open, null otherwise.
+        public BroadcastView BroadcastView
+        {
+            get
+            {
+                var ctx = mCurrentlyActiveWindowContext ?? mWindows.FirstOrDefault();
+                return (ctx?.OwnerWindow as MainWindow)?.BroadcastView;
+            }
+        }
 
         private void ShowDevleoperConsole(object obj)
         {

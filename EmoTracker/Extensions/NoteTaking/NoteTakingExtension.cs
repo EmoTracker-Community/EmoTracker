@@ -52,16 +52,10 @@ namespace EmoTracker.Extensions.NoteTaking
     {
         public string ExtensionUID => "emotracker_note_taking";
 
-        NoteTakingStatusBarIndicator mStatusBarControl;
-        public object StatusBarControl
-        {
-            get
-            {
-                if (mStatusBarControl == null)
-                    mStatusBarControl = new NoteTakingStatusBarIndicator();
-                return mStatusBarControl;
-            }
-        }
+        // Avalonia visuals are single-parent: each MainWindow that binds the
+        // status bar needs its own control instance. Return fresh per getter
+        // call (matching the AutoTrackerExtension pattern).
+        public object StatusBarControl => new NoteTakingStatusBarIndicator();
 
         public void OnAttachedToState(TrackerState state) { }
         public void OnDetachedFromState(TrackerState state) { }

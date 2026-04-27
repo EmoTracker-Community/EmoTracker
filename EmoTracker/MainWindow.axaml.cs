@@ -29,6 +29,12 @@ namespace EmoTracker
         /// </summary>
         public WindowContext WindowContext { get; }
 
+        // Owned per-window tracker that watches title-bar drags and merges
+        // this window's tabs into another EmoTracker window when the user
+        // drops the source window inside the target. Disposed on window
+        // close.
+        readonly UI.WindowMergeTracker mMergeTracker;
+
         // Phase 7.9: helper for ApplicationModel.FindTabStripAtScreenPoint —
         // returns this window's tab strip control if hosted, else null.
         public UI.StateTabStripControl GetTabStrip()
@@ -99,6 +105,29 @@ namespace EmoTracker
             // handles shortcuts before any child control can consume the key.
             this.AddHandler(KeyDownEvent, MainWindow_KeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             this.PointerWheelChanged += MainWindow_PointerWheelChanged;
+
+            // Drag-window-onto-window merge: when the user title-bar-drags
+            // this window into another EmoTracker window's bounds and lets
+            // go (idle ~300ms), the tracker moves all of this window's
+            // tabs into the target and closes this window.
+            mMergeTracker = new UI.WindowMergeTracker(this);
+
+            // Per-window broadcast lifecycle. Each MainWindow owns its own
+            // visible BroadcastView (lazy, opened via menu / F2) and its
+            // own off-screen HiddenBroadcastWindow (auto-managed based on
+            // settings + the host's active broadcast layout). Both bind to
+            // this window's WindowContext.BroadcastLayout, so each
+            // window's broadcast feed follows its own active tab.
+            WindowContext.PropertyChanged += OnWindowContextBroadcastChanged;
+            ApplicationSettings.Instance.PropertyChanged += OnAppSettingsBroadcastChanged;
+            this.Closed += (_, __) =>
+            {
+                WindowContext.PropertyChanged -= OnWindowContextBroadcastChanged;
+                ApplicationSettings.Instance.PropertyChanged -= OnAppSettingsBroadcastChanged;
+                CloseBroadcastView();
+                DestroyHiddenBroadcast();
+            };
+            ReconcileHiddenBroadcast();
 
             // Set initial layout and resize mode
             RefreshTrackerLayout();
@@ -446,11 +475,17 @@ namespace EmoTracker
                 DeveloperConsole = null;
             }
 
-            var broadcastView = ApplicationModel.Instance.BroadcastView;
-            if (broadcastView != null)
-            {
-                broadcastView.Close();
-            }
+            // Note: this window's per-window BroadcastView and
+            // HiddenBroadcastWindow are closed via the Closed lambda
+            // wired in the ctor; nothing to do here for them.
+
+            // If this window IS the desktop's MainWindow and there's
+            // another live EmoTracker window, promote that window so the
+            // app stays alive after this close. Without this, the user
+            // closing the original window via the X button would shut
+            // down the entire process even when other windows are still
+            // open — App.axaml.cs sets ShutdownMode.OnMainWindowClose.
+            ApplicationModel.Instance.PromoteAlternativeMainWindowIfNeeded(this);
 
             base.OnClosing(e);
         }
@@ -573,6 +608,114 @@ namespace EmoTracker
             {
                 DeveloperConsole.Activate();
             }
+        }
+
+        // =================================================================
+        //  Per-window broadcast (visible BroadcastView + hidden NDI window)
+        // =================================================================
+        //
+        // Each MainWindow owns its own pair of broadcast windows so that
+        // the user can have multiple tracker windows broadcasting their
+        // own active-tab content simultaneously. Both windows bind to
+        // this window's WindowContext.BroadcastLayout, so switching tabs
+        // in this window automatically updates this window's broadcast
+        // feed without affecting any other window's feed.
+
+        private UI.BroadcastView mBroadcastView;
+        private Extensions.NDI.HiddenBroadcastWindow mHiddenBroadcast;
+
+        /// <summary>
+        /// The visible broadcast window for THIS app window, or null if
+        /// the user hasn't opened it. Exposed so the screenshot tooling
+        /// and similar can find a per-window broadcast view.
+        /// </summary>
+        public UI.BroadcastView BroadcastView => mBroadcastView;
+
+        /// <summary>
+        /// Lazy-creates and shows this window's <see cref="UI.BroadcastView"/>
+        /// (or activates an existing one). The view binds to this window's
+        /// <see cref="WindowContext.BroadcastLayout"/> and follows the
+        /// active tab in this window.
+        /// </summary>
+        public void ShowBroadcastView()
+        {
+            if (mBroadcastView == null)
+            {
+                mBroadcastView = new UI.BroadcastView(WindowContext);
+                mBroadcastView.Closing += (_, _) => mBroadcastView = null;
+                // No owner so the broadcast view is an independent
+                // top-level window — passing this as owner forces the OS
+                // to keep the broadcast view above the host window at
+                // all times, which the user almost never wants.
+                mBroadcastView.Show();
+            }
+            else
+            {
+                mBroadcastView.Activate();
+            }
+        }
+
+        void CloseBroadcastView()
+        {
+            if (mBroadcastView != null)
+            {
+                try { mBroadcastView.Close(); } catch { /* defensive */ }
+                mBroadcastView = null;
+            }
+        }
+
+        // -- Hidden broadcast (per-window background NDI) ----------------
+
+        // Reconciliation triggered by:
+        //   * App-wide setting flip (EnableBackgroundNdi)
+        //   * Active tab switch in this window (BroadcastLayout fires)
+        //   * Pack load completion that populates this window's layout
+        //
+        // The hidden window is created when the setting is on AND the
+        // host's active tab has a broadcast layout with content; destroyed
+        // otherwise.
+        void ReconcileHiddenBroadcast()
+        {
+            bool settingEnabled = ApplicationSettings.Instance.EnableBackgroundNdi;
+            bool hasContent = WindowContext?.BroadcastLayout?.Root != null;
+            bool shouldExist = settingEnabled && hasContent;
+
+            if (shouldExist && mHiddenBroadcast == null)
+                CreateHiddenBroadcast();
+            else if (!shouldExist && mHiddenBroadcast != null)
+                DestroyHiddenBroadcast();
+        }
+
+        void CreateHiddenBroadcast()
+        {
+            try
+            {
+                mHiddenBroadcast = new Extensions.NDI.HiddenBroadcastWindow(WindowContext, this);
+                mHiddenBroadcast.Show();
+            }
+            catch
+            {
+                mHiddenBroadcast = null;
+            }
+        }
+
+        void DestroyHiddenBroadcast()
+        {
+            if (mHiddenBroadcast == null) return;
+            try { mHiddenBroadcast.Close(); } catch { /* defensive */ }
+            mHiddenBroadcast = null;
+        }
+
+        void OnWindowContextBroadcastChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(WindowContext.BroadcastLayout))
+                Avalonia.Threading.Dispatcher.UIThread.Post(ReconcileHiddenBroadcast);
+        }
+
+        void OnAppSettingsBroadcastChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ApplicationSettings.EnableBackgroundNdi))
+                Avalonia.Threading.Dispatcher.UIThread.Post(ReconcileHiddenBroadcast);
         }
     }
 }

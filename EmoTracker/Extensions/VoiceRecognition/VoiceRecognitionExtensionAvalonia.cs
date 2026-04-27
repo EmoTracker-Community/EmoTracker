@@ -117,11 +117,13 @@ namespace EmoTracker.Extensions.VoiceRecognition
             private set => SetProperty(ref _audioLibrariesAvailable, value);
         }
 
-        public object StatusBarControl { get; }
+        // Avalonia visuals are single-parent: each MainWindow that binds
+        // the status bar needs its own control instance. Return fresh per
+        // getter call (matching the AutoTrackerExtension pattern).
+        public object StatusBarControl => new VoiceRecognitionStatusIndicator { DataContext = this };
 
         public VoiceRecognitionExtension()
         {
-            StatusBarControl = new VoiceRecognitionStatusIndicator { DataContext = this };
             try
             {
                 Vosk.Vosk.SetLogLevel(-1);

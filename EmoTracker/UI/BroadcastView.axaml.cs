@@ -3,6 +3,7 @@ using Avalonia.Input;
 using EmoTracker.Data;
 using EmoTracker.Extensions;
 using EmoTracker.Extensions.NDI;
+using System;
 using System.ComponentModel;
 
 namespace EmoTracker.UI
@@ -10,10 +11,50 @@ namespace EmoTracker.UI
     public partial class BroadcastView : Window
     {
         private bool _closed;
+        private readonly WindowContext _hostContext;
 
-        public BroadcastView()
+        // Default ctor exists for the XAML designer / legacy callers; falls
+        // back to ApplicationModel's app-wide BroadcastLayout. Production
+        // callers should use the WindowContext-bound ctor below.
+        public BroadcastView() : this(null) { }
+
+        /// <summary>
+        /// Constructs a BroadcastView whose content tracks
+        /// <paramref name="hostContext"/>'s active tab. The view's
+        /// <see cref="Window.DataContext"/> is set to that context's
+        /// <see cref="WindowContext.BroadcastLayout"/> and refreshes
+        /// when the host's active state changes (e.g. user switches
+        /// tabs in the host window).
+        ///
+        /// <para>
+        /// The NDI source name is suffixed with the host context's name
+        /// so multiple windows broadcasting simultaneously advertise as
+        /// distinct NDI sources rather than colliding on a single name.
+        /// </para>
+        /// </summary>
+        public BroadcastView(WindowContext hostContext)
         {
             InitializeComponent();
+            _hostContext = hostContext;
+
+            // Wire the per-host data context. The XAML root no longer sets
+            // DataContext to ApplicationModel's app-wide BroadcastLayout;
+            // we drive it from the host WindowContext here so each window's
+            // broadcast view follows its own active tab.
+            if (hostContext != null)
+            {
+                DataContext = hostContext.BroadcastLayout;
+                hostContext.PropertyChanged += OnHostPropertyChanged;
+                NDIHost.NdiName = ResolveNdiName(hostContext);
+                Title = ResolveTitle(hostContext);
+            }
+            else
+            {
+                // Legacy / designer path: bind to app-wide layout so the
+                // view still has something to render against.
+                DataContext = ApplicationModel.Instance.BroadcastLayout;
+                NDIHost.NdiName = "EmoTracker Broadcast View";
+            }
 
             // When background NDI is enabled, the hidden HiddenBroadcastWindow
             // handles NDI broadcasting on all platforms, so the visible container
@@ -47,12 +88,25 @@ namespace EmoTracker.UI
         protected override void OnClosing(WindowClosingEventArgs e)
         {
             _closed = true;
+            if (_hostContext != null)
+                _hostContext.PropertyChanged -= OnHostPropertyChanged;
             if (NDIHost.NdiEnabled)
             {
                 NDIHost.Dispose();
                 UpdateNDIExtensionStatus();
             }
             base.OnClosing(e);
+        }
+
+        private void OnHostPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            // ActiveState change drives a BroadcastLayout PropertyChanged on
+            // the host context; refresh our DataContext so the rendered
+            // layout follows.
+            if (e.PropertyName == nameof(WindowContext.BroadcastLayout))
+            {
+                DataContext = _hostContext.BroadcastLayout;
+            }
         }
 
         private void NDIHost_PropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -73,6 +127,28 @@ namespace EmoTracker.UI
             var extension = ExtensionManager.Instance.FindExtension<NDIExtension>();
             if (extension != null)
                 extension.Active = !_closed && !NDIHost.IsSendPaused;
+        }
+
+        // --- Per-window NDI naming ---------------------------------------
+
+        // Build a per-host NDI name so multiple BroadcastView windows
+        // (one per app window) advertise as distinct sources on the
+        // network. Uses WindowContext.Sequence — a unique, sequential
+        // per-process integer — to guarantee no two windows can collide
+        // on a single NDI source name. (WindowContext.Name defaults to
+        // "primary" for every MainWindow, so naming by Name alone would
+        // produce duplicate NDI sources, which is the symptom we're
+        // fixing.)
+        static string ResolveNdiName(WindowContext host)
+        {
+            if (host == null) return "EmoTracker Broadcast";
+            return $"EmoTracker Broadcast {host.Sequence}";
+        }
+
+        static string ResolveTitle(WindowContext host)
+        {
+            if (host == null) return "EmoTracker: Broadcast View";
+            return $"EmoTracker: Broadcast View {host.Sequence}";
         }
     }
 }

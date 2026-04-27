@@ -35,18 +35,19 @@ namespace EmoTracker.Extensions.McpServer
         }
 
         private WebApplication mApp;
-        private McpStatusIndicator mStatusBarControl;
 
+        // Avalonia visuals are single-parent: each MainWindow that binds the
+        // status bar needs its own control instance. Return fresh per getter
+        // call (matching the AutoTrackerExtension pattern); the DataContext
+        // binds to the singleton extension so all windows show the same
+        // server status.
         public object StatusBarControl
         {
             get
             {
                 if (!UserDirectory.IsDevMode)
                     return null;
-
-                if (mStatusBarControl == null)
-                    mStatusBarControl = new McpStatusIndicator { DataContext = this };
-                return mStatusBarControl;
+                return new McpStatusIndicator { DataContext = this };
             }
         }
 

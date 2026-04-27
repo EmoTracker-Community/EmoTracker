@@ -22,6 +22,15 @@ namespace EmoTracker
         readonly Guid mId = Guid.NewGuid();
         public Guid Id => mId;
 
+        // Sequential per-process index assigned at construction. Used for
+        // human-readable per-window labels (NDI source naming, broadcast
+        // window titles, etc.) where reading "Broadcast 2" is clearer than
+        // a Guid suffix. Stable for the lifetime of the WindowContext;
+        // never recycled if a window is closed. First context gets 1.
+        static int sNextSeq = 0;
+        readonly int mSeq = System.Threading.Interlocked.Increment(ref sNextSeq);
+        public int Sequence => mSeq;
+
         string mName;
         public string Name
         {
@@ -51,9 +60,30 @@ namespace EmoTracker
                     NotifyPropertyChanged(nameof(ActiveGamePackage));
                     NotifyPropertyChanged(nameof(WindowTitle));
                     NotifyPropertyChanged(nameof(HasActiveState));
+                    NotifyPropertyChanged(nameof(BroadcastLayout));
                 }
             }
         }
+
+        /// <summary>
+        /// Per-window broadcast layout: the active tab's
+        /// <c>tracker_broadcast</c> layout, or null when no pack is loaded.
+        /// Each window's <see cref="UI.BroadcastView"/> and
+        /// <see cref="Extensions.NDI.HiddenBroadcastWindow"/> bind to this
+        /// instead of the app-wide <c>ApplicationModel.BroadcastLayout</c>
+        /// so each window has its own broadcast feed that follows its
+        /// own active tab.
+        ///
+        /// <para>
+        /// Recomputed on every read (cheap dictionary lookup). Fires
+        /// PropertyChanged when <see cref="ActiveState"/> changes; pack
+        /// reload also drives a refresh because the layout instance lives
+        /// on <see cref="TrackerState.Layouts"/> which is rebuilt during
+        /// pack-load.
+        /// </para>
+        /// </summary>
+        public EmoTracker.Data.Layout.Layout BroadcastLayout
+            => mActiveState?.Layouts?.FindLayout("tracker_broadcast");
 
         /// <summary>
         /// Phase 7 XAML migration: the <see cref="PackageInstance"/>

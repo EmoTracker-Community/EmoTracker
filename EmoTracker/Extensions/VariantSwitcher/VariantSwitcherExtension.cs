@@ -17,14 +17,13 @@ namespace EmoTracker.Extensions.VariantSwitcher
 
         public int Priority { get { return -200; } }
 
-        public object StatusBarControl
-        {
-            get; set;
-        }
+        // Avalonia visuals are single-parent: each MainWindow that binds
+        // the status bar needs its own control instance. Return fresh per
+        // getter call (matching the AutoTrackerExtension pattern).
+        public object StatusBarControl => new VariantSwitcherControl() { DataContext = this };
 
         public VariantSwitcherExtension()
         {
-            StatusBarControl = new VariantSwitcherControl() { DataContext = this };
         }
 
         public void Start()

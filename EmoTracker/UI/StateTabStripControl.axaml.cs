@@ -51,8 +51,8 @@ namespace EmoTracker.UI
         bool mDragging;
         Point mDragStart;
         TrackerState mDragState;
+        DragPreviewWindow mDragPreview;
         const double DragThreshold = 5.0;
-        const double TearOffThreshold = 40.0;
 
         public StateTabStripControl()
         {
@@ -195,22 +195,38 @@ namespace EmoTracker.UI
                 var delta = pos - mDragStart;
                 var dist = Math.Sqrt(delta.X * delta.X + delta.Y * delta.Y);
                 if (!mDragging && dist > DragThreshold)
-                    mDragging = true;
-                if (!mDragging) return;
-
-                bool outsideStrip =
-                    pos.Y < -TearOffThreshold ||
-                    pos.Y > Bounds.Height + TearOffThreshold ||
-                    pos.X < -TearOffThreshold ||
-                    pos.X > Bounds.Width + TearOffThreshold;
-                if (outsideStrip)
                 {
-                    var state = mDragState;
-                    var ctx = mContext;
-                    EndDrag();
-                    if (ctx != null && state != null)
-                        ApplicationModel.Instance.OpenStateInNewWindow(ctx, state);
+                    // Drag begins: spawn the preview window. The preview
+                    // follows the cursor in screen-space; it's closed in
+                    // PointerReleased / EndDrag.
+                    mDragging = true;
+                    try
+                    {
+                        mDragPreview = new DragPreviewWindow(mDragState.Name ?? "(unnamed)");
+                        mDragPreview.FollowCursor(ComposeScreenPoint(pos));
+                        mDragPreview.Show();
+                    }
+                    catch
+                    {
+                        // Preview is best-effort: if the platform refuses to
+                        // open the auxiliary window, keep the drag alive but
+                        // without visual feedback.
+                        mDragPreview = null;
+                    }
                 }
+                if (mDragging && mDragPreview != null)
+                {
+                    try { mDragPreview.FollowCursor(ComposeScreenPoint(pos)); }
+                    catch { /* defensive */ }
+                }
+                // Drop decision happens at PointerReleased — DO NOT tear off
+                // mid-move. Earlier behavior would rip the tab into a new
+                // window the moment the cursor crossed an arbitrary
+                // threshold around the strip, which made it impossible to
+                // dock a tab back into an existing window once you'd left
+                // its strip's bounds. With release-time decisioning, the
+                // user can drag through any region of the desktop and only
+                // the final drop point matters.
             }
             catch (Exception)
             {
@@ -223,32 +239,162 @@ namespace EmoTracker.UI
             // Phase 7 polish: release the pointer capture established in
             // PointerPressed so events route normally afterwards.
             try { e.Pointer.Capture(null); } catch { }
+
+            // Capture state BEFORE we tear down drag-mode flags (EndDrag
+            // also closes the preview window — which we want to do FIRST so
+            // it doesn't sit on top as a topmost window while we spawn /
+            // activate a tear-off window).
+            bool wasDragging = mDragging;
+            var movingState = mDragState;
+            var sourceCtx = mContext;
+            Avalonia.PixelPoint screenPt = default;
+            Point localPt = default;
+            if (wasDragging && movingState != null && sourceCtx != null)
+            {
+                localPt = e.GetPosition(this);
+                screenPt = ComposeScreenPoint(localPt);
+            }
+
+            // Close the drag preview before any window-creation work runs:
+            // the preview is Topmost and could obscure / steal Z-order from
+            // the new tear-off window otherwise.
+            EndDrag();
+
             try
             {
-                if (mDragging && mDragState != null && mContext != null)
+                if (wasDragging && movingState != null && sourceCtx != null)
                 {
-                    // Compose a screen-pixel point: this window's screen
-                    // origin + this control's offset in the window + pointer
-                    // position in this control.
-                    Avalonia.PixelPoint screenPt = ComposeScreenPoint(e.GetPosition(this));
-                    var target = ApplicationModel.Instance.FindTabStripAtScreenPoint(screenPt);
-                    if (target != null && !ReferenceEquals(target, this) && target.mContext != null)
-                    {
-                        var movingState = mDragState;
-                        var sourceCtx = mContext;
-                        var targetCtx = target.mContext;
-                        EndDrag();
-                        sourceCtx.RemoveState(movingState);
-                        targetCtx.AddState(movingState);
-                        e.Handled = true;
-                        return;
-                    }
+                    HandleDrop(movingState, sourceCtx, screenPt, localPt);
+                    e.Handled = true;
                 }
             }
             catch (Exception)
             {
+                // Defensive — drop handling can touch many subsystems
+                // (window creation, extension lifecycle, etc.); a throw
+                // here shouldn't tear down the input pipeline.
             }
-            EndDrag();
+        }
+
+        // Decides what to do with the dragged tab on release. The pointer's
+        // screen-space coordinate steers the routing:
+        //
+        //   * Over the source's own strip           -> reorder within the
+        //                                              source window.
+        //   * Over another window's tab strip       -> dock into that strip.
+        //   * Over another EmoTracker window (any   -> dock at the end of
+        //     region, but not on its strip)            that window's strip.
+        //   * Over the source window (not strip)    -> no-op, keep current.
+        //   * Outside every EmoTracker window       -> spawn a new window
+        //                                              at the drop point
+        //                                              and dock there.
+        //
+        // The "drop on any window" behavior makes docking forgiving: the
+        // user doesn't have to hit the narrow tab strip rectangle — anywhere
+        // on the destination window's frame counts.
+        //
+        // <paramref name="localPt"/> is the pointer's position in this strip's
+        // local coordinate space, used by the same-strip reorder path so it
+        // can pick a target index without re-projecting from screen-space.
+        void HandleDrop(TrackerState movingState, WindowContext sourceCtx, Avalonia.PixelPoint screenPt, Point localPt)
+        {
+            var targetStrip = ApplicationModel.Instance.FindTabStripAtScreenPoint(screenPt);
+
+            // Same-strip drop -> reorder.
+            if (targetStrip != null && ReferenceEquals(targetStrip, this))
+            {
+                ReorderWithinStrip(movingState, sourceCtx, localPt);
+                return;
+            }
+
+            // Cross-strip drop -> dock into target window's strip.
+            if (targetStrip != null && targetStrip.mContext != null)
+            {
+                sourceCtx.RemoveState(movingState);
+                targetStrip.mContext.AddState(movingState);
+                return;
+            }
+
+            var targetCtx = ApplicationModel.Instance.FindWindowContextAtScreenPoint(screenPt);
+            if (targetCtx != null && !ReferenceEquals(targetCtx, sourceCtx))
+            {
+                sourceCtx.RemoveState(movingState);
+                targetCtx.AddState(movingState);
+                return;
+            }
+            if (targetCtx != null && ReferenceEquals(targetCtx, sourceCtx))
+            {
+                // Released over the source window but not on the strip —
+                // user signaled "stay where I am". Keep the tab put.
+                return;
+            }
+
+            // Outside every live EmoTracker window — spawn a new window
+            // at the drop point and dock the state there.
+            ApplicationModel.Instance.OpenStateInNewWindow(sourceCtx, movingState, screenPt);
+        }
+
+        // Reorder <paramref name="movingState"/> within <paramref name="sourceCtx"/>'s
+        // OpenStates based on the cursor's <paramref name="localPt"/> within
+        // this strip. Picks a target index by walking each tab Border's
+        // local-space bounds and finding the slot whose horizontal midpoint
+        // the cursor is closest to. Inserts at the end if the cursor is past
+        // the last tab. No-ops if the resulting index would leave the order
+        // unchanged.
+        void ReorderWithinStrip(TrackerState movingState, WindowContext sourceCtx, Point localPt)
+        {
+            var openStates = sourceCtx.OpenStates;
+            int sourceIdx = openStates.IndexOf(movingState);
+            if (sourceIdx < 0) return;
+
+            int targetIdx = FindTargetTabIndex(localPt);
+            if (targetIdx < 0) return;
+
+            // After removing source first, indices to its right shift down
+            // by one. ObservableCollection.Move handles this internally,
+            // but our targetIdx was computed against the original layout —
+            // adjust if the target is past the source's slot.
+            if (targetIdx > sourceIdx) targetIdx--;
+            if (targetIdx == sourceIdx) return;
+            if (targetIdx >= openStates.Count) targetIdx = openStates.Count - 1;
+            if (targetIdx < 0) targetIdx = 0;
+
+            openStates.Move(sourceIdx, targetIdx);
+        }
+
+        // Walks the tab strip's child Borders in horizontal order and
+        // returns the index where a tab dropped at <paramref name="localPt"/>
+        // should be inserted. The drop slot is determined by which tab's
+        // horizontal midpoint <paramref name="localPt"/>.X falls before;
+        // if past every tab's right edge, returns the count (i.e. append).
+        int FindTargetTabIndex(Point localPt)
+        {
+            var host = this.FindControl<ItemsControl>("TabsHost");
+            if (host == null) return -1;
+
+            // Collect tab borders and order by their on-screen X so the
+            // returned index reflects the visual order regardless of
+            // which order GetVisualDescendants happens to return them in.
+            var borders = new System.Collections.Generic.List<(Border B, double Left, double Width)>();
+            foreach (var v in host.GetVisualDescendants())
+            {
+                if (v is Border b && b.Tag is TrackerState)
+                {
+                    var p = b.TranslatePoint(new Point(0, 0), this);
+                    if (p.HasValue)
+                        borders.Add((b, p.Value.X, b.Bounds.Width));
+                }
+            }
+            borders.Sort((a, c) => a.Left.CompareTo(c.Left));
+
+            for (int i = 0; i < borders.Count; i++)
+            {
+                var entry = borders[i];
+                var center = entry.Left + entry.Width / 2.0;
+                if (localPt.X < center)
+                    return i;
+            }
+            return borders.Count;
         }
 
         Avalonia.PixelPoint ComposeScreenPoint(Point pIn)
@@ -272,6 +418,13 @@ namespace EmoTracker.UI
         {
             mDragging = false;
             mDragState = null;
+            if (mDragPreview != null)
+            {
+                try { mDragPreview.Close(); }
+                catch { /* defensive — closing a window can throw if it's
+                           in a transient state from the platform's POV */ }
+                mDragPreview = null;
+            }
         }
 
         // ---------- Tab close + context menu --------------------------------
@@ -374,6 +527,11 @@ namespace EmoTracker.UI
                 {
                     if (ctx.OpenStates.Count == 0 && ctx.OwnerWindow is Window w)
                     {
+                        // If this window IS the desktop MainWindow, promote
+                        // a sibling first — closing the MainWindow with
+                        // ShutdownMode.OnMainWindowClose would terminate the
+                        // app even though other windows are still alive.
+                        ApplicationModel.Instance.PromoteAlternativeMainWindowIfNeeded(w);
                         try { w.Close(); } catch { }
                     }
                 }
