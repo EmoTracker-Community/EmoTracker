@@ -88,12 +88,9 @@ namespace EmoTracker.Data.Core.DataModel
 
         /// <summary>
         /// Resolves the active <see cref="ITransactionProcessor"/> for transactable
-        /// writes on this model. Phase 6: prefers
-        /// <see cref="TrackerState.Transactions"/> when this model has been claimed
-        /// by a state (<see cref="ModelTypeBase.OwnerState"/> set), so its writes
-        /// participate in that state's per-state undo stack rather than the global
-        /// singleton's. Falls back to <see cref="TransactionProcessor.Current"/>
-        /// for unowned models — the path every Phase 0–5 model uses today.
+        /// writes on this model: <see cref="TrackerState.Transactions"/> on the
+        /// owning state. Throws if this model has no <see cref="ModelTypeBase.OwnerState"/>
+        /// set — every transactable model must have a state.
         ///
         /// <para>
         /// The <c>OwnerState as TrackerState</c> cast is the place where the
@@ -106,14 +103,18 @@ namespace EmoTracker.Data.Core.DataModel
         /// </summary>
         ITransactionProcessor ResolveActiveProcessor()
         {
-            return (this.OwnerState as TrackerState)?.Transactions
-                ?? TransactionProcessor.Current;
+            var processor = (this.OwnerState as TrackerState)?.Transactions;
+            if (processor == null)
+                throw new InvalidOperationException(
+                    "TransactableModelTypeBase requires OwnerState to be set to a " +
+                    "TrackerState before any transactable property is accessed. " +
+                    $"Model {this.GetType().Name} has OwnerState={(this.OwnerState?.GetType().Name ?? "null")}.");
+            return processor;
         }
 
         /// <summary>
-        /// Routes the write through the active transaction processor — the
-        /// owning <see cref="TrackerState"/>'s when set, the global
-        /// <see cref="TransactionProcessor.Current"/> otherwise. On commit, the
+        /// Routes the write through this model's owning
+        /// <see cref="TrackerState"/>'s transaction processor. On commit, the
         /// transaction's callback writes the resulting value into
         /// <see cref="ModelTypeBase.MutableData"/>, raises <c>PropertyChanging</c> /
         /// <c>PropertyChanged</c>, and invokes <paramref name="onTransactionProcessed"/>.

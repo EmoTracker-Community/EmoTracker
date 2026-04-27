@@ -149,7 +149,10 @@ namespace EmoTracker.Data.Items
         protected override void ParseDataInternal(JObject data, IGamePackage package)
         {
             mCodeProvider.AddCodes(data.GetValue<string>("codes"));
-            Section = Tracker.Instance.FindObjectForCode(data.GetValue<string>("section")) as Section;
+            // Resolve through the owning state so the ref points at this
+            // state's Section. OwnerState must be set before parse.
+            var ownerState = this.OwnerState as Sessions.TrackerState;
+            Section = Tracker.Instance.FindObjectForCode(ownerState, data.GetValue<string>("section")) as Section;
         }
 
         protected override void OnForked(ModelTypeBase source)

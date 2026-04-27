@@ -50,7 +50,7 @@ namespace EmoTracker.SourceGenerators.Tests
         public void BadgeEntry_Fork_PreservesKeyAndDefinitionId()
         {
             var b = new BadgeEntry("k", null, 1.0, 2.0);
-            var fork = (BadgeEntry)b.Fork();
+            var fork = (BadgeEntry)b.Fork(ForkTestHelpers.NewDestState());
             Assert.NotSame(b, fork);
             Assert.Equal(b.DefinitionId, fork.DefinitionId);
             Assert.Equal("k", fork.Key);
@@ -122,7 +122,7 @@ namespace EmoTracker.SourceGenerators.Tests
             var ml = new MapLocation();
             ml.X = 10.0;
 
-            var fork = (MapLocation)ml.Fork();
+            var fork = (MapLocation)ml.Fork(ForkTestHelpers.NewDestState());
             Assert.Equal(10.0, fork.X);
 
             fork.X = 99.0;
@@ -139,7 +139,7 @@ namespace EmoTracker.SourceGenerators.Tests
             m.AddLocation(new MapLocation { X = 1, Y = 2 });
             m.AddLocation(new MapLocation { X = 3, Y = 4 });
 
-            var fork = (Map)m.Fork();
+            var fork = (Map)m.Fork(ForkTestHelpers.NewDestState());
             Assert.Equal("world", fork.Name);
             int count = 0;
             foreach (var ml in fork.Locations) count++;
@@ -235,7 +235,7 @@ namespace EmoTracker.SourceGenerators.Tests
             var defId = loc.DefinitionId;
             Assert.NotEqual(Guid.Empty, defId);
 
-            var fork = (Location)loc.Fork();
+            var fork = (Location)loc.Fork(ForkTestHelpers.NewDestState());
             Assert.Equal(defId, fork.DefinitionId);
         }
 
@@ -251,7 +251,7 @@ namespace EmoTracker.SourceGenerators.Tests
             section.Name = "Throne";
             loc.AddSection(section);
 
-            var forkLoc = (Location)loc.Fork();
+            var forkLoc = (Location)loc.Fork(ForkTestHelpers.NewDestState());
             // Fork has its own Sections list with a freshly-forked Section.
             int forkSectionCount = 0;
             Section forkedSection = null;
@@ -275,7 +275,7 @@ namespace EmoTracker.SourceGenerators.Tests
             child.Parent = loc;
             loc.AddChild(child);
 
-            var forkLoc = (Location)loc.Fork();
+            var forkLoc = (Location)loc.Fork(ForkTestHelpers.NewDestState());
             int forkChildCount = 0;
             Location forkedChild = null;
             foreach (var c in forkLoc.Children) { forkChildCount++; forkedChild = c; }
@@ -294,16 +294,16 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void Section_AvailableChestCount_IsTransactable_AndUndoes()
         {
-            var loc = new Location();
-            var section = new Section(loc);
+            var loc = new Location { OwnerState = _fix.State };
+            var section = new Section(loc) { OwnerState = _fix.State };
             section.ChestCount = 5;
             loc.AddSection(section);
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 section.AvailableChestCount = 3;
             Assert.Equal(3u, section.AvailableChestCount);
 
-            ((IUndoableTransactionProcessor)TransactionProcessor.Current).Undo();
+            _fix.Processor.Undo();
             Assert.Equal(0u, section.AvailableChestCount);
         }
 
@@ -312,66 +312,17 @@ namespace EmoTracker.SourceGenerators.Tests
         {
             // We can't construct an ItemBase target easily without a pack here
             // — exercise the empty-state path.
-            var loc = new Location();
-            var section = new Section(loc);
+            var loc = new Location { OwnerState = _fix.State };
+            var section = new Section(loc) { OwnerState = _fix.State };
             Assert.Null(section.HostedItem);
             Assert.Null(section.CapturedItem);
             Assert.Null(section.GateItem);
         }
 
-        // -------- ModelReference + PrimaryStateModelResolver ----------------
-
-        [Fact]
-        public void PrimaryStateModelResolver_DoesNotResolveUnknownGuid()
-        {
-            // Phase 6 step 9: PrimaryStateModelResolver replaces the
-            // AmbientSingletonModelResolver. With no active state set, it
-            // returns null for any lookup.
-            var prior = EmoTracker.Data.Sessions.SessionContext.ActiveState;
-            try
-            {
-                EmoTracker.Data.Sessions.SessionContext.ActiveState = null;
-                var resolver = new PrimaryStateModelResolver();
-                var result = resolver.Resolve<Location>(Guid.NewGuid());
-                Assert.Null(result);
-            }
-            finally
-            {
-                EmoTracker.Data.Sessions.SessionContext.ActiveState = prior;
-            }
-        }
-
-        [Fact]
-        public void PrimaryStateModelResolver_ReturnsNullOnEmptyGuid()
-        {
-            var resolver = new PrimaryStateModelResolver();
-            Assert.Null(resolver.Resolve<Location>(Guid.Empty));
-        }
-
-        [Fact]
-        public void PrimaryStateModelResolver_DelegatesToActiveState()
-        {
-            // With an active state holding a registered model, the resolver
-            // hits the state's IndexedModelResolver and returns that model.
-            var prior = EmoTracker.Data.Sessions.SessionContext.ActiveState;
-            try
-            {
-                var state = new EmoTracker.Data.Sessions.TrackerState("test");
-                var loc = new Location();
-                state.Resolver.Register(loc);
-                EmoTracker.Data.Sessions.SessionContext.ActiveState = state;
-
-                var resolver = new PrimaryStateModelResolver();
-                Assert.Same(loc, resolver.Resolve<Location>(loc.DefinitionId));
-
-                // Unknown id still returns null even with a populated state.
-                Assert.Null(resolver.Resolve<Location>(Guid.NewGuid()));
-            }
-            finally
-            {
-                EmoTracker.Data.Sessions.SessionContext.ActiveState = prior;
-            }
-        }
+        // Phase 7.1+: PrimaryStateModelResolver and SessionContext were retired —
+        // every model is expected to belong to a TrackerState via OwnerState,
+        // and the state IS the resolver. Tests for the ambient-resolver
+        // bridge are no longer applicable.
 
         // -------- SectionChestsProxyItem retrofit (Phase 2.5 deferred) ------
 
@@ -383,7 +334,7 @@ namespace EmoTracker.SourceGenerators.Tests
             Assert.Null(item.Section);
             Assert.Equal(0u, item.Count);
 
-            var fork = (EmoTracker.Data.Items.SectionChestsProxyItem)item.Fork();
+            var fork = (EmoTracker.Data.Items.SectionChestsProxyItem)item.Fork(ForkTestHelpers.NewDestState());
             Assert.NotSame(item, fork);
             Assert.Equal(item.DefinitionId, fork.DefinitionId);
             Assert.Null(fork.Section);

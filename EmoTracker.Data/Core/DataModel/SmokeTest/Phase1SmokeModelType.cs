@@ -122,7 +122,10 @@ namespace EmoTracker.Data.Core.DataModel.SmokeTest
         /// during ParseDataInternal.
         /// </summary>
         public static Phase1SmokeModelType CreateDefinition(string tag, Phase1SmokeNote seedNote)
-            => CreateDefinition(tag, seedNote, defaultWidth: 0.0, defaultBackground: null);
+            => CreateDefinition(tag, seedNote, defaultWidth: 0.0, defaultBackground: null, ownerState: null);
+
+        public static Phase1SmokeModelType CreateDefinition(string tag, Phase1SmokeNote seedNote, ITrackerStateContext ownerState)
+            => CreateDefinition(tag, seedNote, defaultWidth: 0.0, defaultBackground: null, ownerState: ownerState);
 
         /// <summary>
         /// Overload that also seeds <see cref="Width"/> / <see cref="Background"/>
@@ -135,9 +138,11 @@ namespace EmoTracker.Data.Core.DataModel.SmokeTest
             string tag,
             Phase1SmokeNote seedNote,
             double defaultWidth,
-            string defaultBackground)
+            string defaultBackground,
+            ITrackerStateContext ownerState = null)
         {
             var inst = new Phase1SmokeModelType();
+            if (ownerState != null) inst.OwnerState = ownerState;
 
             // Carry the auto-generated DefinitionId across into the seeded immutable
             // store: forks should observe the same DefinitionId no matter how many
@@ -157,15 +162,17 @@ namespace EmoTracker.Data.Core.DataModel.SmokeTest
 
         // -------- Fork --------------------------------------------------------------
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = new Phase1SmokeModelType();
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             return copy;
         }
 
         /// <summary>Strongly-typed convenience wrapper around <see cref="Fork"/>.</summary>
-        public Phase1SmokeModelType ForkAs() => (Phase1SmokeModelType)Fork();
+        public Phase1SmokeModelType ForkAs(ITrackerStateContext destOwnerState) => (Phase1SmokeModelType)Fork(destOwnerState);
 
         protected override void OnForked(ModelTypeBase source)
         {

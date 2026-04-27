@@ -6,8 +6,6 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
 
-// Phase 6 step 11: Layout's Sessions.SessionContext.ActiveState?.Scripts access here is pure
-// exception logging.
 #pragma warning disable CS0618
 
 namespace EmoTracker.Data.Layout
@@ -55,7 +53,7 @@ namespace EmoTracker.Data.Layout
             }
             catch (Exception e)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                ((this.OwnerState as Sessions.TrackerState)?.Scripts)?.OutputException(e);
             }
 
             return false;
@@ -65,7 +63,9 @@ namespace EmoTracker.Data.Layout
         {
             try
             {
-                Root = LayoutItem.CreateLayoutItem(root, package);
+                // Children inherit this Layout's OwnerState — set on the
+                // Layout instance by its caller before Load is invoked.
+                Root = LayoutItem.CreateLayoutItem(root, package, this.OwnerState);
             }
             catch
             {
@@ -81,12 +81,14 @@ namespace EmoTracker.Data.Layout
 
         // -------- Fork ------------------------------------------------------
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new ArgumentNullException(nameof(destOwnerState));
             var copy = (Layout)System.Activator.CreateInstance(this.GetType());
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             if (this.mRoot != null)
-                copy.mRoot = (LayoutItem)this.mRoot.Fork();
+                copy.mRoot = (LayoutItem)this.mRoot.Fork(destOwnerState);
             return copy;
         }
     }

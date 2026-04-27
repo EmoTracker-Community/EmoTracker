@@ -153,9 +153,11 @@ namespace EmoTracker.Data.Items
         /// with a more efficient direct allocation; the activator path is fast
         /// enough for fork-on-state-switch (not a hot path).
         /// </summary>
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = (ItemBase)System.Activator.CreateInstance(this.GetType());
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             return copy;
         }

@@ -132,11 +132,9 @@ namespace EmoTracker.Data.Items
 
         protected override void ParseDataInternal(JObject data, IGamePackage package)
         {
-            // Phase 6 step 11: prefer the owning state's ItemDatabase; at
-            // parse time OwnerState may not yet be set, so fall back via
-            // SessionContext / singleton.
-            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
-                ?? Sessions.SessionContext.ActiveState?.Items;
+            // Resolve through the owning state's ItemDatabase. OwnerState
+            // is stamped before parse so cross-references resolve.
+            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
             BaseItem = itemDb?.FindProvidingItemForCode(data.GetValue<string>("base_item"));
 
             string disabledImgMods = data.GetValue<string>("disabled_img_spec");

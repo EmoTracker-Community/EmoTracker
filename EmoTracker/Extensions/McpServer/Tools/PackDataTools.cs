@@ -273,7 +273,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (item == null)
                         return JsonSerializer.Serialize(new { success = false, error = "Item not found" });
 
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    var transactable = item as EmoTracker.Data.Core.DataModel.TransactableModelTypeBase;
+                    if (transactable == null)
+                        return JsonSerializer.Serialize(new { success = false, error = $"Item is not transactable: {item.GetType().Name}" });
+
+                    using (transactable.OpenTransaction())
                     {
                         if (item is ToggleItem toggle)
                         {
@@ -320,7 +324,17 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     var nameList = names.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
                     var results = new List<object>();
 
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    // Open the transaction scope on the primary state's processor —
+                    // every item's OnLeftClick mutates its own transactable Active /
+                    // CurrentStage via SetTransactableProperty which routes through
+                    // the item's OwnerState.Transactions. As long as every item
+                    // batched here belongs to the same primary state, opening on
+                    // primary.Transactions matches.
+                    var primaryProcessor = ApplicationModel.Instance.PrimaryState?.Transactions;
+                    if (primaryProcessor == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "No active TrackerState" });
+
+                    using (primaryProcessor.OpenTransaction())
                     {
                         foreach (var name in nameList)
                         {

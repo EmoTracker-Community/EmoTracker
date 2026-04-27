@@ -224,9 +224,11 @@ namespace EmoTracker.Data.Locations
         // override it. We provide a virtual default-Activator implementation
         // here so types like Section and Location can override it cleanly with
         // their coordinated-fork logic.
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = (LocationVisualProperties)System.Activator.CreateInstance(this.GetType());
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             return copy;
         }

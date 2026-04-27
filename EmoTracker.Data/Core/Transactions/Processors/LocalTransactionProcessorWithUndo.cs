@@ -126,7 +126,22 @@ namespace EmoTracker.Data.Core.Transactions.Processors
 
             public void Undo()
             {
-                using (new LocationDatabase.SuspendRefreshScope())
+                // Locate the LocationDatabase to suspend by walking the
+                // transactable objects in this transaction — they all share
+                // the same OwnerState (per the cross-state-mutation guard
+                // in TransactableModelTypeBase.SetTransactableProperty), so
+                // sampling the first entry is sufficient.
+                LocationDatabase locationsTarget = null;
+                foreach (var entry in mValueStates)
+                {
+                    if (entry.Value.Source is EmoTracker.Core.DataModel.ModelTypeBase mtb &&
+                        mtb.OwnerState is Sessions.TrackerState ts)
+                    {
+                        locationsTarget = ts.Locations;
+                        break;
+                    }
+                }
+                using (new LocationDatabase.SuspendRefreshScope(locationsTarget))
                 {
                     mReadSource = ReadSource.Original;
                     foreach (var entry in mValueStates)

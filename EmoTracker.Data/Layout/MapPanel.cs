@@ -42,12 +42,11 @@ namespace EmoTracker.Data.Layout
                 if (mMapRefs != null)
                     return mMapRefs.Select(r => r.Target).Where(m => m != null);
 
-                // Phase 6 step 11: prefer the holder's state's MapDatabase
-                // when this MapPanel has been claimed by a state; fall
-                // through to the in-Data SessionContext for the legacy
-                // (pre-state-stamping) case.
-                var stateMaps = (this.OwnerState as Sessions.TrackerState)?.Maps
-                    ?? Sessions.SessionContext.ActiveState?.Maps;
+                // Resolve through the holder's state's MapDatabase. Models
+                // are expected to belong to a state (OwnerState set during
+                // pack-load); pre-stamping callsites return Empty rather
+                // than falling back to a global.
+                var stateMaps = (this.OwnerState as Sessions.TrackerState)?.Maps;
                 return stateMaps?.Maps ?? Enumerable.Empty<Map>();
             }
         }
@@ -59,19 +58,17 @@ namespace EmoTracker.Data.Layout
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            if (!Data.Tracker.Instance.MapEnabled)
+            var mapEnabled = (this.OwnerState as Sessions.TrackerState)?.Settings.MapEnabled ?? false;
+            if (!mapEnabled)
                 return false;
 
             JArray mapList = data.GetValue<JArray>("maps");
             if (mapList != null)
             {
-                // Phase 6 step 11: parse-time map resolution still goes
-                // through the active state's MapDatabase. The MapPanel may
-                // not yet have its OwnerState set (parse runs before
-                // OwnerState stamping for adopted singletons); fall through
-                // to SessionContext.
-                var maps = (this.OwnerState as Sessions.TrackerState)?.Maps
-                    ?? Sessions.SessionContext.ActiveState?.Maps;
+                // Parse-time map resolution goes through the holder's
+                // state's MapDatabase. OwnerState must be stamped before
+                // parse for cross-references to resolve.
+                var maps = (this.OwnerState as Sessions.TrackerState)?.Maps;
                 if (maps != null)
                 {
                     mMapRefs = new List<ModelReference<Map>>();

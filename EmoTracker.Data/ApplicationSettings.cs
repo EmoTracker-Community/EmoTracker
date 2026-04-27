@@ -68,8 +68,17 @@ namespace EmoTracker.Data
         bool mbSeedAlwaysAllowClearing = Sessions.SessionSettings.DefaultAlwaysAllowClearing;
         bool mbSeedPinLocationsOnItemCapture = Sessions.SessionSettings.DefaultPinLocationsOnItemCapture;
 
+        // Phase 7.1 cleanup: ApplicationSettings is a process-wide singleton
+        // and must NOT consult an ambient state slot. Cross-assembly hookup:
+        // ApplicationModel installs <see cref="ActiveSessionSettingsResolver"/>
+        // at startup so per-state values flow through whichever state the
+        // app currently treats as the active primary. The resolver, like
+        // <see cref="Data.Tracker.ResolveReloadTarget"/>, evaluates the
+        // relevant state at call time — no slot is held here.
+        public static Func<Sessions.SessionSettings> ActiveSessionSettingsResolver { get; set; }
+
         Sessions.SessionSettings ActiveSessionSettings
-            => Sessions.SessionContext.ActiveState?.Settings;
+            => ActiveSessionSettingsResolver?.Invoke();
 
         /// <summary>
         /// Phase 7.3: copy this app-settings instance's seed values onto a

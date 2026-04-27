@@ -102,8 +102,7 @@ namespace EmoTracker.Data.Items
             mRows.Clear();
             if (data == null) return;
 
-            var itemDb = (holder?.OwnerState as Sessions.TrackerState)?.Items
-                         ?? Sessions.SessionContext.ActiveState?.Items;
+            var itemDb = (holder?.OwnerState as Sessions.TrackerState)?.Items;
 
             foreach (JArray rowData in data)
             {

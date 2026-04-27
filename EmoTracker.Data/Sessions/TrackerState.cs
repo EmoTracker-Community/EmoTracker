@@ -169,6 +169,20 @@ namespace EmoTracker.Data.Sessions
         internal IndexedModelResolver Resolver => mResolver;
 
         /// <summary>
+        /// Registers a freshly-constructed model with this state's resolver
+        /// so cross-references can find it by DefinitionId. Called by load
+        /// orchestrators (LayoutManager, MapDatabase, etc.) immediately
+        /// after they construct a model — paired with stamping
+        /// <see cref="ModelTypeBase.OwnerState"/> = this. No-op if the model
+        /// is null.
+        /// </summary>
+        public void RegisterModel(ModelTypeBase model)
+        {
+            if (model == null) return;
+            mResolver.Register(model);
+        }
+
+        /// <summary>
         /// Constructs a fresh TrackerState with its own ScriptManager.
         /// Caller is responsible for populating the resolver via the fork
         /// pipeline (step 8) before any cross-reference resolution occurs.
@@ -182,22 +196,19 @@ namespace EmoTracker.Data.Sessions
         {
             mName = name;
             Scripts = new ScriptManager();
+            Scripts.OwnerState = this;
             Transactions = new LocalTransactionProcessorWithUndo();
             Items = new ItemDatabase();
             Locations = new LocationDatabase();
             Maps = new MapDatabase();
             Layouts = new LayoutManager();
 
-            // Phase 7.3: per-state SessionSettings. OwnerState is set after
-            // the state is otherwise wired so OnChanged hooks (e.g. on
-            // IgnoreAllLogic) can resolve OwnerState back-references.
             Settings = new SessionSettings();
             Settings.OwnerState = this;
 
-            // Phase 6 step 11: wire each catalog's back-ref so peer-catalog
-            // access from within the catalog (e.g. LocationDatabase calling
-            // MapDatabase) resolves to the same state's instance, not the
-            // ambient singleton.
+            // Wire each catalog's back-ref so peer-catalog access (e.g.
+            // LocationDatabase calling MapDatabase) resolves to this
+            // state's instance.
             WireCatalogStateBackRefs();
         }
 
@@ -230,6 +241,7 @@ namespace EmoTracker.Data.Sessions
         {
             mName = name;
             Scripts = scripts ?? new ScriptManager();
+            Scripts.OwnerState = this;
             Transactions = transactions ?? new LocalTransactionProcessorWithUndo();
             Items = items ?? new ItemDatabase();
             Locations = locations ?? new LocationDatabase();
@@ -281,69 +293,6 @@ namespace EmoTracker.Data.Sessions
             Layouts.State = this;
         }
 
-        /// <summary>
-        /// Phase 6 step 11: walks every model in this state's catalogs and
-        /// stamps <see cref="ModelTypeBase.OwnerState"/> = this. Called by
-        /// the adoption path in ApplicationModel.RebindActivePackageInstanceFromSingletons
-        /// so the primary state's models route their per-state lookups
-        /// (transaction processor, script manager, peer catalogs) through
-        /// this state rather than fall through to the ambient singletons.
-        ///
-        /// <para>
-        /// The Fork path (step 8) sets OwnerState as it walks; this method
-        /// is for the adoption-from-singletons case where the catalogs
-        /// arrive pre-populated. Idempotent — calling on already-stamped
-        /// models is a no-op.
-        /// </para>
-        ///
-        /// <para>
-        /// Layouts are not yet stamped (step 8 deferred layout fork
-        /// orchestration; LayoutItem hierarchy walks land with that
-        /// follow-up).
-        /// </para>
-        /// </summary>
-        public void StampOwnerStateOnAdoptedModels()
-        {
-            // Items: enumerate the catalog and stamp ModelTypeBase-derived ones.
-            // Phase 6 step 10 fix: also register each item in the IndexedModelResolver
-            // so primary-state ModelReference<T>.Target lookups (which now go through
-            // GetModelResolver() → state.Resolve()) actually find the model. Pre-step-9
-            // those lookups walked Sessions.SessionContext.ActiveState?.Items.Items via the now-deleted
-            // AmbientSingletonModelResolver; post-step-9 the resolver IS the index, and
-            // adoption must keep it populated.
-            foreach (var item in Items.Items)
-            {
-                if (item is ModelTypeBase mtb)
-                {
-                    mtb.OwnerState = this;
-                    mResolver.Register(mtb);
-                }
-            }
-
-            // Locations: walk the flat AllLocations + each Location's sections.
-            foreach (var loc in Locations.AllLocations)
-            {
-                loc.OwnerState = this;
-                mResolver.Register(loc);
-                foreach (var sec in loc.Sections)
-                {
-                    sec.OwnerState = this;
-                    mResolver.Register(sec);
-                }
-            }
-
-            // Maps: each Map + its MapLocations.
-            foreach (var map in Maps.Maps)
-            {
-                map.OwnerState = this;
-                mResolver.Register(map);
-                foreach (var ml in map.Locations)
-                {
-                    ml.OwnerState = this;
-                    mResolver.Register(ml);
-                }
-            }
-        }
 
         /// <inheritdoc />
         public T Resolve<T>(Guid definitionId) where T : class
@@ -448,11 +397,14 @@ namespace EmoTracker.Data.Sessions
             var modelIdentityMap = new Dictionary<object, object>();
 
             // ---- Items ------------------------------------------------------
+            // Each fork is born with OwnerState = copy via the state-aware
+            // Fork(destState) overload — InitializeAsForkOf reads the
+            // destination state from the thread-local hand-off and stamps
+            // it before OnForked runs.
             foreach (var item in this.Items.Items)
             {
                 if (!(item is ItemBase srcItemBase)) continue;
-                var forkedItem = (ItemBase)srcItemBase.Fork();
-                forkedItem.OwnerState = copy;
+                var forkedItem = (ItemBase)srcItemBase.Fork(copy);
                 copy.Items.RegisterItem(forkedItem);
                 copy.mResolver.Register(forkedItem);
                 modelIdentityMap[srcItemBase] = forkedItem;
@@ -461,31 +413,27 @@ namespace EmoTracker.Data.Sessions
 
             // ---- Locations + Sections (coordinated tree walk) --------------
             // Phase 3 Location.Fork cascades to sections + child locations
-            // via the owned-subtree pattern. We fork the source's root and
-            // then descend the resulting tree to register every node.
+            // via the owned-subtree pattern. The cascading children all
+            // observe ForkDestination.Current = copy and stamp OwnerState
+            // accordingly during their own InitializeAsForkOf.
             if (this.Locations.Root != null)
             {
-                var forkedRoot = (Location)this.Locations.Root.Fork();
+                var forkedRoot = (Location)this.Locations.Root.Fork(copy);
                 RegisterLocationTreeOnFork(this.Locations.Root, forkedRoot, copy, modelIdentityMap);
                 copy.Locations.SetRootFromFork(forkedRoot);
             }
 
             // ---- Maps -------------------------------------------------------
-            // Phase 3 Map.Fork cascades to MapLocations.
+            // Phase 3 Map.Fork cascades to MapLocations — children stamp
+            // OwnerState=copy at construction via the same hand-off.
             foreach (var map in this.Maps.Maps)
             {
-                var forkedMap = (Map)map.Fork();
-                forkedMap.OwnerState = copy;
+                var forkedMap = (Map)map.Fork(copy);
                 copy.Maps.AddMapFromFork(forkedMap);
                 copy.mResolver.Register(forkedMap);
                 modelIdentityMap[map] = forkedMap;
-                // Phase 7 polish: stamp OwnerState on each MapLocation in
-                // the forked map AND register them in the fork's resolver,
-                // then run their post-stamp hook so the cached Location
-                // reference resolves through the fork.
                 foreach (var ml in forkedMap.Locations)
                 {
-                    ml.OwnerState = copy;
                     copy.mResolver.Register(ml);
                     ml.OnOwnerStateStamped();
                 }
@@ -498,23 +446,19 @@ namespace EmoTracker.Data.Sessions
             // independently — fork mutations clear only fork's cache.
             copy.Locations.SeedRuleCacheFromFork(this.Locations);
 
-            // ---- Layouts (Phase 7 polish: deferred from Phase 6 step 8) ----
-            // Walk the source's layouts and fork each into the new state's
-            // LayoutManager. Each forked layout's children are recursively
-            // forked via Layout.Fork's coordinated tree walk; OwnerState is
-            // stamped during InitializeAsForkOf so per-fork mutations land
-            // on the correct state.
+            // ---- Layouts ---------------------------------------------------
+            // Layout.Fork's tree walk recurses into children which all
+            // observe ForkDestination.Current = copy via the state-aware
+            // Fork overload. Each LayoutItem's OnOwnerStateStamped fires
+            // during InitializeAsForkOf so cross-reference caches refresh
+            // before the caller observes the fork.
             foreach (var pair in this.Layouts.GetLayoutsForFork())
             {
                 if (pair.Value == null) continue;
-                var forkedLayout = (EmoTracker.Data.Layout.Layout)pair.Value.Fork();
-                StampLayoutOwnerStateRecursive(forkedLayout, copy);
+                var forkedLayout = (EmoTracker.Data.Layout.Layout)pair.Value.Fork(copy);
                 copy.Layouts.AddLayoutFromFork(pair.Key, forkedLayout);
-                // Phase 7 polish: register the forked layout in this state's
-                // resolver so cross-references to it (e.g. <c>LayoutReference</c>'s
-                // <c>ModelReference&lt;Layout&gt;</c>) resolve through the fork's
-                // own catalog instead of returning null and rendering empty.
                 copy.mResolver.Register(forkedLayout);
+                RegisterLayoutTreeInResolver(forkedLayout, copy);
             }
 
             // ---- Per-state SessionSettings (Phase 7.3) ---------------------
@@ -563,45 +507,38 @@ namespace EmoTracker.Data.Sessions
             return copy;
         }
 
-        // Phase 7 polish: recursively stamp OwnerState on every LayoutItem
-        // in a forked layout tree. Each LayoutItem subtype exposes its
-        // owned children via the virtual <see cref="LayoutItem.EnumerateChildren"/>;
-        // we recurse through it so all containers (Container, DockPanel,
-        // CanvasPanel, ArrayPanel, TabPanel, ScrollPanel, ViewBox,
-        // GroupBox) are covered. Cross-references (ButtonPopup.Layout,
-        // LayoutReference.Layout, MapPanel.Maps) point at separately-
-        // forked siblings and are NOT walked here — those siblings
-        // (Layouts, Maps) are forked + stamped by their own catalog walks.
-        static void StampLayoutOwnerStateRecursive(EmoTracker.Core.DataModel.ModelTypeBase node, TrackerState state)
+        // Walks a freshly-forked layout tree and registers each LayoutItem
+        // with the destination state's resolver. OwnerState is already set
+        // at construction time via the Fork(destState) → ForkDestination
+        // hand-off + InitializeAsForkOf — no late stamping needed; the walk
+        // here is purely for resolver indexing.
+        //
+        // Cross-references (ButtonPopup.Layout, LayoutReference.Layout,
+        // MapPanel.Maps) point at separately-forked siblings and are NOT
+        // walked here — those siblings (Layouts, Maps) are forked +
+        // registered by their own catalog walks above.
+        static void RegisterLayoutTreeInResolver(EmoTracker.Core.DataModel.ModelTypeBase node, TrackerState state)
         {
             if (node == null || state == null) return;
-            node.OwnerState = state;
+            state.mResolver.Register(node);
 
-            // Phase 7 polish: ItemGrid layout-items wrap a Data.Items.ItemGrid
-            // which holds resolved item references. After OwnerState is
-            // set we rebuild the grid's rows against THIS state's items so
-            // the items panel renders the right state's catalog.
+            // ItemGrid layout-items wrap a Data.Items.ItemGrid that holds
+            // resolved item references; the grid's rows must be rebuilt
+            // against the fork's items so the panel renders the right
+            // state's catalog. OwnerState is already set; this is the
+            // grid-specific post-construction trigger.
             if (node is EmoTracker.Data.Layout.ItemGrid itemGrid)
                 itemGrid.ResolveRowsAgainstOwnerState();
-
-            // Phase 7 polish: invalidate cross-reference caches that may
-            // have been populated before OwnerState was stamped (e.g. an
-            // early visual-tree binding read of Item.Data captured the
-            // primary state's item before this fork's OwnerState was
-            // set). The next read resolves through the now-stamped
-            // OwnerState's resolver.
-            if (node is EmoTracker.Data.Layout.LayoutItem li)
-                li.OnOwnerStateStamped();
 
             switch (node)
             {
                 case EmoTracker.Data.Layout.Layout layout:
                     if (layout.Root != null)
-                        StampLayoutOwnerStateRecursive(layout.Root, state);
+                        RegisterLayoutTreeInResolver(layout.Root, state);
                     break;
                 case EmoTracker.Data.Layout.LayoutItem item:
                     foreach (var child in item.EnumerateChildren())
-                        StampLayoutOwnerStateRecursive(child, state);
+                        RegisterLayoutTreeInResolver(child, state);
                     break;
             }
         }

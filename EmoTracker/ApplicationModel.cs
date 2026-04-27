@@ -52,7 +52,11 @@ namespace EmoTracker
 
         public DelegateCommand  UninstallPackageCommand { get; private set; }
 
-        private Layout mBroadcastLayout = new Layout();
+        // BroadcastLayout is lazy-initialized in AcquireLayouts so its
+        // OwnerState can be stamped to the live primary state at the time
+        // of construction — rather than constructed null-state at field-
+        // initializer time before any state exists.
+        private Layout mBroadcastLayout;
         private Layout mTrackerLayout;
         private Layout mTrackerHorizontalLayout;
         private Layout mTrackerVerticalLayout;
@@ -168,8 +172,6 @@ namespace EmoTracker
         public void OnActiveStateSwitched(TrackerState newState)
         {
             if (newState == null) return;
-
-            EmoTracker.Data.Sessions.SessionContext.ActiveState = newState;
 
             // Find the PackageInstance owning the new state.
             PackageInstance owningPI = null;
@@ -401,12 +403,18 @@ namespace EmoTracker
 
                 InitializePackageManagerViews();
 
-            // Phase 7.1: pre-allocate the primary state + PackageInstance
-            // BEFORE any pack-load reaches Tracker.Reload. PackageLoader's
-            // new "load into a target state" model requires a target to
-            // exist; pre-allocation guarantees one is always installed in
-            // SessionContext.ActiveState by the time Tracker.Reload fires.
+            // Pre-allocate the primary state + PackageInstance BEFORE any
+            // pack-load reaches Tracker.Reload. PackageLoader's "load into
+            // a target state" model requires a target to exist.
             PreallocatePrimaryState();
+
+            // Install the cross-assembly resolver hooks so EmoTracker.Data
+            // and EmoTracker.UI code can reach the currently-active primary
+            // state without consulting an ambient slot. Each resolver
+            // evaluates the relevant state on call rather than caching one.
+            EmoTracker.Data.Tracker.Instance.ResolveReloadTarget = () => PrimaryState;
+            EmoTracker.Data.ApplicationSettings.ActiveSessionSettingsResolver = () => PrimaryState?.Settings;
+            EmoTracker.UI.Converters.LayoutReferenceConverter.ActiveLayoutsResolver = () => PrimaryState?.Layouts;
 
             // Notification service install — now that the primary state's
             // ScriptManager exists, give it the back-reference for
@@ -536,7 +544,7 @@ namespace EmoTracker
             var primary = new TrackerState(
                 name: "primary",
                 scripts: new ScriptManager(),
-                transactions: TransactionProcessor.Current as IUndoableTransactionProcessor,
+                transactions: new EmoTracker.Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo(),
                 items: new ItemDatabase(),
                 locations: new LocationDatabase(),
                 maps: new MapDatabase(),
@@ -547,13 +555,6 @@ namespace EmoTracker
             // Phase 7.5: track in the collection so multi-pack consumers
             // can enumerate every live PackageInstance.
             mPackageInstances.Add(mActivePackageInstance);
-
-            // Install the active state for the in-Data layer's fallback
-            // resolver (PrimaryStateModelResolver) and for any in-Data
-            // callsites that need to reach the active state without an
-            // OwnerState holder. Phase 7.6's WindowContext makes this
-            // per-window; for now it's a single global slot.
-            EmoTracker.Data.Sessions.SessionContext.ActiveState = primary;
         }
 
         // -------- Phase 7.5: multi-PackageInstance lifecycle ----------------
@@ -631,7 +632,6 @@ namespace EmoTracker
             if (ReferenceEquals(pi, mActivePackageInstance))
             {
                 ActivePackageInstance = mPackageInstances.Count > 0 ? mPackageInstances[0] : null;
-                EmoTracker.Data.Sessions.SessionContext.ActiveState = PrimaryState;
             }
             pi.Dispose();
         }
@@ -1038,9 +1038,12 @@ defaultSaveDataPath)
             if (!CanSave(null))
                 return false;
 
+            var target = PrimaryState;
+            if (target == null) return false;
+
             try
             {
-                bool bResult = Tracker.Instance.SaveProgress(path, (JObject root) =>
+                bool bResult = Tracker.Instance.SaveProgress(target, path, (JObject root) =>
                 {
                     root["main_window_width"] = WindowService.Instance.MainWindowWidth;
                     root["main_window_height"] = WindowService.Instance.MainWindowHeight;
@@ -1094,7 +1097,10 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         // Phase 7.10: exposed to BundleService for per-state load round-trips.
         public bool LoadProgress(string path)
         {
-            if (Tracker.Instance.LoadProgress(path, (JObject root) =>
+            var target = PrimaryState;
+            if (target == null) return false;
+
+            if (Tracker.Instance.LoadProgress(target, path, (JObject root) =>
             {
                 WindowService.Instance.MainWindowWidth = root.GetValue<double>("main_window_width", WindowService.Instance.MainWindowWidth);
                 WindowService.Instance.MainWindowHeight = root.GetValue<double>("main_window_height", WindowService.Instance.MainWindowHeight);
@@ -1207,9 +1213,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         {
             //  Undo history should not propagate across package reloads, and should also not include
             //  fields being set during load
-            IUndoableTransactionProcessor undo = TransactionProcessor.Current as IUndoableTransactionProcessor;
-            if (undo != null)
-                undo.ClearUndoHistory();
+            (PrimaryState?.Transactions as IUndoableTransactionProcessor)?.ClearUndoHistory();
 
             //  Reset the current save path
             mCurrentSavePath = null;
@@ -1229,9 +1233,7 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             //  Undo history should not propagate across package reloads, and should also not include
             //  fields being set during load
-            IUndoableTransactionProcessor undo = TransactionProcessor.Current as IUndoableTransactionProcessor;
-            if (undo != null)
-                undo.ClearUndoHistory();
+            (PrimaryState?.Transactions as IUndoableTransactionProcessor)?.ClearUndoHistory();
 
             // Phase 6 step 7: wrap the just-loaded singleton catalogs into a
             // PackageInstance + primary TrackerState. Fires for every pack-load
@@ -1298,11 +1300,13 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             {
                 if (BroadcastLayout == null)
                 {
+                    var primary = PrimaryState;
                     BroadcastLayout = new Layout();
-#pragma warning disable CS0618 // logging-only access to ScriptManager singleton; per-state logging not a goal
-                    ApplicationModel.Instance?.PrimaryState?.Scripts.OutputWarning("Loading legacy broadcast layout data");
-#pragma warning restore CS0618
-                    using (new LoggingBlock())
+                    BroadcastLayout.OwnerState = primary;
+                    primary?.RegisterModel(BroadcastLayout);
+                    var primaryScripts = primary?.Scripts;
+                    primaryScripts?.OutputWarning("Loading legacy broadcast layout data");
+                    using (new LoggingBlock(primaryScripts))
                     {
                         if (Tracker.Instance.ActiveGamePackage != null)
                             BroadcastLayout.Load(Tracker.Instance.ActiveGamePackage.Open("broadcast_layout.json"), Tracker.Instance.ActiveGamePackage);

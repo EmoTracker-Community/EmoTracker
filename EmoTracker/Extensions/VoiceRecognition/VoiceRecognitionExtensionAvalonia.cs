@@ -593,7 +593,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
                 addCommand($"{wake} undo that", () =>
                 {
                     SpeakAsync("Okay, I'll undo the last operation");
-                    (TransactionProcessor.Current as IUndoableTransactionProcessor)?.Undo();
+                    (ApplicationModel.Instance.PrimaryState?.Transactions as IUndoableTransactionProcessor)?.Undo();
                 });
             }
 
@@ -654,7 +654,12 @@ namespace EmoTracker.Extensions.VoiceRecognition
         {
             if (string.IsNullOrWhiteSpace(text) || text == "[unk]") { Listening = false; return; }
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            // Voice commands run against the primary state's transaction processor.
+            // Each command invokes item.OnLeftClick / location ops which mutate
+            // their own OwnerState's transactable values; opening on primary's
+            // processor matches the items' OwnerState in single-state apps.
+            var primaryProcessor = ApplicationModel.Instance.PrimaryState?.Transactions;
+            using (primaryProcessor != null ? primaryProcessor.OpenTransaction() : null)
             {
                 Listening = false;
 

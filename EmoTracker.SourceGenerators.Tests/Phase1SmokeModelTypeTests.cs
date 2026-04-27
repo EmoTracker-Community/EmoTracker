@@ -36,7 +36,7 @@ namespace EmoTracker.SourceGenerators.Tests
         public void KVImmutable_ReadsFromImmutableDataAfterDefinitionSeed()
         {
             var note = new Phase1SmokeNote { Body = "hi", Numbers = new List<int> { 1, 2 } };
-            var def = Phase1SmokeModelType.CreateDefinition("def-tag", note);
+            var def = Phase1SmokeModelType.CreateDefinition("def-tag", note, _fix.State);
 
             Assert.Equal("def-tag", def.DefinitionTag);
 
@@ -50,7 +50,7 @@ namespace EmoTracker.SourceGenerators.Tests
         public void KVImmutable_DeepCopiesAcrossReads_NotAliased()
         {
             var note = new Phase1SmokeNote { Body = "hi", Numbers = new List<int> { 1, 2 } };
-            var def = Phase1SmokeModelType.CreateDefinition("def", note);
+            var def = Phase1SmokeModelType.CreateDefinition("def", note, _fix.State);
 
             // Two reads return distinct objects (deep-copied at the boundary).
             var a = def.SeedNote;
@@ -69,7 +69,7 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void KVMutable_RoundTrip_RaisesINPC()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
             var changes = new List<string>();
             ((INotifyPropertyChanged)def).PropertyChanged += (_, e) => changes.Add(e.PropertyName);
 
@@ -81,7 +81,7 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void KVMutable_NoOpWrite_DoesNotRaiseINPC()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
             def.Label = "alpha";
 
             var changes = new List<string>();
@@ -94,7 +94,7 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void KVMutable_OnChanged_CallbackFiresOnEachWrite()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
             Assert.Equal(0, def.QuantityChangedCount);
 
             def.Quantity = 1;
@@ -111,28 +111,28 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void KVTransactable_RoundTrip_IsUndoable()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 def.Active = true;
 
             Assert.True(def.Active);
 
-            ((IUndoableTransactionProcessor)TransactionProcessor.Current).Undo();
+            _fix.Processor.Undo();
             Assert.False(def.Active);
         }
 
         [Fact]
         public void KVTransactable_OnChanged_CallbackFiresOnCommit()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
             Assert.Equal(0, def.SelectedColorChangedCount);
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 def.SelectedColor = "red";
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 def.SelectedColor = "red"; // no-op, should not double-fire
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 def.SelectedColor = "blue";
 
             Assert.Equal("blue", def.SelectedColor);
@@ -142,11 +142,11 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void KVTransactable_RaisesINPC()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
             var changes = new List<string>();
             ((INotifyPropertyChanged)def).PropertyChanged += (_, e) => changes.Add(e.PropertyName);
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 def.Active = true;
 
             Assert.Contains("Active", changes);
@@ -158,7 +158,7 @@ namespace EmoTracker.SourceGenerators.Tests
         public void KVOverridable_ReturnsDefinitionDefault_WhenNoOverridePresent()
         {
             var def = Phase1SmokeModelType.CreateDefinition(
-                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy", ownerState: _fix.State);
 
             // No override has been written; getter falls through to the __def key
             // in ImmutableData.
@@ -170,7 +170,7 @@ namespace EmoTracker.SourceGenerators.Tests
         public void KVOverridable_SetWritesOverride_GetterSeesOverrideValue()
         {
             var def = Phase1SmokeModelType.CreateDefinition(
-                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy", ownerState: _fix.State);
 
             def.Width = 100.0;
             Assert.Equal(100.0, def.Width);
@@ -183,7 +183,7 @@ namespace EmoTracker.SourceGenerators.Tests
         public void KVOverridable_SetRaisesINPC_AndInvokesOnChanged()
         {
             var def = Phase1SmokeModelType.CreateDefinition(
-                "d", null, defaultWidth: 0.0, defaultBackground: null);
+                "d", null, defaultWidth: 0.0, defaultBackground: null, ownerState: _fix.State);
 
             var changes = new List<string>();
             ((INotifyPropertyChanged)def).PropertyChanged += (_, e) => changes.Add(e.PropertyName);
@@ -215,7 +215,7 @@ namespace EmoTracker.SourceGenerators.Tests
         public void KVOverridable_RemoveOverride_FallsBackToDefinitionDefault()
         {
             var def = Phase1SmokeModelType.CreateDefinition(
-                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy", ownerState: _fix.State);
 
             def.Width = 100.0;
             def.Background = "red";
@@ -253,11 +253,11 @@ namespace EmoTracker.SourceGenerators.Tests
         public void KVOverridable_Fork_OverrideIsCOWIsolated()
         {
             var def = Phase1SmokeModelType.CreateDefinition(
-                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy", ownerState: _fix.State);
             def.Width = 100.0;
 
             // Fork inherits the override through copy-on-write.
-            var fork = def.ForkAs();
+            var fork = def.ForkAs(ForkTestHelpers.NewDestState());
             Assert.Equal(100.0, fork.Width);
 
             // Fork-side write shadows the parent without mutating it.
@@ -272,9 +272,9 @@ namespace EmoTracker.SourceGenerators.Tests
             // Fork shares ImmutableData by reference, so the __def fallback survives
             // forks and stays consistent across the family.
             var def = Phase1SmokeModelType.CreateDefinition(
-                "d", null, defaultWidth: 42.0, defaultBackground: "navy");
+                "d", null, defaultWidth: 42.0, defaultBackground: "navy", ownerState: _fix.State);
 
-            var fork = def.ForkAs();
+            var fork = def.ForkAs(ForkTestHelpers.NewDestState());
 
             // Without a local override on the fork, both the source and fork report the
             // same definition default.
@@ -293,35 +293,35 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void DefinitionId_IsStableAcrossForks()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
             var defId = def.DefinitionId;
             Assert.NotEqual(Guid.Empty, defId);
 
-            var fork = def.ForkAs();
+            var fork = def.ForkAs(ForkTestHelpers.NewDestState());
             Assert.Equal(defId, fork.DefinitionId);
 
             // And further forks of forks share the same DefinitionId.
-            var forkOfFork = fork.ForkAs();
+            var forkOfFork = fork.ForkAs(ForkTestHelpers.NewDestState());
             Assert.Equal(defId, forkOfFork.DefinitionId);
         }
 
         [Fact]
         public void OnForked_HookRunsOnFork()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
             Assert.Null(def.ForkedFrom);
 
-            var fork = def.ForkAs();
+            var fork = def.ForkAs(ForkTestHelpers.NewDestState());
             Assert.Same(def, fork.ForkedFrom);
         }
 
         [Fact]
         public void Fork_KVMutable_IsCOWIsolated()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
             def.Label = "original";
 
-            var fork = def.ForkAs();
+            var fork = def.ForkAs(ForkTestHelpers.NewDestState());
             // Reads through to the parent for a not-yet-locally-set key.
             Assert.Equal("original", fork.Label);
 
@@ -339,14 +339,14 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void Fork_KVTransactable_IsCOWIsolated()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
-            using (TransactionProcessor.Current.OpenTransaction())
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
+            using (_fix.Processor.OpenTransaction())
                 def.Active = true;
 
-            var fork = def.ForkAs();
+            var fork = def.ForkAs(ForkTestHelpers.NewDestState());
             Assert.True(fork.Active);
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 fork.Active = false;
             Assert.False(fork.Active);
             Assert.True(def.Active);
@@ -355,11 +355,11 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void Fork_OnChangedCounters_AreInstanceLocal()
         {
-            var def = Phase1SmokeModelType.CreateDefinition("d", null);
+            var def = Phase1SmokeModelType.CreateDefinition("d", null, _fix.State);
             def.Quantity = 5;
             Assert.Equal(1, def.QuantityChangedCount);
 
-            var fork = def.ForkAs();
+            var fork = def.ForkAs(ForkTestHelpers.NewDestState());
             // Counters reset on the fork (per-instance state).
             Assert.Equal(0, fork.QuantityChangedCount);
             // Original is unaffected.

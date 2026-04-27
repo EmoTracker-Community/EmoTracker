@@ -9,10 +9,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-// Phase 6 step 11: LuaItem's Sessions.SessionContext.ActiveState?.Scripts accesses are wrapped
-// pcall logging — they fire on every Lua callback exception. Per-state
-// Lua state lands when each TrackerState allocates its own interpreter
-// (deferred follow-up); for now logging routes through the singleton.
+// LuaItem's exception-logging routes through GetCallbackScriptManager()
+// — the holder's per-state ScriptManager. There is no fall-back ambient
+// state; if a LuaItem has no OwnerState its exception simply isn't logged.
 #pragma warning disable CS0618
 
 namespace EmoTracker.Data.Scripting
@@ -161,7 +160,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                GetCallbackScriptManager()?.OutputException(e);
             }
         }
 
@@ -178,7 +177,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                GetCallbackScriptManager()?.OutputException(e);
             }
 
             return false;
@@ -190,7 +189,7 @@ namespace EmoTracker.Data.Scripting
             {
                 if (OnLeftClickFunc != null)
                 {
-                    using (new LocationDatabase.SuspendRefreshScope())
+                    using (new LocationDatabase.SuspendRefreshScope((this.OwnerState as Sessions.TrackerState)?.Locations))
                     {
                         GetCallbackScriptManager().SafeCall(OnLeftClickFunc, this);
                     }
@@ -198,7 +197,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                GetCallbackScriptManager()?.OutputException(e);
             }
         }
 
@@ -208,7 +207,7 @@ namespace EmoTracker.Data.Scripting
             {
                 if (OnRightClickFunc != null)
                 {
-                    using (new LocationDatabase.SuspendRefreshScope())
+                    using (new LocationDatabase.SuspendRefreshScope((this.OwnerState as Sessions.TrackerState)?.Locations))
                     {
                         GetCallbackScriptManager().SafeCall(OnRightClickFunc, this);
                     }
@@ -216,7 +215,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                GetCallbackScriptManager()?.OutputException(e);
             }
         }
 
@@ -233,7 +232,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                GetCallbackScriptManager()?.OutputException(e);
             }
 
             return 0;
@@ -286,7 +285,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                GetCallbackScriptManager()?.OutputException(e);
             }
 
             return false;
@@ -307,7 +306,7 @@ namespace EmoTracker.Data.Scripting
                         }                        
                         catch (Exception e)
                         {                        
-                            Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                            GetCallbackScriptManager()?.OutputException(e);
                         }
                     }
 
@@ -320,7 +319,7 @@ namespace EmoTracker.Data.Scripting
             }
             catch (Exception e)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                GetCallbackScriptManager()?.OutputException(e);
             }
 
             return false;
@@ -337,7 +336,7 @@ namespace EmoTracker.Data.Scripting
                 }
                 catch (Exception e)
                 {
-                    Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
+                    GetCallbackScriptManager()?.OutputException(e);
                 }
 
             }, key);

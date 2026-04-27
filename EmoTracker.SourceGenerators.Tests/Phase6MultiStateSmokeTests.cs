@@ -191,8 +191,16 @@ namespace EmoTracker.SourceGenerators.Tests
             var itemB = new ToggleItem { Name = "b" };
             src.Items.RegisterItem(itemA);
             src.Items.RegisterItem(itemB);
-            // Production adoption flow: stamp OwnerState + populate resolver.
-            src.StampOwnerStateOnAdoptedModels();
+            // Mirror the production parse path: register models in the
+            // state's resolver and stamp OwnerState. (Pre-Phase-7 the
+            // production code stamped via StampOwnerStateOnAdoptedModels
+            // after pack-load; that fixup pass was removed once each
+            // load orchestrator stamped at construction time. Tests do
+            // the same registration directly here.)
+            foreach (var it in src.Items.Items)
+            {
+                if (it is ModelTypeBase mtb) { mtb.OwnerState = src; src.RegisterModel(mtb); }
+            }
 
             var fork = src.Fork();
 
@@ -225,8 +233,16 @@ namespace EmoTracker.SourceGenerators.Tests
             var src = new TrackerState();
             var item = new ToggleItem();
             src.Items.RegisterItem(item);
-            // Production adoption flow: stamp OwnerState + populate resolver.
-            src.StampOwnerStateOnAdoptedModels();
+            // Mirror the production parse path: register models in the
+            // state's resolver and stamp OwnerState. (Pre-Phase-7 the
+            // production code stamped via StampOwnerStateOnAdoptedModels
+            // after pack-load; that fixup pass was removed once each
+            // load orchestrator stamped at construction time. Tests do
+            // the same registration directly here.)
+            foreach (var it in src.Items.Items)
+            {
+                if (it is ModelTypeBase mtb) { mtb.OwnerState = src; src.RegisterModel(mtb); }
+            }
 
             var fork = src.Fork();
             var forkItem = fork.Resolve<ToggleItem>(item.DefinitionId);
@@ -240,78 +256,17 @@ namespace EmoTracker.SourceGenerators.Tests
             src.Dispose();
         }
 
-        // -------- PrimaryStateModelResolver routing -------------------------
-
         [Fact]
-        public void PrimaryStateModelResolver_RoutesThroughSessionContext()
+        public void GetModelResolver_PrefersOwnerState()
         {
-            // The step-9 resolver delegates to whichever state is installed
-            // as SessionContext.ActiveState. Switching the active state
-            // changes which IndexedModelResolver answers lookups.
-            var prior = SessionContext.ActiveState;
-            try
-            {
-                var stateA = new TrackerState("A");
-                var stateB = new TrackerState("B");
-                var itemA = new ToggleItem();
-                var itemB = new ToggleItem();
-                stateA.Items.RegisterItem(itemA);
-                stateB.Items.RegisterItem(itemB);
-                // Production adoption flow: stamp OwnerState + populate resolver.
-                stateA.StampOwnerStateOnAdoptedModels();
-                stateB.StampOwnerStateOnAdoptedModels();
-
-                var resolver = new EmoTracker.Data.Core.DataModel.PrimaryStateModelResolver();
-
-                // No active state → null lookup.
-                SessionContext.ActiveState = null;
-                Assert.Null(resolver.Resolve<ToggleItem>(itemA.DefinitionId));
-
-                // Activate state A → resolver routes to state A's index.
-                SessionContext.ActiveState = stateA;
-                Assert.Same(itemA, resolver.Resolve<ToggleItem>(itemA.DefinitionId));
-                // State A doesn't know about state B's items.
-                Assert.Null(resolver.Resolve<ToggleItem>(itemB.DefinitionId));
-
-                // Switch active state → lookups follow.
-                SessionContext.ActiveState = stateB;
-                Assert.Same(itemB, resolver.Resolve<ToggleItem>(itemB.DefinitionId));
-                Assert.Null(resolver.Resolve<ToggleItem>(itemA.DefinitionId));
-            }
-            finally
-            {
-                SessionContext.ActiveState = prior;
-            }
-        }
-
-        [Fact]
-        public void GetModelResolver_PrefersOwnerState_OverPrimaryStateResolver()
-        {
-            // ModelTypeBase.GetModelResolver returns OwnerState directly
-            // when present — it doesn't fall through to ModelResolver.Current
-            // (which the app installs as PrimaryStateModelResolver). This
-            // is the structural guarantee that a model's lookups stay in
-            // its own state regardless of which state is active globally.
-            var prior = SessionContext.ActiveState;
-            try
-            {
-                var stateA = new TrackerState("A");
-                var stateB = new TrackerState("B");
-                var item = new ToggleItem();
-                item.OwnerState = stateA;
-                stateA.Items.RegisterItem(item);
-
-                // Make state B the active state — a curveball.
-                SessionContext.ActiveState = stateB;
-
-                // The item's GetModelResolver returns stateA, not stateB,
-                // because OwnerState wins.
-                Assert.Same(stateA, item.GetModelResolver());
-            }
-            finally
-            {
-                SessionContext.ActiveState = prior;
-            }
+            // ModelTypeBase.GetModelResolver returns OwnerState directly.
+            // A model's lookups stay in its own state regardless of which
+            // state any other code is operating against.
+            var stateA = new TrackerState("A");
+            var item = new ToggleItem();
+            item.OwnerState = stateA;
+            stateA.Items.RegisterItem(item);
+            Assert.Same(stateA, item.GetModelResolver());
         }
 
         // -------- Per-state Lua isolation -----------------------------------
@@ -391,7 +346,13 @@ namespace EmoTracker.SourceGenerators.Tests
             // mLua got closed during the previous teardown, which
             // surfaces as NRE in InvokeStandardCallback / ProviderCountForCode
             // the moment a section fires its property-change callbacks.
+            // The shared ScriptManager is the production singleton-shaped
+            // pre-load state; wrap a host TrackerState so its OwnerState is
+            // populated for BootstrapInterpreter (the "adopted" state below
+            // will reassign OwnerState to itself on construction).
             var sharedScripts = new ScriptManager();
+            var preAdoptionHost = new TrackerState("pre-adoption-host");
+            sharedScripts.OwnerState = preAdoptionHost;
             sharedScripts.BootstrapInterpreter();
             Assert.True(sharedScripts.IsLuaLoaded);
 

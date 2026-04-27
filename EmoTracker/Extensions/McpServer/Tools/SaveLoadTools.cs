@@ -35,7 +35,10 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (!savePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                         savePath += ".json";
 
-                    bool result = Tracker.Instance.SaveProgress(savePath);
+                    var target = ApplicationModel.Instance.PrimaryState;
+                    if (target == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "No active TrackerState" });
+                    bool result = Tracker.Instance.SaveProgress(target, savePath);
                     return JsonSerializer.Serialize(new { success = result, path = savePath });
                 }
                 catch (Exception ex)
@@ -63,7 +66,10 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (!File.Exists(loadPath))
                         return JsonSerializer.Serialize(new { success = false, error = $"File not found: {loadPath}" });
 
-                    bool result = Tracker.Instance.LoadProgress(loadPath);
+                    var target = ApplicationModel.Instance.PrimaryState;
+                    if (target == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "No active TrackerState" });
+                    bool result = Tracker.Instance.LoadProgress(target, loadPath);
                     return JsonSerializer.Serialize(new { success = result, path = loadPath });
                 }
                 catch (Exception ex)

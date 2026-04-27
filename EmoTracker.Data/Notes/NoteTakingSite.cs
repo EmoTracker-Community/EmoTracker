@@ -4,16 +4,18 @@ using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
-// Phase 6 step 11: NoteTakingSite is owned by a Location which has
-// OwnerState — but the Save / Load paths run from the LocationDatabase
-// without an obvious holder reference here. Use SessionContext.ActiveState
-// fallback for these uses.
-#pragma warning disable CS0618
-
 namespace EmoTracker.Data.Notes
 {
     public class NoteTakingSite : ObservableObject, INoteTaking
     {
+        // Back-reference to the Location that owns this site. Set by the
+        // owning Location during construction; used to resolve item
+        // references through the owning state's ItemDatabase without
+        // consulting any ambient slot.
+        internal EmoTracker.Core.DataModel.ModelTypeBase Owner { get; set; }
+
+        Sessions.TrackerState OwnerState
+            => Owner?.OwnerState as Sessions.TrackerState;
         ObservableCollection<Note> mNotes = new ObservableCollection<Note>();
 
         public IEnumerable<Note> Notes
@@ -81,7 +83,7 @@ namespace EmoTracker.Data.Notes
                             {
                                 try
                                 {
-                                    string persistableItemRef = Sessions.SessionContext.ActiveState?.Items.GetPersistableItemReference(item);
+                                    string persistableItemRef = OwnerState?.Items.GetPersistableItemReference(item);
                                     if (!string.IsNullOrWhiteSpace(persistableItemRef))
                                         itemsArray.Add(JToken.FromObject(persistableItemRef));
                                 }
@@ -126,7 +128,7 @@ namespace EmoTracker.Data.Notes
                         {
                             foreach (string itemRef in itemsArray)
                             {
-                                ITrackableItem item = Sessions.SessionContext.ActiveState?.Items.ResolvePersistableItemReference(itemRef);
+                                ITrackableItem item = OwnerState?.Items.ResolvePersistableItemReference(itemRef);
                                 if (item != null)
                                     note.AddItem(item);
                             }

@@ -72,12 +72,14 @@ namespace EmoTracker.Data.Layout
                 this.mContent = content;
             }
 
-            public override ModelTypeBase Fork()
+            public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
             {
+                if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
                 var copy = (Tab)System.Activator.CreateInstance(this.GetType());
+                copy.OwnerState = destOwnerState;
                 copy.InitializeAsForkOf(this);
                 if (this.mContent != null)
-                    copy.mContent = (LayoutItem)this.mContent.Fork();
+                    copy.mContent = (LayoutItem)this.mContent.Fork(destOwnerState);
                 return copy;
             }
         }
@@ -143,10 +145,11 @@ namespace EmoTracker.Data.Layout
             {
                 foreach (JObject entry in tabList)
                 {
-                    LayoutItem layout = CreateLayoutItem(entry.GetValue<JObject>("content"), package);
+                    LayoutItem layout = CreateLayoutItem(entry.GetValue<JObject>("content"), package, this.OwnerState);
                     if (layout != null)
                     {
                         var tab = new Tab();
+                        tab.OwnerState = this.OwnerState;
                         tab.SeedDefinition(
                             entry.GetValue<string>("title"),
                             ImageReference.FromPackRelativePath(package, entry.GetValue<string>("icon"), entry.GetValue<string>("icon_image_spec")),
@@ -163,9 +166,11 @@ namespace EmoTracker.Data.Layout
 
         // -------- Fork ------------------------------------------------------
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = (TabPanel)System.Activator.CreateInstance(this.GetType());
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
 
             // Fork the owned mTabs subtree. CurrentTabId is inherited via
@@ -173,7 +178,7 @@ namespace EmoTracker.Data.Layout
             // own mTabs (since each forked Tab carries the same DefinitionId
             // as its source counterpart) — no explicit selection rewire needed.
             foreach (var tab in this.mTabs)
-                copy.mTabs.Add((Tab)tab.Fork());
+                copy.mTabs.Add((Tab)tab.Fork(destOwnerState));
 
             return copy;
         }

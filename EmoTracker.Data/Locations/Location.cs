@@ -45,13 +45,15 @@ namespace EmoTracker.Data.Locations
         AccessibilityLevel mCachedBaseAccessibility = AccessibilityLevel.None;
 
         // Instance-local state (not in any KV store).
-        NoteTakingSite mNoteTakingSite = new NoteTakingSite();
+        NoteTakingSite mNoteTakingSite;
 
         public Location()
         {
             mParentRef = new ModelReference<Location>(this);
             mGroupRef = new ModelReference<Group>(this);
             mBadges.CollectionChanged += Badges_CollectionChanged;
+            mNoteTakingSite = new NoteTakingSite();
+            mNoteTakingSite.Owner = this;
         }
 
         public Location(EmoTracker.Core.DataModel.ITrackerStateContext state)
@@ -60,6 +62,8 @@ namespace EmoTracker.Data.Locations
             mGroupRef = new ModelReference<Group>(this);
             mBadges.CollectionChanged += Badges_CollectionChanged;
             OwnerState = state;
+            mNoteTakingSite = new NoteTakingSite();
+            mNoteTakingSite.Owner = this;
         }
 
         // -------- KVMutable strings & flags ----------------------------------
@@ -254,7 +258,7 @@ namespace EmoTracker.Data.Locations
 
         public void FullClearAllPossible()
         {
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (this.OpenTransaction())
             {
                 int numClearedSections = 0;
                 foreach (Section s in Sections)
@@ -612,23 +616,25 @@ namespace EmoTracker.Data.Locations
 
         // -------- Fork --------------------------------------------------------
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = new Location();
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
 
             // Coordinated fork: walk owned subtrees and rewire back-references.
             // Sections first.
             foreach (var section in this.mSections)
             {
-                var forkedSection = (Section)section.Fork();
+                var forkedSection = (Section)section.Fork(destOwnerState);
                 forkedSection.SetOwner(copy);
                 copy.mSections.Add(forkedSection);
             }
             // Children second; rewire each child's Parent to the new fork.
             foreach (var child in this.mChildren)
             {
-                var forkedChild = (Location)child.Fork();
+                var forkedChild = (Location)child.Fork(destOwnerState);
                 forkedChild.Parent = copy;
                 copy.mChildren.Add(forkedChild);
             }

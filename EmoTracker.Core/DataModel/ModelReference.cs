@@ -79,7 +79,7 @@ namespace EmoTracker.Core.DataModel
             {
                 if (IsEmpty) return null;
                 if (mCached != null) return mCached;
-                var resolver = (mHolder != null) ? mHolder.GetModelResolver() : ModelResolver.Current;
+                var resolver = mHolder.GetModelResolver();
                 if (resolver == null) return null;
                 mCached = resolver.Resolve<T>(mDefinitionId);
                 return mCached;

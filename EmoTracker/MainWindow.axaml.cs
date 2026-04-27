@@ -384,8 +384,7 @@ namespace EmoTracker
             }
             else if (e.Key == Key.Z && HasCmdModifier(e.KeyModifiers))
             {
-                if (TransactionProcessor.Current is IUndoableTransactionProcessor undo)
-                    undo.Undo();
+                (ApplicationModel.Instance.PrimaryState?.Transactions as IUndoableTransactionProcessor)?.Undo();
                 e.Handled = true;
                 return;
             }

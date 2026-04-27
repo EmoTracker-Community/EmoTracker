@@ -412,7 +412,7 @@ namespace EmoTracker.UI
                     {
                         if (!mShiftKeyDown)
                         {
-                            using (TransactionProcessor.Current.OpenTransaction())
+                            using (data.Location.OpenTransaction())
                             {
                                 data.Location.FullClearAllPossible();
                                 data.Location.ModifiedByUser = true;

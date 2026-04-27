@@ -101,60 +101,62 @@ namespace EmoTracker.Data.Sessions
 
             var evtArgs = new PackageLoadEventArgs(target, package, variant);
 
-            try
-            {
-                // Phase 7.2: per-state rule cache clear (replaces static AccessibilityRule.ClearCaches).
-                target.Locations.RuleCache.Clear();
-
-                OnPackageLoadStarting?.Invoke(null, evtArgs);
-
-                // Reset state-affecting flags on Tracker if it's still around.
-                // (Phase 7.1 keeps Tracker for backwards compat; 7.1.g deletes it.)
-                ResetPackageSettings();
-
-                target.Layouts.Clear();
-                target.Maps.Reset();
-                target.Locations.Reset();
-                target.Items.Reset();
-                target.Scripts.Reset();
-
-                ApplicationColors.Instance.LoadColors();
-
-                if (package != null)
+            using (new LocationDatabase.SuspendRefreshScope(target.Locations))
+            {                    
+                try
                 {
-                    target.Scripts.Output("Beginning Package Load");
-                    using (new LoggingBlock())
+                    // Phase 7.2: per-state rule cache clear (replaces static AccessibilityRule.ClearCaches).
+                    target.Locations.RuleCache.Clear();
+
+                    OnPackageLoadStarting?.Invoke(null, evtArgs);
+
+                    // Reset state-affecting flags on Tracker if it's still around.
+                    // (Phase 7.1 keeps Tracker for backwards compat; 7.1.g deletes it.)
+                    ResetPackageSettings();
+
+                    target.Layouts.Clear();
+                    target.Maps.Reset();
+                    target.Locations.Reset();
+                    target.Items.Reset();
+                    target.Scripts.Reset();
+
+                    ApplicationColors.Instance.LoadColors();
+
+                    if (package != null)
                     {
-                        target.Scripts.Output(string.Format("Package: {0}", package.UniqueID));
-                        if (variant != null)
-                            target.Scripts.Output(string.Format("Variant: {0}", variant.UniqueID));
+                        target.Scripts.Output("Beginning Package Load");
+                        using (new LoggingBlock(target.Scripts))
+                        {
+                            target.Scripts.Output(string.Format("Package: {0}", package.UniqueID));
+                            if (variant != null)
+                                target.Scripts.Output(string.Format("Variant: {0}", variant.UniqueID));
 
-                        LoadPackageSettings(target, package);
+                            LoadPackageSettings(target, package);
 
-                        target.Scripts.Load(package);
+                            target.Scripts.Load(package);
 
-                        // Legacy loads — should this be contingent on a flag in the manifest?
-                        target.Items.LegacyLoad(package, target);
-                        target.Maps.LegacyLoad(package, target);
-                        target.Locations.LegacyLoad(package, target);
+                            // Legacy loads — should this be contingent on a flag in the manifest?
+                            target.Items.LegacyLoad(package, target);
+                            target.Maps.LegacyLoad(package, target);
+                            target.Locations.LegacyLoad(package, target);
+                        }
+                        target.Scripts.Output("Package Load Finished");
                     }
-                    target.Scripts.Output("Package Load Finished");
                 }
-            }
-            finally
-            {
-                // Phase 7.2: per-state rule cache clear.
-                target.Locations.RuleCache.Clear();
-                target.Items.BuildCodeIndex();
-
-                mInProgress = false;
-
-                OnPackageLoadComplete?.Invoke(null, evtArgs);
-
-                if (!suspendPackReadyEvent)
+                finally
                 {
-                    var host = ScriptManagerHost.Current ?? NullScriptManager.Instance;
-                    host.InvokeStandardCallback(StandardCallback.PackReady);
+                    // Phase 7.2: per-state rule cache clear.
+                    target.Locations.RuleCache.Clear();
+                    target.Items.BuildCodeIndex();
+
+                    mInProgress = false;
+
+                    OnPackageLoadComplete?.Invoke(null, evtArgs);
+
+                    if (!suspendPackReadyEvent)
+                    {
+                        ((IScriptManager)target.Scripts)?.InvokeStandardCallback(StandardCallback.PackReady);
+                    }
                 }
             }
         }
@@ -182,7 +184,7 @@ namespace EmoTracker.Data.Sessions
                 if (s != null)
                 {
                     target.Scripts.Output("Loading package settings");
-                    using (new LoggingBlock())
+                    using (new LoggingBlock(target.Scripts))
                     {
                         try
                         {
@@ -213,7 +215,7 @@ namespace EmoTracker.Data.Sessions
             if (!bLoadedSettings)
             {
                 target.Scripts.OutputWarning("Loading legacy package settings from tracker_layout.json");
-                using (new LoggingBlock())
+                using (new LoggingBlock(target.Scripts))
                 {
                     try
                     {

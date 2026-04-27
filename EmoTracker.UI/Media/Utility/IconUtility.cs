@@ -396,7 +396,7 @@ namespace EmoTracker.UI.Media.Utility
 
             if (baseBmp.Width != overlay.Width || baseBmp.Height != overlay.Height)
             {
-                EmoTracker.Data.Sessions.SessionContext.ActiveState?.Scripts?.OutputError("Not applying overlay to base image because dimensions don't match.");
+                System.Diagnostics.Debug.WriteLine("Not applying overlay to base image because dimensions don't match.");
                 overlay.Dispose();
                 return baseBmp;
             }

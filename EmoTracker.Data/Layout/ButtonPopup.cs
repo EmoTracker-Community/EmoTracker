@@ -74,11 +74,9 @@ namespace EmoTracker.Data.Layout
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            // Phase 6 step 11: prefer the owning state's LayoutManager; at
-            // parse time OwnerState may not yet be set, so fall back via
-            // SessionContext / singleton.
-            var layouts = (this.OwnerState as Sessions.TrackerState)?.Layouts
-                ?? Sessions.SessionContext.ActiveState?.Layouts;
+            // Resolve through the owning state's LayoutManager. OwnerState
+            // is stamped before parse so cross-references resolve.
+            var layouts = (this.OwnerState as Sessions.TrackerState)?.Layouts;
             var resolved = layouts?.FindLayout(LayoutKey);
             mLayoutRef.Set(resolved);
             return true;

@@ -137,9 +137,10 @@ namespace EmoTracker.UI
 
             public void Execute(object? parameter)
             {
-                using (new LocationDatabase.SuspendRefreshScope())
+                ITrackableItem? item = parameter as ITrackableItem;
+                var ownerState = (item as Core.DataModel.ModelTypeBase)?.OwnerState as EmoTracker.Data.Sessions.TrackerState;
+                using (new LocationDatabase.SuspendRefreshScope(ownerState?.Locations))
                 {
-                    ITrackableItem? item = parameter as ITrackableItem;
                     if (item != null)
                     {
                         IClickHandler? interrupt = GetClickHandler(mOwner);
@@ -148,7 +149,21 @@ namespace EmoTracker.UI
 
                         if (!item.IgnoreUserInput)
                         {
-                            using (TransactionProcessor.Current.OpenTransaction())
+                            // Open the scope on the model's own processor so
+                            // commit fires on the same processor that
+                            // SetTransactableProperty's WriteProperty queues
+                            // entries to. Every transactable model has an
+                            // OwnerState whose Transactions is the canonical
+                            // processor.
+                            var transactable = item as Data.Core.DataModel.TransactableModelTypeBase;
+                            if (transactable != null)
+                            {
+                                using (transactable.OpenTransaction())
+                                {
+                                    item.OnLeftClick();
+                                }
+                            }
+                            else
                             {
                                 item.OnLeftClick();
                             }
@@ -181,9 +196,10 @@ namespace EmoTracker.UI
 
             public void Execute(object? parameter)
             {
-                using (new LocationDatabase.SuspendRefreshScope())
+                ITrackableItem? item = parameter as ITrackableItem;
+                var ownerState = (item as Core.DataModel.ModelTypeBase)?.OwnerState as EmoTracker.Data.Sessions.TrackerState;
+                using (new LocationDatabase.SuspendRefreshScope(ownerState?.Locations))
                 {
-                    ITrackableItem? item = parameter as ITrackableItem;
                     if (item != null)
                     {
                         IClickHandler? interrupt = GetClickHandler(mOwner);
@@ -192,7 +208,15 @@ namespace EmoTracker.UI
 
                         if (!item.IgnoreUserInput)
                         {
-                            using (TransactionProcessor.Current.OpenTransaction())
+                            var transactable = item as Data.Core.DataModel.TransactableModelTypeBase;
+                            if (transactable != null)
+                            {
+                                using (transactable.OpenTransaction())
+                                {
+                                    item.OnRightClick();
+                                }
+                            }
+                            else
                             {
                                 item.OnRightClick();
                             }

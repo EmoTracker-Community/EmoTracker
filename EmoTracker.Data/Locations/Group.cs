@@ -51,9 +51,11 @@ namespace EmoTracker.Data.Locations
             NotifyPropertyChanged(nameof(Locations));
         }
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = new Group();
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             return copy;
         }

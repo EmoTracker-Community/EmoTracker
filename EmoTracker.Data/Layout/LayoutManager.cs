@@ -77,7 +77,7 @@ namespace EmoTracker.Data.Layout
         public bool IncrementalLoad(string path, IGamePackage package)
         {
             this.State?.Scripts.Output("Loading Layouts: {0}", path);
-            using (new LoggingBlock())
+            using (new LoggingBlock(this.State?.Scripts))
             {
                 try
                 {
@@ -95,10 +95,16 @@ namespace EmoTracker.Data.Layout
                                     if (content != null)
                                     {
                                         Layout layout = new Layout();
+                                        layout.OwnerState = this.State;
                                         layout.Load(content, package);
 
                                         if (layout.Root != null)
                                             mKeyToLayout[name] = layout;
+                                        // Register the freshly-parsed layout in the
+                                        // owning state's resolver so cross-state
+                                        // references find it (per the construction-time
+                                        // OwnerState contract).
+                                        this.State?.RegisterModel(layout);
                                     }
                                 }
                             }
@@ -120,7 +126,7 @@ namespace EmoTracker.Data.Layout
             if(package == null) { return false; }
 
             this.State?.Scripts.OutputWarning("Loading legacy layout data");
-            using (new LoggingBlock())
+            using (new LoggingBlock(this.State?.Scripts))
             {
                 try
                 {
@@ -139,10 +145,16 @@ namespace EmoTracker.Data.Layout
                                     if (content != null)
                                     {
                                         Layout layout = new Layout();
+                                        layout.OwnerState = this.State;
                                         layout.Load(content, package);
 
                                         if (layout.Root != null)
                                             mKeyToLayout[name] = layout;
+                                        // Register the freshly-parsed layout in the
+                                        // owning state's resolver so cross-state
+                                        // references find it (per the construction-time
+                                        // OwnerState contract).
+                                        this.State?.RegisterModel(layout);
                                     }
                                 }
                             }

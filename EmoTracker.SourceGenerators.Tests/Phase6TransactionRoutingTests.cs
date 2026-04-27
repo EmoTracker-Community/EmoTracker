@@ -10,10 +10,9 @@ namespace EmoTracker.SourceGenerators.Tests
     /// <summary>
     /// Phase 6 step 4: transactable property writes route through the
     /// owning <see cref="TrackerState"/>'s
-    /// <see cref="TrackerState.Transactions"/> when the model has been
-    /// claimed by a state. Falls through to the global
-    /// <see cref="TransactionProcessor.Current"/> for unowned models —
-    /// the path every Phase 0–5 model uses today.
+    /// <see cref="TrackerState.Transactions"/>. Phase 7 retired the
+    /// fallback to a process-wide processor — every transactable model
+    /// must have an OwnerState, otherwise the write throws.
     ///
     /// <para>
     /// The headline contract: each TrackerState has its own undo stack;
@@ -101,28 +100,28 @@ namespace EmoTracker.SourceGenerators.Tests
         }
 
         [Fact]
-        public void TransactableWrite_OnUnownedModel_FallsThroughToAmbient()
+        public void TransactableWrite_OnUnownedModel_Throws()
         {
-            // Phase 0–5 contract preserved: a model with no OwnerState
-            // routes through TransactionProcessor.Current — the same
-            // singleton it always has. No regression for legacy callers.
+            // Phase 7 contract: every transactable model must have an
+            // OwnerState (and therefore a per-state processor). Writes on
+            // an unowned model throw rather than silently falling through
+            // to a global slot.
             var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
             Assert.Null(smoke.OwnerState);
 
-            using (TransactionProcessor.Current.OpenTransaction())
-                smoke.Active = true;
-            Assert.True(smoke.Active);
-
-            ((IUndoableTransactionProcessor)TransactionProcessor.Current).Undo();
-            Assert.False(smoke.Active);
+            var ex = Assert.Throws<System.InvalidOperationException>(() =>
+            {
+                using (smoke.OpenTransaction())
+                    smoke.Active = true;
+            });
+            Assert.Contains("OwnerState", ex.Message);
         }
 
         [Fact]
         public void OpenTransaction_OnModel_ReturnsScopeBoundToOwnerProcessor()
         {
-            // model.OpenTransaction() opens on the owner's processor, not
-            // the singleton's. Verifies by checking the resolved scope's
-            // currency on each side.
+            // model.OpenTransaction() opens on the owner's processor — there
+            // is no other place a scope can be opened.
             var state = new TrackerState();
             var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
             smoke.OwnerState = state;
@@ -131,9 +130,6 @@ namespace EmoTracker.SourceGenerators.Tests
             {
                 // The owner's processor sees the open scope.
                 Assert.NotNull(state.Transactions.CurrentScope);
-                // The singleton (assuming it's a different processor) doesn't.
-                if (!ReferenceEquals(state.Transactions, TransactionProcessor.Current))
-                    Assert.Null(TransactionProcessor.Current.CurrentScope);
             }
 
             // Scope closes on dispose.

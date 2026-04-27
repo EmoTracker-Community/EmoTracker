@@ -87,7 +87,7 @@ namespace EmoTracker.SourceGenerators.Tests
             t.Text = "original";
             t.FontSize = 12.0;
 
-            var fork = (TextBlock)t.Fork();
+            var fork = (TextBlock)t.Fork(ForkTestHelpers.NewDestState());
 
             // Fork inherits via COW.
             Assert.Equal("original", fork.Text);
@@ -117,7 +117,7 @@ namespace EmoTracker.SourceGenerators.Tests
             var img = new Image();
             Assert.Null(img.Content);
 
-            var fork = (Image)img.Fork();
+            var fork = (Image)img.Fork(ForkTestHelpers.NewDestState());
             Assert.Null(fork.Content);
         }
 
@@ -132,7 +132,7 @@ namespace EmoTracker.SourceGenerators.Tests
             // Easiest path: use TextBlock directly and add through an ad-hoc
             // helper. We test the fork copy semantics, so fork an empty
             // container and confirm the fork has its own items collection.
-            var fork = (EmoTracker.Data.Layout.Container)c.Fork();
+            var fork = (EmoTracker.Data.Layout.Container)c.Fork(ForkTestHelpers.NewDestState());
             Assert.NotSame(c, fork);
             // Both empty.
             using (var s = c.Items.GetEnumerator())
@@ -154,7 +154,7 @@ namespace EmoTracker.SourceGenerators.Tests
             var i = new Item();
             Assert.Null(i.Data);
 
-            var fork = (Item)i.Fork();
+            var fork = (Item)i.Fork(ForkTestHelpers.NewDestState());
             Assert.NotSame(i, fork);
             Assert.Null(fork.Data);
             Assert.Equal(i.DefinitionId, fork.DefinitionId);
@@ -166,7 +166,7 @@ namespace EmoTracker.SourceGenerators.Tests
             var lr = new LayoutReference();
             Assert.Null(lr.Layout);
 
-            var fork = (LayoutReference)lr.Fork();
+            var fork = (LayoutReference)lr.Fork(ForkTestHelpers.NewDestState());
             Assert.NotSame(lr, fork);
             Assert.Null(fork.Layout);
             Assert.Equal(lr.DefinitionId, fork.DefinitionId);
@@ -181,7 +181,7 @@ namespace EmoTracker.SourceGenerators.Tests
             Assert.IsAssignableFrom<ModelTypeBase>(l);
             Assert.Null(l.Root);
 
-            var fork = (Layout)l.Fork();
+            var fork = (Layout)l.Fork(ForkTestHelpers.NewDestState());
             Assert.NotSame(l, fork);
             Assert.Equal(l.DefinitionId, fork.DefinitionId);
             Assert.Null(fork.Root);
@@ -275,7 +275,7 @@ namespace EmoTracker.SourceGenerators.Tests
             var tab = new TabPanel.Tab();
             tab.Title = "Source";
 
-            var fork = (TabPanel.Tab)tab.Fork();
+            var fork = (TabPanel.Tab)tab.Fork(ForkTestHelpers.NewDestState());
             Assert.Equal("Source", fork.Title);
 
             fork.Title = "Fork";
@@ -321,7 +321,7 @@ namespace EmoTracker.SourceGenerators.Tests
             // Fork: the fork has its own forked Tab instances (same
             // DefinitionIds, different references); the inherited CurrentTabId
             // resolves through the fork's mTabs.
-            var fork = (TabPanel)panel.Fork();
+            var fork = (TabPanel)panel.Fork(ForkTestHelpers.NewDestState());
             var forkMTabs = (System.Collections.ObjectModel.ObservableCollection<TabPanel.Tab>)tabsField.GetValue(fork);
             Assert.Equal(2, forkMTabs.Count);
             Assert.Equal(tab0.DefinitionId, forkMTabs[0].DefinitionId);

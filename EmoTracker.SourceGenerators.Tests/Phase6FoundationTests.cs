@@ -23,7 +23,7 @@ namespace EmoTracker.SourceGenerators.Tests
         sealed class StubStateContext : ITrackerStateContext
         {
             public IndexedModelResolver Resolver { get; } = new IndexedModelResolver();
-            public IScriptManager Scripts { get; set; } = NullScriptManager.Instance;
+            public IScriptManager Scripts { get; set; }
             public T Resolve<T>(Guid definitionId) where T : class => Resolver.Resolve<T>(definitionId);
         }
 
@@ -47,11 +47,11 @@ namespace EmoTracker.SourceGenerators.Tests
         {
             var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
 
-            // No OwnerState: GetModelResolver falls through to the ambient
-            // ModelResolver.Current (which the test harness has set to the
-            // singleton-backed resolver from earlier phases).
+            // No OwnerState: GetModelResolver returns null (Phase 7.1+
+            // removed the static ModelResolver.Current fallback — every
+            // model is expected to belong to a state).
             Assert.Null(smoke.OwnerState);
-            Assert.Same(ModelResolver.Current, smoke.GetModelResolver());
+            Assert.Null(smoke.GetModelResolver());
 
             // With OwnerState set: GetModelResolver returns the owner
             // (it IS an IModelResolver via interface inheritance).
@@ -287,25 +287,15 @@ namespace EmoTracker.SourceGenerators.Tests
         }
 
         [Fact]
-        public void GetScriptManager_NoOwnerState_FallsThroughToHost()
+        public void GetScriptManager_NoOwnerState_ReturnsNull()
         {
-            // Models without an OwnerState use the host's Current — the
-            // Phase 0–5 path. Preserves the singleton behavior for any
-            // legacy callsite that hasn't been claimed by a state.
+            // Phase 7.1+: with the static ScriptManagerHost / NullScriptManager
+            // fallback removed, models without an OwnerState resolve to null.
+            // Callsites that fire standard callbacks must null-check the
+            // GetScriptManager() result.
             var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
             Assert.Null(smoke.OwnerState);
-
-            var prior = ScriptManagerHost.Current;
-            try
-            {
-                var stub = new StubStateContext();
-                ScriptManagerHost.Current = stub.Scripts;
-                Assert.Same(stub.Scripts, smoke.GetScriptManager());
-            }
-            finally
-            {
-                ScriptManagerHost.Current = prior;
-            }
+            Assert.Null(smoke.GetScriptManager());
         }
     }
 }

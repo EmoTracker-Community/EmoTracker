@@ -6,22 +6,16 @@ using EmoTracker.Data.Locations;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 
-// Phase 6 step 11: this layout element subscribes to the singleton
-// LocationDatabase's PropertyChanged at construction time (before any
-// state has stamped OwnerState). The full per-state migration of this
-// reactive subscription is part of the multi-window UI follow-up; for
-// now the singleton subscription remains, with the same caveat as
-// Phase 4 §4.6 documented.
-#pragma warning disable CS0618
-
 namespace EmoTracker.Data.Layout
 {
     /// <summary>
-    /// Phase 4 reactive layout element: surfaces
+    /// Phase 4 reactive layout element: surfaces the owning
+    /// <see cref="Sessions.TrackerState"/>'s
     /// <see cref="LocationDatabase.LastClearedLocation"/> through a stable
     /// <c>Location</c> property, re-firing when the underlying database
-    /// signals a change. Phase 6 routes the lookup through a per-state
-    /// <c>LocationDatabase</c>; for now the singleton subscription remains.
+    /// signals a change. Subscription is wired in
+    /// <see cref="OnOwnerStateStamped"/> so we resolve through this
+    /// element's per-state LocationDatabase.
     /// </summary>
     [JsonTypeTags("last_cleared_location")]
     public partial class LastClearedLocation : LayoutItem
@@ -29,15 +23,38 @@ namespace EmoTracker.Data.Layout
         [KVOverridable]
         public partial bool CompactDisplay { get; set; }
 
+        LocationDatabase mSubscribedLocations;
+
         public LastClearedLocation()
         {
-            Sessions.SessionContext.ActiveState?.Locations.PropertyChanged += Instance_PropertyChanged;
         }
 
         public override void Dispose()
         {
-            Sessions.SessionContext.ActiveState?.Locations.PropertyChanged -= Instance_PropertyChanged;
+            UnsubscribeLocations();
             base.Dispose();
+        }
+
+        public override void OnOwnerStateStamped()
+        {
+            base.OnOwnerStateStamped();
+            UnsubscribeLocations();
+            var locations = (this.OwnerState as Sessions.TrackerState)?.Locations;
+            if (locations != null)
+            {
+                mSubscribedLocations = locations;
+                locations.PropertyChanged += Instance_PropertyChanged;
+            }
+            NotifyPropertyChanged("Location");
+        }
+
+        void UnsubscribeLocations()
+        {
+            if (mSubscribedLocations != null)
+            {
+                mSubscribedLocations.PropertyChanged -= Instance_PropertyChanged;
+                mSubscribedLocations = null;
+            }
         }
 
         private void Instance_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -47,7 +64,7 @@ namespace EmoTracker.Data.Layout
 
         public Location Location
         {
-            get { return Sessions.SessionContext.ActiveState?.Locations.LastClearedLocation; }
+            get { return (this.OwnerState as Sessions.TrackerState)?.Locations.LastClearedLocation; }
         }
 
         protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)

@@ -35,7 +35,8 @@ namespace EmoTracker.SourceGenerators.Tests
         public void Fork_RewiresLuaItem_ItemStateAndCallback_PointAtForkInterpreter()
         {
             // 1. Source ScriptManager + LuaItem with state and a callback.
-            var srcSm = new ScriptManager();
+            var srcState = new EmoTracker.Data.Sessions.TrackerState("src");
+            var srcSm = srcState.Scripts;
             srcSm.BootstrapInterpreter();
 
             srcSm.ExecuteLuaString(@"
@@ -48,7 +49,8 @@ namespace EmoTracker.SourceGenerators.Tests
             srcItem.OnLeftClickFunc = (LuaFunction)srcSm.GetLuaGlobal("bump");
 
             // 2. Fork the manager (cloner runs).
-            var forkSm = (ScriptManager)srcSm.Fork();
+            var destState = ForkTestHelpers.NewDestState();
+            var forkSm = (ScriptManager)srcSm.Fork(destState);
             Assert.NotNull(forkSm.ForkCloner);
 
             // 3. Fork the item — Phase 5 contract: OnForked deliberately
@@ -56,7 +58,7 @@ namespace EmoTracker.SourceGenerators.Tests
             //    Until rewire, the fork's ItemState / OnLeftClickFunc /
             //    etc. are null; existing null checks in OnLeftClick / etc.
             //    silently no-op rather than firing on the wrong state.
-            var forkItem = (LuaItem)srcItem.Fork();
+            var forkItem = (LuaItem)srcItem.Fork(destState);
             Assert.Null(forkItem.ItemState);
             Assert.Null(forkItem.OnLeftClickFunc);
 
@@ -119,7 +121,8 @@ namespace EmoTracker.SourceGenerators.Tests
             // cross-interpreter call. Null-default + the existing null
             // checks in OnLeftClick / Save / etc. silently no-op until
             // rewire happens — orphan-free by construction.
-            var srcSm = new ScriptManager();
+            var srcState = new EmoTracker.Data.Sessions.TrackerState("src");
+            var srcSm = srcState.Scripts;
             srcSm.BootstrapInterpreter();
             srcSm.ExecuteLuaString("state = { v = 1 }");
 
@@ -127,7 +130,8 @@ namespace EmoTracker.SourceGenerators.Tests
             srcItem.ItemState = (LuaTable)srcSm.GetLuaGlobal("state");
             srcItem.OnLeftClickFunc = (LuaFunction)srcSm.ExecuteLuaString("return function() end")[0];
 
-            var forkItem = (LuaItem)srcItem.Fork();
+            var destState = ForkTestHelpers.NewDestState();
+            var forkItem = (LuaItem)srcItem.Fork(destState);
 
             // Pre-rewire: fork's reference fields are null.
             Assert.Null(forkItem.ItemState);
@@ -151,7 +155,8 @@ namespace EmoTracker.SourceGenerators.Tests
             // OnLeftClickFunc is a fork-side LuaFunction. Post-fix:
             // GetCallbackScriptManager() returns the fork's manager, so
             // SafeCall happens in the same interpreter as the function.
-            var srcSm = new ScriptManager();
+            var srcState = new EmoTracker.Data.Sessions.TrackerState("src");
+            var srcSm = srcState.Scripts;
             srcSm.BootstrapInterpreter();
 
             srcSm.ExecuteLuaString(@"
@@ -163,8 +168,9 @@ namespace EmoTracker.SourceGenerators.Tests
             srcItem.ItemState = (LuaTable)srcSm.GetLuaGlobal("state");
             srcItem.OnLeftClickFunc = (LuaFunction)srcSm.GetLuaGlobal("bump_via_click");
 
-            var forkSm = (ScriptManager)srcSm.Fork();
-            var forkItem = (LuaItem)srcItem.Fork();
+            var destState = ForkTestHelpers.NewDestState();
+            var forkSm = (ScriptManager)srcSm.Fork(destState);
+            var forkItem = (LuaItem)srcItem.Fork(destState);
             forkSm.RewireForkedLuaItem(forkItem, srcItem);
 
             // Invoke the high-level callback on the fork — uses the
@@ -186,7 +192,8 @@ namespace EmoTracker.SourceGenerators.Tests
             // resolved through the cloner (or null when the source's
             // reference wasn't reachable from _G). 8 LuaFunction callbacks
             // + ItemState.
-            var srcSm = new ScriptManager();
+            var srcState = new EmoTracker.Data.Sessions.TrackerState("src");
+            var srcSm = srcState.Scripts;
             srcSm.BootstrapInterpreter();
 
             srcSm.ExecuteLuaString(@"
@@ -212,8 +219,9 @@ namespace EmoTracker.SourceGenerators.Tests
             srcItem.LoadFunc         = (LuaFunction)srcSm.GetLuaGlobal("f_load");
             srcItem.PropertyChangedFunc = (LuaFunction)srcSm.GetLuaGlobal("f_pchanged");
 
-            var forkSm = (ScriptManager)srcSm.Fork();
-            var forkItem = (LuaItem)srcItem.Fork();
+            var destState = ForkTestHelpers.NewDestState();
+            var forkSm = (ScriptManager)srcSm.Fork(destState);
+            var forkItem = (LuaItem)srcItem.Fork(destState);
             forkSm.RewireForkedLuaItem(forkItem, srcItem);
 
             // All fields are non-null and resolve through the fork's

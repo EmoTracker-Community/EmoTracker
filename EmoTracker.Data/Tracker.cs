@@ -79,20 +79,10 @@ namespace EmoTracker.Data
 
         private void ValidatePackageSafety(IGamePackage package)
         {
-#if False
-            if (package != null && package.FlaggedAsUnsafe)
-            {
-                if (Sessions.SessionContext.ActiveState?.Scripts.NotificationService != null)
-                {
-                    Sessions.SessionContext.ActiveState?.Scripts.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Warning,
-@"### Potentially Unsafe Package Loaded
-
-The active game package uses potentially unsafe scripting functionality, which allows it to access your filesystem, can expose user information, and more.
-* Make sure you trust the author of this package
-* Proceed at your own risk", 60000);
-                }
-            }
-#endif
+            // Pack-safety warning was disabled. The original implementation
+            // pushed a notification to the active state's NotificationService;
+            // bring it back via the holder-aware path
+            // (notification target = the state being loaded into).
         }
 
         // Phase 7 polish: when set to true, the next pack-info update
@@ -190,42 +180,22 @@ The active game package uses potentially unsafe scripting functionality, which a
             }
         }
 
-        // Phase 7.11 polish: forward SwapLeftRight / MapEnabled to the
-        // active state's SessionSettings (Phase 7.3 made these per-state).
-        // Tracker keeps the property surface for back-compat with existing
-        // bindings; the underlying value lives on SessionSettings.
+        // Legacy shim properties. The authoritative values live on each
+        // TrackerState's SessionSettings (Phase 7.3) — Tracker keeps a
+        // local copy for back-compat with bindings that haven't yet
+        // migrated to <c>WindowContext.ActiveState.Settings</c>. There's
+        // no automatic per-state forwarding here; per-state consumers
+        // should read via <c>(holder.OwnerState as TrackerState)?.Settings</c>.
         public bool SwapLeftRight
         {
-            get
-            {
-                var s = Sessions.SessionContext.ActiveState?.Settings;
-                return s != null ? s.SwapLeftRight : mbSwapLeftRight;
-            }
-            set
-            {
-                bool changed = SetProperty(ref mbSwapLeftRight, value);
-                var s = Sessions.SessionContext.ActiveState?.Settings;
-                if (s != null && s.SwapLeftRight != value)
-                    s.SwapLeftRight = value;
-                if (changed) Reload();
-            }
+            get { return mbSwapLeftRight; }
+            set { if (SetProperty(ref mbSwapLeftRight, value)) Reload(); }
         }
 
         public bool MapEnabled
         {
-            get
-            {
-                var s = Sessions.SessionContext.ActiveState?.Settings;
-                return s != null ? s.MapEnabled : mbMapEnabled;
-            }
-            set
-            {
-                bool changed = SetProperty(ref mbMapEnabled, value);
-                var s = Sessions.SessionContext.ActiveState?.Settings;
-                if (s != null && s.MapEnabled != value)
-                    s.MapEnabled = value;
-                if (changed) Reload();
-            }
+            get { return mbMapEnabled; }
+            set { if (SetProperty(ref mbMapEnabled, value)) Reload(); }
         }
 
         public bool AllowResize
@@ -250,8 +220,10 @@ The active game package uses potentially unsafe scripting functionality, which a
 #region -- Save/Load --
 
         //  TODO: Replace width/height with generic key/value data
-        public bool SaveProgress(string path, Action<JObject> dataAction = null)
+        public bool SaveProgress(Sessions.TrackerState target, string path, Action<JObject> dataAction = null)
         {
+            if (target == null) throw new ArgumentNullException(nameof(target));
+
             JObject root = new JObject();
 
             if (ActiveGamePackage != null)
@@ -269,8 +241,8 @@ The active game package uses potentially unsafe scripting functionality, which a
                 root["auto_unpin_locations_on_clear"] = ApplicationSettings.Instance.AutoUnpinLocationsOnClear;
                 root["pin_locations_on_item_capture"] = ApplicationSettings.Instance.PinLocationsOnItemCapture;
 
-                Sessions.SessionContext.ActiveState?.Items.Save(root);
-                Sessions.SessionContext.ActiveState?.Locations.Save(root);
+                target.Items.Save(root);
+                target.Locations.Save(root);
 
                 if (dataAction != null)
                     dataAction(root);
@@ -290,9 +262,9 @@ The active game package uses potentially unsafe scripting functionality, which a
                 }
                 catch
                 {
-                    if (Sessions.SessionContext.ActiveState?.Scripts.NotificationService != null)
+                    if (target.Scripts?.NotificationService != null)
                     {
-                        Sessions.SessionContext.ActiveState?.Scripts.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Error,
+                        target.Scripts.NotificationService.PushMarkdownNotification(Scripting.NotificationType.Error,
 @"### Couldn't Save Progress
 
 An error occurred while saving. This may be due to anti-virus/malware software protecting your chosen save directory over-aggressively.
@@ -305,14 +277,16 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             return false;
         }
 
-        public bool LoadProgress(string path, Action<JObject> dataAction = null)
+        public bool LoadProgress(Sessions.TrackerState target, string path, Action<JObject> dataAction = null)
         {
-            Reload();
+            if (target == null) throw new ArgumentNullException(nameof(target));
+
+            Reload(target);
 
             try
             {
-                Sessions.SessionContext.ActiveState?.Scripts.Output("Loading save game \"{0}\"", path);
-                (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.StartLoadingSaveFile);
+                target.Scripts?.Output("Loading save game \"{0}\"", path);
+                ((IScriptManager)target.Scripts)?.InvokeStandardCallback(StandardCallback.StartLoadingSaveFile);
 
                 using (StreamReader reader = new StreamReader(path))
                 {
@@ -339,17 +313,14 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
                     //  Load either the package or the variant, as appropriate
                     if (packageVariant != null)
-                        ActiveGamePackageVariant = packageVariant;
+                        SetActiveGamePackageVariantForTarget(target, packageVariant);
                     else
-                        ActiveGamePackage = package;
+                        SetActiveGamePackageForTarget(target, package);
 
-                    var loadTarget = Sessions.SessionContext.ActiveState
-                        ?? throw new InvalidOperationException("LoadProgress called before SessionContext.ActiveState was installed");
-
-                    if (!loadTarget.Items.Load(root))
+                    if (!target.Items.Load(root))
                         return false;
 
-                    if (!loadTarget.Locations.Load(root))
+                    if (!target.Locations.Load(root))
                         return false;
 
                     ApplicationSettings.Instance.IgnoreAllLogic = root.GetValue<bool>("ignore_all_logic", false);
@@ -367,15 +338,15 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             }
             catch (Exception ex)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputError("Error encountered while loading save game");
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(ex);
+                target.Scripts?.OutputError("Error encountered while loading save game");
+                target.Scripts?.OutputException(ex);
             }
             finally
             {
-                (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.FinishLoadingSaveFile);
-                (ScriptManagerHost.Current ?? NullScriptManager.Instance).InvokeStandardCallback(StandardCallback.PackReady);
+                ((IScriptManager)target.Scripts)?.InvokeStandardCallback(StandardCallback.FinishLoadingSaveFile);
+                ((IScriptManager)target.Scripts)?.InvokeStandardCallback(StandardCallback.PackReady);
 
-                Sessions.SessionContext.ActiveState?.Scripts.Output("Finished loading save game \"{0}\"", path);
+                target.Scripts?.Output("Finished loading save game \"{0}\"", path);
 
                 SuspendPackReadyEvent = false;
             }
@@ -383,41 +354,79 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             return false;
         }
 
+        // Shim helpers for LoadProgress: the legacy ActiveGamePackage / ActiveGamePackageVariant
+        // setters trigger Reload() against an ambient target. With LoadProgress now taking
+        // an explicit target, we set the underlying field and drive Reload(target) directly.
+        void SetActiveGamePackageForTarget(Sessions.TrackerState target, IGamePackage package)
+        {
+            mActiveGamePackage = package;
+            mActiveGamePackageVariant = null;
+            NotifyPropertyChanged(nameof(ActiveGamePackage));
+            NotifyPropertyChanged(nameof(ActiveVariantUID));
+            Reload(target);
+        }
+
+        void SetActiveGamePackageVariantForTarget(Sessions.TrackerState target, IGamePackageVariant variant)
+        {
+            mActiveGamePackageVariant = variant;
+            if (variant != null) mActiveGamePackage = variant.Package;
+            NotifyPropertyChanged(nameof(ActiveGamePackageVariant));
+            NotifyPropertyChanged(nameof(ActiveGamePackage));
+            NotifyPropertyChanged(nameof(ActiveVariantUID));
+            Reload(target);
+        }
+
 
 #endregion
 
 #region -- ICodeProvider --
 
-        private void GetFilteredCodeAndProvider(ref string code, out ICodeProvider provider)
+        private static void GetFilteredCodeAndProvider(Sessions.TrackerState state, ref string code, out ICodeProvider provider)
         {
-            provider = Sessions.SessionContext.ActiveState?.Items;
+            if (state == null) { provider = null; return; }
+            provider = state.Items;
 
             if (code.StartsWith("@"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = Sessions.SessionContext.ActiveState?.Locations;
+                provider = state.Locations;
             }
             else if (code.StartsWith("$"))
             {
                 code = code.Substring(1, code.Length - 1);
-                provider = Sessions.SessionContext.ActiveState?.Scripts;
+                provider = state.Scripts;
             }
         }
 
+        public object FindObjectForCode(Sessions.TrackerState state, string code)
+        {
+            GetFilteredCodeAndProvider(state, ref code, out var provider);
+            return provider?.FindObjectForCode(code);
+        }
+
+        public uint ProviderCountForCode(Sessions.TrackerState state, string code, out AccessibilityLevel maxAccessibility)
+        {
+            GetFilteredCodeAndProvider(state, ref code, out var provider);
+            if (provider == null)
+            {
+                maxAccessibility = AccessibilityLevel.None;
+                return 0;
+            }
+            return provider.ProviderCountForCode(code, out maxAccessibility);
+        }
+
+        // Legacy ICodeProvider members kept until Tracker is fully retired (Phase 7.1.g).
+        // These have no state context and so always return null/0; new callers must use
+        // the state-taking overloads above.
         public object FindObjectForCode(string code)
         {
-            ICodeProvider provider;
-            GetFilteredCodeAndProvider(ref code, out provider);
-
-            return provider.FindObjectForCode(code);
+            return null;
         }
 
         public uint ProviderCountForCode(string code, out AccessibilityLevel maxAccessibility)
         {
-            ICodeProvider provider;
-            GetFilteredCodeAndProvider(ref code, out provider);
-
-            return provider.ProviderCountForCode(code, out maxAccessibility);
+            maxAccessibility = AccessibilityLevel.None;
+            return 0;
         }
 
 #endregion
@@ -475,103 +484,38 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             DisabledImageFilterSpec = DefaultDisabledImageFilterSpec;
         }
 
-        void LoadPackageSettings()
-        {
-            if (mActiveGamePackage != null)
-            {
-                bool bLoadedSettings = false;
-                using (Stream s = mActiveGamePackage.Open("settings.json"))
-                {
-                    if (s != null)
-                    {
-                        Sessions.SessionContext.ActiveState?.Scripts.Output("Loading package settings");
-                        using (new LoggingBlock())
-                        {
-                            try
-                            {
-                                using (StreamReader reader = new StreamReader(s))
-                                {
-                                    JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
-                                    AllowResize = root.GetValue<bool>("allow_resize", true);
-
-                                    string spec = root.GetValue<string>("disabled_image_filter", null);
-                                    if (spec != null)
-                                        DisabledImageFilterSpec = spec;
-
-                                    Sessions.SessionContext.ActiveState?.Locations.ParseLocationVisualProperties(root, Sessions.SessionContext.ActiveState?.Locations.Root, mActiveGamePackage);
-
-                                    AccessibilityRule.EnableCache = root.GetValue<bool>("enable_accessibility_rule_caching", true);
-
-                                    bLoadedSettings = true;
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
-                            }
-                        }
-                    } 
-                }
-
-                if (!bLoadedSettings)
-                {
-                    Sessions.SessionContext.ActiveState?.Scripts.OutputWarning("Loading legacy package settings from tracker_layout.json");
-                    using (new LoggingBlock())
-                    {
-                        try
-                        {
-                            //  TODO : Destroy this fuckery with hot liquid rage
-                            using (StreamReader reader = new StreamReader(mActiveGamePackage.Open("tracker_layout.json")))
-                            {
-                                JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
-                                AllowResize = root.GetValue<bool>("allow_resize", true);
-                                string spec = root.GetValue<string>("disabled_image_filter", null);
-                                if (spec != null)
-                                    DisabledImageFilterSpec = spec;
-
-                                Sessions.SessionContext.ActiveState?.Locations.ParseLocationVisualProperties(root, Sessions.SessionContext.ActiveState?.Locations.Root, mActiveGamePackage);
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            Sessions.SessionContext.ActiveState?.Scripts.OutputException(e);
-                        }
-                    }
-                }
-            }
-        }
+        // Phase 7.1: pack-settings load orchestration moved to PackageLoader.LoadPackageSettings;
+        // the Tracker-bound copy that consulted SessionContext.ActiveState is dead code.
 
         bool mbReloadInProgress = false;
 
+        // Reload is parameterless for back-compat with property setters
+        // (ActiveGamePackage / SwapLeftRight / etc. all call Reload() on
+        // change). Resolution of the target state happens via the
+        // <see cref="ResolveReloadTarget"/> hook installed by
+        // ApplicationModel — the runtime owner of the active primary
+        // state. No SessionContext or other ambient slot is consulted.
+        public Func<Sessions.TrackerState> ResolveReloadTarget { get; set; }
+
         public void Reload()
         {
+            var target = ResolveReloadTarget?.Invoke();
+            if (target == null)
+                throw new InvalidOperationException(
+                    "Tracker.Reload requires ResolveReloadTarget to be installed by " +
+                    "ApplicationModel. Call sites must either install it during ctor or " +
+                    "call Reload(state) directly.");
+            Reload(target);
+        }
+
+        public void Reload(Sessions.TrackerState target)
+        {
+            if (target == null) throw new ArgumentNullException(nameof(target));
             if (mbReloadInProgress) return;
             mbReloadInProgress = true;
 
             try
             {
-                // Phase 7.1: pack-load orchestration moved to PackageLoader
-                // (loads into a target TrackerState instead of mutating
-                // shared singleton catalogs). Tracker's own
-                // OnPackageLoadStarting/Complete events fire as a thin shim
-                // around PackageLoader's events for backwards compat through
-                // 7.1.g (Tracker deletion).
-                var target = Sessions.SessionContext.ActiveState;
-                if (target == null)
-                {
-                    // Pre-7.1 we mutated the singleton catalogs here. Phase
-                    // 7.1.b ensures ApplicationModel pre-allocates the
-                    // primary state + installs SessionContext.ActiveState
-                    // before any pack-load reaches Tracker.Reload, so this
-                    // path is no longer exercised. Throwing makes the
-                    // assumption explicit and turns any regression into a
-                    // loud failure rather than a silent fallback to the
-                    // deleted legacy path.
-                    throw new InvalidOperationException(
-                        "Tracker.Reload called before SessionContext.ActiveState was installed. " +
-                        "ApplicationModel must pre-allocate the primary state during construction.");
-                }
-
                 EventHandler<Sessions.PackageLoader.PackageLoadEventArgs> startHandler =
                     (_, _) => OnPackageLoadStarting?.Invoke(this, EventArgs.Empty);
                 EventHandler<Sessions.PackageLoader.PackageLoadEventArgs> completeHandler =
@@ -601,54 +545,11 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
 #endregion
 
-#region -- Incremental Load Wrappers --
-
-        // Phase 7.1: route pack-script-driven incremental loads (called via
-        // Tracker:AddItems / AddMaps / AddLocations / AddLayouts from
-        // init.lua) into the active state's catalogs. PackageLoader sets
-        // SessionContext.ActiveState to the target before invoking
-        // ScriptManager.Load(package), which is when init.lua runs and
-        // calls these helpers.
-        // Phase 7.1 fix: thread the active state through to IncrementalLoad
-        // so items/locations/maps get OwnerState stamped at construction
-        // (and registered in state.Resolver) rather than left null. Without
-        // this, items added via Tracker:AddItems from init.lua have null
-        // OwnerState — so their KVMutable [OnChanged] side effects (e.g.
-        // InvalidateAccessibility on Icon change) silently no-op because
-        // `(this.OwnerState as TrackerState)?.Locations` is null.
-        public void AddItems(string path)
-        {
-            if (ActiveGamePackage == null) return;
-            var state = Sessions.SessionContext.ActiveState;
-            if (state != null)
-                state.Items.IncrementalLoad(path, ActiveGamePackage, bLegacy: false, state: state);
-        }
-
-        public void AddMaps(string path)
-        {
-            if (ActiveGamePackage == null) return;
-            var state = Sessions.SessionContext.ActiveState;
-            if (state != null)
-                state.Maps.IncrementalLoad(path, ActiveGamePackage, state: state);
-        }
-
-        public void AddLocations(string path)
-        {
-            if (ActiveGamePackage == null) return;
-            var state = Sessions.SessionContext.ActiveState;
-            if (state != null)
-                state.Locations.IncrementalLoad(path, ActiveGamePackage, bLegacy: false, state: state);
-        }
-
-        public void AddLayouts(string path)
-        {
-            if (ActiveGamePackage == null) return;
-            var state = Sessions.SessionContext.ActiveState;
-            if (state != null)
-                state.Layouts.IncrementalLoad(path, ActiveGamePackage);
-        }
-
-        #endregion
+        // Phase 7.1: pack-script-driven incremental loads (Tracker:AddItems
+        // / AddMaps / AddLocations / AddLayouts from init.lua) now route
+        // directly through the per-state TrackerScriptInterface bound to
+        // the state's Lua interpreter. The Tracker-level wrappers are
+        // gone — they had to consult an ambient state slot.
 
     }
 }

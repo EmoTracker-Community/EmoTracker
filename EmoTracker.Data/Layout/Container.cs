@@ -46,7 +46,7 @@ namespace EmoTracker.Data.Layout
             {
                 foreach (JObject dataObject in contentAsArray)
                 {
-                    LayoutItem item = CreateLayoutItem(dataObject, package);
+                    LayoutItem item = CreateLayoutItem(dataObject, package, this.OwnerState);
                     if (item != null)
                         mItems.Add(item);
                 }
@@ -56,7 +56,7 @@ namespace EmoTracker.Data.Layout
             JObject contentAsObject = data.GetValue<JObject>("content");
             if (contentAsObject != null)
             {
-                LayoutItem item = CreateLayoutItem(contentAsObject, package);
+                LayoutItem item = CreateLayoutItem(contentAsObject, package, this.OwnerState);
                 if (item != null)
                     mItems.Add(item);
             }
@@ -76,13 +76,15 @@ namespace EmoTracker.Data.Layout
         /// per-state state. Currently none do beyond what <see cref="Container"/>
         /// itself owns.
         /// </summary>
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = (Container)System.Activator.CreateInstance(this.GetType());
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             foreach (var child in this.mItems)
             {
-                var forked = (LayoutItem)child.Fork();
+                var forked = (LayoutItem)child.Fork(destOwnerState);
                 copy.mItems.Add(forked);
             }
             return copy;

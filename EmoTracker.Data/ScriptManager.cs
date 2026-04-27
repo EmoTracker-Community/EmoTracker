@@ -41,45 +41,83 @@ namespace EmoTracker.Data
         }
     }
 
-    class TrackerScriptInterface : Singleton<TrackerScriptInterface>
+    class TrackerScriptInterface
     {
+        readonly Sessions.TrackerState mState;
+
+        public TrackerScriptInterface(Sessions.TrackerState state)
+        {
+            mState = state ?? throw new ArgumentNullException(nameof(state));
+        }
+
         public void AddItems(string path)
         {
-            Tracker.Instance.AddItems(path);
+            var pkg = Tracker.Instance.ActiveGamePackage;
+            if (pkg == null) return;
+            mState.Items.IncrementalLoad(path, pkg, bLegacy: false, state: mState);
         }
 
         public void AddMaps(string path)
         {
-            Tracker.Instance.AddMaps(path);
+            var pkg = Tracker.Instance.ActiveGamePackage;
+            if (pkg == null) return;
+            mState.Maps.IncrementalLoad(path, pkg, state: mState);
         }
 
         public void AddLocations(string path)
         {
-            Tracker.Instance.AddLocations(path);
+            var pkg = Tracker.Instance.ActiveGamePackage;
+            if (pkg == null) return;
+            mState.Locations.IncrementalLoad(path, pkg, bLegacy: false, state: mState);
         }
 
         public void AddLayouts(string path)
         {
-            Tracker.Instance.AddLayouts(path);
+            var pkg = Tracker.Instance.ActiveGamePackage;
+            if (pkg == null) return;
+            mState.Layouts.IncrementalLoad(path, pkg);
+        }
+
+        ICodeProvider GetProvider(ref string code)
+        {
+            if (code.StartsWith("@"))
+            {
+                code = code.Substring(1);
+                return mState.Locations;
+            }
+            if (code.StartsWith("$"))
+            {
+                code = code.Substring(1);
+                return mState.Scripts;
+            }
+            return mState.Items;
         }
 
         public object FindObjectForCode(string code)
         {
-            return Tracker.Instance.FindObjectForCode(code);
+            var provider = GetProvider(ref code);
+            return provider?.FindObjectForCode(code);
         }
 
         public uint ProviderCountForCode(string code, out AccessibilityLevel maxAccessibility)
         {
-            return Tracker.Instance.ProviderCountForCode(code, out maxAccessibility);
+            var provider = GetProvider(ref code);
+            if (provider == null)
+            {
+                maxAccessibility = AccessibilityLevel.None;
+                return 0;
+            }
+            return provider.ProviderCountForCode(code, out maxAccessibility);
         }
 
         public string ActiveVariantUID
         {
             get { return Tracker.Instance.ActiveVariantUID; }
         }
+
         public Location RootLocation
         {
-            get { return Sessions.SessionContext.ActiveState?.Locations.Root; }
+            get { return mState.Locations.Root; }
         }
 
         #region -- Backwards Compatibility (Temp) --
@@ -112,16 +150,23 @@ namespace EmoTracker.Data
 
     }
 
-    class LayoutScriptInterface : Singleton<LayoutScriptInterface>
+    class LayoutScriptInterface
     {
+        readonly Sessions.TrackerState mState;
+
+        public LayoutScriptInterface(Sessions.TrackerState state)
+        {
+            mState = state ?? throw new ArgumentNullException(nameof(state));
+        }
+
         public Layout.Layout FindLayout(string key)
         {
-            return Sessions.SessionContext.ActiveState?.Layouts?.FindLayout(key);
+            return mState.Layouts?.FindLayout(key);
         }
 
         public Layout.LayoutItem FindElement(string uid)
         {
-            return Sessions.SessionContext.ActiveState?.Layouts?.FindElement(uid);
+            return mState.Layouts?.FindElement(uid);
         }
 
         public string GetColorForAccessibility(AccessibilityLevel accessibility)
@@ -154,9 +199,9 @@ namespace EmoTracker.Data
     public class LoggingBlock : IDisposable
     {
         readonly ScriptManager mScripts;
-        public LoggingBlock()
+        public LoggingBlock(ScriptManager scripts)
         {
-            mScripts = Sessions.SessionContext.ActiveState?.Scripts;
+            mScripts = scripts;
             if (mScripts != null) mScripts.LogIndent++;
         }
 
@@ -287,7 +332,7 @@ end
         private object[] LoadScript(IGamePackage package, string path)
         {
             Output(string.Format("Loading Script: {0}", path));
-            using (LoggingBlock block = new LoggingBlock())
+            using (LoggingBlock block = new LoggingBlock(this))
             {
                 try
                 {
@@ -314,7 +359,7 @@ end
                 catch (Exception e)
                 {
                     Output(string.Format("A C# exception occurred while loading script: {0}", path));
-                    using (LoggingBlock excBlock = new LoggingBlock())
+                    using (LoggingBlock excBlock = new LoggingBlock(this))
                     {
                         // Phase 7.1 debug: dump the full exception (including
                         // any inner exceptions from NLua's marshalling layer)
@@ -431,8 +476,19 @@ end
                 mLua["io"] = null;
             }
 
-            mLua["Tracker"] = TrackerScriptInterface.Instance;
-            mLua["Layout"] = LayoutScriptInterface.Instance;
+            // Per-state bridge globals: each ScriptManager allocates its own
+            // Tracker / Layout interfaces bound to its owning state, so
+            // Lua-side `Tracker:AddItems(...)` / `Layout:Find(...)` route
+            // into the correct state's catalogs without consulting any
+            // global ambient slot.
+            var ownerState = this.OwnerState as Sessions.TrackerState;
+            if (ownerState == null)
+                throw new InvalidOperationException(
+                    "ScriptManager.BootstrapInterpreter requires the manager's OwnerState " +
+                    "to be set to its TrackerState before bootstrapping. Bridge globals " +
+                    "(Tracker, Layout) cannot be constructed without a state context.");
+            mLua["Tracker"] = new TrackerScriptInterface(ownerState);
+            mLua["Layout"] = new LayoutScriptInterface(ownerState);
             mLua["AccessibilityLevel"] = new AccessibilityLevel();
             mLua["NotificationType"] = new NotificationType();
             mLua["ScriptHost"] = this;
@@ -491,10 +547,10 @@ end
             LuaException luaException = e as LuaException;
             if (jsonException != null)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputError("JSON Parse Error");
-                using (new LoggingBlock())
+                OutputError("JSON Parse Error");
+                using (new LoggingBlock(this))
                 {
-                    Sessions.SessionContext.ActiveState?.Scripts.OutputError(jsonException.Message);
+                    OutputError(jsonException.Message);
 
                     if (!string.IsNullOrWhiteSpace(jsonException.HelpLink))
                         OutputError("  For more information, see: {0}", jsonException.HelpLink);
@@ -502,10 +558,10 @@ end
             }
             else if (luaException != null)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputError("Lua Execution Error");
-                using (new LoggingBlock())
+                OutputError("Lua Execution Error");
+                using (new LoggingBlock(this))
                 {
-                    Sessions.SessionContext.ActiveState?.Scripts.OutputError(luaException.Message);
+                    OutputError(luaException.Message);
                 }
             }
             else
@@ -628,6 +684,15 @@ end
                 if (!ok)
                 {
                     string errorMsg = result.Length > 1 ? result[1]?.ToString() : "Unknown Lua error";
+                    // Phase 7 debug: log the stack trace + scriptmanager identity
+                    // when SafeCall fails to help diagnose stale-LuaFunction issues
+                    // (where func is from a different Lua state than mLua).
+                    try
+                    {
+                        var st = new System.Diagnostics.StackTrace(skipFrames: 1, fNeedFileInfo: false);
+                        System.IO.File.AppendAllText("/tmp/lua_safecall_fail.log",
+                            $"[{System.DateTime.Now:HH:mm:ss.fff}] SafeCall fail: sm={this.GetHashCode()} mLua={mLua?.GetHashCode()} func.Type={func?.GetType().FullName} err={errorMsg.Substring(0, System.Math.Min(120, errorMsg.Length))}\n{st}\n----\n");
+                    } catch {}
                     throw new LuaException(errorMsg);
                 }
 
@@ -869,7 +934,7 @@ end
                 {
                     try
                     {
-                        using (new LocationDatabase.SuspendRefreshScope())
+                        using (new LocationDatabase.SuspendRefreshScope((this.OwnerState as Sessions.TrackerState)?.Locations))
                         {
                             if (callback != null)
                             {
@@ -918,13 +983,15 @@ end
         public LuaItem CreateLuaItem()
         {
             LuaItem item = new LuaItem();
-            // Phase 7.1: register the freshly-created LuaItem into the
-            // active state's ItemDatabase (PackageLoader installed it as
-            // SessionContext.ActiveState before invoking the script that
-            // called this). Falls back to the singleton for tests that
-            // use ScriptManager standalone.
-            var itemDb = Sessions.SessionContext.ActiveState?.Items;
-            itemDb?.RegisterItem(item);
+            // Register the freshly-created LuaItem into the owning state's
+            // ItemDatabase. This ScriptManager belongs to the state that
+            // is currently running its init.lua / pack scripts.
+            var ownerState = this.OwnerState as Sessions.TrackerState;
+            if (ownerState != null)
+            {
+                item.OwnerState = ownerState;
+                ownerState.Items.RegisterItem(item);
+            }
             return item;
         }
 
@@ -962,9 +1029,11 @@ end
         /// state from <c>scripts/init.lua</c> and any subsequent runtime
         /// mutations carry across via <see cref="LuaStateCloner.CloneAll"/>.
         /// </summary>
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = new ScriptManager();
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             return copy;
         }

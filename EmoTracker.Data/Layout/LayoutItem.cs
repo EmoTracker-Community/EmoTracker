@@ -269,7 +269,8 @@ namespace EmoTracker.Data.Layout
             string dockLocation = data.GetValue<string>("dock", null);
             string margin = data.GetValue<string>("margin", "0");
 
-            if (Tracker.Instance.SwapLeftRight)
+            var swapLeftRight = (this.OwnerState as Sessions.TrackerState)?.Settings.SwapLeftRight ?? false;
+            if (swapLeftRight)
             {
                 bool bModified = false;
 
@@ -368,7 +369,7 @@ namespace EmoTracker.Data.Layout
             {
                 foreach (JObject entry in list)
                 {
-                    LayoutItem item = CreateLayoutItem(entry, package);
+                    LayoutItem item = CreateLayoutItem(entry, package, this.OwnerState);
                     if (item != null)
                         destination.Add(item);
                 }
@@ -377,11 +378,19 @@ namespace EmoTracker.Data.Layout
 
         protected abstract bool TryParseInternal(JObject data, IGamePackage package);
 
-        public static LayoutItem CreateLayoutItem(JObject data, IGamePackage package)
+        /// <summary>
+        /// Polymorphic factory: instantiates a concrete <see cref="LayoutItem"/>
+        /// whose <see cref="JsonTypeTagsAttribute"/> matches the data's "type"
+        /// field, stamps <see cref="ModelTypeBase.OwnerState"/> at
+        /// construction time, then parses. State threading is required so
+        /// nested children created by <c>TryParseInternal</c> (containers
+        /// recursing into their children) inherit the same state.
+        /// </summary>
+        public static LayoutItem CreateLayoutItem(JObject data, IGamePackage package, EmoTracker.Core.DataModel.ITrackerStateContext state)
         {
             if (data != null)
             {
-                LayoutItem instance = JsonTypeTagsAttribute.CreateIntanceForTypeTag<LayoutItem>(data.GetValue<string>("type"));
+                LayoutItem instance = JsonTypeTagsAttribute.CreateIntanceForTypeTag<LayoutItem>(data.GetValue<string>("type"), state);
 
                 if (instance != null && instance.TryParse(data, package))
                     return instance;
@@ -394,13 +403,15 @@ namespace EmoTracker.Data.Layout
 
         /// <summary>
         /// Default Activator-based Fork: allocates a fresh instance of the concrete
-        /// type and runs <see cref="ModelTypeBase.InitializeAsForkOf"/>. Subclasses
-        /// holding owned subtrees override to also walk + fork their children.
-        /// Concrete leaves without owned subtrees inherit this default.
+        /// type, stamps OwnerState, and runs <see cref="ModelTypeBase.InitializeAsForkOf"/>.
+        /// Subclasses holding owned subtrees override to also walk + fork their
+        /// children, passing <paramref name="destOwnerState"/> through.
         /// </summary>
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new ArgumentNullException(nameof(destOwnerState));
             var copy = (LayoutItem)Activator.CreateInstance(this.GetType());
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             return copy;
         }

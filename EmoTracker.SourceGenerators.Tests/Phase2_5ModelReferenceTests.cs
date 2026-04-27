@@ -43,7 +43,7 @@ namespace EmoTracker.SourceGenerators.Tests
             readonly IModelResolver mResolver;
             public HolderWithResolver(IModelResolver resolver) { mResolver = resolver; }
             public override IModelResolver GetModelResolver() => mResolver;
-            public override ModelTypeBase Fork() => throw new NotImplementedException();
+            public override ModelTypeBase Fork(ITrackerStateContext destOwnerState) => throw new NotImplementedException();
         }
 
         // -------------------------------------------------- Construction
@@ -257,48 +257,9 @@ namespace EmoTracker.SourceGenerators.Tests
             Assert.True(refA != refOther);
         }
 
-        [Fact]
-        public void NullHolder_FallsBackToModelResolverCurrent()
-        {
-            // Save and restore the global resolver around this test so it can
-            // run in any order relative to the ambient one installed at app
-            // startup (which the test harness doesn't go through).
-            var prior = ModelResolver.Current;
-            var resolver = new CountingResolver();
-            var target = Phase1SmokeModelType.CreateDefinition("d", null);
-            resolver.Add(target.DefinitionId, target);
-            try
-            {
-                ModelResolver.Current = resolver;
-                var reference = new ModelReference<Phase1SmokeModelType>(holder: null, target.DefinitionId);
-
-                var resolved = reference.Target;
-                Assert.Same(target, resolved);
-                Assert.Equal(1, resolver.CallCount);
-            }
-            finally
-            {
-                ModelResolver.Current = prior;
-            }
-        }
-
-        // -------------------------------------------------- ModelTypeBase.GetModelResolver default
-
-        [Fact]
-        public void GetModelResolver_DefaultReturnsModelResolverCurrent()
-        {
-            var prior = ModelResolver.Current;
-            var resolver = new CountingResolver();
-            try
-            {
-                ModelResolver.Current = resolver;
-                var inst = Phase1SmokeModelType.CreateDefinition("d", null);
-                Assert.Same(resolver, inst.GetModelResolver());
-            }
-            finally
-            {
-                ModelResolver.Current = prior;
-            }
-        }
+        // Phase 7.1+: the static ModelResolver.Current fallback was removed —
+        // every model is expected to belong to a TrackerState, which IS its
+        // resolver. Tests that exercised null-holder + ambient-resolver and
+        // GetModelResolver default-to-Current are no longer applicable.
     }
 }

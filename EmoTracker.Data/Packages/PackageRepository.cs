@@ -1,5 +1,4 @@
 ﻿#pragma warning disable SYSLIB0014 // WebClient is obsolete
-#pragma warning disable CS0618    // Phase 6 step 11: Sessions.SessionContext.ActiveState?.Scripts for logging is acceptable
 using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json;
@@ -355,7 +354,7 @@ namespace EmoTracker.Data.Packages
                             }
                             catch (Exception innerException)
                             {
-                                Sessions.SessionContext.ActiveState?.Scripts.OutputException(innerException);
+                                System.Diagnostics.Debug.WriteLine(innerException);
                                 System.Threading.Thread.Sleep(500);
                             }
 
@@ -401,7 +400,7 @@ namespace EmoTracker.Data.Packages
             }
             catch (Exception outerException)
             {
-                Sessions.SessionContext.ActiveState?.Scripts.OutputException(outerException);
+                System.Diagnostics.Debug.WriteLine(outerException);
             }
             finally
             {

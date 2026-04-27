@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmoTracker.Core.DataModel;
 
 namespace EmoTracker.Core
 {
@@ -26,7 +27,17 @@ namespace EmoTracker.Core
         }
 
 
-        public static T CreateIntanceForTypeTag<T>(string type)
+        /// <summary>
+        /// Polymorphic factory: allocates a fresh instance of the registered
+        /// type whose <see cref="JsonTypeTagsAttribute"/> matches
+        /// <paramref name="type"/>. If <paramref name="state"/> is non-null
+        /// and the resulting instance is a <see cref="ModelTypeBase"/>,
+        /// stamps <see cref="ModelTypeBase.OwnerState"/> at construction
+        /// time — before any caller touches the instance — so subsequent
+        /// property setters / parse logic see the correct state from the
+        /// first read.
+        /// </summary>
+        public static T CreateIntanceForTypeTag<T>(string type, ITrackerStateContext state = null)
             where T : class
         {
             if (string.IsNullOrWhiteSpace(type))
@@ -47,7 +58,10 @@ namespace EmoTracker.Core
                     {
                         if (string.Equals(supportedTag, type, StringComparison.OrdinalIgnoreCase))
                         {
-                            return Activator.CreateInstance(itemType) as T;
+                            var instance = Activator.CreateInstance(itemType) as T;
+                            if (instance is ModelTypeBase mtb && state != null)
+                                mtb.OwnerState = state;
+                            return instance;
                         }
                     }
                 }

@@ -103,14 +103,24 @@ namespace EmoTracker.Core.DataModel
         }
 
         /// <summary>
-        /// Creates a copy-on-write fork of this instance: <see cref="ImmutableData"/>
-        /// is shared by reference (definition data); <see cref="MutableData"/> is a
-        /// new <see cref="MutableKeyValueStore"/> COW-layered over this instance's
-        /// mutable state. Concrete leaves override with a covariant return type and
-        /// invoke <see cref="OnForked"/> on the resulting instance after the stores
-        /// are wired.
+        /// Creates a copy-on-write fork of this instance into the destination
+        /// state <paramref name="destOwnerState"/>: <see cref="ImmutableData"/>
+        /// is shared by reference (definition data); <see cref="MutableData"/>
+        /// is a new <see cref="MutableKeyValueStore"/> COW-layered over this
+        /// instance's mutable state. Concrete leaves override with a covariant
+        /// return type, stamp <see cref="OwnerState"/> = <paramref name="destOwnerState"/>
+        /// on the fresh instance immediately after allocation, then invoke
+        /// <see cref="InitializeAsForkOf"/> (which fires <see cref="OnForked"/>).
+        ///
+        /// <para>
+        /// <paramref name="destOwnerState"/> must be non-null — every fork is
+        /// born in a specific state. Cascading children (e.g. a forked
+        /// Location's Sections) pass the same destination state through to
+        /// their own Fork calls; the destination state propagates explicitly
+        /// rather than via any ambient hand-off.
+        /// </para>
         /// </summary>
-        public abstract ModelTypeBase Fork();
+        public abstract ModelTypeBase Fork(ITrackerStateContext destOwnerState);
 
         /// <summary>
         /// Hook invoked on the new instance at the tail of <see cref="Fork"/>, after
@@ -135,13 +145,17 @@ namespace EmoTracker.Core.DataModel
         protected void InitializeAsForkOf(ModelTypeBase source)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
+            if (this.OwnerState == null)
+                throw new InvalidOperationException(
+                    "InitializeAsForkOf requires the fork's OwnerState to be stamped " +
+                    "by the Fork(destOwnerState) override before this is called. " +
+                    "OwnerState is part of construction-time identity, not a post-init " +
+                    "field.");
             this.ImmutableData = source.ImmutableData;
-            // Phase 7 polish: snapshot the source's mutable state at fork
-            // time so forks are TRULY independent of subsequent source
-            // mutations. Without this Flatten, the COW parent-chain would
-            // leak source-side writes into forks via fall-through reads.
-            // The Phase 1 plan reserved Flatten as an explicit op; we use
-            // it here to make the multi-state-isolation goal hold.
+            // Snapshot the source's mutable state at fork time so forks are
+            // truly independent of subsequent source mutations. Without
+            // this Flatten the COW parent-chain would leak source-side
+            // writes into forks via fall-through reads.
             this.MutableData = new MutableKeyValueStore(source.MutableData);
             this.MutableData.Flatten();
             this.OnForked(source);
@@ -186,7 +200,7 @@ namespace EmoTracker.Core.DataModel
         /// </summary>
         public virtual IModelResolver GetModelResolver()
         {
-            return OwnerState ?? ModelResolver.Current;
+            return OwnerState;
         }
 
         /// <summary>
@@ -207,9 +221,7 @@ namespace EmoTracker.Core.DataModel
         /// </summary>
         public virtual IScriptManager GetScriptManager()
         {
-            return OwnerState?.Scripts
-                ?? ScriptManagerHost.Current
-                ?? NullScriptManager.Instance;
+            return OwnerState?.Scripts;
         }
     }
 }

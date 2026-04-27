@@ -42,13 +42,11 @@ namespace EmoTracker.Data.Layout
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            // Phase 6 step 11: prefer the owning state's ItemDatabase; at
-            // parse time OwnerState may not yet be set, so fall back via
-            // SessionContext / singleton. The resolved instance's DefinitionId
-            // is captured in mDataRef so cross-state resolution flows through
-            // the per-state resolver afterward.
-            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items
-                ?? Sessions.SessionContext.ActiveState?.Items;
+            // Resolve through the owning state's ItemDatabase. The
+            // resolved instance's DefinitionId is captured in mDataRef
+            // so cross-state resolution flows through the per-state
+            // resolver afterward.
+            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
             var resolved = itemDb?.FindProvidingItemForCode(data.GetValue<string>("item"));
             mDataRef.Set(resolved);
             return true;

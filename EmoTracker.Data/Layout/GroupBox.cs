@@ -49,24 +49,23 @@ namespace EmoTracker.Data.Layout
 
             JObject headerContentAsObject = data.GetValue<JObject>("header_content");
             if (headerContentAsObject != null)
-                HeaderContent = CreateLayoutItem(headerContentAsObject, package);
+                HeaderContent = CreateLayoutItem(headerContentAsObject, package, this.OwnerState);
 
             return true;
         }
 
         // -------- Fork ------------------------------------------------------
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
-            // Container.Fork uses Activator.CreateInstance(this.GetType()),
-            // so calling base.Fork() returns a fully-set-up GroupBox with
-            // ImmutableData + COW MutableData wired and the Items collection
-            // already forked. We just need to fork the GroupBox-specific
-            // owned subtree (HeaderContent) on top.
-            var copy = (GroupBox)base.Fork();
+            // Container.Fork(destOwnerState) returns a fully-set-up GroupBox
+            // with ImmutableData + COW MutableData wired and Items already
+            // forked into destOwnerState. We just need to fork the GroupBox-
+            // specific owned subtree (HeaderContent).
+            var copy = (GroupBox)base.Fork(destOwnerState);
             if (this.mHeaderContent != null)
             {
-                copy.mHeaderContent = (LayoutItem)this.mHeaderContent.Fork();
+                copy.mHeaderContent = (LayoutItem)this.mHeaderContent.Fork(destOwnerState);
             }
             return copy;
         }

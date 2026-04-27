@@ -8,36 +8,47 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 
-// Phase 6 step 11: this layout element subscribes to the singleton
-// LocationDatabase's PinnedLocations at construction. Same caveat as
-// LastClearedLocation: per-state migration is part of the multi-window
-// UI follow-up.
-#pragma warning disable CS0618
-
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("recentpins", "recent_pins")]
     public partial class RecentPinnedLocations : ArrayPanel
     {
         // Per-state runtime view of LocationDatabase.PinnedLocations, capped to
-        // NumItems. Held as a private field — derived from the singleton +
-        // NumItems, recomputed via OnNumItemsChanged / Ncc_CollectionChanged.
+        // NumItems. Held as a private field — derived from the owning state's
+        // pinned-locations collection + NumItems.
         ObservableCollection<Location> mDisplayLocations = new ObservableCollection<Location>();
+        INotifyCollectionChanged mSubscribedNcc;
 
         public RecentPinnedLocations()
         {
-            INotifyCollectionChanged ncc = Sessions.SessionContext.ActiveState?.Locations.PinnedLocations as INotifyCollectionChanged;
-            if (ncc != null)
-                ncc.CollectionChanged += Ncc_CollectionChanged;
         }
 
         public override void Dispose()
         {
-            INotifyCollectionChanged ncc = Sessions.SessionContext.ActiveState?.Locations.PinnedLocations as INotifyCollectionChanged;
-            if (ncc != null)
-                ncc.CollectionChanged -= Ncc_CollectionChanged;
-
+            UnsubscribePinned();
             base.Dispose();
+        }
+
+        public override void OnOwnerStateStamped()
+        {
+            base.OnOwnerStateStamped();
+            UnsubscribePinned();
+            var pinned = (this.OwnerState as Sessions.TrackerState)?.Locations.PinnedLocations as INotifyCollectionChanged;
+            if (pinned != null)
+            {
+                mSubscribedNcc = pinned;
+                pinned.CollectionChanged += Ncc_CollectionChanged;
+            }
+            RefreshDisplayItems();
+        }
+
+        void UnsubscribePinned()
+        {
+            if (mSubscribedNcc != null)
+            {
+                mSubscribedNcc.CollectionChanged -= Ncc_CollectionChanged;
+                mSubscribedNcc = null;
+            }
         }
 
         private void Ncc_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
@@ -61,8 +72,12 @@ namespace EmoTracker.Data.Layout
         {
             mDisplayLocations.Clear();
 
+            var pinned = (this.OwnerState as Sessions.TrackerState)?.Locations.PinnedLocations;
+            if (pinned == null)
+                return;
+
             int idx = 0;
-            foreach (Location location in Sessions.SessionContext.ActiveState?.Locations.PinnedLocations)
+            foreach (Location location in pinned)
             {
                 mDisplayLocations.Add(location);
 
@@ -82,20 +97,18 @@ namespace EmoTracker.Data.Layout
         {
             // Both ArrayPanel-level (Orientation, Style) and the local NumItems /
             // CompactDisplay defaults have been seeded into ImmutableData by
-            // PopulateDefinitionData. We still need to do the post-definition
-            // refresh so mDisplayLocations starts populated.
+            // PopulateDefinitionData. The display refresh happens in
+            // OnOwnerStateStamped once the owning state's pinned collection
+            // is available.
             base.TryParseInternal(data, package);
-            RefreshDisplayItems();
             return true;
         }
 
         protected override void OnForked(ModelTypeBase source)
         {
             base.OnForked(source);
-            // Each fork gets its own mDisplayLocations subscribed to the
-            // singleton's PinnedLocations (Phase 6 will route through the
-            // per-state LocationDatabase). Repopulate from current state.
-            RefreshDisplayItems();
+            // Subscription + refresh wires up in OnOwnerStateStamped on the
+            // fork, once the new state's resolver has been stamped.
         }
     }
 }

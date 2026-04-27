@@ -39,7 +39,7 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void BlankItem_DerivesFromModelTypeBase_AndStoresCapturableInMutableData()
         {
-            var item = new BlankItem();
+            var item = new BlankItem { OwnerState = _fix.State };
             Assert.IsAssignableFrom<ModelTypeBase>(item);
             Assert.IsAssignableFrom<TransactableModelTypeBase>(item);
 
@@ -52,7 +52,7 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void BlankItem_INPC_FiresOnNameChange()
         {
-            var item = new BlankItem();
+            var item = new BlankItem { OwnerState = _fix.State };
             var changes = new List<string>();
             ((INotifyPropertyChanged)item).PropertyChanged += (_, e) => changes.Add(e.PropertyName);
 
@@ -63,8 +63,8 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void BlankItem_Fork_IsCOWIsolated()
         {
-            var item = new BlankItem { Name = "alpha" };
-            var fork = (BlankItem)item.Fork();
+            var item = new BlankItem { OwnerState = _fix.State, Name = "alpha" };
+            var fork = (BlankItem)item.Fork(ForkTestHelpers.NewDestState());
 
             Assert.NotSame(item, fork);
             Assert.Equal(item.DefinitionId, fork.DefinitionId);
@@ -80,21 +80,21 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ToggleItem_TransactableActive_RoundTrip_AndUndo()
         {
-            var item = new ToggleItem();
+            var item = new ToggleItem { OwnerState = _fix.State };
             Assert.False(item.Active);
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 item.Active = true;
             Assert.True(item.Active);
 
-            ((IUndoableTransactionProcessor)TransactionProcessor.Current).Undo();
+            _fix.Processor.Undo();
             Assert.False(item.Active);
         }
 
         [Fact]
         public void ToggleItem_KVMutable_LoopRoundTrip()
         {
-            var item = new ToggleItem();
+            var item = new ToggleItem { OwnerState = _fix.State };
             Assert.False(item.Loop);
             item.Loop = true;
             Assert.True(item.Loop);
@@ -103,14 +103,14 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ToggleItem_Fork_TransactableActive_IsCOWIsolated()
         {
-            var item = new ToggleItem();
-            using (TransactionProcessor.Current.OpenTransaction())
+            var item = new ToggleItem { OwnerState = _fix.State };
+            using (_fix.Processor.OpenTransaction())
                 item.Active = true;
 
-            var fork = (ToggleItem)item.Fork();
+            var fork = (ToggleItem)item.Fork(ForkTestHelpers.NewDestState());
             Assert.True(fork.Active); // inherited
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 fork.Active = false;
             Assert.False(fork.Active);
             Assert.True(item.Active);
@@ -121,7 +121,7 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ConsumableItem_Defaults_MatchPrePhase2()
         {
-            var item = new ConsumableItem();
+            var item = new ConsumableItem { OwnerState = _fix.State };
             Assert.Equal(int.MaxValue, item.MaxCount);
             Assert.Equal(0, item.MinCount);
             Assert.Equal(1, item.CountIncrement);
@@ -133,15 +133,15 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ConsumableItem_ClampsAcquiredCount_ToMinAndMax()
         {
-            var item = new ConsumableItem();
+            var item = new ConsumableItem { OwnerState = _fix.State };
             item.MaxCount = 5;
             item.MinCount = 1;
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 item.AcquiredCount = 100;
             Assert.Equal(5, item.AcquiredCount); // clamped to MaxCount
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 item.AcquiredCount = -100;
             Assert.Equal(1, item.AcquiredCount); // clamped to MinCount
         }
@@ -149,7 +149,7 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ConsumableItem_IncrementDecrement_RespectsBounds()
         {
-            var item = new ConsumableItem();
+            var item = new ConsumableItem { OwnerState = _fix.State };
             item.MaxCount = 3;
 
             // Each Increment opens its own transaction internally because the
@@ -167,15 +167,15 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ConsumableItem_Fork_AcquiredCount_IsCOWIsolated()
         {
-            var item = new ConsumableItem();
+            var item = new ConsumableItem { OwnerState = _fix.State };
             item.MaxCount = 10;
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 item.AcquiredCount = 5;
 
-            var fork = (ConsumableItem)item.Fork();
+            var fork = (ConsumableItem)item.Fork(ForkTestHelpers.NewDestState());
             Assert.Equal(5, fork.AcquiredCount);
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 fork.AcquiredCount = 7;
             Assert.Equal(7, fork.AcquiredCount);
             Assert.Equal(5, item.AcquiredCount);
@@ -186,8 +186,8 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ProgressiveItem_CurrentStage_WithEmptyStages_IsNoOp()
         {
-            var item = new ProgressiveItem();
-            using (TransactionProcessor.Current.OpenTransaction())
+            var item = new ProgressiveItem { OwnerState = _fix.State };
+            using (_fix.Processor.OpenTransaction())
                 item.CurrentStage = 5; // out of range, must be ignored
             Assert.Equal(0, item.CurrentStage);
         }
@@ -195,11 +195,11 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ProgressiveItem_AddStage_AndCurrentStage_RoundTrip()
         {
-            var item = new ProgressiveItem();
+            var item = new ProgressiveItem { OwnerState = _fix.State };
             item.AddStage(new ProgressiveItem.Stage { Name = "s0" }, false, package: null);
             item.AddStage(new ProgressiveItem.Stage { Name = "s1" }, false, package: null);
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 item.CurrentStage = 1;
             Assert.Equal(1, item.CurrentStage);
         }
@@ -207,19 +207,19 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ProgressiveItem_Fork_SharesStagesAndCOWsCurrentStage()
         {
-            var item = new ProgressiveItem();
+            var item = new ProgressiveItem { OwnerState = _fix.State };
             item.AddStage(new ProgressiveItem.Stage { Name = "s0" }, false, package: null);
             item.AddStage(new ProgressiveItem.Stage { Name = "s1" }, false, package: null);
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 item.CurrentStage = 1;
 
-            var fork = (ProgressiveItem)item.Fork();
+            var fork = (ProgressiveItem)item.Fork(ForkTestHelpers.NewDestState());
             // Stage list is shared by reference (definition data)
             Assert.Equal(2, System.Linq.Enumerable.Count(fork.Stages));
             // CurrentStage inherited
             Assert.Equal(1, fork.CurrentStage);
 
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
                 fork.CurrentStage = 0;
             Assert.Equal(0, fork.CurrentStage);
             Assert.Equal(1, item.CurrentStage);
@@ -230,8 +230,8 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ProgressiveToggleItem_KVTransactable_BothActiveAndStage()
         {
-            var item = new ProgressiveToggleItem();
-            using (TransactionProcessor.Current.OpenTransaction())
+            var item = new ProgressiveToggleItem { OwnerState = _fix.State };
+            using (_fix.Processor.OpenTransaction())
             {
                 item.Active = true;
                 item.CurrentStage = 3;
@@ -243,16 +243,16 @@ namespace EmoTracker.SourceGenerators.Tests
         [Fact]
         public void ProgressiveToggleItem_Fork_OnForked_CopiesStageCount()
         {
-            var item = new ProgressiveToggleItem();
+            var item = new ProgressiveToggleItem { OwnerState = _fix.State };
             item.SwapActions = true;
             item.StageCount = 5;
-            using (TransactionProcessor.Current.OpenTransaction())
+            using (_fix.Processor.OpenTransaction())
             {
                 item.Active = true;
                 item.CurrentStage = 2;
             }
 
-            var fork = (ProgressiveToggleItem)item.Fork();
+            var fork = (ProgressiveToggleItem)item.Fork(ForkTestHelpers.NewDestState());
             Assert.True(fork.SwapActions);
             Assert.Equal(5u, fork.StageCount);
             Assert.True(fork.Active);
@@ -270,7 +270,7 @@ namespace EmoTracker.SourceGenerators.Tests
             // here without a real pack, but we *can* verify the OnChanged hook
             // fires by exercising the fact that it reaches a real method (any
             // exception would be propagated from inside the setter).
-            var item = new BlankItem();
+            var item = new BlankItem { OwnerState = _fix.State };
             // Set an Icon; under the hood InvalidateAccessibility runs and calls
             // LocationDatabase.Instance which is lazily-instantiated.
             item.Icon = null; // no-op (default already null), no callback
@@ -298,7 +298,7 @@ namespace EmoTracker.SourceGenerators.Tests
         {
             void RoundTrip(ItemBase original)
             {
-                var fork = (ItemBase)original.Fork();
+                var fork = (ItemBase)original.Fork(ForkTestHelpers.NewDestState());
                 Assert.Equal(original.DefinitionId, fork.DefinitionId);
                 Assert.NotSame(original, fork);
             }
@@ -321,14 +321,14 @@ namespace EmoTracker.SourceGenerators.Tests
         {
             // Pre-Phase-2 the field had an inline initializer `= "WhiteSmoke"`.
             // After conversion, the default is seeded by ItemBase's ctor.
-            var item = new ToggleItem();
+            var item = new ToggleItem { OwnerState = _fix.State };
             Assert.Equal("WhiteSmoke", item.BadgeTextColor);
         }
 
         [Fact]
         public void ItemBase_PhoneticSubstitutes_StringArray_RoundTrips()
         {
-            var item = new ToggleItem();
+            var item = new ToggleItem { OwnerState = _fix.State };
             var arr = new[] { "alpha", "bravo", "charlie" };
             item.PhoneticSubstitutes = arr;
 

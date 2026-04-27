@@ -27,20 +27,15 @@ namespace EmoTracker.Data
 
         public class SuspendRefreshScope : IDisposable
         {
-            // Phase 6 step 5: capture the target LocationDatabase at construction
-            // so a state-switch mid-scope doesn't push on one instance and pop
-            // on another.
-            // Phase 7.1: parameterless ctor targets SessionContext.ActiveState's
-            // LocationDatabase if installed; otherwise the scope is a no-op
-            // (for unit tests that construct TrackerStates without going
-            // through ApplicationModel's SessionContext install).
+            // Capture the target LocationDatabase at construction so a state
+            // swap mid-scope doesn't push on one instance and pop on another.
+            // Construction always requires an explicit target — there is no
+            // ambient state slot to fall back to.
             readonly LocationDatabase mTarget;
-
-            public SuspendRefreshScope() : this(target: null) { }
 
             public SuspendRefreshScope(LocationDatabase target)
             {
-                mTarget = target ?? Sessions.SessionContext.ActiveState?.Locations;
+                mTarget = target;
                 mTarget?.PushSuspendRefresh();
             }
 
@@ -168,12 +163,14 @@ namespace EmoTracker.Data
             mLocationIndex.Clear();
             mPinnedLocations.Clear();
             mVisibleLocations.Clear();
-            mRoot = new Location()
-            {
-                Color = "#212121",
-                OpenChestImage = ImageReference.FromExternalURI(new Uri("pack://application:,,,/EmoTracker;component/Resources/chest_open.png")),
-                ClosedChestImage = ImageReference.FromExternalURI(new Uri("pack://application:,,,/EmoTracker;component/Resources/chest_closed.png"))
-            };
+            // Stamp OwnerState + register before property setters fire so
+            // any [OnChanged] hooks resolve the owning state.
+            mRoot = new Location();
+            mRoot.OwnerState = this.State;
+            this.State?.RegisterModel(mRoot);
+            mRoot.Color = "#212121";
+            mRoot.OpenChestImage = ImageReference.FromExternalURI(new Uri("pack://application:,,,/EmoTracker;component/Resources/chest_open.png"));
+            mRoot.ClosedChestImage = ImageReference.FromExternalURI(new Uri("pack://application:,,,/EmoTracker;component/Resources/chest_closed.png"));
         }
 
         public void ParseLocationVisualProperties(JObject data, LocationVisualProperties visual, IGamePackage package)
@@ -219,7 +216,7 @@ namespace EmoTracker.Data
             else
                 this.State?.Scripts.Output("Loading Locations: {0}", path);
 
-            using (new LoggingBlock())
+            using (new LoggingBlock(state?.Scripts))
             {
                 try
                 {
@@ -391,24 +388,22 @@ namespace EmoTracker.Data
         uint mPendingRefreshCount = 0;
 
         // Holder-aware script-manager lookup for standard-callback dispatch.
-        // Prefers mRoot's per-state ScriptManager (Phase 6 makes this
-        // meaningful by returning the state's manager rather than the
-        // ambient singleton); falls back to the static host when no pack
-        // root is loaded yet, and finally to the no-op manager when nothing
-        // is registered (test scenarios).
+        // Prefers mRoot's per-state ScriptManager when a pack root has been
+        // parsed; otherwise falls back to the owning state's Scripts.
+        // Returns null when this LocationDatabase has no state context
+        // (test scenarios) — callers must null-check.
         IScriptManager GetActiveScriptManager()
         {
             if (mRoot != null) return mRoot.GetScriptManager();
-            return ScriptManagerHost.Current ?? NullScriptManager.Instance;
+            return State?.Scripts;
         }
 
-        // Phase 6 step 11: peer-catalog access. Prefers the State back-ref
-        // (set when this LocationDatabase was registered with a TrackerState)
-        // and falls back to the active session's MapDatabase. Returns null
-        // in test scenarios where no state context is installed.
+        // Peer-catalog access: the State back-ref is set when this
+        // LocationDatabase is wired into a TrackerState. Returns null in
+        // test scenarios where no state is installed.
         MapDatabase ActiveMaps()
         {
-            return State?.Maps ?? Sessions.SessionContext.ActiveState?.Maps;
+            return State?.Maps;
         }
 
         internal void RefeshAccessibility(bool bPendingOnly = false)
@@ -442,7 +437,7 @@ namespace EmoTracker.Data
                                 // so its GetScriptManager() override (Phase 6) returns the
                                 // owning state's ScriptManager. Falls back to the singleton
                                 // host when no pack is loaded (mRoot == null).
-                                GetActiveScriptManager().InvokeStandardCallback(StandardCallback.AccessibilityUpdating);
+                                GetActiveScriptManager()?.InvokeStandardCallback(StandardCallback.AccessibilityUpdating);
 
                                 if (mRoot != null)
                                     mRoot.RefreshAccessibility();
@@ -464,7 +459,7 @@ namespace EmoTracker.Data
 
                         if (bRefreshedAccessibility)
                         {
-                            GetActiveScriptManager().InvokeStandardCallback(StandardCallback.AccessibilityUpdated);
+                            GetActiveScriptManager()?.InvokeStandardCallback(StandardCallback.AccessibilityUpdated);
                         }
                     }
                 }
@@ -496,14 +491,15 @@ namespace EmoTracker.Data
 
         Location LoadLocation(IGamePackage package, Location parent, JObject data, Sessions.TrackerState state)
         {
-            Location instance = new Location()
-            {
-                Name = data.GetValue<string>("name"),
-                ShortName = data.GetValue<string>("short_name"),
-                Parent = parent
-            };
+            // Stamp OwnerState before any property setters fire so any
+            // [OnChanged] hooks (accessibility refresh, etc.) resolve the
+            // owning state on the first invocation.
+            Location instance = new Location();
             instance.OwnerState = state;
-            state?.Resolver.Register(instance);
+            state?.RegisterModel(instance);
+            instance.Name = data.GetValue<string>("name");
+            instance.ShortName = data.GetValue<string>("short_name");
+            instance.Parent = parent;
 
             //  Allow for an explicit parent override
             string parentOverride = data.GetValue<string>("parent");
@@ -536,7 +532,7 @@ namespace EmoTracker.Data
                 {
                     Section section = new Section(instance);
                     section.OwnerState = state;
-                    state?.Resolver.Register(section);
+                    state?.RegisterModel(section);
                     ParseLocationVisualProperties(sectionData, section, package);
 
                     section.Name = sectionData.GetValue<string>("name");
@@ -647,9 +643,15 @@ namespace EmoTracker.Data
                             size = size < 0 ? map.LocationSize : size;
                             bordersize = bordersize < 0 ? map.LocationBorderThickness : bordersize;
 
-                            MapLocation mapLocation = new MapLocation() { X = x, Y = y, Size = size, BorderThickness = bordersize, Location = instance };
+                            // Stamp OwnerState + register before setters fire.
+                            MapLocation mapLocation = new MapLocation();
                             mapLocation.OwnerState = state;
-                            state?.Resolver.Register(mapLocation);
+                            state?.RegisterModel(mapLocation);
+                            mapLocation.X = x;
+                            mapLocation.Y = y;
+                            mapLocation.Size = size;
+                            mapLocation.BorderThickness = bordersize;
+                            mapLocation.Location = instance;
 
                             mapLocation.AlwaysVisible = entry.GetValue<bool>("always_visible", false);
                             mapLocation.EnableBadgeHitTest = entry.GetValue<bool>("enable_badge_hit_test", false);

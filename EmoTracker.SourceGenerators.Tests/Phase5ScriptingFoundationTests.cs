@@ -28,55 +28,6 @@ namespace EmoTracker.SourceGenerators.Tests
         }
 
         [Fact]
-        public void ScriptManagerHost_Current_IsSettableAndReturnedByGetScriptManager()
-        {
-            var prior = ScriptManagerHost.Current;
-            try
-            {
-                var stub = new StubScriptManager();
-                ScriptManagerHost.Current = stub;
-
-                // Any ModelTypeBase-derived holder routes through the host.
-                var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
-                Assert.Same(stub, smoke.GetScriptManager());
-
-                // The dispatch path actually flows through the stub.
-                smoke.GetScriptManager().InvokeStandardCallback(StandardCallback.LocationUpdating);
-                Assert.Single(stub.Calls);
-                Assert.Equal(StandardCallback.LocationUpdating, stub.Calls[0]);
-            }
-            finally
-            {
-                ScriptManagerHost.Current = prior;
-            }
-        }
-
-        [Fact]
-        public void GetScriptManager_VirtualDefault_FollowsScriptManagerHost()
-        {
-            // Subclasses can override GetScriptManager() to return their
-            // state's manager (Phase 6); the default implementation flows
-            // through the static host.
-            var prior = ScriptManagerHost.Current;
-            try
-            {
-                var a = new StubScriptManager();
-                var b = new StubScriptManager();
-
-                ScriptManagerHost.Current = a;
-                var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
-                Assert.Same(a, smoke.GetScriptManager());
-
-                ScriptManagerHost.Current = b;
-                Assert.Same(b, smoke.GetScriptManager());
-            }
-            finally
-            {
-                ScriptManagerHost.Current = prior;
-            }
-        }
-
-        [Fact]
         public void StandardCallback_EnumValuesMatchScriptManagerNestedEnum()
         {
             // The Core enum and the Data-side ScriptManager.StandardCallback
@@ -100,45 +51,18 @@ namespace EmoTracker.SourceGenerators.Tests
         // applicable — ScriptManager is now per-state via TrackerState.
 
         [Fact]
-        public void NullScriptManager_FallbackUsedWhenHostUnset_NoOpsCleanly()
-        {
-            // When ScriptManagerHost.Current is null (typical of unit-test
-            // scenarios where app startup hasn't run), GetScriptManager()
-            // returns the no-op fallback. Callsites that fire standard
-            // callbacks via holder.GetScriptManager().InvokeStandardCallback
-            // stay safe rather than NRE'ing on a null host.
-            var prior = ScriptManagerHost.Current;
-            try
-            {
-                ScriptManagerHost.Current = null;
-
-                var smoke = Phase1SmokeModelType.CreateDefinition("d", null);
-                var resolved = smoke.GetScriptManager();
-                Assert.NotNull(resolved);
-                Assert.Same(NullScriptManager.Instance, resolved);
-
-                // Invoking on the null fallback is a no-op — doesn't throw.
-                resolved.InvokeStandardCallback(StandardCallback.AccessibilityUpdated);
-                resolved.InvokeStandardCallback(StandardCallback.LocationUpdating, "any", "args");
-            }
-            finally
-            {
-                ScriptManagerHost.Current = prior;
-            }
-        }
-
-        [Fact]
         public void ScriptManager_Reset_ClearsForkCloner()
         {
             // ForkCloner holds Lua-side helpers on the source's mLua. After
             // Reset, mLua is closed — calling cloner.Resolve() would NRE
             // on the closed interpreter. Reset must drop the cloner so
             // post-reset state is consistent.
-            var src = new EmoTracker.Data.ScriptManager();
+            var srcState = new EmoTracker.Data.Sessions.TrackerState("src");
+            var src = srcState.Scripts;
             src.BootstrapInterpreter();
             src.ExecuteLuaString("test = { x = 1 }");
 
-            var fork = (EmoTracker.Data.ScriptManager)src.Fork();
+            var fork = (EmoTracker.Data.ScriptManager)src.Fork(ForkTestHelpers.NewDestState());
             Assert.NotNull(fork.ForkCloner);
 
             fork.Reset();

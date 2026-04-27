@@ -47,7 +47,7 @@ namespace EmoTracker.Data
                 return true;
 
             this.State?.Scripts.OutputWarning("Loading Legacy Maps");
-            using (new LoggingBlock())
+            using (new LoggingBlock(state?.Scripts))
             {
                 return IncrementalLoad("maps.json", package, state);
             }
@@ -56,7 +56,7 @@ namespace EmoTracker.Data
         internal bool IncrementalLoad(string path, IGamePackage package, Sessions.TrackerState state = null)
         {
             this.State?.Scripts.Output("Loading Maps: {0}", path);
-            using (new LoggingBlock())
+            using (new LoggingBlock(state?.Scripts))
             {
                 try
                 {
@@ -69,15 +69,16 @@ namespace EmoTracker.Data
                                 JArray maps = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
                                 foreach (JObject map in maps)
                                 {
-                                    var mapObj = new Map()
-                                    {
-                                        Name = map.GetValue<string>("name"),
-                                        LocationSize = map.GetValue<double>("location_size", 70),
-                                        LocationBorderThickness = map.GetValue<double>("location_border_thickness", 8),
-                                        Image = ImageReference.FromPackRelativePath(package, map.GetValue<string>("img"), map.GetValue<string>("img_mods"))
-                                    };
+                                    // Stamp OwnerState + register in resolver BEFORE
+                                    // setting properties so [OnChanged] hooks resolve
+                                    // the holder's state on first access.
+                                    var mapObj = new Map();
                                     mapObj.OwnerState = state;
-                                    state?.Resolver.Register(mapObj);
+                                    state?.RegisterModel(mapObj);
+                                    mapObj.Name = map.GetValue<string>("name");
+                                    mapObj.LocationSize = map.GetValue<double>("location_size", 70);
+                                    mapObj.LocationBorderThickness = map.GetValue<double>("location_border_thickness", 8);
+                                    mapObj.Image = ImageReference.FromPackRelativePath(package, map.GetValue<string>("img"), map.GetValue<string>("img_mods"));
                                     mMaps.Add(mapObj);
                                 }
                             }

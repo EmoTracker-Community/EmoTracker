@@ -76,23 +76,18 @@ namespace EmoTracker.Data.Locations
 
         void WireScriptManagerCallbacks()
         {
-            // Phase 5 step 5: dispatch through GetScriptManager() rather than
-            // the singleton. Section is a ModelTypeBase, so its
-            // GetScriptManager() override (Phase 6) returns the owning state's
-            // ScriptManager — and the Lua callback fires against that state's
-            // interpreter. Today GetScriptManager() returns the same singleton
-            // Sessions.SessionContext.ActiveState?.Scripts pointed at, so observable behavior is
-            // unchanged; only the indirection point is in place.
+            // Dispatch through GetScriptManager() so the Lua callback fires
+            // against the owning state's interpreter.
             PropertyChanging += (sender, e) =>
             {
                 if (e.PropertyName == nameof(CapturedItem) || e.PropertyName == nameof(AvailableChestCount))
-                    GetScriptManager().InvokeStandardCallback(StandardCallback.LocationUpdating, this);
+                    GetScriptManager()?.InvokeStandardCallback(StandardCallback.LocationUpdating, this);
             };
 
             PropertyChanged += (sender, e) =>
             {
                 if (e.PropertyName == nameof(CapturedItem) || e.PropertyName == nameof(AvailableChestCount))
-                    GetScriptManager().InvokeStandardCallback(StandardCallback.LocationUpdated, this);
+                    GetScriptManager()?.InvokeStandardCallback(StandardCallback.LocationUpdated, this);
             };
         }
 
@@ -224,7 +219,7 @@ namespace EmoTracker.Data.Locations
             set
             {
                 Guid newId = (value as ModelTypeBase)?.DefinitionId ?? Guid.Empty;
-                using (TransactionProcessor.Current.OpenTransaction())
+                using (this.OpenTransaction())
                 {
                     // PropertyChanging("CapturedItem") fires explicitly for the
                     // ScriptManager LocationUpdating callback (the constructor's
@@ -352,7 +347,7 @@ namespace EmoTracker.Data.Locations
             get { return AvailableChestCountStored; }
             set
             {
-                using (TransactionProcessor.Current.OpenTransaction())
+                using (this.OpenTransaction())
                 {
                     // Drop-captured-on-clear cascade, gated by the same exclusions
                     // as pre-Phase-3 (CaptureBadge / mSuppressCaptureClearing /
@@ -432,7 +427,7 @@ namespace EmoTracker.Data.Locations
             {
                 foreach (AccessibilityRule.CodeRule code in rule.Codes)
                 {
-                    Section dependentSection = Tracker.Instance.FindObjectForCode(code.mCode) as Section;
+                    Section dependentSection = Tracker.Instance.FindObjectForCode(this.OwnerState as Sessions.TrackerState, code.mCode) as Section;
                     if (dependentSection != null)
                         dependentSection.ComputeGateDependencies(aggregateGateRequirements, false);
                 }
@@ -442,7 +437,7 @@ namespace EmoTracker.Data.Locations
             {
                 foreach (AccessibilityRule.CodeRule code in rule.Codes)
                 {
-                    Section dependentSection = Tracker.Instance.FindObjectForCode(code.mCode) as Section;
+                    Section dependentSection = Tracker.Instance.FindObjectForCode(this.OwnerState as Sessions.TrackerState, code.mCode) as Section;
                     if (dependentSection != null)
                         dependentSection.ComputeGateDependencies(aggregateGateRequirements, false);
                 }
@@ -525,9 +520,11 @@ namespace EmoTracker.Data.Locations
 
         // -------- Fork --------------------------------------------------------
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = new Section();
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             return copy;
         }

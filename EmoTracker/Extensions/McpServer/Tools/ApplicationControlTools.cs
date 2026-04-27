@@ -184,7 +184,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (found == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{name}' not found" });
 
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    using (found.OpenTransaction())
                     {
                         found.FullClearAllPossible();
                         found.ModifiedByUser = true;
@@ -261,6 +261,46 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 catch (Exception ex)
                 {
                     return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+                }
+            });
+        }
+
+        [McpServerTool(Name = "load_new_pack_via_state_manager")]
+        [Description("Phase 7 debug: simulate the state-manager popup's 'Load New Pack' button — calls ApplicationModel.LoadNewPack and adds the resulting state as a tab on the current window. Optionally pass a variant uid.")]
+        public static async Task<string> LoadNewPackViaStateManager(
+            [Description("The unique ID of the pack to load")] string uniqueId,
+            [Description("Optional variant unique ID; pass empty for none")] string variant = null)
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var packages = PackageManager.Instance.AvailablePackages;
+                    PackageRepositoryEntry found = null;
+                    foreach (var entry in packages)
+                    {
+                        if (entry.UID?.Equals(uniqueId, StringComparison.OrdinalIgnoreCase) == true)
+                        { found = entry; break; }
+                    }
+                    if (found?.ExistingPackage == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "pack not installed" });
+                    var pack = found.ExistingPackage;
+                    EmoTracker.Data.IGamePackageVariant v = null;
+                    if (!string.IsNullOrEmpty(variant))
+                    {
+                        if (pack is EmoTracker.Data.Packages.GamePackage gp)
+                            v = gp.FindVariant(variant);
+                    }
+                    var ctx = ApplicationModel.Instance.CurrentlyActiveWindowContext;
+                    if (ctx == null) return JsonSerializer.Serialize(new { success = false, error = "no ctx" });
+                    var primary = ApplicationModel.Instance.LoadNewPack(pack, v);
+                    ctx.AddState(primary, makeActive: true);
+                    ApplicationModel.Instance.OnActiveStateSwitched(primary);
+                    return JsonSerializer.Serialize(new { success = true, stateId = primary.Id.ToString(), variant = v?.UniqueID });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = ex.Message, stack = ex.StackTrace });
                 }
             });
         }
@@ -457,7 +497,8 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    if (TransactionProcessor.Current is IUndoableTransactionProcessor undo)
+                    var undo = ApplicationModel.Instance.PrimaryState?.Transactions as IUndoableTransactionProcessor;
+                    if (undo != null)
                     {
                         undo.Undo();
                         return JsonSerializer.Serialize(new { success = true });

@@ -241,7 +241,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (section == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Section '{sectionName}' not found in '{locationName}'" });
 
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    using (loc.OpenTransaction())
                     {
                         if (section.AvailableChestCount > 0)
                             section.AvailableChestCount = 0;
@@ -277,7 +277,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (loc == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{name}' not found" });
 
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    using (loc.OpenTransaction())
                     {
                         foreach (var section in loc.Sections)
                         {
@@ -393,7 +393,8 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var count = Tracker.Instance.ProviderCountForCode(code, out AccessibilityLevel maxAccessibility);
+                    var target = ApplicationModel.Instance.PrimaryState;
+                    var count = Tracker.Instance.ProviderCountForCode(target, code, out AccessibilityLevel maxAccessibility);
                     return JsonSerializer.Serialize(new
                     {
                         code,

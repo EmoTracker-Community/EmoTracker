@@ -71,13 +71,15 @@ namespace EmoTracker.Data.Layout
 
         // -------- Fork ------------------------------------------------------
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = (ArrayPanel)System.Activator.CreateInstance(this.GetType());
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             foreach (var child in this.mChildren)
             {
-                var forked = (LayoutItem)child.Fork();
+                var forked = (LayoutItem)child.Fork(destOwnerState);
                 copy.mChildren.Add(forked);
             }
             return copy;

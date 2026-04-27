@@ -45,7 +45,7 @@ namespace EmoTracker.SourceGenerators.Tests
             // Source has a Lua interpreter; fork before is null.
             Assert.True(src.IsLuaLoaded);
 
-            var fork = (ScriptManager)src.Fork();
+            var fork = (ScriptManager)src.Fork(ForkTestHelpers.NewDestState());
             Assert.True(fork.IsLuaLoaded);
             Assert.NotSame(src, fork);
 
@@ -70,7 +70,7 @@ namespace EmoTracker.SourceGenerators.Tests
                 }
             ");
 
-            var fork = (ScriptManager)src.Fork();
+            var fork = (ScriptManager)src.Fork(ForkTestHelpers.NewDestState());
 
             // The fork's interpreter has its own pack_state with the same
             // values.
@@ -98,7 +98,7 @@ namespace EmoTracker.SourceGenerators.Tests
 
             var srcTable = (LuaTable)src.GetLuaGlobal("test_table");
 
-            var fork = (ScriptManager)src.Fork();
+            var fork = (ScriptManager)src.Fork(ForkTestHelpers.NewDestState());
 
             // ForkCloner is populated and Resolve maps source-side
             // references to destination clones — exactly the lookup
@@ -127,7 +127,7 @@ namespace EmoTracker.SourceGenerators.Tests
                 tracker_on_pack_ready = function() src_called = true end
             ");
 
-            var fork = (ScriptManager)src.Fork();
+            var fork = (ScriptManager)src.Fork(ForkTestHelpers.NewDestState());
 
             // Replace the fork's callback with one that marks a fork-local.
             fork.ExecuteLuaString(@"
@@ -159,7 +159,7 @@ namespace EmoTracker.SourceGenerators.Tests
             var src = new ScriptManager();
             BootstrapWithStub(src);
 
-            var fork = (ScriptManager)src.Fork();
+            var fork = (ScriptManager)src.Fork(ForkTestHelpers.NewDestState());
 
             Assert.NotEqual(Guid.Empty, src.DefinitionId);
             Assert.Equal(src.DefinitionId, fork.DefinitionId);
@@ -172,10 +172,11 @@ namespace EmoTracker.SourceGenerators.Tests
             // (no interpreter). The fork still bootstraps its own
             // interpreter (so callers don't get null mLua surprises) but
             // there's nothing to clone — the cloner just doesn't run.
-            var src = new ScriptManager();
+            var srcState = new EmoTracker.Data.Sessions.TrackerState("src-uninit");
+            var src = srcState.Scripts;
             Assert.False(src.IsLuaLoaded);
 
-            var fork = (ScriptManager)src.Fork();
+            var fork = (ScriptManager)src.Fork(ForkTestHelpers.NewDestState());
             Assert.True(fork.IsLuaLoaded);
             Assert.Null(fork.ForkCloner); // no clone happened
         }
@@ -187,8 +188,17 @@ namespace EmoTracker.SourceGenerators.Tests
         // attempt to run scripts/init.lua). BootstrapInterpreter is exposed
         // at internal scope so test code (with InternalsVisibleTo) can
         // drive the same scaffolding the production Load() path uses.
+        // Wraps the manager in a fresh TrackerState since BootstrapInterpreter
+        // requires OwnerState to construct the Tracker / Layout bridge globals.
         static void BootstrapWithStub(ScriptManager sm)
         {
+            if (sm.OwnerState == null)
+            {
+                var hostState = new EmoTracker.Data.Sessions.TrackerState("test-host");
+                // Replace the host state's auto-allocated ScriptManager
+                // with sm so OwnerState wiring matches the test's manager.
+                sm.OwnerState = hostState;
+            }
             sm.BootstrapInterpreter();
         }
     }

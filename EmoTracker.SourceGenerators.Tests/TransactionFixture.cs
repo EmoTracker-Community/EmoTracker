@@ -1,28 +1,25 @@
 using EmoTracker.Data.Core.Transactions;
 using EmoTracker.Data.Core.Transactions.Processors;
+using EmoTracker.Data.Sessions;
 
 namespace EmoTracker.SourceGenerators.Tests
 {
     /// <summary>
-    /// Installs a real <see cref="LocalTransactionProcessorWithUndo"/> as the global
-    /// <see cref="TransactionProcessor"/> for the duration of the test process so
-    /// transactable-property tests have a working write/undo path. xUnit collects
-    /// fixture types annotated as a <c>CollectionDefinition</c>; tests that need it
-    /// reference the <see cref="TransactionCollection"/> in <c>[Collection]</c>.
-    ///
-    /// The processor is shared because <see cref="TransactionProcessor"/> is itself
-    /// a static singleton — replacing it under tests running in parallel would race.
+    /// Provides a per-state-host TrackerState for transactable-property tests.
+    /// The static <c>TransactionProcessor.Current</c> slot was retired; every
+    /// transactable model gets its processor from <c>OwnerState.Transactions</c>,
+    /// so a TrackerState fixture is the new single source of a working
+    /// write/undo path. Tests that need it reference the
+    /// <see cref="TransactionCollection"/> in <c>[Collection]</c>.
     /// </summary>
     public sealed class TransactionFixture
     {
-        public IUndoableTransactionProcessor Processor { get; }
+        public TrackerState State { get; }
+        public IUndoableTransactionProcessor Processor => (IUndoableTransactionProcessor)State.Transactions;
 
         public TransactionFixture()
         {
-            // Replace whatever (likely null) processor is currently installed.
-            var local = new LocalTransactionProcessorWithUndo();
-            TransactionProcessor.SetTransactionProcessor(local);
-            Processor = local;
+            State = new TrackerState("test-fixture-state");
         }
     }
 

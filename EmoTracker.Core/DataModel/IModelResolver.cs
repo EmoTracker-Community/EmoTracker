@@ -25,19 +25,4 @@ namespace EmoTracker.Core.DataModel
         /// </summary>
         T Resolve<T>(Guid definitionId) where T : class;
     }
-
-    /// <summary>
-    /// Ambient global model resolver, mirroring the static-current pattern used by
-    /// <c>TransactionProcessor</c>. Installed once at app startup; read by
-    /// <see cref="ModelTypeBase.GetModelResolver"/> by default.
-    /// </summary>
-    public static class ModelResolver
-    {
-        /// <summary>
-        /// The currently-installed ambient resolver. Models without a state context
-        /// (Phase 2.5 / early Phase 3) read through this; per-state graphs override
-        /// <see cref="ModelTypeBase.GetModelResolver"/> to point at their own.
-        /// </summary>
-        public static IModelResolver Current { get; set; }
-    }
 }

@@ -352,9 +352,11 @@ namespace EmoTracker.Data.Locations
 
         // -------- Fork --------------------------------------------------------
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = new MapLocation();
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
             return copy;
         }
@@ -495,14 +497,16 @@ namespace EmoTracker.Data.Locations
 
         // -------- Fork --------------------------------------------------------
 
-        public override ModelTypeBase Fork()
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
         {
+            if (destOwnerState == null) throw new System.ArgumentNullException(nameof(destOwnerState));
             var copy = new Map();
+            copy.OwnerState = destOwnerState;
             copy.InitializeAsForkOf(this);
-            // Walk the owned MapLocation subtree, forking each.
+            // Walk the owned MapLocation subtree, forking each into destOwnerState.
             foreach (var ml in this.mLocations)
             {
-                var forked = (MapLocation)ml.Fork();
+                var forked = (MapLocation)ml.Fork(destOwnerState);
                 copy.mLocations.Add(forked);
             }
             return copy;

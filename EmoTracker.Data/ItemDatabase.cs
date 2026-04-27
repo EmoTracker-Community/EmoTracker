@@ -132,11 +132,11 @@ namespace EmoTracker.Data
             else
                 this.State?.Scripts.Output("Loading Items: {0}", path);
 
-            using (new LoggingBlock())
+            using (new LoggingBlock(state?.Scripts))
             {
                 try
                 {
-                    using (new LocationDatabase.SuspendRefreshScope())
+                    using (new LocationDatabase.SuspendRefreshScope(state?.Locations))
                     {
                         using (StreamReader reader = new StreamReader(package.Open(path)))
                         {
