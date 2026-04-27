@@ -105,9 +105,11 @@ namespace EmoTracker.Data.Sessions
             {
                 target.Locations.PushSuspendRefresh();
 
-                // Pack metadata travels with the state — stamp it before
-                // any consumer (init.lua, layout binding) reads it.
-                target.SetPackInfo(package, variant);
+                // Phase 7.1.h: pack metadata lives on the target's
+                // PackageInstance back-ref. The caller (TrackerState.
+                // ActivatePackage / LoadProgress / Reload) is responsible
+                // for setting up the PackageInstance to match the
+                // (package, variant) being loaded BEFORE invoking LoadInto.
 
                 // Phase 7.2: per-state rule cache clear (replaces static AccessibilityRule.ClearCaches).
                 target.Locations.RuleCache.Clear();

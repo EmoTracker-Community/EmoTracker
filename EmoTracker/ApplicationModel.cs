@@ -193,8 +193,8 @@ namespace EmoTracker
             // sections in those forked layouts have OwnerState=newState
             // (Phase 7 polish stamps this during fork) so cross-state
             // resolution lands correctly.
-            if (ReferenceEquals(PrimaryState?.Package, newState.Package)
-                && ReferenceEquals(PrimaryState?.ActiveVariant, newState.ActiveVariant))
+            if (ReferenceEquals(PrimaryState?.PackageInstance?.GamePackage, newState.PackageInstance?.GamePackage)
+                && ReferenceEquals(PrimaryState?.PackageInstance?.ActiveVariant, newState.PackageInstance?.ActiveVariant))
             {
                 ActivePackageInstance = owningPI;
                 NotifyPropertyChanged(nameof(PrimaryState));
@@ -643,12 +643,10 @@ namespace EmoTracker
 
         /// <summary>
         /// Notifies UI bindings that pack metadata on the active state may
-        /// have changed. The state itself owns its
-        /// <see cref="TrackerState.Package"/> / <see cref="TrackerState.ActiveVariant"/>
-        /// fields (set by <see cref="PackageLoader.LoadInto"/>), so the
-        /// only thing this method does is fan out a
-        /// <c>NotifyPropertyChanged(PrimaryState)</c> for any binding that
-        /// reads through the active-pack getters that surface metadata.
+        /// have changed. Pack identity now lives on the state's
+        /// <see cref="TrackerState.PackageInstance"/> back-reference; this
+        /// method just fans out a <c>NotifyPropertyChanged(PrimaryState)</c>
+        /// for any binding that reads through the active-pack getters.
         /// </summary>
         void OnActivePackageMetadataChanged()
         {
@@ -1190,10 +1188,10 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         public bool IsActivePackage(string uniqueId) => PrimaryState?.IsActivePackage(uniqueId) ?? false;
 
         /// <summary>The active pack on the primary state.</summary>
-        public IGamePackage ActiveGamePackage => PrimaryState?.Package;
+        public IGamePackage ActiveGamePackage => PrimaryState?.PackageInstance?.GamePackage;
 
         /// <summary>The active variant on the primary state.</summary>
-        public IGamePackageVariant ActiveGamePackageVariant => PrimaryState?.ActiveVariant;
+        public IGamePackageVariant ActiveGamePackageVariant => PrimaryState?.PackageInstance?.ActiveVariant;
 
         /// <summary>The pack's <c>DisabledImageFilterSpec</c> on the primary state.</summary>
         public string DisabledImageFilterSpec => PrimaryState?.DisabledImageFilterSpec ?? "grayscale, dim";

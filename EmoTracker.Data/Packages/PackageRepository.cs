@@ -340,7 +340,7 @@ namespace EmoTracker.Data.Packages
                     if (!string.IsNullOrWhiteSpace(path) && File.Exists(path) && new FileInfo(path).Length > 0)
                     {
                         bool bIsFirstInstalledPackage = PackageManager.Instance.InstalledPackages.Count() == 0;
-                        bool bExistingIsActive = ExistingPackage == Sessions.ActiveSession.Primary?.Package;
+                        bool bExistingIsActive = ExistingPackage == Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage;
 
                         if (ExistingPackage != null)
                             ExistingPackage.Source.ReleaseStorage();

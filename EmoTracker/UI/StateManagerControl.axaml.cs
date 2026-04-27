@@ -192,7 +192,7 @@ namespace EmoTracker.UI
                         bool firstActivation =
                             ApplicationModel.Instance.PackageInstances.Count == 0
                             || (ApplicationModel.Instance.PackageInstances.Count == 1
-                                && !ApplicationModel.Instance.PackageInstances[0].States.Values.Any(s => s.Package != null));
+                                && ApplicationModel.Instance.PackageInstances[0].GamePackage == null);
                         if (firstActivation)
                         {
                             // First-pack activation: drive through ApplicationModel

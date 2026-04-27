@@ -11,13 +11,12 @@ using System.Linq;
 namespace EmoTracker.Data.Sessions
 {
     /// <summary>
-    /// Phase 7.1.g: per-state pack-management operations. Previously these
-    /// lived on the <c>Tracker</c> singleton; with the singleton retired,
-    /// they're per-state methods on <see cref="TrackerState"/>. The state
-    /// is the natural owner: each operation acts on this state's catalogs
-    /// (<see cref="Items"/>, <see cref="Locations"/>, <see cref="Maps"/>,
-    /// <see cref="Layouts"/>, <see cref="Scripts"/>) and updates this
-    /// state's pack metadata (<see cref="Package"/>, <see cref="ActiveVariant"/>).
+    /// Phase 7.1.g/h: per-state pack-management operations. Pack identity
+    /// (<see cref="Sessions.PackageInstance.GamePackage"/> /
+    /// <see cref="Sessions.PackageInstance.ActiveVariant"/>) lives on the
+    /// back-referenced <see cref="PackageInstance"/>; activating a
+    /// different pack or variant swaps this state's PackageInstance to a
+    /// new one.
     /// </summary>
     public sealed partial class TrackerState
     {
@@ -26,11 +25,10 @@ namespace EmoTracker.Data.Sessions
         /// <summary>
         /// The currently active variant's <c>UniqueID</c>, or the literal
         /// string <c>"none"</c> when no variant is active. Mirrors
-        /// <c>Tracker.ActiveVariantUID</c>'s semantics for save-file
-        /// compatibility.
+        /// legacy save-file compatibility semantics.
         /// </summary>
         public string ActiveVariantUID =>
-            mActiveVariant != null ? mActiveVariant.UniqueID : "none";
+            PackageInstance?.ActiveVariant != null ? PackageInstance.ActiveVariant.UniqueID : "none";
 
         /// <summary>
         /// Returns true iff this state's active package's
@@ -38,8 +36,9 @@ namespace EmoTracker.Data.Sessions
         /// </summary>
         public bool IsActivePackage(string uniqueId)
         {
-            if (mPackage == null) return false;
-            return string.Equals(mPackage.UniqueID, uniqueId, StringComparison.Ordinal);
+            var pkg = PackageInstance?.GamePackage;
+            if (pkg == null) return false;
+            return string.Equals(pkg.UniqueID, uniqueId, StringComparison.Ordinal);
         }
 
         // ---- Per-state pack-driven settings -----------------------------
@@ -78,7 +77,7 @@ namespace EmoTracker.Data.Sessions
 
         /// <summary>
         /// Re-runs <see cref="PackageLoader.LoadInto"/> against this state
-        /// using its current <see cref="Package"/> / <see cref="ActiveVariant"/>.
+        /// using its current <see cref="PackageInstance"/>'s pack/variant.
         /// No-op if a reload is already in progress on this state.
         /// </summary>
         public void Reload()
@@ -87,7 +86,8 @@ namespace EmoTracker.Data.Sessions
             mbReloadInProgress = true;
             try
             {
-                PackageLoader.LoadInto(this, mPackage, mActiveVariant);
+                var pi = PackageInstance;
+                PackageLoader.LoadInto(this, pi?.GamePackage, pi?.ActiveVariant);
             }
             finally
             {
@@ -96,10 +96,11 @@ namespace EmoTracker.Data.Sessions
         }
 
         /// <summary>
-        /// Sets this state's <see cref="Package"/> / <see cref="ActiveVariant"/>
-        /// and re-runs <see cref="PackageLoader.LoadInto"/>. Pass
-        /// <paramref name="variant"/> = null when the new pack has no
-        /// chosen variant (or to default to its first available).
+        /// Switches this state to a new <see cref="PackageInstance"/>
+        /// constructed against the given <paramref name="package"/> and
+        /// <paramref name="variant"/>, then runs
+        /// <see cref="PackageLoader.LoadInto"/>. Pass null
+        /// <paramref name="variant"/> when the pack has no chosen variant.
         /// </summary>
         public void ActivatePackage(IGamePackage package, IGamePackageVariant variant)
         {
@@ -107,17 +108,14 @@ namespace EmoTracker.Data.Sessions
             mbReloadInProgress = true;
             try
             {
-                // Validate variant belongs to package, falling back to first
-                // available variant when the requested one is invalid (matches
-                // legacy Tracker behavior).
+                // Validate variant belongs to package, falling back to
+                // none if the requested one isn't valid for the pack.
                 if (package != null && variant != null
                     && !package.AvailableVariants.Contains(variant))
                 {
                     variant = null;
                 }
 
-                Package = package;
-                ActiveVariant = variant;
                 if (package != null)
                 {
                     package.ActiveVariant = variant;
@@ -129,10 +127,15 @@ namespace EmoTracker.Data.Sessions
                     ApplicationSettings.Instance.LastActivePackageVariant = null;
                 }
 
+                // Swap in a new PackageInstance for the new (pack, variant)
+                // identity. The old PackageInstance is left to its existing
+                // owner (typically ApplicationModel).
+                PackageInstance = new PackageInstance(package, variant);
+
                 PackageManager.Instance.RefreshActiveState();
                 NotifyPropertyChanged(nameof(ActiveVariantUID));
 
-                PackageLoader.LoadInto(this, mPackage, mActiveVariant);
+                PackageLoader.LoadInto(this, package, variant);
             }
             finally
             {
@@ -141,15 +144,15 @@ namespace EmoTracker.Data.Sessions
         }
 
         /// <summary>
-        /// Updates <see cref="Package"/> / <see cref="ActiveVariant"/>
-        /// without triggering a reload. Used by cross-PackageInstance tab
-        /// switches that want to update pack metadata without re-running
-        /// the load (the destination pack is already loaded).
+        /// Swaps this state's <see cref="PackageInstance"/> to a fresh one
+        /// for the given (pack, variant) without triggering a reload.
+        /// Used by cross-PackageInstance tab switches that want pack
+        /// metadata to track the active state without re-running the load
+        /// (the destination pack is already loaded elsewhere).
         /// </summary>
         public void UpdatePackageInfoWithoutReload(IGamePackage package, IGamePackageVariant variant)
         {
-            Package = package;
-            ActiveVariant = variant;
+            PackageInstance = new PackageInstance(package, variant);
             NotifyPropertyChanged(nameof(ActiveVariantUID));
         }
 
@@ -165,13 +168,15 @@ namespace EmoTracker.Data.Sessions
         /// </param>
         public bool SaveProgress(string path, Action<JObject> dataAction = null)
         {
-            if (mPackage == null) return false;
+            var pi = PackageInstance;
+            var pkg = pi?.GamePackage;
+            if (pkg == null) return false;
 
             JObject root = new JObject();
-            root["package_uid"] = mPackage.UniqueID;
-            if (mActiveVariant != null)
-                root["package_variant_uid"] = mActiveVariant.UniqueID;
-            root["package_version"] = mPackage.Version.ToString();
+            root["package_uid"] = pkg.UniqueID;
+            if (pi.ActiveVariant != null)
+                root["package_variant_uid"] = pi.ActiveVariant.UniqueID;
+            root["package_version"] = pkg.Version.ToString();
             root["creation_time"] = DateTime.Now.ToString();
             root["ignore_all_logic"] = Settings.IgnoreAllLogic;
             root["display_all_locations"] = Settings.DisplayAllLocations;
@@ -212,16 +217,12 @@ An error occurred while saving. This may be due to anti-virus/malware software p
 
         /// <summary>
         /// Load previously-saved progress from <paramref name="path"/> into
-        /// this state. Triggers a fresh <see cref="Reload"/> first to
-        /// ensure the catalogs are clean.
+        /// this state. Swaps <see cref="PackageInstance"/> to match the
+        /// save's (pack, variant) and re-runs the pack load before reading
+        /// items / locations.
         /// </summary>
         public bool LoadProgress(string path, Action<JObject> dataAction = null)
         {
-            // Reload first so we start from a clean slate against the
-            // pack/variant referenced by the save file.
-            //
-            // The pack identity in the save file MAY differ from the
-            // currently active one — handle below.
             try
             {
                 Scripts?.Output("Loading save game \"{0}\"", path);
@@ -245,11 +246,11 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                     if (!string.IsNullOrWhiteSpace(packageVariantUID) && packageVariant == null)
                         return false;
 
-                    // Reload into this state with the save's pack/variant.
-                    Package = package;
-                    ActiveVariant = packageVariant;
+                    // Swap to a fresh PackageInstance for the save's
+                    // (pack, variant), then drive the load.
                     if (package != null)
                         package.ActiveVariant = packageVariant;
+                    PackageInstance = new PackageInstance(package, packageVariant);
                     PackageLoader.LoadInto(this, package, packageVariant, suspendPackReadyEvent: true);
 
                     if (!Items.Load(root)) return false;

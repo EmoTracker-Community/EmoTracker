@@ -42,7 +42,7 @@ namespace EmoTracker.Data.Packages
 
             public bool IsActive
             {
-                get { return Sessions.ActiveSession.Primary?.ActiveVariant == this; }
+                get { return Sessions.ActiveSession.Primary?.PackageInstance?.ActiveVariant == this; }
             }
 
             public string UniqueID
@@ -116,7 +116,7 @@ namespace EmoTracker.Data.Packages
 
         public bool IsActive
         {
-            get { return Sessions.ActiveSession.Primary?.Package == this; }
+            get { return Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage == this; }
         }
 
         public string Name { get { return mName; } }

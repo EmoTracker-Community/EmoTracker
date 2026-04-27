@@ -219,7 +219,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (ctx == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No active window context" });
 
-                    var pi = app.PackageInstances.FirstOrDefault(p => p.States.Values.Any(s => s.Package != null));
+                    var pi = app.PackageInstances.FirstOrDefault(p => p.GamePackage != null);
                     if (pi == null)
                         return JsonSerializer.Serialize(new { success = false, error = "No PackageInstance with a loaded pack" });
 

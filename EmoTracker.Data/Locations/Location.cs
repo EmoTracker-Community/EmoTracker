@@ -521,8 +521,8 @@ namespace EmoTracker.Data.Locations
         {
             try
             {
-                var pkg = (this.OwnerState as Sessions.TrackerState)?.Package
-                    ?? Sessions.ActiveSession.Primary?.Package;
+                var pkg = (this.OwnerState as Sessions.TrackerState)?.PackageInstance?.GamePackage
+                    ?? Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage;
                 ImageReference badge = ImageReference.FromPackRelativePath(pkg, imageRef, filterSpec);
                 if (badge == null) return null;
                 mBadges[DefaultBadgeKey] = new BadgeEntry(DefaultBadgeKey, badge);

@@ -50,7 +50,7 @@ namespace EmoTracker.UI.Media.Resolvers
 
             if (concreteRef.URI.Scheme.Equals("gamepackage", StringComparison.OrdinalIgnoreCase))
             {
-                if (EmoTracker.Data.Sessions.ActiveSession.Primary?.Package == null)
+                if (EmoTracker.Data.Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage == null)
                     return null;
 
                 string filePath = string.Format("{0}{1}",
@@ -70,7 +70,7 @@ namespace EmoTracker.UI.Media.Resolvers
                 {
                     if (!sSourceCache.TryGetValue(filePath, out SKBitmap baseSK))
                     {
-                        using (Stream s = EmoTracker.Data.Sessions.ActiveSession.Primary?.Package.Open(filePath))
+                        using (Stream s = EmoTracker.Data.Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage.Open(filePath))
                         {
                             if (s == null)
                                 return null;
@@ -96,7 +96,7 @@ namespace EmoTracker.UI.Media.Resolvers
                 // Filtering happens outside the lock — it operates on `working`
                 // (our exclusive copy) and doesn't touch the cache.
                 working = Utility.IconUtility.ApplyFilterSpecToSKBitmap(
-                    EmoTracker.Data.Sessions.ActiveSession.Primary?.Package, working, concreteRef.Filter);
+                    EmoTracker.Data.Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage, working, concreteRef.Filter);
 
                 // Convert to Avalonia IImage once at the end, computing the
                 // alpha mask for InputMaskingImage hit-testing.

@@ -62,45 +62,26 @@ namespace EmoTracker.Data.Sessions
             set { SetProperty(ref mName, value); }
         }
 
-        // Pack metadata: which package and variant this state was loaded
-        // with. Set by the load orchestrator (PackageLoader for fresh
-        // loads, the Tracker.Reload path for in-place reloads). Mutates
-        // when a state's pack/variant changes — UI bindings observe via
-        // INPC.
-        IGamePackage mPackage;
-        IGamePackageVariant mActiveVariant;
+        // Phase 7.1.h: pack metadata lives on the back-referenced
+        // PackageInstance. PackageInstance is created against a (pack,
+        // variant) pair, and the state inherits both through the
+        // back-reference. Switching pack or variant means swapping this
+        // state's PackageInstance to a new one.
+        PackageInstance mPackageInstance;
 
         /// <summary>
-        /// The pack this state has loaded. Null before any pack-load
-        /// has run against it.
+        /// The <see cref="Sessions.PackageInstance"/> this state belongs
+        /// to. Stamped by <see cref="PackageInstance.CreateState"/> /
+        /// <see cref="PackageInstance.AdoptAsPrimary"/>. Pack metadata
+        /// (<see cref="Sessions.PackageInstance.GamePackage"/> /
+        /// <see cref="Sessions.PackageInstance.ActiveVariant"/>) is read
+        /// through this back-reference rather than mirrored on the state
+        /// itself.
         /// </summary>
-        public IGamePackage Package
+        public PackageInstance PackageInstance
         {
-            get => mPackage;
-            internal set { SetProperty(ref mPackage, value); }
-        }
-
-        /// <summary>
-        /// The active variant of <see cref="Package"/>. Null when the
-        /// pack has no variant or none has been chosen.
-        /// </summary>
-        public IGamePackageVariant ActiveVariant
-        {
-            get => mActiveVariant;
-            internal set { SetProperty(ref mActiveVariant, value); }
-        }
-
-        /// <summary>
-        /// Updates pack metadata in one shot, raising INPC for both
-        /// properties only when a change actually occurs. Called by
-        /// <c>PackageLoader.LoadInto</c> at the end of a successful load
-        /// so UI bindings against the active state's <see cref="Package"/>
-        /// / <see cref="ActiveVariant"/> refresh correctly.
-        /// </summary>
-        internal void SetPackInfo(IGamePackage package, IGamePackageVariant variant)
-        {
-            Package = package;
-            ActiveVariant = variant;
+            get => mPackageInstance;
+            internal set { SetProperty(ref mPackageInstance, value); }
         }
 
         /// <summary>

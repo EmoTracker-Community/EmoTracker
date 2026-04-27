@@ -39,21 +39,10 @@ namespace EmoTracker
             var packageInstancesArray = new JArray();
             foreach (var pi in ApplicationModel.Instance.PackageInstances)
             {
-                // Pack metadata lives on the per-state objects now. Pull it
-                // from the first live primary state in the PI; if there's
-                // no state with a Package set, this is a pre-allocated
-                // empty PI — skip.
-                IGamePackage piPackage = null;
-                IGamePackageVariant piVariant = null;
-                foreach (var kvp in pi.States)
-                {
-                    if (kvp.Value.Package != null)
-                    {
-                        piPackage = kvp.Value.Package;
-                        piVariant = kvp.Value.ActiveVariant;
-                        break;
-                    }
-                }
+                // Pack metadata lives directly on the PackageInstance now.
+                // Skip empty PIs (no pack loaded).
+                IGamePackage piPackage = pi.GamePackage;
+                IGamePackageVariant piVariant = pi.ActiveVariant;
                 if (piPackage == null) continue;
 
                 var piObj = new JObject();

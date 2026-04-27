@@ -6,16 +6,25 @@ namespace EmoTracker.Data.Sessions
 {
     /// <summary>
     /// Phase 6: represents one loaded pack and the family of states
-    /// layered on top of it. Holds the <see cref="DefinitionalState"/>
-    /// (built once by the package loader, never used for interaction)
-    /// and the registry of live <see cref="TrackerState"/> instances
-    /// (the "primary" states the UI binds to, plus any forks created
-    /// for simulation contexts).
+    /// layered on top of it. Created against a (Pack, Variant) pair —
+    /// the pack identity is part of the PackageInstance's identity, so
+    /// switching to a different pack (or variant) constructs a new
+    /// PackageInstance rather than mutating an existing one.
     ///
     /// <para>
-    /// Lifetime is owned by <c>ApplicationModel</c> (introduced in
-    /// step 7), NOT by <c>PackageManager</c>. The two concerns are
-    /// deliberately decoupled:
+    /// Holds the <see cref="DefinitionalState"/> (built once by the
+    /// package loader, never used for interaction) and the registry of
+    /// live <see cref="TrackerState"/> instances (the "primary" states
+    /// the UI binds to, plus any forks created for simulation contexts).
+    /// Every state in this PackageInstance shares a common pack identity
+    /// — accessed through <see cref="TrackerState.PackageInstance"/>'s
+    /// <see cref="GamePackage"/> / <see cref="ActiveVariant"/>.
+    /// </para>
+    ///
+    /// <para>
+    /// Lifetime is owned by <c>ApplicationModel</c>, NOT by
+    /// <c>PackageManager</c>. The two concerns are deliberately
+    /// decoupled:
     /// <list type="bullet">
     ///   <item><c>PackageManager</c> retains pack discovery / install /
     ///         resolution responsibilities — long-lived, app-wide.</item>
@@ -26,17 +35,6 @@ namespace EmoTracker.Data.Sessions
     /// They communicate only via events; neither holds a back-reference
     /// to the other.
     /// </para>
-    ///
-    /// <para>
-    /// Step 3 (this commit) lands the container shell with the
-    /// definitional + states surfaces. The definitional-state population
-    /// (parse-phase items / locations / layouts → seeded ImmutableData)
-    /// and the <see cref="CreateState"/> coordinated fork plumbing
-    /// arrive in step 8 alongside the per-state catalogs from step 5.
-    /// For now, callers can construct an empty PackageInstance, retrieve
-    /// the (empty) definitional state, and create empty primary states
-    /// for testing.
-    /// </para>
     /// </summary>
     public sealed class PackageInstance : ObservableObject
     {
@@ -44,12 +42,18 @@ namespace EmoTracker.Data.Sessions
         readonly Dictionary<Guid, TrackerState> mStates = new Dictionary<Guid, TrackerState>();
 
         /// <summary>
-        /// The pack metadata (Package + ActiveVariant) is held on each
-        /// <see cref="TrackerState"/> directly — see
-        /// <see cref="TrackerState.Package"/>. Read it from the
-        /// state(s) inside this instance rather than from the
-        /// PackageInstance itself.
+        /// The pack this instance was constructed against. Null for the
+        /// bootstrap "no pack loaded" instance that exists between app
+        /// startup and the first pack activation.
         /// </summary>
+        public IGamePackage GamePackage { get; }
+
+        /// <summary>
+        /// The active variant of <see cref="GamePackage"/>. Null when the
+        /// pack has no variants, or when this is the bootstrap instance
+        /// pre-pack-load.
+        /// </summary>
+        public IGamePackageVariant ActiveVariant { get; }
 
         /// <summary>
         /// The model graph as initialized by the package-load process —
@@ -64,20 +68,37 @@ namespace EmoTracker.Data.Sessions
         /// </summary>
         public IReadOnlyDictionary<Guid, TrackerState> States => mStates;
 
-        public PackageInstance()
+        /// <summary>
+        /// Constructs a PackageInstance for the given (pack, variant)
+        /// pair. Pass nulls for the bootstrap "no pack loaded" instance.
+        /// </summary>
+        public PackageInstance(IGamePackage gamePackage, IGamePackageVariant activeVariant)
         {
+            GamePackage = gamePackage;
+            ActiveVariant = activeVariant;
             mDefinitionalState = new TrackerState("__definitional__");
+            mDefinitionalState.PackageInstance = this;
         }
 
         /// <summary>
-        /// Creates a new primary state. In step 8 this becomes
-        /// <c>DefinitionalState.Fork()</c> with a coordinated walk over
-        /// every per-state catalog; for the step-3 shell the returned
-        /// state is empty (callers can populate it for tests).
+        /// Bootstrap-only ctor: builds an empty PackageInstance with no
+        /// pack/variant. Used by <c>ApplicationModel.PreallocatePrimaryState</c>
+        /// at startup to maintain the "always-non-null PrimaryState"
+        /// invariant before any pack is loaded.
+        /// </summary>
+        public PackageInstance() : this(null, null)
+        {
+        }
+
+        /// <summary>
+        /// Creates a new primary state inside this PackageInstance and
+        /// stamps the back-reference. The state's catalogs are empty;
+        /// callers (typically <c>PackageLoader.LoadInto</c>) populate them.
         /// </summary>
         public TrackerState CreateState(string name = null)
         {
             var state = new TrackerState(name ?? "state_" + (mStates.Count + 1));
+            state.PackageInstance = this;
             mStates[state.Id] = state;
             // Phase 7.4: notify the lifecycle observer (typically the
             // ExtensionManager) so per-state extensions are attached.
@@ -88,15 +109,15 @@ namespace EmoTracker.Data.Sessions
         /// <summary>
         /// Phase 6 step 7: registers <paramref name="state"/> as a primary
         /// state on this PackageInstance, used by ApplicationModel to wrap
-        /// the existing singleton-based pack-load result without
-        /// re-running pack load. Unlike <see cref="CreateState"/> this
-        /// adopts a caller-constructed state (typically built with the
-        /// adopt-the-singletons constructor overload on
-        /// <see cref="TrackerState"/>) rather than allocating a fresh one.
+        /// the existing pack-load result without re-running pack load.
+        /// Unlike <see cref="CreateState"/> this adopts a caller-constructed
+        /// state rather than allocating a fresh one. Sets the back-reference
+        /// on the adopted state.
         /// </summary>
         public void AdoptAsPrimary(TrackerState state)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
+            state.PackageInstance = this;
             mStates[state.Id] = state;
             // Phase 7.4: same lifecycle hook as CreateState — adopting a
             // pre-built state still wants per-state extensions attached.
