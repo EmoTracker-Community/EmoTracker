@@ -1,5 +1,6 @@
 using EmoTracker.Core;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace EmoTracker.Data.Sessions
@@ -67,6 +68,39 @@ namespace EmoTracker.Data.Sessions
         /// Keyed by <see cref="TrackerState.Id"/>.
         /// </summary>
         public IReadOnlyDictionary<Guid, TrackerState> States => mStates;
+
+        // ---- Image caches ----------------------------------------------
+        // Phase 7.1.h: per-PackageInstance image caches. Every state in a
+        // PackageInstance shares the same loaded pack, so all share the
+        // same resolved-image data; switching packs (= new PackageInstance)
+        // means a fresh cache, while switching tabs within a PackageInstance
+        // does not invalidate cached images. Lifetime is bounded by the
+        // PackageInstance — Dispose tears down both caches.
+
+        /// <summary>
+        /// Resolved-image cache (ImageReference identity → IImage). Owned
+        /// by this PackageInstance — shared by every <see cref="TrackerState"/>
+        /// in <see cref="States"/>, since they share the pack-loaded
+        /// <see cref="ImmutableData"/> that holds the ImageReference objects.
+        /// Stored as <see cref="object"/> because <c>IImage</c> lives in
+        /// the Avalonia stack and Data must not depend on UI.
+        /// </summary>
+        public ConcurrentDictionary<Media.ImageReference, object> ImageCache { get; }
+            = new ConcurrentDictionary<Media.ImageReference, object>();
+
+        /// <summary>
+        /// Source-bitmap cache (pack-relative file path → decoded SKBitmap-
+        /// or-equivalent object). Owned by this PackageInstance so multiple
+        /// <see cref="ConcreteImageReference"/> instances pointing at the
+        /// same file but with different filters share a single decoded
+        /// source. Stored as <see cref="object"/> for the same Avalonia /
+        /// SkiaSharp dependency reasons as <see cref="ImageCache"/>.
+        /// </summary>
+        public Dictionary<string, object> SourceImageCache { get; }
+            = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Lock guarding <see cref="SourceImageCache"/>.</summary>
+        public object SourceImageCacheLock { get; } = new object();
 
         /// <summary>
         /// Constructs a PackageInstance for the given (pack, variant)
@@ -168,6 +202,18 @@ namespace EmoTracker.Data.Sessions
             mStates.Clear();
 
             mDefinitionalState?.Dispose();
+
+            // Drop image caches owned by this PackageInstance. SkiaSharp
+            // SKBitmaps in SourceImageCache require explicit Dispose; we
+            // use reflection to invoke IDisposable.Dispose because Data
+            // doesn't reference SkiaSharp directly.
+            lock (SourceImageCacheLock)
+            {
+                foreach (var kvp in SourceImageCache)
+                    (kvp.Value as IDisposable)?.Dispose();
+                SourceImageCache.Clear();
+            }
+            ImageCache.Clear();
 
             base.Dispose();
         }

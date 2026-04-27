@@ -404,16 +404,18 @@ namespace EmoTracker
 
                 InitializePackageManagerViews();
 
-            // Pre-allocate the primary state + PackageInstance BEFORE any
-            // pack-load reaches Tracker.Reload. PackageLoader's "load into
-            // a target state" model requires a target to exist.
-            PreallocatePrimaryState();
+            // Phase 7.1.h: no preallocated PrimaryState. The first
+            // ApplicationModel.ActivatePackage call constructs the initial
+            // PackageInstance against the (pack, variant) being activated
+            // and forks its DefinitionalState to produce a primary state.
 
             // Install the cross-assembly resolver hooks so EmoTracker.Data
             // and EmoTracker.UI code can reach the currently-active primary
             // state without consulting an ambient slot. Each resolver
             // evaluates the relevant state on call rather than caching one.
             EmoTracker.Data.Sessions.ActiveSession.PrimaryStateResolver = () => PrimaryState;
+            EmoTracker.Data.Sessions.ActiveSession.PackageInstanceForPackageResolver = pkg =>
+                mPackageInstances.FirstOrDefault(p => ReferenceEquals(p.GamePackage, pkg));
             EmoTracker.Data.ApplicationSettings.ActiveSessionSettingsResolver = () => PrimaryState?.Settings;
             EmoTracker.UI.Converters.LayoutReferenceConverter.ActiveLayoutsResolver = () => PrimaryState?.Layouts;
 
@@ -541,85 +543,39 @@ namespace EmoTracker
         /// which populates the state's catalogs in-place.
         /// </para>
         /// </summary>
-        void PreallocatePrimaryState()
-        {
-            mActivePackageInstance = new PackageInstance();
-
-            var primary = new TrackerState(
-                name: "primary",
-                scripts: new ScriptManager(),
-                transactions: new EmoTracker.Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo(),
-                items: new ItemDatabase(),
-                locations: new LocationDatabase(),
-                maps: new MapDatabase(),
-                layouts: new LayoutManager());
-
-            mActivePackageInstance.AdoptAsPrimary(primary);
-
-            // Phase 7.5: track in the collection so multi-pack consumers
-            // can enumerate every live PackageInstance.
-            mPackageInstances.Add(mActivePackageInstance);
-        }
-
-        // -------- Phase 7.5: multi-PackageInstance lifecycle ----------------
+        // -------- Phase 7.5 / 7.1.h: multi-PackageInstance lifecycle ---------
 
         /// <summary>
-        /// Phase 7.5: load a pack into a freshly-allocated
-        /// <see cref="PackageInstance"/> without disturbing any existing
-        /// instance. Returns the new instance's primary state.
-        ///
-        /// <para>
-        /// Today the existing single-pack flow (<c>LoadDefaultPackage</c>
-        /// → <c>Tracker.Reload</c> → <c>RebindActivePackageInstanceFromSingletons</c>)
-        /// remains the dominant pack-load path because Avalonia UI bindings
-        /// and several extensions still assume one active set of catalogs
-        /// (<c>ApplicationModel.Instance.PrimaryState.Items</c> etc).
-        /// Phase 7.6's <c>WindowContext</c> binding migration unblocks the
-        /// multi-pack scenario; this method exposes the API now so 7.6+
-        /// UI work can use it.
-        /// </para>
+        /// Phase 7.1.h: load a pack into a freshly-allocated (or reused)
+        /// <see cref="PackageInstance"/> and return a forked primary
+        /// <see cref="TrackerState"/> for it. Equivalent to
+        /// <see cref="ActivatePackage"/> minus the "add-to-window" side
+        /// effect — used by callers (e.g. Bundle restore, MCP debug
+        /// tooling) that want to control state placement themselves.
         /// </summary>
         public TrackerState LoadNewPack(IGamePackage package, IGamePackageVariant variant)
         {
             if (package == null) throw new ArgumentNullException(nameof(package));
 
-            var pi = new PackageInstance();
-
-            // Allocate a fresh primary state with brand-new catalogs.
-            var primary = new TrackerState(
-                name: package.UniqueID + " #1",
-                scripts: new ScriptManager(),
-                transactions: new EmoTracker.Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo(),
-                items: new ItemDatabase(),
-                locations: new LocationDatabase(),
-                maps: new MapDatabase(),
-                layouts: new LayoutManager());
+            var pi = GetOrCreatePackageInstance(package, variant);
+            string forkName = package.UniqueID + " #" + (pi.States.Count + 1);
+            var primary = pi.DefinitionalState.Fork(forkName);
             pi.AdoptAsPrimary(primary);
-
-            // Drive the package load into this state. PackageLoader.LoadInto
-            // sets the state's Package/ActiveVariant on the way through.
-            EmoTracker.Data.Sessions.PackageLoader.LoadInto(primary, package, variant);
-
-            mPackageInstances.Add(pi);
-
             return primary;
         }
 
         /// <summary>
-        /// Phase 7.5: fork the given PackageInstance's primary state to
-        /// produce an additional state on the same pack. Used by Phase 7.7
-        /// "+ create new state from pack" UI.
+        /// Forks <paramref name="pi"/>'s
+        /// <see cref="PackageInstance.DefinitionalState"/> to produce an
+        /// additional primary state. Each fork is independent — a fresh
+        /// snapshot of the pack-loaded definitional state.
         /// </summary>
         public TrackerState CreateAdditionalState(PackageInstance pi, string name = null)
         {
             if (pi == null) throw new ArgumentNullException(nameof(pi));
-            var sourcePrimary = pi.States.Values.FirstOrDefault();
-            if (sourcePrimary == null)
-                throw new InvalidOperationException("PackageInstance has no primary state to fork from.");
-            var fork = sourcePrimary.Fork(name);
-            // The fork is registered in the PackageInstance.States via
-            // AdoptAsPrimary so per-state extensions get attached. Multiple
-            // states per PI is the headline 7.5 capability.
+            if (pi.DefinitionalState == null)
+                throw new InvalidOperationException("PackageInstance has no definitional state to fork from.");
+            var fork = pi.DefinitionalState.Fork(name);
             pi.AdoptAsPrimary(fork);
             return fork;
         }
@@ -650,9 +606,6 @@ namespace EmoTracker
         /// </summary>
         void OnActivePackageMetadataChanged()
         {
-            if (mActivePackageInstance == null)
-                PreallocatePrimaryState();
-
             NotifyPropertyChanged(nameof(PrimaryState));
         }
 
@@ -1175,13 +1128,86 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
         /// <summary>
         /// Activates <paramref name="package"/> (with optional
-        /// <paramref name="variant"/>) on the primary state, triggering a
-        /// reload. Replaces the legacy
-        /// <c>ActiveGamePackage = X</c> setter pattern.
+        /// <paramref name="variant"/>): finds an existing
+        /// <see cref="PackageInstance"/> for the (pack, variant) pair or
+        /// constructs a fresh one (running <see cref="PackageLoader.LoadInto"/>
+        /// against its <see cref="PackageInstance.DefinitionalState"/>),
+        /// then forks the definitional state to create a new primary
+        /// <see cref="TrackerState"/> and adds it to the active window.
         /// </summary>
         public void ActivatePackage(IGamePackage package, IGamePackageVariant variant = null)
         {
-            PrimaryState?.ActivatePackage(package, variant);
+            if (package == null) return;
+
+            // Validate variant; fall back to first available.
+            if (variant != null && package.AvailableVariants != null
+                && !package.AvailableVariants.Contains(variant))
+            {
+                variant = null;
+            }
+            if (variant == null && package.AvailableVariants != null)
+                variant = package.AvailableVariants.FirstOrDefault();
+
+            var pi = GetOrCreatePackageInstance(package, variant);
+
+            ApplicationSettings.Instance.LastActivePackage = package.UniqueID;
+            ApplicationSettings.Instance.LastActivePackageVariant = variant?.UniqueID;
+            PackageManager.Instance.RefreshActiveState();
+
+            // Fork the PI's DefinitionalState to produce a fresh primary
+            // state for this activation. The DefinitionalState retains the
+            // canonical pack-loaded snapshot; primary states layer per-state
+            // mutation on top via Phase-1 fork mechanics.
+            string forkName = package.UniqueID + " #" + (pi.States.Count + 1);
+            var primary = pi.DefinitionalState.Fork(forkName);
+            pi.AdoptAsPrimary(primary);
+
+            ActivePackageInstance = pi;
+
+            // Add to the active window so it shows up as a tab there. During
+            // app startup no window is registered yet; the first MainWindow's
+            // seedWithPrimaryState path picks the state up via the
+            // PrimaryState getter fallback.
+            var ctx = mCurrentlyActiveWindowContext ?? mWindows.FirstOrDefault();
+            ctx?.AddState(primary);
+
+            NotifyPropertyChanged(nameof(PrimaryState));
+
+            // Now that PrimaryState is non-null, run the deferred app-level
+            // package-loaded side effects (extensions, layouts, etc.).
+            FirePackageLoadedFanout();
+        }
+
+        /// <summary>
+        /// Finds the existing <see cref="PackageInstance"/> matching
+        /// <paramref name="package"/> / <paramref name="variant"/>, or
+        /// constructs a new one and runs <see cref="PackageLoader.LoadInto"/>
+        /// against its <see cref="PackageInstance.DefinitionalState"/>.
+        /// </summary>
+        public PackageInstance GetOrCreatePackageInstance(IGamePackage package, IGamePackageVariant variant)
+        {
+            if (package == null) throw new ArgumentNullException(nameof(package));
+
+            var existing = mPackageInstances.FirstOrDefault(p =>
+                ReferenceEquals(p.GamePackage, package)
+                && ReferenceEquals(p.ActiveVariant, variant));
+            if (existing != null) return existing;
+
+            var pi = new PackageInstance(package, variant);
+            package.ActiveVariant = variant;
+
+            // Phase 7.1.h: register the PI BEFORE the load so the
+            // PackageInstanceForPackageResolver can find it during pack
+            // parse — ImageReference factory methods stamp the PI back-ref
+            // by walking this collection.
+            mPackageInstances.Add(pi);
+
+            // Load the pack into the PI's DefinitionalState. This is the
+            // single canonical pack-load per (pack, variant) pair —
+            // subsequent activations fork from here rather than re-loading.
+            EmoTracker.Data.Sessions.PackageLoader.LoadInto(pi.DefinitionalState, package, variant);
+
+            return pi;
         }
 
         /// <summary>True iff the primary state's active pack has the given UID.</summary>
@@ -1274,7 +1300,11 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             ExtensionManager.Instance.OnPackageUnloaded();
 
             NotifyPropertyChanged("MainWindowTitle");
-            ImageReferenceService.Instance.ClearImageCache();
+            // Phase 7.1.h: image caches are owned by PackageInstance now;
+            // a pack-load starting on one PI doesn't disturb others, and
+            // each PI's cache is freed by its Dispose. The service-level
+            // ClearImageCache is no longer called here — only when an
+            // entire PI tears down.
             mPreviousNotifications.Clear();
 
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
@@ -1283,6 +1313,31 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
         }
         private void OnPackageLoadCompleteHandler(object sender, PackageLoader.PackageLoadEventArgs e)
         {
+            // Phase 7.1.h: when the load target is a PackageInstance's
+            // DefinitionalState, no primary state exists yet — the caller
+            // (ApplicationModel.ActivatePackage) is responsible for forking
+            // a primary state and then driving FirePackageLoadedFanout.
+            // Skip the app-level fan-out here in that case so extensions
+            // (VoiceRecognition / AutoTracker / NoteTaking) and AcquireLayouts
+            // don't see a null PrimaryState.
+            var target = e.Target;
+            if (target != null && ReferenceEquals(target, target.PackageInstance?.DefinitionalState))
+                return;
+
+            FirePackageLoadedFanout();
+        }
+
+        /// <summary>
+        /// Phase 7.1.h: app-level package-loaded side effects — extension
+        /// notification, layout acquisition, dirty-marker reset, focus
+        /// restore, app-level <see cref="PackageLoadComplete"/> event.
+        /// Invoked by <see cref="OnPackageLoadCompleteHandler"/> for
+        /// primary-state loads (Reload / LoadProgress) and explicitly by
+        /// <see cref="ActivatePackage"/> after the definitional-state load
+        /// + fork has produced the new primary.
+        /// </summary>
+        void FirePackageLoadedFanout()
+        {
             ExtensionManager.Instance.OnPackageLoaded();
             AcquireLayouts();
 
@@ -1290,18 +1345,10 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
             //  fields being set during load
             (PrimaryState?.Transactions as IUndoableTransactionProcessor)?.ClearUndoHistory();
 
-            // Pack metadata is now stored on the TrackerState itself
-            // (PackageLoader.LoadInto sets it during load); the
-            // PackageInstance is just a state container. We fire one
-            // PropertyChanged on PrimaryState so UI bindings against the
-            // active state's pack/variant refresh.
             OnActivePackageMetadataChanged();
 
             // Phase 7.11 polish: a freshly-loaded pack isn't dirty —
-            // clear the marker on every active state. (Transactable
-            // writes during pack-load via init.lua mark the state dirty;
-            // we clear here once load is complete so the user only sees
-            // dirty when THEIR mutations are unsaved.)
+            // clear the marker on every active state.
             foreach (var pi in mPackageInstances)
                 foreach (var kvp in pi.States)
                     kvp.Value.MarkClean();

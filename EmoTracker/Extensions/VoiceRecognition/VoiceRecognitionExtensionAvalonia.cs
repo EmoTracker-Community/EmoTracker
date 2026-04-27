@@ -427,11 +427,20 @@ namespace EmoTracker.Extensions.VoiceRecognition
             var cts = new CancellationTokenSource();
             _buildCommandMapCts = cts;
 
+            // Phase 7.1.h: defensive — OnPackageLoaded can fire before the
+            // active primary state exists (e.g. early activation of an
+            // extension before any pack is loaded). Skip the build until
+            // the catalogs are available; the next pack-load completion
+            // will re-trigger this method.
+            var items = ActiveItems;
+            var locations = ActiveLocations;
+            if (items == null || locations == null) return;
+
             // Snapshot all data we need from the UI thread before going to background.
             // Item/location databases are only mutated on the UI thread during pack load,
             // and OnPackageLoaded fires after load completes, so this snapshot is safe.
             var itemSnapshots = new List<(ITrackableItem item, string code, string[] names)>();
-            foreach (var item in ActiveItems.Items)
+            foreach (var item in items.Items)
             {
                 if (string.IsNullOrWhiteSpace(item.Name)) continue;
                 string code = ActiveItems.GetPersistableItemReference(item);

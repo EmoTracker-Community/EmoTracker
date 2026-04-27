@@ -45,6 +45,17 @@ namespace EmoTracker.Data.Media
         public int SourceHeight { get; set; }
 
         /// <summary>
+        /// Phase 7.1.h: the <see cref="Sessions.PackageInstance"/> this
+        /// reference was constructed against. Owns the resolved-image
+        /// cache + decoded-source cache for this reference; the resolver
+        /// reads/writes through it instead of consulting the active
+        /// session. For composite refs (Filter / Layered), inherits from
+        /// the wrapped / first-layer reference. May be null for refs
+        /// constructed outside a pack-load (external URIs, tests).
+        /// </summary>
+        public Sessions.PackageInstance PackageInstance { get; internal set; }
+
+        /// <summary>
         /// Optional callback invoked whenever a new ImageReference is created via
         /// a factory method.  Set by the image resolution service at startup so
         /// that newly-created references are automatically queued for background
@@ -262,7 +273,11 @@ namespace EmoTracker.Data.Media
             var result = new ConcreteImageReference()
             {
                 URI = new Uri(path),
-                Filter = filter
+                Filter = filter,
+                // Phase 7.1.h: stamp the owning PackageInstance so the
+                // resolver can find this reference's cache + open the
+                // file directly without consulting an ambient session.
+                PackageInstance = Sessions.ActiveSession.FindPackageInstanceFor(package),
             };
 
             PopulateDimensions(result, package, path);
@@ -282,7 +297,10 @@ namespace EmoTracker.Data.Media
             var result = new FilterImageReference()
             {
                 Reference = existingReference,
-                Filter = filter
+                Filter = filter,
+                // Inherit the PI back-ref from the wrapped reference so
+                // the resolver can navigate to the same per-PI caches.
+                PackageInstance = existingReference.PackageInstance,
             };
 
             // Filters don't change dimensions – inherit from the source
@@ -300,6 +318,9 @@ namespace EmoTracker.Data.Media
             {
                 URI = uri,
                 Filter = filter
+                // External URIs aren't pack-relative, so PackageInstance
+                // stays null. The resolver falls back to the service-wide
+                // cache for these.
             };
 
             NotifyCreated(result);
@@ -323,6 +344,9 @@ namespace EmoTracker.Data.Media
                 var firstLayer = instance.Layers[0];
                 instance.SourceWidth = firstLayer.SourceWidth;
                 instance.SourceHeight = firstLayer.SourceHeight;
+                // Inherit PI back-ref from the first layer (all layers
+                // typically belong to the same PI in practice).
+                instance.PackageInstance = firstLayer.PackageInstance;
 
                 NotifyCreated(instance);
 

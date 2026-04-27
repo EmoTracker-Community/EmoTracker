@@ -29,8 +29,54 @@ namespace EmoTracker.UI.Media
     public class ImageReferenceService : ObservableSingleton<ImageReferenceService>
     {
         // ── Cache ───────────────────────────────────────────────────────
-        readonly ConcurrentDictionary<ImageReference, IImage> mCache = new ConcurrentDictionary<ImageReference, IImage>();
+        // Phase 7.1.h: per-PackageInstance image caches replaced the
+        // previous process-wide cache. The active cache for an
+        // ImageReference is owned by its PackageInstance back-ref. For
+        // refs without a PI (FromExternalURI, tests), we fall back to
+        // mFallbackCache below.
+        readonly ConcurrentDictionary<ImageReference, IImage> mFallbackCache = new ConcurrentDictionary<ImageReference, IImage>();
         readonly object mResolutionLock = new object();
+
+        // Returns the (typed) ImageReference cache for the supplied
+        // reference: the back-referenced PackageInstance's ImageCache, or
+        // mFallbackCache if no PI is bound. The PackageInstance side
+        // stores values as <c>object</c> because it lives in
+        // EmoTracker.Data and can't see Avalonia's IImage type — we
+        // round-trip through that boxing here.
+        bool TryGetCached(ImageReference imageRef, out IImage image)
+        {
+            image = null;
+            if (imageRef == null) return false;
+            var pi = imageRef.PackageInstance;
+            if (pi != null)
+            {
+                if (pi.ImageCache.TryGetValue(imageRef, out var boxed) && boxed is IImage img)
+                {
+                    image = img;
+                    return true;
+                }
+                return false;
+            }
+            return mFallbackCache.TryGetValue(imageRef, out image);
+        }
+
+        bool ContainsCached(ImageReference imageRef)
+        {
+            if (imageRef == null) return false;
+            var pi = imageRef.PackageInstance;
+            if (pi != null) return pi.ImageCache.ContainsKey(imageRef);
+            return mFallbackCache.ContainsKey(imageRef);
+        }
+
+        void StoreCached(ImageReference imageRef, IImage image)
+        {
+            if (imageRef == null || image == null) return;
+            var pi = imageRef.PackageInstance;
+            if (pi != null)
+                pi.ImageCache[imageRef] = image;
+            else
+                mFallbackCache[imageRef] = image;
+        }
 
         // ── Instance Tracking ───────────────────────────────────────────
         // Multiple distinct ImageReference objects can share the same equality
@@ -194,21 +240,24 @@ namespace EmoTracker.UI.Media
         /// </summary>
         public void ClearImageCache()
         {
+            // Phase 7.1.h: per-PI caches are owned by PackageInstance
+            // and torn down on its Dispose; this method now only clears
+            // the work queue, pending-instance bookkeeping, and the
+            // service-wide fallback cache for non-pack-bound refs.
+            // Per-PI image caches and the per-PI source-bitmap cache are
+            // NOT cleared here.
             lock (mQueueLock)
             {
                 mQueue.Clear();
                 mQueueIndex.Clear();
                 mQueueSignal.Reset();
             }
-            mCache.Clear();
+            mFallbackCache.Clear();
 
             lock (mInstancesLock)
             {
                 mPendingInstances.Clear();
             }
-
-            // Clear the source image cache used by ConcreteImageReferenceResolver
-            ConcreteImageReferenceResolver.ClearSourceCache();
         }
 
         /// <summary>
@@ -223,7 +272,7 @@ namespace EmoTracker.UI.Media
                 return;
 
             // Already resolved – nothing to do.
-            if (mCache.ContainsKey(imageRef))
+            if (ContainsCached(imageRef))
                 return;
 
             int pri = (int)priority;
@@ -255,7 +304,7 @@ namespace EmoTracker.UI.Media
         {
             if (imageRef == null)
                 return null;
-            mCache.TryGetValue(imageRef, out IImage cached);
+            TryGetCached(imageRef, out IImage cached);
             return cached;
         }
 
@@ -275,7 +324,7 @@ namespace EmoTracker.UI.Media
             // In sync mode, also set ResolvedImage on the requesting object so
             // duplicate ImageReference instances (same URI+filter, different object)
             // get the resolved image immediately.
-            if (mCache.TryGetValue(imageRef, out IImage cachedSrc))
+            if (TryGetCached(imageRef, out IImage cachedSrc))
             {
                 if (SyncMode && imageRef.ResolvedImage as IImage != cachedSrc)
                     imageRef.ResolvedImage = cachedSrc;
@@ -287,7 +336,7 @@ namespace EmoTracker.UI.Media
             lock (mResolutionLock)
             {
                 // Double-check after acquiring lock
-                if (mCache.TryGetValue(imageRef, out cachedSrc))
+                if (TryGetCached(imageRef, out cachedSrc))
                 {
                     if (SyncMode && imageRef.ResolvedImage as IImage != cachedSrc)
                         imageRef.ResolvedImage = cachedSrc;
@@ -317,7 +366,7 @@ namespace EmoTracker.UI.Media
             if (imageRef == null)
                 return null;
 
-            if (mCache.TryGetValue(imageRef, out IImage cached))
+            if (TryGetCached(imageRef, out IImage cached))
                 return cached;
 
             if (SyncMode)
@@ -336,9 +385,10 @@ namespace EmoTracker.UI.Media
         }
 
         /// <summary>
-        /// Returns the number of resolved images in the cache.
+        /// Returns the number of resolved images in the service-wide
+        /// fallback cache (per-PI caches are not summed here).
         /// </summary>
-        public int CacheCount => mCache.Count;
+        public int CacheCount => mFallbackCache.Count;
 
         // ── Instance Tracking ───────────────────────────────────────────
 
@@ -385,7 +435,7 @@ namespace EmoTracker.UI.Media
                 {
                     IImage src = entry.ResolveReference(imageRef);
                     if (src != null)
-                        mCache[imageRef] = src;
+                        StoreCached(imageRef, src);
                     return src;
                 }
             }
@@ -413,9 +463,9 @@ namespace EmoTracker.UI.Media
 
                     // Skip if already resolved (may have been resolved by a
                     // recursive call from a Filter/Layered resolver).
-                    if (mCache.ContainsKey(imageRef))
+                    if (TryGetCached(imageRef, out IImage already))
                     {
-                        PostResolvedImage(imageRef, mCache[imageRef]);
+                        PostResolvedImage(imageRef, already);
                         continue;
                     }
 
@@ -425,7 +475,7 @@ namespace EmoTracker.UI.Media
                         lock (mResolutionLock)
                         {
                             // Double-check under lock
-                            if (mCache.TryGetValue(imageRef, out resolved))
+                            if (TryGetCached(imageRef, out resolved))
                             {
                                 PostResolvedImage(imageRef, resolved);
                                 continue;

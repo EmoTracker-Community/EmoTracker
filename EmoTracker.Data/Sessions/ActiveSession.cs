@@ -41,5 +41,24 @@ namespace EmoTracker.Data.Sessions
         /// pack is loaded yet (or the resolver isn't installed).
         /// </summary>
         public static TrackerState Primary => PrimaryStateResolver?.Invoke();
+
+        /// <summary>
+        /// Installed by <c>ApplicationModel</c> at startup. Walks the
+        /// live <see cref="PackageInstance"/> collection to find the one
+        /// whose <see cref="PackageInstance.GamePackage"/> matches the
+        /// supplied package. Used by <see cref="Media.ImageReference"/>'s
+        /// factory methods to stamp the back-reference at construction
+        /// time so the resolver can find this reference's cache without
+        /// asking the active session.
+        /// </summary>
+        public static Func<IGamePackage, PackageInstance> PackageInstanceForPackageResolver { get; set; }
+
+        /// <summary>
+        /// Returns the <see cref="PackageInstance"/> that owns
+        /// <paramref name="package"/>, or null if no PI is registered
+        /// for it (or the resolver isn't installed).
+        /// </summary>
+        public static PackageInstance FindPackageInstanceFor(IGamePackage package)
+            => package == null ? null : PackageInstanceForPackageResolver?.Invoke(package);
     }
 }
