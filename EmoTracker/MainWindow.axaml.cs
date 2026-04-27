@@ -382,6 +382,12 @@ namespace EmoTracker
                 e.Handled = true;
                 return;
             }
+            else if (e.Key == Key.T && HasCmdModifier(e.KeyModifiers))
+            {
+                ApplicationModel.Instance.NewEmptyTabCommand?.Execute(null);
+                e.Handled = true;
+                return;
+            }
             else if (e.Key == Key.Z && HasCmdModifier(e.KeyModifiers))
             {
                 (ApplicationModel.Instance.PrimaryState?.Transactions as IUndoableTransactionProcessor)?.Undo();

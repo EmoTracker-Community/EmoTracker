@@ -35,6 +35,7 @@ namespace EmoTracker
         public DelegateCommand ResetUserDataCommand { get; private set; }
         public DelegateCommand OpenPackOverrideFolderCommand { get; private set; }
         public DelegateCommand ActivatePackCommand { get; private set; }
+        public DelegateCommand NewEmptyTabCommand { get; private set; }
         public DelegateCommand ShowPackageManagerCommand { get; private set; }
         public DelegateCommand ExportPackageOverrideCommand { get; private set; }
         public DelegateCommand ShowBroadcastViewCommand { get; private set; }
@@ -434,6 +435,7 @@ namespace EmoTracker
             ResetUserDataCommand = new DelegateCommand(ResetUserDataHandler);
             OpenPackOverrideFolderCommand = new DelegateCommand(OpenPackOverrideFolderHandler);
             ActivatePackCommand = new DelegateCommand(ActivatePackHandler);
+            NewEmptyTabCommand = new DelegateCommand(_ => NewEmptyTab());
             ShowPackageManagerCommand = new DelegateCommand(ShowPackManagerHandler);
             ExportPackageOverrideCommand = new DelegateCommand(ExportPackageOverrideHandler);
             SaveCommand = new AsyncDelegateCommand(SaveHandler, CanSave);
@@ -1164,18 +1166,64 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
 
             ActivePackageInstance = pi;
 
-            // Add to the active window so it shows up as a tab there. During
-            // app startup no window is registered yet; the first MainWindow's
-            // seedWithPrimaryState path picks the state up via the
-            // PrimaryState getter fallback.
+            // Open the new primary in the currently selected tab — clicking
+            // a pack/variant from the installed-packs menu replaces whatever
+            // was in the active tab rather than appending a new tab. The
+            // user explicitly creates new tabs via Ctrl+T (NewEmptyTab).
+            // During app startup no window is registered yet; the first
+            // MainWindow's seedWithPrimaryState path picks the state up
+            // via the PrimaryState getter fallback. Once a window exists
+            // but its tab strip is empty (no ActiveState), ReplaceActiveState
+            // falls through to AddState, so the first activation in a
+            // freshly-spawned-empty window also lands a tab.
             var ctx = mCurrentlyActiveWindowContext ?? mWindows.FirstOrDefault();
-            ctx?.AddState(primary);
+            if (ctx != null)
+            {
+                var oldState = ctx.ReplaceActiveState(primary);
+                if (oldState != null)
+                {
+                    // The replaced tab's state belongs to its
+                    // PackageInstance — remove it through the PI so the
+                    // per-state extension lifecycle observer is notified
+                    // and the state's catalogs are disposed cleanly.
+                    // States created via the empty-tab flow have no PI,
+                    // in which case dispose directly.
+                    var oldPi = oldState.PackageInstance;
+                    if (oldPi != null)
+                        oldPi.RemoveState(oldState.Id);
+                    else
+                        oldState.Dispose();
+                }
+            }
 
             NotifyPropertyChanged(nameof(PrimaryState));
 
             // Now that PrimaryState is non-null, run the deferred app-level
             // package-loaded side effects (extensions, layouts, etc.).
             FirePackageLoadedFanout();
+        }
+
+        /// <summary>
+        /// Creates a new "empty" tab (a <see cref="TrackerState"/> with no
+        /// pack loaded) on the currently-active window. Used by the
+        /// <c>Ctrl+T</c> keyboard shortcut: an empty tab is the user's
+        /// staging area for selecting which pack to load via the
+        /// installed-packs menu (which then opens the pack into that
+        /// tab via <see cref="WindowContext.ReplaceActiveState"/>).
+        ///
+        /// <para>
+        /// Returns the newly-allocated state, or null if no window is
+        /// available to host the tab.
+        /// </para>
+        /// </summary>
+        public TrackerState NewEmptyTab()
+        {
+            var ctx = mCurrentlyActiveWindowContext ?? mWindows.FirstOrDefault();
+            if (ctx == null) return null;
+
+            var state = new TrackerState("New Tab");
+            ctx.AddState(state, makeActive: true);
+            return state;
         }
 
         /// <summary>

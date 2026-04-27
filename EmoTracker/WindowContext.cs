@@ -137,6 +137,46 @@ namespace EmoTracker
         }
 
         /// <summary>
+        /// Replaces the currently <see cref="ActiveState"/> entry in
+        /// <see cref="OpenStates"/> with <paramref name="newState"/>,
+        /// preserving the tab's index in the strip. Returns the old
+        /// state so the caller can dispose / reassign it; returns null
+        /// if there was no active state to replace (in which case
+        /// <paramref name="newState"/> is added as a fresh tab and made
+        /// active, matching <see cref="AddState"/> semantics).
+        ///
+        /// <para>
+        /// Used by the "open in current tab" UX: clicking a pack from
+        /// the installed-packs menu replaces the active tab's state
+        /// with a freshly-forked primary, rather than appending a new
+        /// tab. To explicitly create a new tab, callers go through
+        /// <see cref="AddState"/> (e.g. <c>Ctrl+T</c> -&gt; new empty
+        /// tab).
+        /// </para>
+        /// </summary>
+        public TrackerState ReplaceActiveState(TrackerState newState)
+        {
+            if (newState == null) return null;
+
+            int idx = mActiveState != null ? mOpenStates.IndexOf(mActiveState) : -1;
+            if (idx < 0)
+            {
+                AddState(newState, makeActive: true);
+                return null;
+            }
+
+            var oldState = mOpenStates[idx];
+            if (ReferenceEquals(oldState, newState)) return null;
+
+            // Replace at the same index so the tab strip's element ordering
+            // is preserved. ObservableCollection's indexer setter fires a
+            // Replace event which the ItemsControl handles correctly.
+            mOpenStates[idx] = newState;
+            ActiveState = newState;
+            return oldState;
+        }
+
+        /// <summary>
         /// Remove <paramref name="state"/> from <see cref="OpenStates"/>.
         /// If it was the active state, the next state in the collection
         /// (or null if none remain) becomes active.
