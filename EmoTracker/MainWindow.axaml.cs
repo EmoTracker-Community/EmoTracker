@@ -506,7 +506,21 @@ namespace EmoTracker
                     : ApplicationModel.Instance.TrackerHorizontalLayout;
             }
             if (TrackerLayout != null)
-                TrackerLayout.DataContext = layout;
+            {
+                // Phase 7 polish: assigning a different Layout instance to
+                // DataContext doesn't always trigger a full visual-subtree
+                // rebuild in Avalonia (the existing bound DataTemplates
+                // re-use their visual children with the new DataContext).
+                // For per-window content swap to actually refresh the
+                // displayed items + map markers, we explicitly clear
+                // DataContext first to force the inner ContentControl /
+                // ItemsControl to release their existing visual children.
+                if (!ReferenceEquals(TrackerLayout.DataContext, layout))
+                {
+                    TrackerLayout.DataContext = null;
+                    TrackerLayout.DataContext = layout;
+                }
+            }
         }
 
         // Phase 7 XAML migration: forward WindowContext.ActiveState

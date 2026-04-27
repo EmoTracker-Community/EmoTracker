@@ -372,20 +372,15 @@ namespace EmoTracker.Data.Locations
             // us a fresh ModelReference bound to this fork — same DefinitionId,
             // empty cache — so resolution flows through this fork's resolver on
             // first read.
+            //
+            // Phase 7 polish: the previous code immediately read mLocationRef.Target
+            // here to set up a PropertyChanged subscription. That read happened
+            // BEFORE OwnerState was stamped on this fork-side MapLocation, so the
+            // cache captured the primary state's Location instead of the fork's.
+            // Subscription + cache priming now deferred to ResubscribeForOwnerState,
+            // called by the fork pipeline after OwnerState is stamped.
             mLocationRef = src.mLocationRef.ForFork(this);
-
-            // Re-subscribe PropertyChanged on the (fork's) resolved Location.
-            // Done explicitly rather than via the public setter because the
-            // setter's ReferenceEquals shortcut would early-exit (the resolved
-            // Target is identical via the singleton resolver) and skip the
-            // resubscribe.
             mSubscribedLocation = null;
-            var resolved = mLocationRef.Target;
-            if (resolved != null)
-            {
-                resolved.PropertyChanged += MLocation_PropertyChanged;
-                mSubscribedLocation = resolved;
-            }
 
             // Recompute derived margins from the fork's inherited Size /
             // BadgeAlignment / etc. (which are inherited via the COW MutableData).
@@ -393,6 +388,30 @@ namespace EmoTracker.Data.Locations
             mItemMargin.Top = mItemMargin.Left = -1 * (Size / 2);
             mNoteIndicatorSize = Math.Min(Size * 0.75, 50);
             mNoteIndicatorMargin = new Thickness(0, mNoteIndicatorSize * -0.5, mNoteIndicatorSize * -0.5, 0);
+        }
+
+        /// <summary>
+        /// Phase 7 polish: called by the fork pipeline after OwnerState
+        /// is stamped on this MapLocation. Invalidates the location-ref
+        /// cache so the next read resolves through this fork's resolver,
+        /// and re-subscribes to the resolved Location's PropertyChanged
+        /// for accessibility-update notifications.
+        /// </summary>
+        public void OnOwnerStateStamped()
+        {
+            mLocationRef?.InvalidateCache();
+            if (mSubscribedLocation != null)
+            {
+                mSubscribedLocation.PropertyChanged -= MLocation_PropertyChanged;
+                mSubscribedLocation = null;
+            }
+            var resolved = mLocationRef?.Target;
+            if (resolved != null)
+            {
+                resolved.PropertyChanged += MLocation_PropertyChanged;
+                mSubscribedLocation = resolved;
+            }
+            NotifyPropertyChanged(nameof(Location));
         }
     }
 

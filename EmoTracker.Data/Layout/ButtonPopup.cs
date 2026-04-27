@@ -90,5 +90,12 @@ namespace EmoTracker.Data.Layout
             var src = (ButtonPopup)source;
             mLayoutRef = src.mLayoutRef.ForFork(this);
         }
+
+        public override void OnOwnerStateStamped()
+        {
+            base.OnOwnerStateStamped();
+            mLayoutRef?.InvalidateCache();
+            NotifyPropertyChanged(nameof(Layout));
+        }
     }
 }

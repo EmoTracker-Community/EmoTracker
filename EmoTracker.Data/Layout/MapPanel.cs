@@ -104,5 +104,13 @@ namespace EmoTracker.Data.Layout
                 mMapRefs = null;
             }
         }
+
+        public override void OnOwnerStateStamped()
+        {
+            base.OnOwnerStateStamped();
+            if (mMapRefs != null)
+                foreach (var r in mMapRefs) r?.InvalidateCache();
+            NotifyPropertyChanged(nameof(Maps));
+        }
     }
 }

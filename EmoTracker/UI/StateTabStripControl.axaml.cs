@@ -169,6 +169,12 @@ namespace EmoTracker.UI
                     mDragStart = e.GetPosition(this);
                     mDragState = state;
                     mDragging = false;
+                    // Phase 7 polish: capture the pointer so subsequent
+                    // PointerMoved / PointerReleased events still fire on
+                    // this border even after the pointer leaves it. Without
+                    // this, dragging out of the strip's bounds never
+                    // triggers the tear-off threshold.
+                    e.Pointer.Capture(b);
                     e.Handled = true;
                 }
             }
@@ -214,6 +220,9 @@ namespace EmoTracker.UI
 
         void OnTabPointerReleased(object sender, PointerReleasedEventArgs e)
         {
+            // Phase 7 polish: release the pointer capture established in
+            // PointerPressed so events route normally afterwards.
+            try { e.Pointer.Capture(null); } catch { }
             try
             {
                 if (mDragging && mDragState != null && mContext != null)

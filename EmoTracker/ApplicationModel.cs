@@ -203,15 +203,19 @@ namespace EmoTracker
                 return;
             }
 
-            // Cross-PI switch: drive a Tracker.Reload of the new pack so
-            // singletons + bindings refresh.
+            // Cross-PI switch: update Tracker's pack metadata WITHOUT
+            // triggering Reload — the destination PackageInstance is
+            // already populated. Reloading would clear the image cache,
+            // wipe the destination state's catalogs, and re-run
+            // init.lua against the singletons; none of that is what we
+            // want for a tab swap. Instead, just point ambient slots at
+            // the destination's pack so XAML bindings against
+            // Tracker.Instance.ActiveGamePackage refire.
             ActivePackageInstance = owningPI;
             Core.Services.Dispatch.BeginInvoke(() =>
             {
-                Tracker.Instance.ActiveGamePackageVariant = null;
-                Tracker.Instance.ActiveGamePackage = owningPI.Package;
-                if (owningPI.ActiveVariant != null)
-                    Tracker.Instance.ActiveGamePackageVariant = owningPI.ActiveVariant;
+                Tracker.Instance.UpdatePackageInfoWithoutReload(owningPI.Package, owningPI.ActiveVariant);
+                AcquireLayouts();
             });
         }
 

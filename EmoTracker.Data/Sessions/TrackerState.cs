@@ -479,6 +479,16 @@ namespace EmoTracker.Data.Sessions
                 copy.Maps.AddMapFromFork(forkedMap);
                 copy.mResolver.Register(forkedMap);
                 modelIdentityMap[map] = forkedMap;
+                // Phase 7 polish: stamp OwnerState on each MapLocation in
+                // the forked map AND register them in the fork's resolver,
+                // then run their post-stamp hook so the cached Location
+                // reference resolves through the fork.
+                foreach (var ml in forkedMap.Locations)
+                {
+                    ml.OwnerState = copy;
+                    copy.mResolver.Register(ml);
+                    ml.OnOwnerStateStamped();
+                }
             }
 
             // ---- Per-state AccessibilityRule cache seeding (Phase 7.2) -----
@@ -573,6 +583,15 @@ namespace EmoTracker.Data.Sessions
             // the items panel renders the right state's catalog.
             if (node is EmoTracker.Data.Layout.ItemGrid itemGrid)
                 itemGrid.ResolveRowsAgainstOwnerState();
+
+            // Phase 7 polish: invalidate cross-reference caches that may
+            // have been populated before OwnerState was stamped (e.g. an
+            // early visual-tree binding read of Item.Data captured the
+            // primary state's item before this fork's OwnerState was
+            // set). The next read resolves through the now-stamped
+            // OwnerState's resolver.
+            if (node is EmoTracker.Data.Layout.LayoutItem li)
+                li.OnOwnerStateStamped();
 
             switch (node)
             {

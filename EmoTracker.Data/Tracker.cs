@@ -95,6 +95,36 @@ The active game package uses potentially unsafe scripting functionality, which a
 #endif
         }
 
+        // Phase 7 polish: when set to true, the next pack-info update
+        // (ActiveGamePackage / ActiveGamePackageVariant) skips Reload —
+        // used by cross-PackageInstance tab switches that want to update
+        // pack metadata without re-running pack-load (the target pack is
+        // already loaded in the destination PackageInstance).
+        bool mSuppressNextReload = false;
+
+        /// <summary>
+        /// Phase 7 polish: update <see cref="ActiveGamePackage"/> /
+        /// <see cref="ActiveGamePackageVariant"/> WITHOUT triggering
+        /// <see cref="Reload"/>. Used by <c>OnActiveStateSwitched</c>'s
+        /// cross-PackageInstance path so the image cache (and other
+        /// pack-load-tear-down side effects) survives a tab swap.
+        /// </summary>
+        public void UpdatePackageInfoWithoutReload(IGamePackage package, IGamePackageVariant variant)
+        {
+            mSuppressNextReload = true;
+            try
+            {
+                ActiveGamePackageVariant = null;
+                ActiveGamePackage = package;
+                if (variant != null)
+                    ActiveGamePackageVariant = variant;
+            }
+            finally
+            {
+                mSuppressNextReload = false;
+            }
+        }
+
         public IGamePackage ActiveGamePackage
         {
             get { return mActiveGamePackage; }
@@ -105,7 +135,8 @@ The active game package uses potentially unsafe scripting functionality, which a
                     ValidatePackageSafety(mActiveGamePackage);
 
                     PackageManager.Instance.RefreshActiveState();
-                    Reload();
+                    if (!mSuppressNextReload)
+                        Reload();
 
                     if (mActiveGamePackage != null)
                     {
@@ -142,7 +173,8 @@ The active game package uses potentially unsafe scripting functionality, which a
                     }
 
                     PackageManager.Instance.RefreshActiveState();
-                    Reload();
+                    if (!mSuppressNextReload)
+                        Reload();
                 }
             }
         }

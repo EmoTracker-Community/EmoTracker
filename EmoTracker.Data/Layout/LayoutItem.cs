@@ -406,6 +406,19 @@ namespace EmoTracker.Data.Layout
         }
 
         /// <summary>
+        /// Phase 7 polish: invalidate any cross-reference caches on this
+        /// layout-item that were populated before <see cref="ModelTypeBase.OwnerState"/>
+        /// was stamped. The fork pipeline calls this after stamping so
+        /// the next read of cross-references resolves through the fork's
+        /// resolver rather than returning a primary-side cached target.
+        /// Subclasses with <see cref="EmoTracker.Core.DataModel.ModelReference{T}"/>
+        /// fields override to invalidate them.
+        /// </summary>
+        public virtual void OnOwnerStateStamped()
+        {
+        }
+
+        /// <summary>
         /// Phase 7 polish: enumerate this layout item's owned <see cref="LayoutItem"/>
         /// children. Used by <c>TrackerState.Fork</c>'s OwnerState-stamping walk
         /// so per-fork item / location resolution flows through the fork's

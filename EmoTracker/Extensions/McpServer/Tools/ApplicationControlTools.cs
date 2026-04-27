@@ -291,6 +291,141 @@ namespace EmoTracker.Extensions.McpServer.Tools
             });
         }
 
+#if DEBUG_PHASE7_INSPECT
+        [McpServerTool(Name = "inspect_first_itemgrid")]
+        [Description("Phase 7 debug: inspect the first ItemGrid layout-element + its first row's first item.")]
+        public static async Task<string> InspectFirstItemGrid()
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var ctx = ApplicationModel.Instance.CurrentlyActiveWindowContext;
+                    var state = ctx?.ActiveState;
+                    var layout = state?.Layouts.FindLayout("shared_item_grid");
+                    if (layout?.Root == null) return JsonSerializer.Serialize(new { error = "no layout" });
+                    EmoTracker.Data.Layout.ItemGrid grid = null;
+                    void Walk(EmoTracker.Data.Layout.LayoutItem n)
+                    {
+                        if (grid != null) return;
+                        if (n is EmoTracker.Data.Layout.ItemGrid g) { grid = g; return; }
+                        foreach (var c in n.EnumerateChildren()) Walk(c);
+                    }
+                    Walk(layout.Root);
+                    if (grid == null) return JsonSerializer.Serialize(new { error = "no itemgrid" });
+                    var data = grid.Data;
+                    var rows = data?.Rows.GetEnumerator();
+                    string firstItem = null; int firstHash = 0; bool firstActive = false;
+                    if (rows != null && rows.MoveNext())
+                    {
+                        var row = rows.Current;
+                        var rowEnum = row?.GetEnumerator();
+                        if (rowEnum != null && rowEnum.MoveNext())
+                        {
+                            var item = rowEnum.Current;
+                            firstItem = item?.Name;
+                            firstHash = item?.GetHashCode() ?? 0;
+                            if (item is EmoTracker.Data.Items.ToggleItem ti) firstActive = ti.Active;
+                            else if (item is EmoTracker.Data.Items.ProgressiveItem pi) firstActive = pi.CurrentStage > 0;
+                        }
+                    }
+                    return JsonSerializer.Serialize(new {
+                        stateName = state.Name,
+                        gridHash = grid.GetHashCode(),
+                        gridOwner = (grid.OwnerState as EmoTracker.Data.Sessions.TrackerState)?.Name,
+                        innerDataHash = data?.GetHashCode() ?? 0,
+                        firstItemName = firstItem,
+                        firstItemHash = firstHash,
+                        firstItemActive = firstActive,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { error = ex.Message });
+                }
+            });
+        }
+
+#endif
+#if DEBUG_PHASE7_INSPECT
+        [McpServerTool(Name = "inspect_first_item_layout")]
+        [Description("Phase 7 debug: inspect the first Item LayoutItem in active state's tracker_horizontal layout.")]
+        public static async Task<string> InspectFirstItemLayout()
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var ctx = ApplicationModel.Instance.CurrentlyActiveWindowContext;
+                    var state = ctx?.ActiveState;
+                    var layout = state?.Layouts.FindLayout("shared_item_grid")
+                                 ?? state?.Layouts.FindLayout("tracker_horizontal");
+                    if (layout?.Root == null) return JsonSerializer.Serialize(new { error = "no layout/root" });
+                    var found = FindFirstItem(layout.Root);
+                    if (found == null) return JsonSerializer.Serialize(new { error = "no Item element in layout tree" });
+                    var data = found.Data;
+                    return JsonSerializer.Serialize(new {
+                        stateName = state.Name,
+                        itemHash = found.GetHashCode(),
+                        ownerStateName = (found.OwnerState as EmoTracker.Data.Sessions.TrackerState)?.Name,
+                        dataNotNull = data != null,
+                        dataType = data?.GetType().FullName,
+                        dataName = data?.Name,
+                        dataHash = data?.GetHashCode() ?? 0,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { error = ex.Message, stack = ex.StackTrace });
+                }
+            });
+        }
+
+        static EmoTracker.Data.Layout.Item FindFirstItem(EmoTracker.Data.Layout.LayoutItem node)
+        {
+            if (node is EmoTracker.Data.Layout.Item it) return it;
+            foreach (var c in node.EnumerateChildren())
+            {
+                var found = FindFirstItem(c);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+#endif
+
+#if DEBUG_PHASE7_INSPECT
+        [McpServerTool(Name = "inspect_layout_dc")]
+        [Description("Phase 7 debug: inspect the active window's TrackerLayout DataContext.")]
+        public static async Task<string> InspectLayoutDC()
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var ctx = ApplicationModel.Instance.CurrentlyActiveWindowContext;
+                    if (ctx == null) return JsonSerializer.Serialize(new { error = "no ctx" });
+                    var mw = ctx.OwnerWindow as MainWindow;
+                    if (mw == null) return JsonSerializer.Serialize(new { error = "no mw", ownerType = ctx.OwnerWindow?.GetType().FullName });
+                    var tl = mw.FindControl<UI.LayoutControl>("TrackerLayout");
+                    if (tl == null) return JsonSerializer.Serialize(new { error = "no tl" });
+                    var dc = tl.DataContext;
+                    return JsonSerializer.Serialize(new {
+                        activeState = ctx.ActiveState?.Name,
+                        dcHash = dc?.GetHashCode() ?? 0,
+                        dcType = dc?.GetType().FullName,
+                        layoutsHash = ctx.ActiveState?.Layouts.FindLayout("tracker_horizontal")?.GetHashCode() ?? 0,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { error = ex.Message });
+                }
+            });
+        }
+
+#endif
+
         [McpServerTool(Name = "shutdown")]
         [Description("Trigger a normal shutdown of the application by closing the main window")]
         public static async Task<string> Shutdown()
