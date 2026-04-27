@@ -107,6 +107,7 @@
                                     <Separator />
                                     <MenuItem Header="Save" Command="{Binding SaveCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+S" />
                                     <MenuItem Header="Save As..." Command="{Binding SaveAsCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+Shift+S" />
+                                    <MenuItem Header="Save All…" Command="{Binding SaveAllCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                                 </MenuItem>
                                 <Separator />
                                 <MenuItem Header="Broadcast View" Command="{Binding ShowBroadcastViewCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F2" />

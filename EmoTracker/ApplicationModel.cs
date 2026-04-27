@@ -45,6 +45,15 @@ namespace EmoTracker
         public AsyncDelegateCommand SaveAsCommand { get; private set; }
         public AsyncDelegateCommand OpenCommand { get; private set; }
 
+        // Multi-state workspace persistence: one JSON envelope captures
+        // every open primary state across every window plus the window /
+        // tab arrangement. SaveAll always prompts (no current-bundle path
+        // tracked); the existing OpenCommand detects the workspace
+        // envelope (by its `type` marker) and routes to the workspace
+        // restore path automatically — single-pack save files continue
+        // to load into the current tab.
+        public AsyncDelegateCommand SaveAllCommand { get; private set; }
+
         public DelegateCommand OpenPackageDocumentationCommand { get; private set; }
 
         public DelegateCommand ResetLayoutScaleCommand { get; private set; }
@@ -537,6 +546,7 @@ namespace EmoTracker
             SaveCommand = new AsyncDelegateCommand(SaveHandler, CanSave);
             SaveAsCommand = new AsyncDelegateCommand(SaveAsHandler, CanSave);
             OpenCommand = new AsyncDelegateCommand(OpenHandler);
+            SaveAllCommand = new AsyncDelegateCommand(SaveAllHandler, CanSaveAll);
 
             OpenPackageDocumentationCommand = new DelegateCommand(OpenPackageDocumentation, CanOpenPackageDocumentation);
             ResetLayoutScaleCommand = new DelegateCommand(ResetLayoutScale);
@@ -976,7 +986,34 @@ ActiveGamePackage.OverridePath)
             string filename = await DialogService.Instance.OpenFileAsync("EmoTracker Save File (*.json)|*.json", defaultSaveDataPath);
             if (filename != null)
             {
-                if (!LoadProgress(filename))
+                // Sniff the JSON envelope: a multi-window workspace file
+                // declares `type = "emotracker_workspace"`. Anything else
+                // (including legacy save files which don't have a `type`
+                // key at all) is treated as a single-pack save and loaded
+                // into the current tab.
+                bool isWorkspace = TrySniffWorkspaceFile(filename);
+                if (isWorkspace)
+                {
+                    try
+                    {
+                        JObject root;
+                        using (var reader = new System.IO.StreamReader(filename))
+                            root = (JObject)JToken.ReadFrom(new Newtonsoft.Json.JsonTextReader(reader));
+
+                        RestoreWorkspaceFromJObject(root);
+
+                        PushMarkdownNotification(NotificationType.Message, string.Format(
+@"### Workspace Loaded
+Successfully restored workspace from ```{0}```",
+                            filename));
+                    }
+                    catch (System.Exception ex)
+                    {
+                        await DialogService.Instance.ShowOKAsync("Failed to load workspace…",
+                            "Failed to load the requested workspace save file.\n\n" + ex.Message);
+                    }
+                }
+                else if (!LoadProgress(filename))
                 {
                     Reload();
 
@@ -995,6 +1032,38 @@ ActiveGamePackage.OverridePath)
             }
 
             tcs?.TrySetResult(null);
+        }
+
+        // Quick sniff: read just enough of the JSON to determine whether
+        // the file is a workspace envelope. Returns false on any IO /
+        // parse error; the caller falls through to the single-pack path
+        // and surfaces an error there if the file is genuinely broken.
+        static bool TrySniffWorkspaceFile(string path)
+        {
+            try
+            {
+                using (var reader = new System.IO.StreamReader(path))
+                using (var jr = new Newtonsoft.Json.JsonTextReader(reader))
+                {
+                    while (jr.Read())
+                    {
+                        if (jr.TokenType == Newtonsoft.Json.JsonToken.PropertyName && (string)jr.Value == "type")
+                        {
+                            if (jr.Read() && jr.TokenType == Newtonsoft.Json.JsonToken.String)
+                                return (string)jr.Value == WorkspaceTypeMarker;
+                            return false;
+                        }
+                        // Don't recurse into nested objects/arrays — the
+                        // workspace marker is at the top level. Skip past
+                        // any nested values we encounter on the way to the
+                        // next top-level property.
+                        if (jr.TokenType == Newtonsoft.Json.JsonToken.StartObject && jr.Depth > 1) jr.Skip();
+                        else if (jr.TokenType == Newtonsoft.Json.JsonToken.StartArray && jr.Depth > 0) jr.Skip();
+                    }
+                }
+            }
+            catch { /* not parseable as JSON, or IO error — caller handles */ }
+            return false;
         }
 
         private bool CanSave(object obj)
@@ -1105,6 +1174,294 @@ Failed to save progress to ```{0}```. Make sure you have available disk space an
                 path));
 
             return false;
+        }
+
+        // ----- Workspace (multi-state, multi-window) save/load -----------
+
+        // Workspace JSON envelope identifier — versioned so future format
+        // changes can be detected and migrated. Bumped only when the
+        // envelope shape itself changes incompatibly.
+        const string WorkspaceTypeMarker = "emotracker_workspace";
+        const int WorkspaceFormatVersion = 1;
+
+        bool CanSaveAll(object obj)
+        {
+            // Saving requires at least one window with at least one
+            // pack-loaded state. Otherwise the workspace would be empty.
+            foreach (var ctx in mWindows)
+            {
+                foreach (var s in ctx.OpenStates)
+                {
+                    if (s.PackageInstance?.GamePackage != null)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        async void SaveAllHandler(object obj, TaskCompletionSource<object> tcs)
+        {
+            string defaultSaveDataPath = System.IO.Path.Combine(UserDirectory.Path, "saves");
+            try
+            {
+                if (!System.IO.Directory.Exists(defaultSaveDataPath))
+                    System.IO.Directory.CreateDirectory(defaultSaveDataPath);
+            }
+            catch { /* defensive */ }
+
+            string filename = await DialogService.Instance.SaveFileAsync(
+                "EmoTracker Workspace (*.json)|*.json", defaultSaveDataPath);
+            if (string.IsNullOrWhiteSpace(filename))
+            {
+                tcs?.TrySetResult(null);
+                return;
+            }
+
+            try
+            {
+                JObject root = BuildWorkspaceJObject();
+                using (System.IO.TextWriter textWriter = new System.IO.StreamWriter(filename))
+                using (Newtonsoft.Json.JsonTextWriter writer = new Newtonsoft.Json.JsonTextWriter(textWriter))
+                {
+                    writer.Formatting = Newtonsoft.Json.Formatting.Indented;
+                    root.WriteTo(writer);
+                }
+
+                // Workspace save satisfies dirty markers across every state.
+                foreach (var ctx in mWindows)
+                    foreach (var s in ctx.OpenStates)
+                        s.MarkClean();
+
+                PushMarkdownNotification(NotificationType.Message, string.Format(
+@"### Workspace Saved
+Successfully saved {0} window(s) to ```{1}```",
+                    mWindows.Count, filename));
+            }
+            catch (System.Exception ex)
+            {
+                PushMarkdownNotification(NotificationType.Error, string.Format(
+@"### Failed to Save Workspace
+Failed to save workspace to ```{0}```.
+
+{1}",
+                    filename, ex.Message));
+            }
+
+            tcs?.TrySetResult(null);
+        }
+
+        // Builds the JSON envelope: one entry per WindowContext, each
+        // carrying the host window's screen geometry + an array of tabs
+        // (state name + per-state save JObject + last-active flag).
+        JObject BuildWorkspaceJObject()
+        {
+            var root = new JObject();
+            root["type"] = WorkspaceTypeMarker;
+            root["version"] = WorkspaceFormatVersion;
+            root["creation_time"] = System.DateTime.Now.ToString();
+
+            var windowsArr = new JArray();
+            foreach (var ctx in mWindows)
+            {
+                var winObj = new JObject();
+                winObj["sequence"] = ctx.Sequence;
+                winObj["name"] = ctx.Name ?? string.Empty;
+
+                if (ctx.OwnerWindow is Avalonia.Controls.Window w)
+                {
+                    try
+                    {
+                        winObj["x"] = w.Position.X;
+                        winObj["y"] = w.Position.Y;
+                        winObj["width"] = double.IsFinite(w.Width) ? w.Width : 0.0;
+                        winObj["height"] = double.IsFinite(w.Height) ? w.Height : 0.0;
+                        winObj["maximized"] = w.WindowState == Avalonia.Controls.WindowState.Maximized;
+                    }
+                    catch { /* defensive */ }
+                }
+
+                int activeIdx = ctx.ActiveState != null
+                    ? ctx.OpenStates.IndexOf(ctx.ActiveState)
+                    : -1;
+                winObj["active_tab_index"] = activeIdx;
+
+                var tabsArr = new JArray();
+                foreach (var state in ctx.OpenStates)
+                {
+                    var tabObj = new JObject();
+                    tabObj["name"] = state.Name ?? string.Empty;
+                    var stateData = state.SaveProgressToJObject();
+                    if (stateData != null)
+                        tabObj["state"] = stateData;
+                    // States with no pack (empty Ctrl+T tabs) still
+                    // serialise their slot so the tab count survives;
+                    // restore creates an empty TrackerState for them.
+                    tabsArr.Add(tabObj);
+                }
+                winObj["tabs"] = tabsArr;
+
+                windowsArr.Add(winObj);
+            }
+            root["windows"] = windowsArr;
+            return root;
+        }
+
+        // Tears down the current arrangement and rebuilds every window /
+        // tab from <paramref name="root"/>. The first saved window adopts
+        // the existing primary MainWindow (so we don't leak it); each
+        // additional saved window spawns a fresh MainWindow.
+        void RestoreWorkspaceFromJObject(JObject root)
+        {
+            var windowsArr = root.GetValue<JArray>("windows");
+            if (windowsArr == null || windowsArr.Count == 0) return;
+
+            // 1. Clear current arrangement: remove all states from all
+            //    windows and dispose their owning PackageInstances.
+            foreach (var ctx in new System.Collections.Generic.List<WindowContext>(mWindows))
+            {
+                foreach (var s in new System.Collections.Generic.List<Data.Sessions.TrackerState>(ctx.OpenStates))
+                    ctx.RemoveState(s);
+            }
+            foreach (var pi in new System.Collections.Generic.List<PackageInstance>(mPackageInstances))
+            {
+                try { pi.Dispose(); } catch { /* defensive */ }
+            }
+            mPackageInstances.Clear();
+
+            // 2. Trim down to a single window — the existing primary —
+            //    then add new windows as needed for additional saved
+            //    entries. Closing extras here also clears their
+            //    WindowMergeTracker / per-window broadcast lifecycles.
+            var primaryWindow = mWindows.FirstOrDefault();
+            if (primaryWindow == null) return; // app shutting down — bail.
+
+            for (int i = mWindows.Count - 1; i >= 1; i--)
+            {
+                if (mWindows[i].OwnerWindow is Avalonia.Controls.Window w)
+                {
+                    PromoteAlternativeMainWindowIfNeeded(w);
+                    try { w.Close(); } catch { /* defensive */ }
+                }
+            }
+
+            // 3. Walk saved windows. Index 0 reuses the primary; further
+            //    indices spawn new tear-off-shaped windows (their lifetime
+            //    matches a regular tab strip tear-off, including
+            //    per-window WindowMergeTracker + broadcast wiring).
+            for (int i = 0; i < windowsArr.Count; i++)
+            {
+                var winObj = windowsArr[i] as JObject;
+                if (winObj == null) continue;
+
+                WindowContext targetCtx;
+                MainWindow targetWindow;
+                if (i == 0)
+                {
+                    targetCtx = primaryWindow;
+                    targetWindow = primaryWindow.OwnerWindow as MainWindow;
+                }
+                else
+                {
+                    targetWindow = new MainWindow(seedWithPrimaryState: false);
+                    targetCtx = targetWindow.WindowContext;
+                    targetWindow.Show();
+                }
+                if (targetWindow == null) continue;
+
+                // Window geometry — applied AFTER the new window has been
+                // shown so the platform has finalised its size constraints.
+                try
+                {
+                    bool maximized = winObj.GetValue<bool>("maximized", false);
+                    int x = (int)winObj.GetValue<double>("x", targetWindow.Position.X);
+                    int y = (int)winObj.GetValue<double>("y", targetWindow.Position.Y);
+                    double width = winObj.GetValue<double>("width", 0.0);
+                    double height = winObj.GetValue<double>("height", 0.0);
+
+                    if (!maximized)
+                    {
+                        targetWindow.WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.Manual;
+                        targetWindow.Position = new Avalonia.PixelPoint(x, y);
+                        if (width > 0) targetWindow.Width = width;
+                        if (height > 0) targetWindow.Height = height;
+                    }
+                    else
+                    {
+                        targetWindow.WindowState = Avalonia.Controls.WindowState.Maximized;
+                    }
+                }
+                catch { /* defensive */ }
+
+                // Tabs — for each saved tab, rebuild the state and attach
+                // to this window's OpenStates.
+                var tabsArr = winObj.GetValue<JArray>("tabs");
+                if (tabsArr != null)
+                {
+                    foreach (var tabTok in tabsArr)
+                    {
+                        if (!(tabTok is JObject tabObj)) continue;
+
+                        Data.Sessions.TrackerState state = RestoreStateFromTabJObject(tabObj);
+                        if (state != null)
+                            targetCtx.AddState(state, makeActive: false);
+                    }
+                }
+
+                // Active tab.
+                int activeIdx = winObj.GetValue<int>("active_tab_index", -1);
+                if (activeIdx >= 0 && activeIdx < targetCtx.OpenStates.Count)
+                    targetCtx.ActiveState = targetCtx.OpenStates[activeIdx];
+
+                // Workspace restoration shouldn't leave dirty markers.
+                foreach (var s in targetCtx.OpenStates)
+                    s.MarkClean();
+            }
+
+            // 4. Refresh app-wide state derived from the (now-different)
+            //    primary state.
+            ActivePackageInstance = mWindows.FirstOrDefault()?.ActiveState?.PackageInstance;
+            NotifyPropertyChanged(nameof(PrimaryState));
+            FirePackageLoadedFanout();
+        }
+
+        // Builds a TrackerState from one tab's JObject. Returns null if the
+        // tab can't be restored (e.g. its pack is no longer installed); the
+        // caller decides whether to skip or surface a warning.
+        Data.Sessions.TrackerState RestoreStateFromTabJObject(JObject tabObj)
+        {
+            string stateName = tabObj.GetValue<string>("name");
+            var stateData = tabObj.GetValue<JObject>("state");
+            if (stateData == null)
+            {
+                // Empty tab (Ctrl+T placeholder) — restore as such.
+                return new Data.Sessions.TrackerState(stateName ?? "New Tab");
+            }
+
+            string packageUID = stateData.GetValue<string>("package_uid");
+            string packageVariantUID = stateData.GetValue<string>("package_variant_uid");
+            if (string.IsNullOrWhiteSpace(packageUID)) return null;
+
+            IGamePackage package = PackageManager.Instance.FindInstalledPackage(packageUID);
+            if (package == null) return null;
+            IGamePackageVariant variant = !string.IsNullOrWhiteSpace(packageVariantUID)
+                ? package.FindVariant(packageVariantUID)
+                : package.AvailableVariants?.FirstOrDefault();
+
+            // Get-or-create PI (multiple tabs from the same pack share one).
+            var pi = GetOrCreatePackageInstance(package, variant);
+            string forkName = !string.IsNullOrWhiteSpace(stateName) ? stateName : (package.UniqueID + " #" + (pi.States.Count + 1));
+            var primary = pi.DefinitionalState.Fork(forkName);
+            pi.AdoptAsPrimary(primary);
+
+            if (!primary.LoadProgressFromJObject(stateData))
+            {
+                // Restoration failed — drop the orphan state from the PI so
+                // we don't leak it into subsequent state lookups.
+                try { pi.RemoveState(primary.Id); } catch { /* defensive */ }
+                return null;
+            }
+
+            return primary;
         }
 
         // Phase 7.10: exposed to BundleService for per-state load round-trips.

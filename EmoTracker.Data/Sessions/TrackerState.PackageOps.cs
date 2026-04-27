@@ -168,26 +168,8 @@ namespace EmoTracker.Data.Sessions
         /// </param>
         public bool SaveProgress(string path, Action<JObject> dataAction = null)
         {
-            var pi = PackageInstance;
-            var pkg = pi?.GamePackage;
-            if (pkg == null) return false;
-
-            JObject root = new JObject();
-            root["package_uid"] = pkg.UniqueID;
-            if (pi.ActiveVariant != null)
-                root["package_variant_uid"] = pi.ActiveVariant.UniqueID;
-            root["package_version"] = pkg.Version.ToString();
-            root["creation_time"] = DateTime.Now.ToString();
-            root["ignore_all_logic"] = Settings.IgnoreAllLogic;
-            root["display_all_locations"] = Settings.DisplayAllLocations;
-            root["always_allow_chest_manipulation"] = Settings.AlwaysAllowClearing;
-            root["auto_unpin_locations_on_clear"] = Settings.AutoUnpinLocationsOnClear;
-            root["pin_locations_on_item_capture"] = Settings.PinLocationsOnItemCapture;
-
-            Items.Save(root);
-            Locations.Save(root);
-
-            dataAction?.Invoke(root);
+            var root = SaveProgressToJObject(dataAction);
+            if (root == null) return false;
 
             try
             {
@@ -213,6 +195,39 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// In-memory variant of <see cref="SaveProgress"/> — builds and
+        /// returns the JSON envelope for this state's progress without
+        /// writing to disk. Used by the multi-state "Save All" path on
+        /// <see cref="ApplicationModel"/> which collects per-state JObjects
+        /// into a workspace envelope. Returns null when the state has no
+        /// loaded pack (nothing meaningful to serialize).
+        /// </summary>
+        public JObject SaveProgressToJObject(Action<JObject> dataAction = null)
+        {
+            var pi = PackageInstance;
+            var pkg = pi?.GamePackage;
+            if (pkg == null) return null;
+
+            JObject root = new JObject();
+            root["package_uid"] = pkg.UniqueID;
+            if (pi.ActiveVariant != null)
+                root["package_variant_uid"] = pi.ActiveVariant.UniqueID;
+            root["package_version"] = pkg.Version.ToString();
+            root["creation_time"] = DateTime.Now.ToString();
+            root["ignore_all_logic"] = Settings.IgnoreAllLogic;
+            root["display_all_locations"] = Settings.DisplayAllLocations;
+            root["always_allow_chest_manipulation"] = Settings.AlwaysAllowClearing;
+            root["auto_unpin_locations_on_clear"] = Settings.AutoUnpinLocationsOnClear;
+            root["pin_locations_on_item_capture"] = Settings.PinLocationsOnItemCapture;
+
+            Items.Save(root);
+            Locations.Save(root);
+
+            dataAction?.Invoke(root);
+            return root;
         }
 
         /// <summary>
@@ -280,6 +295,55 @@ An error occurred while saving. This may be due to anti-virus/malware software p
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Restores items / locations / settings from <paramref name="root"/>
+        /// into this <i>already-forked</i> state, WITHOUT swapping the
+        /// <see cref="PackageInstance"/> or re-running pack-load.
+        ///
+        /// <para>
+        /// Used by the multi-state "Load All" path: the workspace JSON
+        /// envelope contains pre-built per-state JObjects (one per saved
+        /// tab); the loader forks each PI's <c>DefinitionalState</c> to
+        /// produce a fresh primary, then layers the saved progress on
+        /// top via this method. This is faster than calling
+        /// <see cref="LoadProgress(string, Action{JObject})"/> for every
+        /// tab (which would each re-parse the pack from disk) and lets
+        /// multiple tabs from the same (pack, variant) share a single
+        /// PackageInstance.
+        /// </para>
+        ///
+        /// <para>
+        /// Does NOT validate the save's package_uid / package_version
+        /// against this state's pack — the caller is responsible for
+        /// having forked from the correct PackageInstance. Returns
+        /// false if Items / Locations refuse the data.
+        /// </para>
+        /// </summary>
+        public bool LoadProgressFromJObject(JObject root)
+        {
+            if (root == null) return false;
+
+            try
+            {
+                if (!Items.Load(root)) return false;
+                if (!Locations.Load(root)) return false;
+
+                Settings.IgnoreAllLogic = root.GetValue<bool>("ignore_all_logic", false);
+                Settings.DisplayAllLocations = root.GetValue<bool>("display_all_locations", false);
+                Settings.AlwaysAllowClearing = root.GetValue<bool>("always_allow_chest_manipulation", false);
+                Settings.AutoUnpinLocationsOnClear = root.GetValue<bool>("auto_unpin_locations_on_clear", true);
+                Settings.PinLocationsOnItemCapture = root.GetValue<bool>("pin_locations_on_item_capture", true);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Scripts?.OutputError("Error encountered while restoring saved tracker state");
+                Scripts?.OutputException(ex);
+                return false;
+            }
         }
 
         // ---- ICodeProvider helpers (state-local) ------------------------
