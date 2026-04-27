@@ -171,6 +171,27 @@ namespace EmoTracker.Data.Sessions
                 if (!suspendPackReadyEvent)
                 {
                     ((IScriptManager)target.Scripts)?.InvokeStandardCallback(StandardCallback.PackReady);
+
+                    // Phase 7.1.h: pack scripts (e.g. CodeTracker) commonly
+                    // gate their tracker_on_accessibility_updated body on a
+                    // `STATUS.TRACKER_READY` flag that they only set to true
+                    // inside tracker_on_pack_ready. PopSuspendRefresh's
+                    // earlier accessibility cascade fires AccessibilityUpdated
+                    // BEFORE PackReady, so the pack's gate-check returns
+                    // false and the cascade evaluates against pre-pack-ready
+                    // Lua state — leaving section.mCachedAccessibility stuck
+                    // at None for everything pack-script-derived. Trigger
+                    // ONE more refresh now that PackReady has fired so the
+                    // callback runs with TRACKER_READY = true and pack-side
+                    // accessibility logic gets to actually populate values.
+                    try
+                    {
+                        target.Locations.RefreshAccessibility();
+                    }
+                    catch (Exception e)
+                    {
+                        target.Scripts?.OutputException(e);
+                    }
                 }
             }
         }
