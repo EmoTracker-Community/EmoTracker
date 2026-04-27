@@ -195,26 +195,131 @@ end
         }
 
         // Pre-populate the identity map so the source interpreter's _G
-        // resolves to the destination interpreter's _G. This protects
-        // CloneFunction's upvalue copy from recursively cloning source._G
-        // when a closure captures it as its _ENV upvalue (the default for
-        // every top-level function in Lua 5.2+). Without this seeding,
-        // CloneTable's descent into _G hits CloneFunction's "skip C
-        // functions" branch for stdlib (rawget, pairs, type, ...), which
-        // produces a clone with stdlib slots = nil and breaks any closure
-        // that calls those functions.
+        // resolves to the destination interpreter's _G AND every baseline
+        // C function / stdlib sub-table resolves to the destination's
+        // equivalent. Without this seeding:
+        //
+        //   * Closures that capture _ENV (the default for every top-level
+        //     function in Lua 5.2+) would have their _ENV recursively
+        //     cloned via CloneTable — and CloneFunction skips C functions,
+        //     so the cloned _G ends up with stdlib slots (rawget / pairs /
+        //     type / ipairs / ...) all nil.
+        //   * Closures that capture stdlib functions as locals (e.g.
+        //     `local p = pairs` then `function() return p(t) end`) would
+        //     have their upvalue cloned via CloneFunction → which returns
+        //     null for C functions → upvalue becomes nil on the destination
+        //     → calling that upvalue errors.
+        //
+        // We seed each baseline name's value via GetSourceId so the Lua-
+        // level identity is recorded in the identity map; CloneValue then
+        // short-circuits to the destination's same-name entry on encounter.
+        // We also recurse one level into stdlib sub-tables (string, table,
+        // math, etc.) so e.g. `local fmt = string.format` works.
         bool mGSeeded;
         void SeedSourceGToDestinationG()
         {
             if (mGSeeded) return;
+            mGSeeded = true; // set early to break recursion via GetSourceId
+
             var srcG = mSource["_G"] as LuaTable;
             var dstG = mDestination["_G"] as LuaTable;
-            if (srcG != null && dstG != null)
+            if (srcG == null || dstG == null) return;
+
+            // Seed _G itself.
+            try
             {
                 var (id, _) = GetSourceId(srcG);
                 mIdentityMap[id] = dstG;
             }
-            mGSeeded = true;
+            catch { /* defensive */ }
+
+            // Seed every baseline-name entry (stdlib + cloner helpers +
+            // bridge globals — the bridge globals map handles itself but
+            // having an entry here too is a no-op since it'd be overridden
+            // by mBridgeIdentityMap before falling through to mIdentityMap).
+            foreach (var name in mDestinationBaselineNames)
+            {
+                object srcEntry, dstEntry;
+                try
+                {
+                    srcEntry = srcG[name];
+                    dstEntry = dstG[name];
+                }
+                catch { continue; }
+
+                if (srcEntry == null || dstEntry == null) continue;
+
+                // Skip primitives — they don't need identity mapping.
+                if (IsPrimitive(srcEntry)) continue;
+
+                try
+                {
+                    var (id, _) = GetSourceId(srcEntry);
+                    mIdentityMap[id] = dstEntry;
+                }
+                catch { continue; }
+
+                // For stdlib tables (string, table, math, os, io,
+                // coroutine, debug, package), recurse one level so
+                // captured sub-references like `string.format` resolve
+                // through the seed too.
+                if (srcEntry is LuaTable srcSub && dstEntry is LuaTable dstSub)
+                {
+                    SeedSubTableEntries(srcSub, dstSub);
+                }
+            }
+        }
+
+        // Walk one level deep, seeding identity for every named entry
+        // whose value exists in both src and dst sub-tables. Used for
+        // stdlib namespace tables.
+        void SeedSubTableEntries(LuaTable srcTable, LuaTable dstTable)
+        {
+            var iter = srcTable.GetEnumerator();
+            while (iter.MoveNext())
+            {
+                var key = iter.Key as string;
+                if (key == null) continue;
+
+                var srcVal = iter.Value;
+                if (srcVal == null) continue;
+                if (IsPrimitive(srcVal)) continue;
+
+                object dstVal;
+                try { dstVal = dstTable[key]; }
+                catch { continue; }
+                if (dstVal == null) continue;
+
+                try
+                {
+                    var (id, _) = GetSourceId(srcVal);
+                    mIdentityMap[id] = dstVal;
+                }
+                catch { /* defensive */ }
+            }
+        }
+
+        static bool IsPrimitive(object v)
+        {
+            switch (v)
+            {
+                case bool _:
+                case sbyte _:
+                case byte _:
+                case short _:
+                case ushort _:
+                case int _:
+                case uint _:
+                case long _:
+                case ulong _:
+                case float _:
+                case double _:
+                case decimal _:
+                case string _:
+                case char _:
+                    return true;
+            }
+            return false;
         }
 
         // Returns (id, alreadySeen) for a source-side Lua value.

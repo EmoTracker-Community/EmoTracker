@@ -414,7 +414,16 @@ namespace EmoTracker.Data
             return State?.Maps;
         }
 
-        internal void RefreshAccessibility(bool bPendingOnly = false)
+        /// <summary>
+        /// Triggers an accessibility-refresh sweep over this state's
+        /// locations. Public so cross-assembly callers (ApplicationModel,
+        /// extensions) can force a refresh after operations like
+        /// fork-then-adopt where the fork's cached values may be stale
+        /// relative to a fresh evaluation. Pass <c>bPendingOnly: true</c>
+        /// for the legacy "only refresh if there are pending requests"
+        /// semantics.
+        /// </summary>
+        public void RefreshAccessibility(bool bPendingOnly = false)
         {
             if (!SuspendRefresh)
             {
