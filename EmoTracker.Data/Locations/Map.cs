@@ -373,35 +373,13 @@ namespace EmoTracker.Data.Locations
             // Carry the Location reference across by identity. ForFork(this) gives
             // us a fresh ModelReference bound to this fork — same DefinitionId,
             // empty cache — so resolution flows through this fork's resolver on
-            // first read.
-            //
-            // Phase 7 polish: the previous code immediately read mLocationRef.Target
-            // here to set up a PropertyChanged subscription. That read happened
-            // BEFORE OwnerState was stamped on this fork-side MapLocation, so the
-            // cache captured the primary state's Location instead of the fork's.
-            // Subscription + cache priming now deferred to ResubscribeForOwnerState,
-            // called by the fork pipeline after OwnerState is stamped.
+            // first read. OwnerState is already stamped at construction time
+            // (via Fork(destOwnerState) → ctor) so the resolver lookup below
+            // resolves to the fork's Location.
             mLocationRef = src.mLocationRef.ForFork(this);
-            mSubscribedLocation = null;
 
-            // Recompute derived margins from the fork's inherited Size /
-            // BadgeAlignment / etc. (which are inherited via the COW MutableData).
-            UpdateBadgeMargin();
-            mItemMargin.Top = mItemMargin.Left = -1 * (Size / 2);
-            mNoteIndicatorSize = Math.Min(Size * 0.75, 50);
-            mNoteIndicatorMargin = new Thickness(0, mNoteIndicatorSize * -0.5, mNoteIndicatorSize * -0.5, 0);
-        }
-
-        /// <summary>
-        /// Phase 7 polish: called by the fork pipeline after OwnerState
-        /// is stamped on this MapLocation. Invalidates the location-ref
-        /// cache so the next read resolves through this fork's resolver,
-        /// and re-subscribes to the resolved Location's PropertyChanged
-        /// for accessibility-update notifications.
-        /// </summary>
-        public void OnOwnerStateStamped()
-        {
-            mLocationRef?.InvalidateCache();
+            // Re-subscribe to the fork's Location for PropertyChanged
+            // (accessibility-update) notifications.
             if (mSubscribedLocation != null)
             {
                 mSubscribedLocation.PropertyChanged -= MLocation_PropertyChanged;
@@ -414,6 +392,13 @@ namespace EmoTracker.Data.Locations
                 mSubscribedLocation = resolved;
             }
             NotifyPropertyChanged(nameof(Location));
+
+            // Recompute derived margins from the fork's inherited Size /
+            // BadgeAlignment / etc. (which are inherited via the COW MutableData).
+            UpdateBadgeMargin();
+            mItemMargin.Top = mItemMargin.Left = -1 * (Size / 2);
+            mNoteIndicatorSize = Math.Min(Size * 0.75, 50);
+            mNoteIndicatorMargin = new Thickness(0, mNoteIndicatorSize * -0.5, mNoteIndicatorSize * -0.5, 0);
         }
     }
 

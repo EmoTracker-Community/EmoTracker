@@ -100,13 +100,7 @@ namespace EmoTracker.Data.Layout
             {
                 mMapRefs = null;
             }
-        }
-
-        public override void OnOwnerStateStamped()
-        {
-            base.OnOwnerStateStamped();
-            if (mMapRefs != null)
-                foreach (var r in mMapRefs) r?.InvalidateCache();
+            // Fire PropertyChanged on Maps so post-fork bindings re-evaluate.
             NotifyPropertyChanged(nameof(Maps));
         }
     }

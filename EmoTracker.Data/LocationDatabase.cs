@@ -53,30 +53,36 @@ namespace EmoTracker.Data
         ObservableCollection<Location> mPinnedLocations = new ObservableCollection<Location>();
         ObservableCollection<Location> mVisibleLocations = new ObservableCollection<Location>();
 
+        private struct SuspendRefreshRequest
+        {
+            public string CallStack { get; set; }
+        };
+
+        private Stack<SuspendRefreshRequest> mSuspendRefreshStack = new Stack<SuspendRefreshRequest>();
+
         public bool SuspendRefresh
         {
-            get { return mSuspendRefreshCount > 0; }
+            get { return mSuspendRefreshStack.Count > 0; }
         }
 
         internal void PushSuspendRefresh()
         {
-            ++mSuspendRefreshCount;
+            mSuspendRefreshStack.Push(new SuspendRefreshRequest() { CallStack = Environment.StackTrace });
         }
 
         internal void PopSuspendRefresh()
         {
-            if (mSuspendRefreshCount <= 0)
+            if (mSuspendRefreshStack.Count == 0)
             {
                 this.State?.Scripts.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
                 System.Diagnostics.Debug.Fail("PopSuspendRefresh: underflow — more Pops than Pushes");
                 return;
             }
 
-            --mSuspendRefreshCount;
+            mSuspendRefreshStack.Pop();
 
-            if (mSuspendRefreshCount <= 0)
-            {
-                mSuspendRefreshCount = 0;
+            if (mSuspendRefreshStack.Count == 0)
+            {                
                 RefreshAccessibility(bPendingOnly: true);
             }
         }
@@ -375,7 +381,6 @@ namespace EmoTracker.Data
             mPinnedLocations.Remove(location);
         }
 
-        int mSuspendRefreshCount = 0;
         bool mbInRefresh = false;
         uint mPendingRefreshCount = 0;
 

@@ -87,12 +87,7 @@ namespace EmoTracker.Data.Layout
             base.OnForked(source);
             var src = (ButtonPopup)source;
             mLayoutRef = src.mLayoutRef.ForFork(this);
-        }
-
-        public override void OnOwnerStateStamped()
-        {
-            base.OnOwnerStateStamped();
-            mLayoutRef?.InvalidateCache();
+            // Fire PropertyChanged on Layout so post-fork bindings re-evaluate.
             NotifyPropertyChanged(nameof(Layout));
         }
     }

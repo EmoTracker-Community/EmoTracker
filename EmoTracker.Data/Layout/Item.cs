@@ -61,19 +61,8 @@ namespace EmoTracker.Data.Layout
             // cache — so resolution flows through this fork's resolver on first
             // read.
             mDataRef = src.mDataRef.ForFork(this);
-        }
-
-        public override void OnOwnerStateStamped()
-        {
-            base.OnOwnerStateStamped();
-            // Phase 7 polish: invalidate the cache so the NEXT read of
-            // Data resolves through the (now-stamped) OwnerState's
-            // resolver. Without this, a Target read between Fork and
-            // stamp (e.g. during early visual-tree binding) would have
-            // cached the primary state's item.
-            mDataRef?.InvalidateCache();
-            // Fire PropertyChanged on Data so any pre-stamp bindings
-            // re-evaluate against the now-correct target.
+            // Fire PropertyChanged on Data so post-fork bindings re-evaluate
+            // against the now-correct target.
             NotifyPropertyChanged(nameof(Data));
         }
     }

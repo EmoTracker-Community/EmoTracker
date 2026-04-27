@@ -29,9 +29,12 @@ namespace EmoTracker.Data.Layout
             base.Dispose();
         }
 
-        public override void OnOwnerStateStamped()
+        // OwnerState is stamped at construction time, so we wire the
+        // subscription wherever this element is finalised: at the end of
+        // TryParseInternal for the initial pack-load, and in OnForked for
+        // forked instances.
+        void SubscribeToOwnerStatePinned()
         {
-            base.OnOwnerStateStamped();
             UnsubscribePinned();
             var pinned = (this.OwnerState as Sessions.TrackerState)?.Locations.PinnedLocations as INotifyCollectionChanged;
             if (pinned != null)
@@ -97,18 +100,18 @@ namespace EmoTracker.Data.Layout
         {
             // Both ArrayPanel-level (Orientation, Style) and the local NumItems /
             // CompactDisplay defaults have been seeded into ImmutableData by
-            // PopulateDefinitionData. The display refresh happens in
-            // OnOwnerStateStamped once the owning state's pinned collection
-            // is available.
+            // PopulateDefinitionData. OwnerState is stamped at construction
+            // time, so the pinned-collection subscription can wire up here.
             base.TryParseInternal(data, package);
+            SubscribeToOwnerStatePinned();
             return true;
         }
 
         protected override void OnForked(ModelTypeBase source)
         {
             base.OnForked(source);
-            // Subscription + refresh wires up in OnOwnerStateStamped on the
-            // fork, once the new state's resolver has been stamped.
+            // Re-subscribe to the fork's PinnedLocations.
+            SubscribeToOwnerStatePinned();
         }
     }
 }

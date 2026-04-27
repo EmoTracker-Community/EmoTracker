@@ -466,7 +466,8 @@ namespace EmoTracker.Data.Sessions
 
             // ---- Maps -------------------------------------------------------
             // Phase 3 Map.Fork cascades to MapLocations — children stamp
-            // OwnerState=copy at construction via the same hand-off.
+            // OwnerState=copy at construction via the same hand-off, and
+            // their OnForked override establishes the Location subscription.
             foreach (var map in this.Maps.Maps)
             {
                 var forkedMap = (Map)map.Fork(copy);
@@ -474,10 +475,7 @@ namespace EmoTracker.Data.Sessions
                 copy.mResolver.Register(forkedMap);
                 modelIdentityMap[map] = forkedMap;
                 foreach (var ml in forkedMap.Locations)
-                {
                     copy.mResolver.Register(ml);
-                    ml.OnOwnerStateStamped();
-                }
             }
 
             // ---- Per-state AccessibilityRule cache seeding (Phase 7.2) -----
@@ -489,10 +487,11 @@ namespace EmoTracker.Data.Sessions
 
             // ---- Layouts ---------------------------------------------------
             // Layout.Fork's tree walk recurses into children which all
-            // observe ForkDestination.Current = copy via the state-aware
-            // Fork overload. Each LayoutItem's OnOwnerStateStamped fires
-            // during InitializeAsForkOf so cross-reference caches refresh
-            // before the caller observes the fork.
+            // observe destOwnerState = copy via the state-aware Fork
+            // overload. OwnerState is stamped at construction time on every
+            // forked LayoutItem; each subclass's OnForked establishes any
+            // necessary cross-reference cache invalidation, subscriptions,
+            // and PropertyChanged fan-out.
             foreach (var pair in this.Layouts.GetLayoutsForFork())
             {
                 if (pair.Value == null) continue;

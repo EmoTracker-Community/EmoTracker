@@ -13,9 +13,9 @@ namespace EmoTracker.Data.Layout
     /// <see cref="Sessions.TrackerState"/>'s
     /// <see cref="LocationDatabase.LastClearedLocation"/> through a stable
     /// <c>Location</c> property, re-firing when the underlying database
-    /// signals a change. Subscription is wired in
-    /// <see cref="OnOwnerStateStamped"/> so we resolve through this
-    /// element's per-state LocationDatabase.
+    /// signals a change. Subscription is wired in <c>TryParseInternal</c>
+    /// (initial pack-load) and <c>OnForked</c> (after fork) so we resolve
+    /// through this element's per-state LocationDatabase.
     /// </summary>
     [JsonTypeTags("last_cleared_location")]
     public partial class LastClearedLocation : LayoutItem
@@ -35,9 +35,11 @@ namespace EmoTracker.Data.Layout
             base.Dispose();
         }
 
-        public override void OnOwnerStateStamped()
+        // OwnerState is stamped at construction time. Wire the subscription
+        // wherever the element is finalised — TryParseInternal for the
+        // initial pack-load, OnForked for forks.
+        void SubscribeToOwnerStateLocations()
         {
-            base.OnOwnerStateStamped();
             UnsubscribeLocations();
             var locations = (this.OwnerState as Sessions.TrackerState)?.Locations;
             if (locations != null)
@@ -74,7 +76,14 @@ namespace EmoTracker.Data.Layout
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
+            SubscribeToOwnerStateLocations();
             return true;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            SubscribeToOwnerStateLocations();
         }
     }
 }
