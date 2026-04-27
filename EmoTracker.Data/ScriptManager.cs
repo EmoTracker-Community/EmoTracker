@@ -25,9 +25,21 @@ namespace EmoTracker.Data
 {
     class ImageReferenceProvider
     {
+        // Phase 7.1.h: bound to a state at construction so the
+        // pack-relative factory uses THIS state's PackageInstance's
+        // GamePackage instead of consulting the active session — which
+        // would be null during a definitional-state load (init.lua
+        // runs before any primary state is forked).
+        readonly Sessions.TrackerState mState;
+
+        public ImageReferenceProvider(Sessions.TrackerState state)
+        {
+            mState = state ?? throw new ArgumentNullException(nameof(state));
+        }
+
         public ImageReference FromPackRelativePath(string path, string filter = null)
         {
-            return ImageReference.FromPackRelativePath(path, filter);
+            return ImageReference.FromPackRelativePath(mState.PackageInstance?.GamePackage, path, filter);
         }
 
         public ImageReference FromImageReference(ImageReference existingReference, string filter = null)
@@ -492,7 +504,7 @@ end
             mLua["AccessibilityLevel"] = new AccessibilityLevel();
             mLua["NotificationType"] = new NotificationType();
             mLua["ScriptHost"] = this;
-            mLua["ImageReference"] = new ImageReferenceProvider();
+            mLua["ImageReference"] = new ImageReferenceProvider(ownerState);
 
             if (ApplicationSettings.Instance.SupportLua53VersionChecks)
                 mLua["_VERSION"] = "Lua 5.3";

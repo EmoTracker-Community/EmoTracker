@@ -888,7 +888,8 @@ namespace EmoTracker.Data
 
                             if (!string.IsNullOrEmpty(imagePath))
                             {
-                                ImageReference imageRef = ImageReference.FromPackRelativePath(imagePath, filter);
+                                var pkg = this.State?.PackageInstance?.GamePackage;
+                                ImageReference imageRef = ImageReference.FromPackRelativePath(pkg, imagePath, filter);
                                 if (imageRef != null)
                                     location.AddBadge(key, imageRef, null, ox, oy);
                             }

@@ -187,6 +187,34 @@ end
 ");
 
             mIdMapInitialized = true;
+
+            // Seed source._G → destination._G in the identity map before
+            // anyone can call CloneValue / Resolve. This must run after
+            // mIdMapInitialized = true so GetSourceId can walk the helper.
+            SeedSourceGToDestinationG();
+        }
+
+        // Pre-populate the identity map so the source interpreter's _G
+        // resolves to the destination interpreter's _G. This protects
+        // CloneFunction's upvalue copy from recursively cloning source._G
+        // when a closure captures it as its _ENV upvalue (the default for
+        // every top-level function in Lua 5.2+). Without this seeding,
+        // CloneTable's descent into _G hits CloneFunction's "skip C
+        // functions" branch for stdlib (rawget, pairs, type, ...), which
+        // produces a clone with stdlib slots = nil and breaks any closure
+        // that calls those functions.
+        bool mGSeeded;
+        void SeedSourceGToDestinationG()
+        {
+            if (mGSeeded) return;
+            var srcG = mSource["_G"] as LuaTable;
+            var dstG = mDestination["_G"] as LuaTable;
+            if (srcG != null && dstG != null)
+            {
+                var (id, _) = GetSourceId(srcG);
+                mIdentityMap[id] = dstG;
+            }
+            mGSeeded = true;
         }
 
         // Returns (id, alreadySeen) for a source-side Lua value.
@@ -320,6 +348,13 @@ end
         /// </summary>
         public void CloneAll()
         {
+            // Ensure the identity map is initialized + source._G → dest._G
+            // is seeded before iteration. EnsureIdMapInitialized installs
+            // the helper functions and seeds source._G → destination._G
+            // so closures that capture _ENV upvalues resolve to the
+            // destination's pristine _G (with full stdlib intact).
+            EnsureIdMapInitialized();
+
             // Iterate every key in source's globals via the LuaTable enumerator
             // (the same shape LuaItem.Save uses for its own table walks).
             // NLua's LuaTableEnumerator implements IDictionaryEnumerator but

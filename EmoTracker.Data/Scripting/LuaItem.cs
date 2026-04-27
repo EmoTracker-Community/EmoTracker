@@ -443,15 +443,25 @@ namespace EmoTracker.Data.Scripting
         {
             if (cloner == null || source == null) return;
 
-            mItemState        = cloner.Resolve(source.mItemState);
-            mOnLeftClick      = cloner.Resolve(source.mOnLeftClick);
-            mOnRightClick     = cloner.Resolve(source.mOnRightClick);
-            mProvidesCode     = cloner.Resolve(source.mProvidesCode);
-            mCanProvideCode   = cloner.Resolve(source.mCanProvideCode);
-            mAdvanceToCode    = cloner.Resolve(source.mAdvanceToCode);
-            mSave             = cloner.Resolve(source.mSave);
-            mLoad             = cloner.Resolve(source.mLoad);
-            mPropertyChanged  = cloner.Resolve(source.mPropertyChanged);
+            // LuaItem's mItemState + 8 callback fields aren't stored as
+            // named globals on _G — pack scripts hand them to LuaItem via
+            // C# bindings and the Lua side typically loses its only
+            // reference once the constructing function returns. So
+            // LuaStateCloner.CloneAll never visits them, and Resolve
+            // (which queries the post-clone identity map) returns null.
+            // Use CloneValue, which clones on demand and registers the
+            // result in the identity map for later Resolve calls (e.g.
+            // closures captured by other LuaItems pointing to the same
+            // table).
+            mItemState        = (LuaTable)    cloner.CloneValue(source.mItemState);
+            mOnLeftClick      = (LuaFunction) cloner.CloneValue(source.mOnLeftClick);
+            mOnRightClick     = (LuaFunction) cloner.CloneValue(source.mOnRightClick);
+            mProvidesCode     = (LuaFunction) cloner.CloneValue(source.mProvidesCode);
+            mCanProvideCode   = (LuaFunction) cloner.CloneValue(source.mCanProvideCode);
+            mAdvanceToCode    = (LuaFunction) cloner.CloneValue(source.mAdvanceToCode);
+            mSave             = (LuaFunction) cloner.CloneValue(source.mSave);
+            mLoad             = (LuaFunction) cloner.CloneValue(source.mLoad);
+            mPropertyChanged  = (LuaFunction) cloner.CloneValue(source.mPropertyChanged);
 
             mOwnerScriptManager = ownerScriptManager;
         }
