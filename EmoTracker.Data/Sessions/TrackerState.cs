@@ -539,6 +539,14 @@ namespace EmoTracker.Data.Sessions
             }
             catch { /* defensive */ }
 
+            // Notify the lifecycle observer that a fork happened. Fired
+            // BEFORE the fork is registered with a PackageInstance (which
+            // typically happens in the caller via AdoptAsPrimary or
+            // CreateState-equivalent). Lets per-state-extension observers
+            // fork their per-state data from `this` to `copy` so the
+            // fork's extensions inherit the source's state.
+            StateLifecycle.Observer?.OnStateForked(this, copy);
+
             return copy;
         }
 

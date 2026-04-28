@@ -29,7 +29,7 @@ using System.Linq;
 
 namespace EmoTracker
 {
-    public class ApplicationModel : ObservableSingleton<ApplicationModel>, ICodeProvider, INotificationService
+    public class ApplicationModel : ObservableSingleton<ApplicationModel>, ICodeProvider, INotificationService, EmoTracker.Extensions.IApplicationContext
     {
         public AsyncDelegateCommand RefreshCommand { get; private set; }
         public DelegateCommand ResetUserDataCommand { get; private set; }
@@ -128,21 +128,33 @@ namespace EmoTracker
         }
 
         // Phase 7.6: register a window's context. Called by the
-        // TrackerWindow during ctor.
+        // TrackerWindow during ctor. Triggers per-window extension
+        // attach via ExtensionManager.
         internal void RegisterWindow(WindowContext ctx)
         {
             if (ctx == null) return;
             if (!mWindows.Contains(ctx))
+            {
                 mWindows.Add(ctx);
+                // Allocate this window's IWindowExtension instances.
+                Extensions.ExtensionManager.Instance.OnWindowRegistered(ctx);
+            }
         }
 
         internal void UnregisterWindow(WindowContext ctx)
         {
             if (ctx == null) return;
+            // Detach window-scoped extensions before removing the context
+            // so OnDetachedFromWindow can still observe its host.
+            Extensions.ExtensionManager.Instance.OnWindowUnregistered(ctx);
             mWindows.Remove(ctx);
             if (ReferenceEquals(mCurrentlyActiveWindowContext, ctx))
                 CurrentlyActiveWindowContext = mWindows.Count > 0 ? mWindows[0] : null;
         }
+
+        // ---- IApplicationContext --------------------------------------
+        IReadOnlyList<PackageInstance> Extensions.IApplicationContext.PackageInstances => mPackageInstances;
+        IReadOnlyList<WindowContext> Extensions.IApplicationContext.Windows => mWindows;
 
         /// <summary>
         /// Phase 7.6 / 7.9: spawn a new TrackerWindow hosting only
@@ -606,15 +618,13 @@ namespace EmoTracker
             ImageReferenceService.Instance.SyncMode = Data.ApplicationSettings.Instance.NoAsyncImages;
             ImageReferenceService.Instance.Start();
 
-            //  Load and start extensions
-            Extensions.ExtensionManager.CreateInstance();
-            Extensions.ExtensionManager.Instance.Start();
-
-            // Phase 7.4: install the ExtensionManager as the per-state
-            // lifecycle observer so per-state IStateScopedExtension
-            // instances are attached / detached as states are created
-            // / removed on the active PackageInstance.
+            //  Load and start extensions. Install the ExtensionManager
+            //  as the lifecycle observer FIRST so package- and tracker-
+            //  scoped extensions are attached as PackageInstances /
+            //  TrackerStates are created during pack load.
             Data.Sessions.StateLifecycle.Observer = Extensions.ExtensionManager.Instance;
+            Extensions.ExtensionManager.CreateInstance();
+            Extensions.ExtensionManager.Instance.Start(this);
 
             //Open up the last active package if set and installed
             bool success;
@@ -1133,7 +1143,11 @@ defaultSaveDataPath)
                     JObject extensionData = new JObject();
                     bool bAddedAny = false;
 
-                    foreach (Extension extension in ExtensionManager.Instance.Extensions)
+                    // Persist app-wide extension state (the per-window /
+                    // per-package / per-tracker scopes have lifecycle tied
+                    // to their owners and don't roundtrip through this
+                    // primary-state save).
+                    foreach (var extension in ExtensionManager.Instance.ApplicationExtensions)
                     {
                         JToken data = extension.SerializeToJson();
                         if (data != null)
@@ -1480,9 +1494,9 @@ Failed to save workspace to ```{0}```.
                 {
                     foreach (JProperty property in extensionData.Properties())
                     {
-                        Extension target = ExtensionManager.Instance.FindExtensionByUID(property.Name);
-                        if (target != null)
-                            target.DeserializeFromJson(property.Value);
+                        var ext = ExtensionManager.Instance.FindApplicationExtensionByUID(property.Name);
+                        if (ext != null)
+                            ext.DeserializeFromJson(property.Value);
                     }
                 }
             }))
@@ -1801,7 +1815,12 @@ Failed to save workspace to ```{0}```.
             //  Reset the current save path
             mCurrentSavePath = null;
 
-            ExtensionManager.Instance.OnPackageUnloaded();
+            // Per-package extensions are torn down via PackageInstance.Dispose
+            // (which fires StateLifecycle.Observer.OnPackageInstanceDisposed
+            // → ExtensionManager.OnPackageInstanceDisposed). No app-level
+            // OnPackageUnloaded fan-out is needed; extensions that previously
+            // implemented OnPackageUnloaded subscribed to PackageLoader's
+            // event stream directly (see VoiceRecognitionExtension.Start).
 
             NotifyPropertyChanged("MainWindowTitle");
             // Phase 7.1.h: image caches are owned by PackageInstance now;
@@ -1842,7 +1861,12 @@ Failed to save workspace to ```{0}```.
         /// </summary>
         void FirePackageLoadedFanout()
         {
-            ExtensionManager.Instance.OnPackageLoaded();
+            // App-level OnPackageLoaded fan-out is no longer needed — the
+            // four-scope ExtensionManager already attached per-package and
+            // per-state extensions when the PackageInstance / TrackerState
+            // were created. Extensions that need to react to the load
+            // event itself subscribe to PackageLoader.OnPackageLoadComplete
+            // directly (see VoiceRecognitionExtension.Start, AutoTrackerExtension).
             AcquireLayouts();
 
             //  Undo history should not propagate across package reloads, and should also not include

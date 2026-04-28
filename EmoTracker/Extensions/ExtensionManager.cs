@@ -1,241 +1,371 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.Sessions;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EmoTracker.Extensions
 {
     /// <summary>
-    /// Phase 7.4: <see cref="ExtensionManager"/> implements
-    /// <see cref="IStateLifecycleObserver"/> so it can attach / detach
-    /// per-state <see cref="IStateScopedExtension"/> instances as
-    /// <see cref="TrackerState"/>s are registered with their owning
-    /// <see cref="PackageInstance"/>.
+    /// Owns the four extension scopes:
+    /// <list type="bullet">
+    ///   <item><b>Application</b> — singletons, one per <see cref="IApplicationExtension"/>
+    ///         type, allocated at construction via <c>TypedObjectRegistry</c>.</item>
+    ///   <item><b>Window</b> — one per (<see cref="WindowContext"/>,
+    ///         <see cref="IWindowExtension"/> type) pair, allocated when a
+    ///         window is registered.</item>
+    ///   <item><b>Package</b> — one per (<see cref="PackageInstance"/>,
+    ///         <see cref="IPackageExtension"/> type) pair, allocated when a
+    ///         package instance is created.</item>
+    ///   <item><b>Tracker</b> — one per (<see cref="TrackerState"/>,
+    ///         <see cref="ITrackerExtension"/> type) pair, allocated when a
+    ///         state is registered. Forks of states fork their tracker
+    ///         extensions via <see cref="ITrackerExtension.Fork"/>.</item>
+    /// </list>
+    /// Status-bar UIs bind to <see cref="GetActiveExtensionsFor"/>, which
+    /// returns the union of all four scopes' instances applicable to the
+    /// given <see cref="WindowContext"/>'s active state — grouped by
+    /// scope, sorted by <see cref="IExtension.Priority"/> within each
+    /// group.
     /// </summary>
-    public class ExtensionManager : ObservableSingleton<ExtensionManager>, IStateLifecycleObserver
+    public sealed class ExtensionManager : ObservableSingleton<ExtensionManager>, IStateLifecycleObserver
     {
-        ObservableCollection<Extension> mExtensions = new ObservableCollection<Extension>();
+        // ------------------------------------------------------------------
+        //  Application scope
+        // ------------------------------------------------------------------
 
-        public IEnumerable<Extension> Extensions
+        readonly List<IApplicationExtension> mApplicationExtensions = new List<IApplicationExtension>();
+        public IReadOnlyList<IApplicationExtension> ApplicationExtensions => mApplicationExtensions;
+
+        // ------------------------------------------------------------------
+        //  Window scope
+        // ------------------------------------------------------------------
+
+        readonly List<Type> mWindowExtensionTypes = new List<Type>();
+        readonly Dictionary<WindowContext, List<IWindowExtension>> mWindowExtensions
+            = new Dictionary<WindowContext, List<IWindowExtension>>();
+
+        public IReadOnlyList<IWindowExtension> GetWindowExtensions(WindowContext window)
         {
-            get { return mExtensions; }
+            if (window == null) return Array.Empty<IWindowExtension>();
+            return mWindowExtensions.TryGetValue(window, out var list)
+                ? (IReadOnlyList<IWindowExtension>)list
+                : Array.Empty<IWindowExtension>();
         }
+
+        // ------------------------------------------------------------------
+        //  Package scope
+        // ------------------------------------------------------------------
+
+        readonly List<Type> mPackageExtensionTypes = new List<Type>();
+        readonly Dictionary<PackageInstance, List<IPackageExtension>> mPackageExtensions
+            = new Dictionary<PackageInstance, List<IPackageExtension>>();
+
+        public IReadOnlyList<IPackageExtension> GetPackageExtensions(PackageInstance package)
+        {
+            if (package == null) return Array.Empty<IPackageExtension>();
+            return mPackageExtensions.TryGetValue(package, out var list)
+                ? (IReadOnlyList<IPackageExtension>)list
+                : Array.Empty<IPackageExtension>();
+        }
+
+        // ------------------------------------------------------------------
+        //  Tracker scope
+        // ------------------------------------------------------------------
+
+        readonly List<Type> mTrackerExtensionTypes = new List<Type>();
+        readonly Dictionary<TrackerState, List<ITrackerExtension>> mTrackerExtensions
+            = new Dictionary<TrackerState, List<ITrackerExtension>>();
+
+        public IReadOnlyList<ITrackerExtension> GetTrackerExtensions(TrackerState state)
+        {
+            if (state == null) return Array.Empty<ITrackerExtension>();
+            return mTrackerExtensions.TryGetValue(state, out var list)
+                ? (IReadOnlyList<ITrackerExtension>)list
+                : Array.Empty<ITrackerExtension>();
+        }
+
+        /// <summary>
+        /// Look up the tracker-extension instance of type T attached to
+        /// <paramref name="state"/>, or null if no such instance exists.
+        /// </summary>
+        public T GetTrackerExtension<T>(TrackerState state) where T : class, ITrackerExtension
+        {
+            if (state == null) return null;
+            if (!mTrackerExtensions.TryGetValue(state, out var list)) return null;
+            foreach (var ext in list)
+                if (ext is T typed) return typed;
+            return null;
+        }
+
+        // ------------------------------------------------------------------
+        //  Application-extension lookups (typed + by-uid)
+        // ------------------------------------------------------------------
+
+        public T FindApplicationExtension<T>() where T : class, IApplicationExtension
+        {
+            foreach (var ext in mApplicationExtensions)
+                if (ext is T typed) return typed;
+            return null;
+        }
+
+        public IApplicationExtension FindApplicationExtensionByUID(string uid)
+        {
+            foreach (var ext in mApplicationExtensions)
+                if (ext.UID.Equals(uid, StringComparison.OrdinalIgnoreCase))
+                    return ext;
+            return null;
+        }
+
+        // ------------------------------------------------------------------
+        //  Aggregated active-extensions for status bar
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Returns the extensions that should be surfaced for the given
+        /// <paramref name="window"/>'s currently-active tab. Order:
+        /// app extensions → window extensions → package extensions →
+        /// tracker extensions, with each group sorted ascending by
+        /// <see cref="IExtension.Priority"/>.
+        /// </summary>
+        public IReadOnlyList<IExtension> GetActiveExtensionsFor(WindowContext window)
+        {
+            var result = new List<IExtension>();
+
+            // App scope: shown in every window.
+            result.AddRange(mApplicationExtensions
+                .OrderBy(e => e.Priority).Cast<IExtension>());
+
+            // Window scope: this window's instances.
+            if (window != null && mWindowExtensions.TryGetValue(window, out var winExts))
+                result.AddRange(winExts.OrderBy(e => e.Priority).Cast<IExtension>());
+
+            // Package + tracker scopes: keyed off the active tab's state.
+            var state = window?.ActiveState;
+            if (state != null)
+            {
+                var pkg = state.PackageInstance;
+                if (pkg != null && mPackageExtensions.TryGetValue(pkg, out var pkgExts))
+                    result.AddRange(pkgExts.OrderBy(e => e.Priority).Cast<IExtension>());
+
+                if (mTrackerExtensions.TryGetValue(state, out var trkExts))
+                    result.AddRange(trkExts.OrderBy(e => e.Priority).Cast<IExtension>());
+            }
+
+            return result;
+        }
+
+        // ==================================================================
+        //  Discovery + construction
+        // ==================================================================
 
         public ExtensionManager()
         {
-            LoadExtensionModules();
-
-            Type interfaceType = typeof(Extension);
-
-            List<Type> types = new List<Type>();
-            foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
+            // Application: singleton-instance discovery.
+            foreach (var inst in TypedObjectRegistry<IApplicationExtension>.SupportRegistry)
             {
                 try
                 {
-                    foreach (Type t in a.GetTypes())
-                    {
-                        try
-                        {
-                            if (!t.IsAbstract && interfaceType.IsAssignableFrom(t) && !types.Contains(t))
-                                types.Add(t);
-                        }
-                        catch
-                        {
-                        }
-                    }
+                    mApplicationExtensions.Add(inst);
                 }
                 catch
                 {
                 }
             }
+            mApplicationExtensions.Sort((a, b) => a.Priority.CompareTo(b.Priority));
 
-            foreach (Type t in types)
+            // Window / Package / Tracker: type-only discovery (instances
+            // allocated lazily as the corresponding scope appears).
+            foreach (var t in TypeRegistry<IWindowExtension>.SupportRegistry)
+                mWindowExtensionTypes.Add(t);
+            foreach (var t in TypeRegistry<IPackageExtension>.SupportRegistry)
+                mPackageExtensionTypes.Add(t);
+            foreach (var t in TypeRegistry<ITrackerExtension>.SupportRegistry)
+                mTrackerExtensionTypes.Add(t);
+        }
+
+        // ==================================================================
+        //  Application-scope lifecycle
+        // ==================================================================
+
+        public void Start(IApplicationContext app)
+        {
+            foreach (var ext in mApplicationExtensions)
             {
-                try
-                {
-                    Extension instance = Activator.CreateInstance(t) as Extension;
-                    if (instance != null)
-                        mExtensions.Add(instance);
-                }
-                catch
-                {
-                }
+                try { ext.Start(app); } catch { }
             }
-
-            mExtensions.Sort(ExtensionSortKeyFunc);
-
-        }
-
-        public void Start()
-        {
-            foreach (Extension ext in Extensions)
-            {
-                ext.Start();
-            }
-        }
-
-        private object ExtensionSortKeyFunc(Extension arg)
-        {
-            return arg.Priority;
-        } 
-
-        public T FindExtension<T>() where T : class, Extension
-        {
-            foreach (Extension ext in Extensions)
-            {
-                if (ext.GetType() == typeof(T))
-                    return ext as T;
-            }
-
-            return null;
-        }
-
-        public Extension FindExtensionByUID(string uid)
-        {
-            foreach (Extension ext in Extensions)
-            {
-                if (ext.UID.Equals(uid, StringComparison.OrdinalIgnoreCase))
-                    return ext;
-            }
-
-            return null;
-        }
-
-        public static string GetExtensionPath(Extension instance)
-        {
-            return Path.Combine(Core.UserDirectory.Path, "extensions", instance.UID);
-        }
-
-        private void LoadExtensionModules()
-        {
         }
 
         public void OnApplicationClosing()
         {
-            foreach (Extension ext in Extensions)
+            foreach (var ext in mApplicationExtensions)
             {
-                ext.Stop();
+                try { ext.Stop(); } catch { }
             }
         }
 
-        public void OnPackageUnloaded()
+        // ==================================================================
+        //  Window-scope lifecycle (called directly by ApplicationModel)
+        // ==================================================================
+
+        public void OnWindowRegistered(WindowContext window)
         {
-            foreach (Extension ext in Extensions)
-            {
-                ext.OnPackageUnloaded();
-            }
-        }
+            if (window == null) return;
+            if (mWindowExtensions.ContainsKey(window)) return;
 
-        public void OnPackageLoaded()
-        {
-            foreach (Extension ext in Extensions)
-            {
-                ext.OnPackageLoaded();
-            }
-        }
+            var list = new List<IWindowExtension>();
+            mWindowExtensions[window] = list;
 
-        // -------- Phase 7.4: per-state extension lifecycle --------------------
-
-        // Map TrackerState → list of IStateScopedExtension created for it.
-        readonly Dictionary<TrackerState, List<IStateScopedExtension>> mStateExtensions
-            = new Dictionary<TrackerState, List<IStateScopedExtension>>();
-
-        /// <summary>
-        /// Returns the per-state extension instance of type T attached to
-        /// <paramref name="state"/>, or null if no such instance exists.
-        /// </summary>
-        public T GetStateScopedExtension<T>(TrackerState state) where T : class, IStateScopedExtension
-        {
-            if (state == null) return null;
-            if (!mStateExtensions.TryGetValue(state, out var list)) return null;
-            foreach (var ext in list)
-            {
-                if (ext is T typed) return typed;
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Phase 7.4: returns the read-only collection of per-state
-        /// extension instances bound to <paramref name="state"/>. Used by
-        /// the status-bar surface to enumerate state-scoped indicators.
-        /// </summary>
-        public IReadOnlyList<IStateScopedExtension> GetStateScopedExtensions(TrackerState state)
-        {
-            if (state == null) return System.Array.Empty<IStateScopedExtension>();
-            if (!mStateExtensions.TryGetValue(state, out var list))
-                return System.Array.Empty<IStateScopedExtension>();
-            return list;
-        }
-
-        /// <summary>
-        /// IStateLifecycleObserver: bind every registered factory's
-        /// per-state extension to <paramref name="state"/>. Called by
-        /// <see cref="PackageInstance.CreateState"/> /
-        /// <see cref="PackageInstance.AdoptAsPrimary"/> via
-        /// <see cref="StateLifecycle.Observer"/>.
-        /// </summary>
-        public void OnStateRegistered(TrackerState state)
-        {
-            if (state == null) return;
-            if (mStateExtensions.ContainsKey(state)) return;   // idempotent
-
-            var list = new List<IStateScopedExtension>();
-            mStateExtensions[state] = list;
-
-            foreach (var ext in mExtensions)
-            {
-                if (ext is IStateScopedExtensionFactory factory)
-                {
-                    try
-                    {
-                        var instance = factory.CreateForState(state);
-                        if (instance != null)
-                        {
-                            list.Add(instance);
-                            instance.OnAttachedToState(state);
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        // Defensive: a faulty factory shouldn't tear down
-                        // state registration for the rest of the extensions.
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// IStateLifecycleObserver: detach + dispose every per-state
-        /// extension bound to <paramref name="state"/>. Called by
-        /// <see cref="PackageInstance.RemoveState"/> /
-        /// <see cref="PackageInstance.Dispose"/>.
-        /// </summary>
-        public void OnStateUnregistered(TrackerState state)
-        {
-            if (state == null) return;
-            if (!mStateExtensions.TryGetValue(state, out var list)) return;
-
-            foreach (var ext in list)
+            foreach (var t in mWindowExtensionTypes)
             {
                 try
                 {
-                    ext.OnDetachedFromState(state);
+                    var inst = Activator.CreateInstance(t) as IWindowExtension;
+                    if (inst != null)
+                    {
+                        list.Add(inst);
+                        inst.OnAttachedToWindow(window);
+                    }
                 }
-                catch (Exception)
+                catch
                 {
-                    // Defensive: a faulty per-state extension's detach
-                    // shouldn't block the rest of the cleanup.
                 }
             }
+            list.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        }
 
-            mStateExtensions.Remove(state);
+        public void OnWindowUnregistered(WindowContext window)
+        {
+            if (window == null) return;
+            if (!mWindowExtensions.TryGetValue(window, out var list)) return;
+
+            foreach (var ext in list)
+            {
+                try { ext.OnDetachedFromWindow(window); } catch { }
+            }
+            mWindowExtensions.Remove(window);
+        }
+
+        // ==================================================================
+        //  IStateLifecycleObserver — package + state lifecycle
+        // ==================================================================
+
+        public void OnPackageInstanceCreated(PackageInstance package)
+        {
+            if (package == null) return;
+            if (mPackageExtensions.ContainsKey(package)) return;
+
+            var list = new List<IPackageExtension>();
+            mPackageExtensions[package] = list;
+
+            foreach (var t in mPackageExtensionTypes)
+            {
+                try
+                {
+                    var inst = Activator.CreateInstance(t) as IPackageExtension;
+                    if (inst != null)
+                    {
+                        list.Add(inst);
+                        inst.OnAttachedToPackage(package);
+                    }
+                }
+                catch
+                {
+                }
+            }
+            list.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        }
+
+        public void OnPackageInstanceDisposed(PackageInstance package)
+        {
+            if (package == null) return;
+            if (!mPackageExtensions.TryGetValue(package, out var list)) return;
+
+            foreach (var ext in list)
+            {
+                try { ext.OnDetachedFromPackage(package); } catch { }
+            }
+            mPackageExtensions.Remove(package);
+        }
+
+        public void OnStateRegistered(TrackerState state)
+        {
+            if (state == null) return;
+            // If the state was forked, its tracker-extensions were already
+            // populated by OnStateForked. Idempotent: skip allocation.
+            if (mTrackerExtensions.ContainsKey(state)) return;
+
+            var list = new List<ITrackerExtension>();
+            mTrackerExtensions[state] = list;
+
+            foreach (var t in mTrackerExtensionTypes)
+            {
+                try
+                {
+                    var inst = Activator.CreateInstance(t) as ITrackerExtension;
+                    if (inst != null)
+                    {
+                        list.Add(inst);
+                        inst.OnAttachedToState(state);
+                    }
+                }
+                catch
+                {
+                }
+            }
+            list.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        }
+
+        public void OnStateUnregistered(TrackerState state)
+        {
+            if (state == null) return;
+            if (!mTrackerExtensions.TryGetValue(state, out var list)) return;
+
+            foreach (var ext in list)
+            {
+                try { ext.OnDetachedFromState(state); } catch { }
+            }
+            mTrackerExtensions.Remove(state);
+        }
+
+        public void OnStateForked(TrackerState source, TrackerState dest)
+        {
+            if (source == null || dest == null) return;
+            if (mTrackerExtensions.ContainsKey(dest)) return;
+            if (!mTrackerExtensions.TryGetValue(source, out var srcList)) return;
+
+            // Allocate the dest's per-state extensions by forking each of
+            // the source's instances. Order: same as source so the type
+            // ordering / priority sort stays stable across the fork.
+            var destList = new List<ITrackerExtension>();
+            mTrackerExtensions[dest] = destList;
+
+            foreach (var srcExt in srcList)
+            {
+                try
+                {
+                    var forked = srcExt.Fork(dest);
+                    if (forked != null)
+                    {
+                        destList.Add(forked);
+                        forked.OnAttachedToState(dest);
+                    }
+                }
+                catch
+                {
+                }
+            }
+            destList.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        }
+
+        // ==================================================================
+        //  Helpers
+        // ==================================================================
+
+        public static string GetExtensionPath(IExtension instance)
+        {
+            return Path.Combine(Core.UserDirectory.Path, "extensions", instance.UID);
         }
     }
 }

@@ -61,6 +61,9 @@ namespace EmoTracker
                     NotifyPropertyChanged(nameof(WindowTitle));
                     NotifyPropertyChanged(nameof(HasActiveState));
                     NotifyPropertyChanged(nameof(BroadcastLayout));
+                    // Status-bar extension list reaches into ActiveState's
+                    // pack + tracker scopes, so it must re-fire too.
+                    NotifyPropertyChanged(nameof(ActiveExtensions));
                 }
             }
         }
@@ -84,6 +87,17 @@ namespace EmoTracker
         /// </summary>
         public EmoTracker.Data.Layout.Layout BroadcastLayout
             => mActiveState?.Layouts?.FindLayout("tracker_broadcast");
+
+        /// <summary>
+        /// The aggregated extensions surfaced in this window's status
+        /// bar: app-wide + this window's window-extensions + the active
+        /// tab's package-extensions + the active tab's tracker-extensions,
+        /// each group ordered by priority. Bound by the status-bar
+        /// ItemsControl in MainWindow.axaml; refreshes when
+        /// <see cref="ActiveState"/> changes.
+        /// </summary>
+        public System.Collections.Generic.IReadOnlyList<EmoTracker.Extensions.IExtension> ActiveExtensions
+            => EmoTracker.Extensions.ExtensionManager.Instance.GetActiveExtensionsFor(this);
 
         /// <summary>
         /// Phase 7 XAML migration: the <see cref="PackageInstance"/>

@@ -239,9 +239,10 @@
                 </Button>
             </StackPanel>
 
-            <!-- Extension indicators (right) -->
+            <!-- Extension indicators (right). Aggregates app + window +
+                 package + tracker extensions for THIS window's active tab. -->
             <ItemsControl HorizontalAlignment="Right"
-                          ItemsSource="{Binding Extensions, Source={x:Static extensions:ExtensionManager.Instance}}"
+                          ItemsSource="{Binding $parent[Window].WindowContext.ActiveExtensions}"
                           VerticalAlignment="Center" Margin="0,2,20,2">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -250,7 +251,13 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
+                        <!-- Collapse the wrapper entirely when the extension
+                             returns null from StatusBarControl (e.g. NDI
+                             when not broadcasting, Voice when disabled,
+                             Twitch when channel name not configured) so
+                             unused slots don't consume WrapPanel width. -->
                         <ContentControl Content="{Binding StatusBarControl}"
+                                        IsVisible="{Binding StatusBarControl, Converter={x:Static ObjectConverters.IsNotNull}}"
                                         VerticalAlignment="Center" Margin="3,2" MaxHeight="18"/>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

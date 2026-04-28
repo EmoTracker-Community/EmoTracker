@@ -32,7 +32,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
         public override string ToString() => IsDefault ? $"{Name} (Default)" : Name;
     }
 
-    public class VoiceRecognitionExtension : ObservableObject, Extension
+    public class VoiceRecognitionExtension : ObservableObject, IApplicationExtension
     {
         // Phase 6 step 11: helpers resolving the active catalogs through
         // the primary state, with singleton fallback for the pre-pack-load
@@ -117,10 +117,15 @@ namespace EmoTracker.Extensions.VoiceRecognition
             private set => SetProperty(ref _audioLibrariesAvailable, value);
         }
 
-        // Avalonia visuals are single-parent: each MainWindow that binds
-        // the status bar needs its own control instance. Return fresh per
-        // getter call (matching the AutoTrackerExtension pattern).
-        public object StatusBarControl => new VoiceRecognitionStatusIndicator { DataContext = this };
+        // Return a control only when the user has enabled voice control
+        // in settings — otherwise return null so the status-bar slot
+        // collapses entirely (the indicator's own IsVisible binding
+        // would still leave the wrapper ContentControl consuming
+        // WrapPanel width).
+        public object StatusBarControl
+            => Data.ApplicationSettings.Instance.EnableVoiceControl
+                ? new VoiceRecognitionStatusIndicator { DataContext = this }
+                : null;
 
         public VoiceRecognitionExtension()
         {
@@ -136,10 +141,33 @@ namespace EmoTracker.Extensions.VoiceRecognition
             RefreshAudioDevices();
         }
 
-        public void Start() { }
-        public void Stop() => Active = false;
-        public void OnPackageLoaded() => BuildCommandMapAsync();
-        public void OnPackageUnloaded() { }
+        public void Start(IApplicationContext app)
+        {
+            // Rebuild the command map whenever any pack is loaded. Pack
+            // load fires PackageLoader.OnPackageLoadComplete; the command
+            // map currently snapshots the primary state's items/locations
+            // (single-state command routing — see BuildCommandMapAsync).
+            EmoTracker.Data.Sessions.PackageLoader.OnPackageLoadComplete += OnAnyPackageLoadComplete;
+            // Settings.EnableVoiceControl gates whether StatusBarControl
+            // returns a control or null — listen so the indicator slot
+            // appears / disappears when the user toggles the setting.
+            Data.ApplicationSettings.Instance.PropertyChanged += OnSettingsPropertyChanged;
+        }
+        public void Stop()
+        {
+            EmoTracker.Data.Sessions.PackageLoader.OnPackageLoadComplete -= OnAnyPackageLoadComplete;
+            Data.ApplicationSettings.Instance.PropertyChanged -= OnSettingsPropertyChanged;
+            Active = false;
+        }
+        void OnSettingsPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Data.ApplicationSettings.EnableVoiceControl))
+                NotifyPropertyChanged(nameof(StatusBarControl));
+        }
+        void OnAnyPackageLoadComplete(object sender, EmoTracker.Data.Sessions.PackageLoader.PackageLoadEventArgs e)
+        {
+            BuildCommandMapAsync();
+        }
         public JToken SerializeToJson() => null;
         public bool DeserializeFromJson(JToken token) => true;
 
@@ -788,7 +816,7 @@ namespace EmoTracker.Extensions.VoiceRecognition
                     ApplicationSettings.Instance.DisplayAllLocations = enable;
                     break;
                 case "chat hud":
-                    var twitch = ExtensionManager.Instance.FindExtension<Twitch.TwitchExtension>();
+                    var twitch = ExtensionManager.Instance.FindApplicationExtension<Twitch.TwitchExtension>();
                     if (twitch != null)
                     {
                         if (enable && twitch.ConnectCommand.CanExecute(null)) twitch.ConnectCommand.Execute(null);

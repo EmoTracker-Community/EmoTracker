@@ -160,11 +160,20 @@ namespace EmoTracker.Extensions.NDI
                 UpdateExtensionStatus(active: !NDIHost.IsSendPaused);
         }
 
-        private static void UpdateExtensionStatus(bool active)
+        private void UpdateExtensionStatus(bool active)
         {
-            var extension = ExtensionManager.Instance?.FindExtension<NDIExtension>();
-            if (extension != null)
-                extension.Active = active;
+            // Look up this window's NDIExtension instance (per-window
+            // IWindowExtension scope). Falls back to no-op if the host
+            // context is null (legacy ctor path).
+            if (_hostContext == null) return;
+            foreach (var ext in ExtensionManager.Instance.GetWindowExtensions(_hostContext))
+            {
+                if (ext is NDIExtension ndi)
+                {
+                    ndi.Active = active;
+                    return;
+                }
+            }
         }
 
         // ----------------------------------------------------------------------

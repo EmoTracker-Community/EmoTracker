@@ -4,61 +4,30 @@ using Newtonsoft.Json.Linq;
 namespace EmoTracker.Extensions.NoteTaking
 {
     /// <summary>
-    /// Phase 7.4: NoteTaking is now per-state. The extension itself is a
-    /// minimal factory; per-state instances render the bottom-bar
-    /// indicator. Notes themselves live on <c>Location.NoteTakingSite</c>
-    /// (per-location, per-state via the Phase 3 Location fork) — the
-    /// vestigial app-level <c>NoteTakingSite</c> previously held by this
-    /// extension was unused by any other code path and has been removed.
+    /// Per-state NoteTaking extension. Hosts the bottom-bar indicator
+    /// surface for the state's active locations with notes; the notes
+    /// themselves live on <c>Location.NoteTakingSite</c> (per-location,
+    /// per-state via the Phase 3 Location fork).
     /// </summary>
-    public class NoteTakingExtension : IStateScopedExtensionFactory
+    public sealed class NoteTakingExtension : ITrackerExtension
     {
-        public string Name { get { return "Note Taking"; } }
+        public string Name => "Note Taking";
+        public string UID => "emotracker_note_taking";
+        public int Priority => -300;
 
-        public string UID { get { return "emotracker_note_taking"; } }
-
-        public int Priority { get { return -300; } }
-
-        public void Start() { }
-
-        public void Stop() { }
-
-        public void OnPackageUnloaded() { }
-
-        public void OnPackageLoaded() { }
-
-        // App-wide status-bar slot is unused now; per-state instance
-        // surfaces its own indicator instead.
-        public object StatusBarControl => null;
-
-        // App-wide serialise / deserialise have nothing to persist —
-        // notes are per-Location now.
-        public JToken SerializeToJson() => null;
-
-        public bool DeserializeFromJson(JToken token) => true;
-
-        public IStateScopedExtension CreateForState(TrackerState state)
-        {
-            return new NoteTakingInstance();
-        }
-    }
-
-    /// <summary>
-    /// Phase 7.4: per-state NoteTaking instance. Holds the per-window
-    /// status-bar indicator surface; serialise / deserialise are no-ops
-    /// (notes live on Location.NoteTakingSite, fork-managed by Phase 3).
-    /// </summary>
-    public sealed class NoteTakingInstance : IStateScopedExtension
-    {
-        public string ExtensionUID => "emotracker_note_taking";
-
-        // Avalonia visuals are single-parent: each MainWindow that binds the
-        // status bar needs its own control instance. Return fresh per getter
-        // call (matching the AutoTrackerExtension pattern).
+        // Avalonia visuals are single-parent: each MainWindow that binds
+        // the status bar needs its own control instance. Return fresh per
+        // getter call.
         public object StatusBarControl => new NoteTakingStatusBarIndicator();
 
         public void OnAttachedToState(TrackerState state) { }
         public void OnDetachedFromState(TrackerState state) { }
+
+        public ITrackerExtension Fork(TrackerState destState)
+        {
+            // Stateless aside from the indicator surface — fresh instance.
+            return new NoteTakingExtension();
+        }
 
         public JToken SerializeToJson() => null;
         public bool DeserializeFromJson(JToken token) => true;

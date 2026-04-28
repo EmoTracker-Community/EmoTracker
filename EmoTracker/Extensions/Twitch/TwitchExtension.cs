@@ -35,7 +35,7 @@ namespace EmoTracker.Extensions.Twitch
         Connected
     }
 
-    public class TwitchExtension : ObservableObject, Extension
+    public class TwitchExtension : ObservableObject, IApplicationExtension
    {
         enum DisconnectReason
         {
@@ -91,7 +91,7 @@ namespace EmoTracker.Extensions.Twitch
             }
         }
 
-        public void Start()
+        public void Start(IApplicationContext app)
         {
             if (!string.IsNullOrWhiteSpace(ApplicationSettings.Instance.TwitchChannelName))
             {
@@ -103,14 +103,6 @@ namespace EmoTracker.Extensions.Twitch
         public void Stop()
         {
             Disconnect(DisconnectReason.Reset);
-        }
-
-        public void OnPackageUnloaded()
-        {
-        }
-
-        public void OnPackageLoaded()
-        {
         }
 
         public JToken SerializeToJson()

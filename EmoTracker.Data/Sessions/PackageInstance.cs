@@ -112,6 +112,10 @@ namespace EmoTracker.Data.Sessions
             ActiveVariant = activeVariant;
             mDefinitionalState = new TrackerState("__definitional__");
             mDefinitionalState.PackageInstance = this;
+            // Notify the lifecycle observer so per-package extensions can
+            // be allocated. Fired before any states are registered on this
+            // instance, so package-extension OnAttachedToPackage runs first.
+            StateLifecycle.Observer?.OnPackageInstanceCreated(this);
         }
 
         /// <summary>
@@ -197,6 +201,11 @@ namespace EmoTracker.Data.Sessions
             // tear down cleanly.
             foreach (var state in mStates.Values)
                 StateLifecycle.Observer?.OnStateUnregistered(state);
+            // Notify the package-level observer hook so per-package
+            // extensions get a chance to tear down. Fired AFTER the
+            // per-state Unregistered fan-out so package-extensions can
+            // assume their states are already detached.
+            StateLifecycle.Observer?.OnPackageInstanceDisposed(this);
             foreach (var state in mStates.Values)
                 state.Dispose();
             mStates.Clear();

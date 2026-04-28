@@ -124,9 +124,21 @@ namespace EmoTracker.UI
             if (!NDIHost.NdiEnabled)
                 return;
 
-            var extension = ExtensionManager.Instance.FindExtension<NDIExtension>();
+            var extension = FindWindowNDIExtension();
             if (extension != null)
                 extension.Active = !_closed && !NDIHost.IsSendPaused;
+        }
+
+        // Look up this window's NDIExtension instance (the per-window
+        // version under the new IWindowExtension scope). Returns null if
+        // the host context is unset (legacy ctor path) or no NDIExtension
+        // is bound to this window.
+        private NDIExtension FindWindowNDIExtension()
+        {
+            if (_hostContext == null) return null;
+            foreach (var ext in ExtensionManager.Instance.GetWindowExtensions(_hostContext))
+                if (ext is NDIExtension ndi) return ndi;
+            return null;
         }
 
         // --- Per-window NDI naming ---------------------------------------
