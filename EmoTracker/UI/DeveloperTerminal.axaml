@@ -87,7 +87,14 @@
              widget (drag from line N to line M selects everything
              between), and per-line color is preserved via Run.Foreground.
              Inlines are rebuilt in code-behind whenever LogOutput
-             changes. -->
+             changes.
+
+             MinHeight is bound to the scroller's viewport height in
+             code-behind so the SelectableTextBlock always fills (or
+             exceeds) the visible scrollback area — drag-selecting
+             from anywhere inside the scrollback (including empty
+             space below the last line) hits the SelectableTextBlock
+             and starts a real selection rather than no-op'ing. -->
         <ScrollViewer Grid.Row="1"
                       Name="ScrollbackScroller"
                       VerticalScrollBarVisibility="Auto"
@@ -99,7 +106,9 @@
                                  FontSize="12"
                                  TextWrapping="Wrap"
                                  Foreground="#CCCCCC"
-                                 SelectionBrush="#264F78" />
+                                 SelectionBrush="#264F78"
+                                 VerticalAlignment="Stretch"
+                                 HorizontalAlignment="Stretch" />
         </ScrollViewer>
 
         <!-- ===================================================== Input prompt -->
@@ -128,7 +137,8 @@
                          FontSize="13"
                          AcceptsReturn="False"
                          Watermark="Type a Lua statement, or /help for slash commands"
-                         KeyDown="OnInputKeyDown">
+                         KeyDown="OnInputKeyDown"
+                         TextChanged="OnInputTextChanged">
                     <!-- Avalonia's default TextBox styles a focused-input
                          glow / pointer-over background that's quite loud
                          for an embedded prompt. Override the inner border
@@ -172,6 +182,26 @@
                     BorderThickness="1"
                     MinWidth="280">
                 <ItemsControl Name="StatePickerItems" />
+            </Border>
+        </Popup>
+
+        <!-- ===================================================== Slash-command auto-complete
+             Anchored above the input field. Opens when the user starts
+             typing a slash command; arrow keys navigate within it,
+             Tab / Enter accepts the highlighted entry, Escape dismisses.
+             Items + selection are managed in code-behind. -->
+        <Popup Name="SlashCompletePopup"
+               Placement="TopEdgeAlignedLeft"
+               PlacementTarget="{Binding ElementName=InputField}"
+               IsLightDismissEnabled="False">
+            <Border Background="#252526"
+                    BorderBrush="#3A3A3A"
+                    BorderThickness="1"
+                    MinWidth="320"
+                    MaxHeight="240">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl Name="SlashCompleteItems" />
+                </ScrollViewer>
             </Border>
         </Popup>
     </Grid>

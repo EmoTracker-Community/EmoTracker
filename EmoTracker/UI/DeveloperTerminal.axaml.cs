@@ -52,6 +52,28 @@ namespace EmoTracker.UI
             InitializeComponent();
             Opened += OnOpened;
             Closed += OnClosed;
+
+            // Bind the scrollback widget's MinHeight to the scroller's
+            // viewport height so empty space below the last log line
+            // is part of the SelectableTextBlock's hit area — drag-
+            // selecting from anywhere in the visible scrollback (not
+            // just on top of text) starts a real selection. We update
+            // on every viewport property change.
+            var scroller = this.FindControl<ScrollViewer>("ScrollbackScroller");
+            var text = this.FindControl<Avalonia.Controls.SelectableTextBlock>("ScrollbackText");
+            if (scroller != null && text != null)
+            {
+                scroller.PropertyChanged += (_, ev) =>
+                {
+                    if (ev.Property == ScrollViewer.ViewportProperty)
+                    {
+                        // Subtract a couple of pixels so the SelectableTextBlock
+                        // never grows past the viewport (which would push the
+                        // text up and create a redundant scrollbar).
+                        text.MinHeight = System.Math.Max(0, scroller.Viewport.Height - 2);
+                    }
+                };
+            }
         }
 
         // ---- Lifecycle ---------------------------------------------------
@@ -221,21 +243,68 @@ namespace EmoTracker.UI
             var input = sender as TextBox;
             if (input == null) return;
 
+            // Auto-complete popup intercepts arrow / Tab / Escape /
+            // Enter while it's open and the input is mid-slash-command.
+            // The completion popup stays open as the user types and
+            // closes on Escape or successful accept.
+            bool acOpen = mAutoCompletePopupOpen;
             switch (e.Key)
             {
                 case Key.Enter:
+                    if (acOpen && mAutoCompleteSelectedIndex >= 0)
+                    {
+                        // Accept the highlighted suggestion. If the
+                        // command takes no further args, submit
+                        // immediately; otherwise leave a trailing
+                        // space and let the user finish typing.
+                        AcceptAutoComplete(input, submitOnAccept: true);
+                        e.Handled = true;
+                        return;
+                    }
                     SubmitInput(input);
                     e.Handled = true;
                     break;
 
+                case Key.Tab:
+                    if (acOpen)
+                    {
+                        AcceptAutoComplete(input, submitOnAccept: false);
+                        e.Handled = true;
+                    }
+                    break;
+
+                case Key.Escape:
+                    if (acOpen)
+                    {
+                        CloseAutoComplete();
+                        e.Handled = true;
+                    }
+                    break;
+
                 case Key.Up:
-                    NavigateHistory(input, -1);
-                    e.Handled = true;
+                    if (acOpen)
+                    {
+                        MoveAutoCompleteSelection(-1);
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        NavigateHistory(input, -1);
+                        e.Handled = true;
+                    }
                     break;
 
                 case Key.Down:
-                    NavigateHistory(input, +1);
-                    e.Handled = true;
+                    if (acOpen)
+                    {
+                        MoveAutoCompleteSelection(+1);
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        NavigateHistory(input, +1);
+                        e.Handled = true;
+                    }
                     break;
 
                 case Key.L when e.KeyModifiers.HasFlag(KeyModifiers.Control):
@@ -243,6 +312,201 @@ namespace EmoTracker.UI
                     mBoundState?.Scripts?.ClearLogCommand?.Execute(null);
                     e.Handled = true;
                     break;
+            }
+        }
+
+        // ---- Slash auto-complete -----------------------------------------
+
+        bool mAutoCompletePopupOpen;
+        int mAutoCompleteSelectedIndex = -1;
+        readonly System.Collections.Generic.List<TerminalCommand> mAutoCompleteCandidates = new();
+
+        void OnInputTextChanged(object sender, TextChangedEventArgs e)
+        {
+            var input = sender as TextBox;
+            if (input == null) return;
+            RefreshAutoComplete(input);
+        }
+
+        void RefreshAutoComplete(TextBox input)
+        {
+            var text = input.Text ?? "";
+            // Auto-complete is slash-command-only. We trigger it once
+            // the user has typed `/` at the start of the input. Once
+            // they hit a space (which means they've moved past the
+            // command name onto its args) we close the popup.
+            if (!text.StartsWith("/") || text.Contains(' ') || mBoundState == null)
+            {
+                CloseAutoComplete();
+                return;
+            }
+
+            string prefix = text.Substring(1);   // strip leading '/'
+
+            // Aggregate every command from every ITerminalExtension on
+            // the bound state, filter by the typed prefix (case-insensitive
+            // StartsWith), order by name, dedupe by name.
+            var seen = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            mAutoCompleteCandidates.Clear();
+            foreach (var ext in ExtensionManager.Instance.GetTerminalExtensions(mBoundState))
+            {
+                var cmds = ext.Commands;
+                if (cmds == null) continue;
+                foreach (var cmd in cmds)
+                {
+                    if (cmd?.Name == null) continue;
+                    if (!seen.Add(cmd.Name)) continue;
+                    if (prefix.Length == 0 ||
+                        cmd.Name.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        mAutoCompleteCandidates.Add(cmd);
+                    }
+                }
+            }
+            mAutoCompleteCandidates.Sort((a, b) =>
+                System.StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name));
+
+            if (mAutoCompleteCandidates.Count == 0)
+            {
+                CloseAutoComplete();
+                return;
+            }
+
+            // Reset selection to top whenever the candidate list changes.
+            mAutoCompleteSelectedIndex = 0;
+            RenderAutoCompleteItems();
+            OpenAutoComplete();
+        }
+
+        void RenderAutoCompleteItems()
+        {
+            var host = this.FindControl<ItemsControl>("SlashCompleteItems");
+            if (host == null) return;
+
+            var rows = new System.Collections.Generic.List<Control>();
+            for (int i = 0; i < mAutoCompleteCandidates.Count; ++i)
+            {
+                rows.Add(BuildAutoCompleteRow(mAutoCompleteCandidates[i], i));
+            }
+            host.ItemsSource = rows;
+        }
+
+        Border BuildAutoCompleteRow(TerminalCommand cmd, int index)
+        {
+            bool isSelected = index == mAutoCompleteSelectedIndex;
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+
+            var nameTb = new TextBlock
+            {
+                Text = "/" + cmd.Name,
+                FontFamily = new FontFamily("Cascadia Mono,Consolas,Menlo,monospace"),
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x4F, 0xC1, 0xFF)),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                MinWidth = 100,
+            };
+            Grid.SetColumn(nameTb, 0);
+            grid.Children.Add(nameTb);
+
+            if (!string.IsNullOrEmpty(cmd.Description))
+            {
+                var descTb = new TextBlock
+                {
+                    Text = cmd.Description,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90)),
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    Margin = new Thickness(12, 0, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                };
+                Grid.SetColumn(descTb, 1);
+                grid.Children.Add(descTb);
+            }
+
+            var row = new Border
+            {
+                Padding = new Thickness(10, 5, 10, 5),
+                Background = isSelected
+                    ? new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D))
+                    : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Child = grid,
+            };
+
+            int capturedIndex = index;
+            row.PointerEntered += (_, __) =>
+            {
+                if (mAutoCompleteSelectedIndex != capturedIndex)
+                {
+                    mAutoCompleteSelectedIndex = capturedIndex;
+                    RenderAutoCompleteItems();
+                }
+            };
+            row.PointerReleased += (_, ev) =>
+            {
+                if (ev.InitialPressMouseButton != MouseButton.Left) return;
+                mAutoCompleteSelectedIndex = capturedIndex;
+                var input = this.FindControl<TextBox>("InputField");
+                if (input != null) AcceptAutoComplete(input, submitOnAccept: false);
+            };
+
+            return row;
+        }
+
+        void OpenAutoComplete()
+        {
+            var popup = this.FindControl<Avalonia.Controls.Primitives.Popup>("SlashCompletePopup");
+            if (popup == null) return;
+            popup.IsOpen = true;
+            mAutoCompletePopupOpen = true;
+        }
+
+        void CloseAutoComplete()
+        {
+            var popup = this.FindControl<Avalonia.Controls.Primitives.Popup>("SlashCompletePopup");
+            if (popup != null) popup.IsOpen = false;
+            mAutoCompletePopupOpen = false;
+            mAutoCompleteSelectedIndex = -1;
+            mAutoCompleteCandidates.Clear();
+        }
+
+        void MoveAutoCompleteSelection(int delta)
+        {
+            if (mAutoCompleteCandidates.Count == 0) return;
+            mAutoCompleteSelectedIndex =
+                (mAutoCompleteSelectedIndex + delta + mAutoCompleteCandidates.Count) %
+                mAutoCompleteCandidates.Count;
+            RenderAutoCompleteItems();
+        }
+
+        // Accepts the currently-highlighted candidate. If
+        // submitOnAccept is true (Enter), submit the now-completed
+        // command directly. Otherwise (Tab / mouse click), leave the
+        // command in the input field with a trailing space and let
+        // the user keep typing args.
+        void AcceptAutoComplete(TextBox input, bool submitOnAccept)
+        {
+            if (mAutoCompleteSelectedIndex < 0 ||
+                mAutoCompleteSelectedIndex >= mAutoCompleteCandidates.Count) return;
+            var cmd = mAutoCompleteCandidates[mAutoCompleteSelectedIndex];
+            string completion = "/" + cmd.Name + " ";
+            input.Text = completion;
+            input.CaretIndex = completion.Length;
+            CloseAutoComplete();
+
+            if (submitOnAccept)
+            {
+                SubmitInput(input);
+            }
+            else
+            {
+                // Re-focus the input so further typing routes here
+                // (a popup item click would otherwise leave focus on
+                // the popup's row).
+                input.Focus();
             }
         }
 
