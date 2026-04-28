@@ -39,7 +39,7 @@ namespace EmoTracker
         public DelegateCommand ShowPackageManagerCommand { get; private set; }
         public DelegateCommand ExportPackageOverrideCommand { get; private set; }
         public DelegateCommand ShowBroadcastViewCommand { get; private set; }
-        public DelegateCommand ShowDeveloperConsoleCommand { get; private set; }
+        public DelegateCommand ShowDeveloperTerminalCommand { get; private set; }
 
         public AsyncDelegateCommand SaveCommand { get; private set; }
         public AsyncDelegateCommand SaveAsCommand { get; private set; }
@@ -564,7 +564,7 @@ namespace EmoTracker
             ResetLayoutScaleCommand = new DelegateCommand(ResetLayoutScale);
 
             ShowBroadcastViewCommand = new DelegateCommand(ShowBroadcastView);
-            ShowDeveloperConsoleCommand = new DelegateCommand(ShowDevleoperConsole);
+            ShowDeveloperTerminalCommand = new DelegateCommand(ShowDeveloperTerminal);
 
             InstallPackageCommand = new DelegateCommand(InstallPackage);
             UninstallPackageCommand = new DelegateCommand(UninstallPackage, CanUninstallPackage);
@@ -751,11 +751,11 @@ namespace EmoTracker
             }
         }
 
-        private void ShowDevleoperConsole(object obj)
+        private void ShowDeveloperTerminal(object obj)
         {
             var mainWindow = (Avalonia.Application.Current?.ApplicationLifetime
                 as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainWindow;
-            mainWindow?.ShowDeveloperConsole();
+            mainWindow?.ShowDeveloperTerminal();
         }
 
         private async void InstallPackage(object obj)

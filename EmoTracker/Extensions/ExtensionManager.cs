@@ -100,6 +100,22 @@ namespace EmoTracker.Extensions
         }
 
         // ------------------------------------------------------------------
+        //  Terminal scope
+        // ------------------------------------------------------------------
+
+        readonly List<Type> mTerminalExtensionTypes = new List<Type>();
+        readonly Dictionary<TrackerState, List<ITerminalExtension>> mTerminalExtensions
+            = new Dictionary<TrackerState, List<ITerminalExtension>>();
+
+        public IReadOnlyList<ITerminalExtension> GetTerminalExtensions(TrackerState state)
+        {
+            if (state == null) return Array.Empty<ITerminalExtension>();
+            return mTerminalExtensions.TryGetValue(state, out var list)
+                ? (IReadOnlyList<ITerminalExtension>)list
+                : Array.Empty<ITerminalExtension>();
+        }
+
+        // ------------------------------------------------------------------
         //  Application-extension lookups (typed + by-uid)
         // ------------------------------------------------------------------
 
@@ -183,6 +199,8 @@ namespace EmoTracker.Extensions
                 mPackageExtensionTypes.Add(t);
             foreach (var t in TypeRegistry<ITrackerExtension>.SupportRegistry)
                 mTrackerExtensionTypes.Add(t);
+            foreach (var t in TypeRegistry<ITerminalExtension>.SupportRegistry)
+                mTerminalExtensionTypes.Add(t);
         }
 
         // ==================================================================
@@ -292,6 +310,38 @@ namespace EmoTracker.Extensions
         public void OnStateRegistered(TrackerState state)
         {
             if (state == null) return;
+            AllocateTrackerExtensionsIfMissing(state);
+            AllocateTerminalExtensionsIfMissing(state);
+        }
+
+        public void OnStateUnregistered(TrackerState state)
+        {
+            if (state == null) return;
+            if (mTrackerExtensions.TryGetValue(state, out var trkList))
+            {
+                foreach (var ext in trkList)
+                    try { ext.OnDetachedFromState(state); } catch { }
+                mTrackerExtensions.Remove(state);
+            }
+            if (mTerminalExtensions.TryGetValue(state, out var termList))
+            {
+                foreach (var ext in termList)
+                    try { ext.OnDetachedFromState(state); } catch { }
+                mTerminalExtensions.Remove(state);
+            }
+        }
+
+        public void OnStateForked(TrackerState source, TrackerState dest)
+        {
+            if (source == null || dest == null) return;
+            ForkTrackerExtensions(source, dest);
+            ForkTerminalExtensions(source, dest);
+        }
+
+        // ---- Tracker scope: allocate / fork helpers -----------------------
+
+        void AllocateTrackerExtensionsIfMissing(TrackerState state)
+        {
             // If the state was forked, its tracker-extensions were already
             // populated by OnStateForked. Idempotent: skip allocation.
             if (mTrackerExtensions.ContainsKey(state)) return;
@@ -317,29 +367,66 @@ namespace EmoTracker.Extensions
             list.Sort((a, b) => a.Priority.CompareTo(b.Priority));
         }
 
-        public void OnStateUnregistered(TrackerState state)
+        void ForkTrackerExtensions(TrackerState source, TrackerState dest)
         {
-            if (state == null) return;
-            if (!mTrackerExtensions.TryGetValue(state, out var list)) return;
-
-            foreach (var ext in list)
-            {
-                try { ext.OnDetachedFromState(state); } catch { }
-            }
-            mTrackerExtensions.Remove(state);
-        }
-
-        public void OnStateForked(TrackerState source, TrackerState dest)
-        {
-            if (source == null || dest == null) return;
             if (mTrackerExtensions.ContainsKey(dest)) return;
             if (!mTrackerExtensions.TryGetValue(source, out var srcList)) return;
 
-            // Allocate the dest's per-state extensions by forking each of
-            // the source's instances. Order: same as source so the type
-            // ordering / priority sort stays stable across the fork.
             var destList = new List<ITrackerExtension>();
             mTrackerExtensions[dest] = destList;
+
+            foreach (var srcExt in srcList)
+            {
+                try
+                {
+                    var forked = srcExt.Fork(dest);
+                    if (forked != null)
+                    {
+                        destList.Add(forked);
+                        forked.OnAttachedToState(dest);
+                    }
+                }
+                catch
+                {
+                }
+            }
+            destList.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        }
+
+        // ---- Terminal scope: allocate / fork helpers ----------------------
+
+        void AllocateTerminalExtensionsIfMissing(TrackerState state)
+        {
+            if (mTerminalExtensions.ContainsKey(state)) return;
+
+            var list = new List<ITerminalExtension>();
+            mTerminalExtensions[state] = list;
+
+            foreach (var t in mTerminalExtensionTypes)
+            {
+                try
+                {
+                    var inst = Activator.CreateInstance(t) as ITerminalExtension;
+                    if (inst != null)
+                    {
+                        list.Add(inst);
+                        inst.OnAttachedToState(state);
+                    }
+                }
+                catch
+                {
+                }
+            }
+            list.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+        }
+
+        void ForkTerminalExtensions(TrackerState source, TrackerState dest)
+        {
+            if (mTerminalExtensions.ContainsKey(dest)) return;
+            if (!mTerminalExtensions.TryGetValue(source, out var srcList)) return;
+
+            var destList = new List<ITerminalExtension>();
+            mTerminalExtensions[dest] = destList;
 
             foreach (var srcExt in srcList)
             {

@@ -6,7 +6,7 @@ using Serilog.Core;
 using Serilog.Events;
 using System;
 
-// Phase 6 step 11: this file is the Serilog → developer-console bridge —
+// Phase 6 step 11: this file is the Serilog → developer-terminal bridge —
 // pure logging, by definition app-wide. The ApplicationModel.Instance?.PrimaryState?.Scripts accesses
 // here are the documented "logging-only callsites are an acceptable
 // fallback" case from the [Obsolete] message on ApplicationModel.Instance?.PrimaryState?.Scripts.
@@ -14,15 +14,15 @@ using System;
 
 namespace EmoTracker.Services
 {
-    class DeveloperConsoleSink : ILogEventSink
+    class DeveloperTerminalSink : ILogEventSink
     {
         private readonly IFormatProvider mFormatProvider;
 
         // Log messages from these subsystems are internal infrastructure concerns
-        // and should not surface in the pack developer console.
+        // and should not surface in the pack developer terminal.
         private static readonly string[] sExcludedPrefixes = { "[Voice]", "[NDI]", "[MCP]", "[SNI]", "[NWA]" };
 
-        public DeveloperConsoleSink(IFormatProvider formatProvider)
+        public DeveloperTerminalSink(IFormatProvider formatProvider)
         {
             mFormatProvider = formatProvider;
         }
@@ -73,11 +73,11 @@ namespace EmoTracker.Services
             }
         }
     }
-    public static class DeveloperConsoleSinkExtensions
+    public static class DeveloperTerminalSinkExtensions
     {
-        public static LoggerConfiguration DeveloperConsole(this LoggerSinkConfiguration loggerConfiguration, IFormatProvider formatProvider = null)
+        public static LoggerConfiguration DeveloperTerminal(this LoggerSinkConfiguration loggerConfiguration, IFormatProvider formatProvider = null)
         {
-            return loggerConfiguration.Sink(new DeveloperConsoleSink(formatProvider));
+            return loggerConfiguration.Sink(new DeveloperTerminalSink(formatProvider));
         }
     }
 

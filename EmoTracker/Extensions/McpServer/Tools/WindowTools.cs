@@ -96,15 +96,15 @@ namespace EmoTracker.Extensions.McpServer.Tools
             });
         }
 
-        [McpServerTool(Name = "open_developer_console")]
-        [Description("Open the developer console window")]
-        public static async Task<string> OpenDeveloperConsole()
+        [McpServerTool(Name = "open_developer_terminal")]
+        [Description("Open the developer terminal window")]
+        public static async Task<string> OpenDeveloperTerminal()
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 try
                 {
-                    ApplicationModel.Instance.ShowDeveloperConsoleCommand?.Execute(null);
+                    ApplicationModel.Instance.ShowDeveloperTerminalCommand?.Execute(null);
                     return JsonSerializer.Serialize(new { success = true });
                 }
                 catch (Exception ex)
@@ -114,9 +114,9 @@ namespace EmoTracker.Extensions.McpServer.Tools
             });
         }
 
-        [McpServerTool(Name = "capture_developer_console")]
-        [Description("Capture the developer console window as a base64-encoded PNG screenshot")]
-        public static async Task<string> CaptureDeveloperConsole()
+        [McpServerTool(Name = "capture_developer_terminal")]
+        [Description("Capture the developer terminal window as a base64-encoded PNG screenshot")]
+        public static async Task<string> CaptureDeveloperTerminal()
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -126,20 +126,20 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (lifetime == null)
                         return JsonSerializer.Serialize(new { error = "Application lifetime not available" });
 
-                    Window consoleWindow = null;
+                    Window terminalWindow = null;
                     foreach (var win in lifetime.Windows)
                     {
-                        if (win is UI.DeveloperConsole)
+                        if (win is UI.DeveloperTerminal)
                         {
-                            consoleWindow = win;
+                            terminalWindow = win;
                             break;
                         }
                     }
 
-                    if (consoleWindow == null)
-                        return JsonSerializer.Serialize(new { error = "Developer console is not open" });
+                    if (terminalWindow == null)
+                        return JsonSerializer.Serialize(new { error = "Developer terminal is not open" });
 
-                    return CaptureWindow(consoleWindow);
+                    return CaptureWindow(terminalWindow);
                 }
                 catch (Exception ex)
                 {

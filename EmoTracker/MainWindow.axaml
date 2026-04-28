@@ -192,7 +192,7 @@
                                               IsChecked="{Binding SupportLua53VersionChecks, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 </MenuItem>
                                 <Separator />
-                                <MenuItem Header="Developer Console" Command="{Binding ShowDeveloperConsoleCommand, Source={x:Static local:ApplicationModel.Instance}}" />
+                                <MenuItem Header="Developer Terminal" Command="{Binding ShowDeveloperTerminalCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                             </MenuItem>
                         </ContextMenu>
                     </Button.ContextMenu>

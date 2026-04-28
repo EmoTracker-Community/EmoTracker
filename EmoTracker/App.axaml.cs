@@ -34,7 +34,7 @@ namespace EmoTracker
                         buffered: true,
                         flushToDiskInterval: TimeSpan.FromSeconds(5))
                     .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
-                    .WriteTo.DeveloperConsole()
+                    .WriteTo.DeveloperTerminal()
                     .CreateLogger();
             }
             catch (Exception)

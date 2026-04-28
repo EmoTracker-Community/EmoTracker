@@ -469,10 +469,10 @@ namespace EmoTracker
                 // For Phase 6 just close — async dialog in Phase 7
             }
 
-            if (DeveloperConsole != null)
+            if (DeveloperTerminal != null)
             {
-                DeveloperConsole.Close();
-                DeveloperConsole = null;
+                DeveloperTerminal.Close();
+                DeveloperTerminal = null;
             }
 
             // Note: this window's per-window BroadcastView and
@@ -594,19 +594,19 @@ namespace EmoTracker
         }
 
 
-        public UI.DeveloperConsole DeveloperConsole { get; private set; }
+        public UI.DeveloperTerminal DeveloperTerminal { get; private set; }
 
-        public void ShowDeveloperConsole()
+        public void ShowDeveloperTerminal()
         {
-            if (DeveloperConsole == null)
+            if (DeveloperTerminal == null)
             {
-                DeveloperConsole = new UI.DeveloperConsole();
-                DeveloperConsole.Closing += (_, _) => DeveloperConsole = null;
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => DeveloperConsole.Show());
+                DeveloperTerminal = new UI.DeveloperTerminal();
+                DeveloperTerminal.Closing += (_, _) => DeveloperTerminal = null;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => DeveloperTerminal.Show());
             }
             else
             {
-                DeveloperConsole.Activate();
+                DeveloperTerminal.Activate();
             }
         }
 
