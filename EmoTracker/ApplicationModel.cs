@@ -1670,7 +1670,10 @@ Failed to save workspace to ```{0}```.
 
             // Now that PrimaryState is non-null, run the deferred app-level
             // package-loaded side effects (extensions, layouts, etc.).
-            FirePackageLoadedFanout();
+            // Pass the freshly-forked primary so its dirty flag is the
+            // only one that gets cleared — sibling tabs hosting other
+            // states keep their modifications intact.
+            FirePackageLoadedFanout(primary);
         }
 
         /// <summary>
@@ -1846,7 +1849,7 @@ Failed to save workspace to ```{0}```.
             if (target != null && ReferenceEquals(target, target.PackageInstance?.DefinitionalState))
                 return;
 
-            FirePackageLoadedFanout();
+            FirePackageLoadedFanout(target);
         }
 
         /// <summary>
@@ -1857,8 +1860,19 @@ Failed to save workspace to ```{0}```.
         /// primary-state loads (Reload / LoadProgress) and explicitly by
         /// <see cref="ActivatePackage"/> after the definitional-state load
         /// + fork has produced the new primary.
+        ///
+        /// <para>
+        /// <paramref name="loadedState"/> is the state whose pack was just
+        /// loaded (or null when the fan-out fires for a workspace
+        /// restore covering many states; in that case the workspace
+        /// restore path has already cleared the dirty flag on the
+        /// states it touched). Only this state's dirty marker is
+        /// cleared; other tabs' modified flags are left intact, so
+        /// loading the same pack into a fresh tab doesn't surprise the
+        /// user by clearing modifications on existing tabs.
+        /// </para>
         /// </summary>
-        void FirePackageLoadedFanout()
+        void FirePackageLoadedFanout(TrackerState loadedState = null)
         {
             // App-level OnPackageLoaded fan-out is no longer needed — the
             // four-scope ExtensionManager already attached per-package and
@@ -1874,11 +1888,12 @@ Failed to save workspace to ```{0}```.
 
             OnActivePackageMetadataChanged();
 
-            // Phase 7.11 polish: a freshly-loaded pack isn't dirty —
-            // clear the marker on every active state.
-            foreach (var pi in mPackageInstances)
-                foreach (var kvp in pi.States)
-                    kvp.Value.MarkClean();
+            // A freshly-loaded pack isn't dirty — but only clear the
+            // marker on the specific state that was loaded. Loading the
+            // same pack into a new tab must NOT clobber sibling tabs'
+            // dirty flags (their state hasn't changed; only this tab's
+            // catalogs were just rebuilt).
+            loadedState?.MarkClean();
 
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
 
