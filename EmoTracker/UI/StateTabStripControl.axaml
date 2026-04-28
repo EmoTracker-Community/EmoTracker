@@ -9,16 +9,52 @@
              mc:Ignorable="d"
              Background="#1A1A1A">
 
-    <!-- Layout:
-         [ScrollViewer holding the tab strip ───────────────] [▾]
-         The ScrollViewer auto-shows a horizontal scrollbar when
-         there are too many tabs to fit; the dropdown button on
-         the right opens a list of every open tab so the user can
-         jump to any tab regardless of scroll position. -->
-    <Grid ColumnDefinitions="*,Auto">
-        <ScrollViewer Grid.Column="0"
-                      Name="TabsScrollViewer"
-                      HorizontalScrollBarVisibility="Auto"
+    <!-- Outer Grid lets EmptyHint overlay the strip when there are
+         no states (UserControl needs a single root, and the empty-
+         state placeholder sits as a sibling overlay rather than
+         inside the dock). -->
+    <Grid>
+
+    <!-- Layout: dropdown docked to the right (always reachable, never
+         scrolls); the rest of the strip width hosts a horizontally-
+         scrollable ItemsControl for the tabs. The scrollbar itself is
+         hidden — overflow tabs are reachable by mouse-wheel scroll
+         (or the dropdown for jump-to-tab). DockPanel guarantees the
+         docked Button sizes to its content first and the fill area
+         takes the remaining width, regardless of how wide the inner
+         StackPanel of tabs gets. -->
+    <DockPanel LastChildFill="True">
+
+        <!-- Right-side dropdown button: opens a flyout listing every
+             open tab so the user can jump to any of them regardless
+             of horizontal scroll position. The flyout's MenuItems are
+             built in code-behind on each open so the list reflects
+             the current OpenStates collection (and active-tab marker). -->
+        <Button DockPanel.Dock="Right"
+                Name="TabsDropdownButton"
+                Background="#1A1A1A"
+                BorderThickness="1,0,0,0"
+                BorderBrush="#2A2A2A"
+                Padding="10,0"
+                VerticalAlignment="Stretch"
+                Foreground="#CCCCCC"
+                ToolTip.Tip="All open tabs"
+                Click="OnTabsDropdownClicked">
+            <TextBlock Text="▾"
+                       FontSize="14"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       Foreground="#CCCCCC" />
+            <Button.Flyout>
+                <MenuFlyout Placement="Bottom" />
+            </Button.Flyout>
+        </Button>
+
+        <!-- Tab strip area (fill). The ScrollViewer keeps overflow
+             tabs reachable via mouse-wheel without showing a visible
+             scrollbar. -->
+        <ScrollViewer Name="TabsScrollViewer"
+                      HorizontalScrollBarVisibility="Hidden"
                       VerticalScrollBarVisibility="Disabled">
             <ItemsControl Name="TabsHost"
                           ItemsSource="{Binding #TabStripRoot.OpenStates}"
@@ -88,41 +124,18 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <!-- Right-side dropdown button: opens a flyout listing every
-             open tab so the user can jump to any of them regardless
-             of horizontal scroll position. The flyout's MenuItems are
-             built in code-behind on each open so the list reflects
-             the current OpenStates collection (and active-tab marker). -->
-        <Button Grid.Column="1"
-                Name="TabsDropdownButton"
-                Background="Transparent"
-                BorderThickness="1,0,0,0"
-                BorderBrush="#2A2A2A"
-                Padding="8,0"
-                VerticalAlignment="Stretch"
-                Foreground="#CCCCCC"
-                ToolTip.Tip="All open tabs"
-                Click="OnTabsDropdownClicked">
-            <TextBlock Text="⌄"
-                       FontSize="14"
-                       VerticalAlignment="Center"
-                       Foreground="#888" />
-            <Button.Flyout>
-                <MenuFlyout Placement="Bottom" />
-            </Button.Flyout>
-        </Button>
+    </DockPanel>
 
-        <!-- Empty-state placeholder -->
-        <TextBlock Name="EmptyHint"
-                   Grid.Column="0"
-                   Grid.ColumnSpan="2"
-                   Text="No states open — load a pack via the bottom bar"
-                   Foreground="#555"
-                   FontSize="10"
-                   VerticalAlignment="Center"
-                   HorizontalAlignment="Left"
-                   Margin="8,0"
-                   IsVisible="False" />
+    <!-- Empty-state placeholder, overlay -->
+    <TextBlock Name="EmptyHint"
+               Text="No states open — load a pack via the bottom bar"
+               Foreground="#555"
+               FontSize="10"
+               VerticalAlignment="Center"
+               HorizontalAlignment="Left"
+               Margin="8,0"
+               IsVisible="False" />
+
     </Grid>
 
 </UserControl>
