@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using EmoTracker.Data;
 using EmoTracker.Data.Sessions;
 using EmoTracker.Extensions;
+using EmoTracker.Extensions.DeveloperTerminal;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -35,17 +36,16 @@ namespace EmoTracker.UI
     public partial class DeveloperTerminal : Window
     {
         // -------- Per-tab terminal context ---------------------------------
+        //
+        // Per-state history / draft live on each state's
+        // DeveloperTerminalCoreExtension instance (already a per-state
+        // ITerminalExtension). The terminal UI just looks the
+        // extension up via ExtensionManager — no parallel dictionary
+        // needed here, and /history reads from the same source the UI
+        // writes to.
 
-        sealed class TerminalContext
-        {
-            public List<string> History = new();   // user input history (most-recent appended)
-            public int HistoryIndex = -1;          // -1 = past-the-end (current draft)
-            public string Draft = "";              // user's in-progress edit at the bottom
-        }
-
-        readonly Dictionary<TrackerState, TerminalContext> mContexts = new();
         TrackerState mBoundState;
-        TerminalContext mBoundContext;
+        DeveloperTerminalCoreExtension mBoundCore;
 
         public DeveloperTerminal()
         {
@@ -101,7 +101,7 @@ namespace EmoTracker.UI
 
             UnbindCurrentState();
             mBoundState = state;
-            mBoundContext = state == null ? null : GetOrCreateContext(state);
+            mBoundCore = ResolveCoreExtension(state);
 
             // Render the bound state's LogOutput into the single
             // SelectableTextBlock. Cross-line selection works because
@@ -115,11 +115,11 @@ namespace EmoTracker.UI
                 ncc.CollectionChanged += OnLogOutputChanged;
 
             // Restore the saved input draft for this state (defaults to
-            // "" on first visit).
+            // "" on first visit; lives on the per-state core extension).
             var input = this.FindControl<TextBox>("InputField");
-            if (input != null && mBoundContext != null)
+            if (input != null && mBoundCore != null)
             {
-                input.Text = mBoundContext.Draft;
+                input.Text = mBoundCore.Draft;
                 input.CaretIndex = input.Text.Length;
             }
 
@@ -129,26 +129,27 @@ namespace EmoTracker.UI
 
         void UnbindCurrentState()
         {
-            // Save the current input draft into the bound context so a
-            // future re-bind restores it.
-            if (mBoundContext != null)
+            // Save the current input draft into the bound core extension
+            // so a future re-bind restores it.
+            if (mBoundCore != null)
             {
                 var input = this.FindControl<TextBox>("InputField");
                 if (input != null)
-                    mBoundContext.Draft = input.Text ?? "";
+                    mBoundCore.Draft = input.Text ?? "";
             }
             if (mBoundState?.Scripts?.LogOutput is INotifyCollectionChanged ncc)
                 ncc.CollectionChanged -= OnLogOutputChanged;
         }
 
-        TerminalContext GetOrCreateContext(TrackerState state)
+        static DeveloperTerminalCoreExtension ResolveCoreExtension(TrackerState state)
         {
-            if (!mContexts.TryGetValue(state, out var ctx))
+            if (state == null) return null;
+            foreach (var ext in ExtensionManager.Instance.GetTerminalExtensions(state))
             {
-                ctx = new TerminalContext();
-                mContexts[state] = ctx;
+                if (ext is DeveloperTerminalCoreExtension core)
+                    return core;
             }
-            return ctx;
+            return null;
         }
 
         void UpdateStatePickerLabel()
@@ -522,16 +523,17 @@ namespace EmoTracker.UI
             }
 
             // Record into history (dedupe consecutive duplicates so
-            // hammering Enter doesn't bloat recall).
-            if (mBoundContext != null)
+            // hammering Enter doesn't bloat recall). History lives on
+            // the per-state core extension.
+            if (mBoundCore != null)
             {
-                if (mBoundContext.History.Count == 0 ||
-                    !string.Equals(mBoundContext.History[^1], text, StringComparison.Ordinal))
+                if (mBoundCore.InputHistory.Count == 0 ||
+                    !string.Equals(mBoundCore.InputHistory[^1], text, StringComparison.Ordinal))
                 {
-                    mBoundContext.History.Add(text);
+                    mBoundCore.InputHistory.Add(text);
                 }
-                mBoundContext.HistoryIndex = -1;
-                mBoundContext.Draft = "";
+                mBoundCore.HistoryIndex = -1;
+                mBoundCore.Draft = "";
             }
 
             // Echo the user's input back to the scrollback so the
@@ -649,32 +651,32 @@ namespace EmoTracker.UI
 
         void NavigateHistory(TextBox input, int direction)
         {
-            if (mBoundContext == null) return;
-            var hist = mBoundContext.History;
+            if (mBoundCore == null) return;
+            var hist = mBoundCore.InputHistory;
             if (hist.Count == 0) return;
 
-            if (mBoundContext.HistoryIndex == -1)
+            if (mBoundCore.HistoryIndex == -1)
             {
                 // Save the current draft so the user can return to it
                 // by pressing Down past the most recent entry.
-                mBoundContext.Draft = input.Text ?? "";
+                mBoundCore.Draft = input.Text ?? "";
             }
 
             int newIdx;
-            if (mBoundContext.HistoryIndex == -1)
+            if (mBoundCore.HistoryIndex == -1)
             {
                 if (direction > 0) return;   // Down at the draft = no-op
                 newIdx = hist.Count - 1;
             }
             else
             {
-                newIdx = mBoundContext.HistoryIndex + direction;
+                newIdx = mBoundCore.HistoryIndex + direction;
                 if (newIdx < 0) newIdx = 0;
                 if (newIdx >= hist.Count) newIdx = -1;
             }
 
-            mBoundContext.HistoryIndex = newIdx;
-            input.Text = newIdx == -1 ? mBoundContext.Draft : hist[newIdx];
+            mBoundCore.HistoryIndex = newIdx;
+            input.Text = newIdx == -1 ? mBoundCore.Draft : hist[newIdx];
             input.CaretIndex = input.Text.Length;
         }
 
