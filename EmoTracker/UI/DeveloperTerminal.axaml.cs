@@ -384,12 +384,29 @@ namespace EmoTracker.UI
             var host = this.FindControl<ItemsControl>("SlashCompleteItems");
             if (host == null) return;
 
+            // Build rows + capture the row for the currently-highlighted
+            // entry so we can scroll it into view after layout. Without
+            // this, arrow-key navigation just toggles the visual
+            // highlight but the ScrollViewer stays put — the active
+            // selection ends up off-screen on long candidate lists.
             var rows = new System.Collections.Generic.List<Control>();
+            Control selectedRow = null;
             for (int i = 0; i < mAutoCompleteCandidates.Count; ++i)
             {
-                rows.Add(BuildAutoCompleteRow(mAutoCompleteCandidates[i], i));
+                var row = BuildAutoCompleteRow(mAutoCompleteCandidates[i], i);
+                if (i == mAutoCompleteSelectedIndex) selectedRow = row;
+                rows.Add(row);
             }
             host.ItemsSource = rows;
+
+            // Defer until after the layout pass so the row has its
+            // realized bounds; BringIntoView walks up the visual tree
+            // and asks each ScrollViewer ancestor to scroll this
+            // visual into its viewport.
+            if (selectedRow != null)
+            {
+                Dispatcher.UIThread.Post(() => selectedRow.BringIntoView());
+            }
         }
 
         Border BuildAutoCompleteRow(TerminalCommand cmd, int index)
