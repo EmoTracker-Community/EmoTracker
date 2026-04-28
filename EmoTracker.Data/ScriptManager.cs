@@ -1282,6 +1282,16 @@ end
             mMemoryService = src.mMemoryService;
             mNotificationService = src.mNotificationService;
 
+            // Terminal history: copy the source's scrollback into the
+            // fork so the fork's developer-terminal opens with the
+            // source's pack-load output, init.lua diagnostics, prior
+            // command transcripts, etc. — not an empty buffer. The
+            // LogLine records are immutable value-shaped (Text + Color
+            // strings); shallow-copying is safe.
+            mLogOutput.Clear();
+            foreach (var line in src.mLogOutput)
+                mLogOutput.Add(line);
+
             // mExpressionCache — per plan §5.9, a forked manager's cache
             // starts empty rather than copying the source's. The field
             // initializer on the new ScriptManager instance already gives

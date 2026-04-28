@@ -81,15 +81,13 @@ namespace EmoTracker.UI
             mBoundState = state;
             mBoundContext = state == null ? null : GetOrCreateContext(state);
 
-            // Wire the scrollback ItemsControl against the bound state's
-            // LogOutput. The collection is observable, so additions tick
-            // through the binding without explicit refresh — we just need
-            // to listen for changes to auto-scroll on append.
-            var scrollbackHost = this.FindControl<ItemsControl>("ScrollbackHost");
-            if (scrollbackHost != null)
-            {
-                scrollbackHost.ItemsSource = state?.Scripts?.LogOutput;
-            }
+            // Render the bound state's LogOutput into the single
+            // SelectableTextBlock. Cross-line selection works because
+            // it's all one widget. We rebuild the Inlines on every
+            // change (additions are O(1) and the scrollback caps at
+            // 500 lines, so even a full rebuild is cheap). Listening
+            // for collection changes also drives auto-scroll.
+            RenderScrollback();
 
             if (state?.Scripts?.LogOutput is INotifyCollectionChanged ncc)
                 ncc.CollectionChanged += OnLogOutputChanged;
@@ -146,7 +144,52 @@ namespace EmoTracker.UI
 
         void OnLogOutputChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            Dispatcher.UIThread.Post(ScrollToEnd);
+            // Re-render the SelectableTextBlock's inlines and re-scroll.
+            // The OutputRaw path can fire from any thread; ensure the UI
+            // mutation happens on the dispatcher.
+            Dispatcher.UIThread.Post(() =>
+            {
+                RenderScrollback();
+                ScrollToEnd();
+            });
+        }
+
+        // Build a single colored-Run-per-line stream into the
+        // SelectableTextBlock. One widget = native cross-line selection
+        // (drag from line N's middle through line M's end and Ctrl+C
+        // captures the whole range, including line breaks). Per-line
+        // colors carried via Run.Foreground.
+        void RenderScrollback()
+        {
+            var tb = this.FindControl<Avalonia.Controls.SelectableTextBlock>("ScrollbackText");
+            if (tb == null) return;
+            tb.Inlines = null; // reset between binds
+
+            var lines = mBoundState?.Scripts?.LogOutput;
+            if (lines == null) return;
+
+            var inlines = new Avalonia.Controls.Documents.InlineCollection();
+            bool first = true;
+            foreach (var line in lines)
+            {
+                if (!first) inlines.Add(new Avalonia.Controls.Documents.LineBreak());
+                first = false;
+
+                var run = new Avalonia.Controls.Documents.Run(line.Text ?? "");
+                if (!string.IsNullOrEmpty(line.Color))
+                {
+                    try
+                    {
+                        run.Foreground = Avalonia.Media.SolidColorBrush.Parse(line.Color);
+                    }
+                    catch
+                    {
+                        // Unknown color string → fall back to the default foreground.
+                    }
+                }
+                inlines.Add(run);
+            }
+            tb.Inlines = inlines;
         }
 
         void ScrollToEnd()
@@ -376,6 +419,9 @@ namespace EmoTracker.UI
         void OnCopyAllClicked(object sender, Avalonia.Interactivity.RoutedEventArgs e)
         {
             if (mBoundState?.Scripts?.LogOutput == null) return;
+            // The SelectableTextBlock supports drag-select for partial
+            // copy. This button copies the entire scrollback regardless
+            // of current selection.
             var sb = new StringBuilder();
             foreach (var line in mBoundState.Scripts.LogOutput)
                 sb.AppendLine(line.Text ?? "");

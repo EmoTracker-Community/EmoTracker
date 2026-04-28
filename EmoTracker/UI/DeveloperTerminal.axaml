@@ -81,26 +81,25 @@
             </Grid>
         </Border>
 
-        <!-- ===================================================== Scrollback -->
+        <!-- ===================================================== Scrollback
+             Single SelectableTextBlock containing one colored Run per
+             log line. Cross-line selection works inside a single
+             widget (drag from line N to line M selects everything
+             between), and per-line color is preserved via Run.Foreground.
+             Inlines are rebuilt in code-behind whenever LogOutput
+             changes. -->
         <ScrollViewer Grid.Row="1"
                       Name="ScrollbackScroller"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Background="#1E1E1E"
-                      Padding="0">
-            <ItemsControl Name="ScrollbackHost"
-                          Padding="6,4">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <SelectableTextBlock FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
-                                             FontSize="12"
-                                             Text="{Binding Text}"
-                                             TextWrapping="Wrap"
-                                             Foreground="{Binding Color}"
-                                             Margin="0,0,0,1" />
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                      Padding="6,4">
+            <SelectableTextBlock Name="ScrollbackText"
+                                 FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                 FontSize="12"
+                                 TextWrapping="Wrap"
+                                 Foreground="#CCCCCC"
+                                 SelectionBrush="#264F78" />
         </ScrollViewer>
 
         <!-- ===================================================== Input prompt -->
@@ -123,11 +122,43 @@
                          BorderThickness="0"
                          Foreground="#E0E0E0"
                          CaretBrush="#E0E0E0"
+                         SelectionBrush="#264F78"
+                         SelectionForegroundBrush="#E0E0E0"
                          FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
                          FontSize="13"
                          AcceptsReturn="False"
                          Watermark="Type a Lua statement, or /help for slash commands"
-                         KeyDown="OnInputKeyDown" />
+                         KeyDown="OnInputKeyDown">
+                    <!-- Avalonia's default TextBox styles a focused-input
+                         glow / pointer-over background that's quite loud
+                         for an embedded prompt. Override the inner border
+                         + content-presenter backgrounds across the
+                         interactive states so the input looks calm:
+                         transparent at rest, a near-black tint when
+                         focused (just enough to indicate input is
+                         routed here), no large coloured glow. -->
+                    <TextBox.Styles>
+                        <Style Selector="TextBox /template/ Border#PART_BorderElement">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                        <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                        </Style>
+                        <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+                            <Setter Property="Background" Value="#252526" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                        <Style Selector="TextBox:focus-within /template/ Border#PART_BorderElement">
+                            <Setter Property="Background" Value="#252526" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </TextBox.Styles>
+                </TextBox>
             </Grid>
         </Border>
 
