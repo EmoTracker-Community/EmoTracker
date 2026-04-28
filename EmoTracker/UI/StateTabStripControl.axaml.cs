@@ -663,15 +663,11 @@ namespace EmoTracker.UI
             foreach (var ctx in windowSnapshot)
                 ctx.RemoveState(state);
 
-            // Remove from owning PackageInstance.
-            foreach (var pi in ApplicationModel.Instance.PackageInstances)
-            {
-                if (pi.States.ContainsKey(state.Id))
-                {
-                    pi.RemoveState(state.Id);
-                    break;
-                }
-            }
+            // Remove from owning PackageInstance via the ApplicationModel
+            // helper — closes the PI if this was its last state, so the
+            // app doesn't accumulate empty PackageInstances after every
+            // tab close.
+            ApplicationModel.Instance.RemoveStateFromPackage(state);
 
             // If a window is now empty and it isn't the last window, close it.
             var liveWindows = new System.Collections.Generic.List<WindowContext>(ApplicationModel.Instance.Windows);

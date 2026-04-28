@@ -716,6 +716,38 @@ namespace EmoTracker
         }
 
         /// <summary>
+        /// Remove a state from its <see cref="PackageInstance"/> and, if
+        /// that was the PI's last state, also release the PI itself
+        /// (drop from <see cref="PackageInstances"/> + dispose). Use
+        /// this rather than calling <c>pi.RemoveState</c> directly on
+        /// any code path that's user-driven (close-tab, activate-into-
+        /// existing-tab, workspace-restore swap-out) so the app
+        /// doesn't accumulate empty PIs after every interaction.
+        ///
+        /// <para>
+        /// Returns true iff a state was actually removed.
+        /// </para>
+        /// </summary>
+        public bool RemoveStateFromPackage(TrackerState state)
+        {
+            if (state == null) return false;
+            var pi = state.PackageInstance;
+            if (pi == null) { state.Dispose(); return true; }
+
+            bool removed = pi.RemoveState(state.Id);
+            // If this was the last state on the PI, the PI no longer
+            // has any user-facing tabs and there's no reason to keep
+            // its catalogs / Lua interpreters / image caches around.
+            // ClosePackageInstance handles the active-instance pointer
+            // shuffle if `pi` happens to be the currently-active one.
+            if (removed && pi.States.Count == 0)
+            {
+                ClosePackageInstance(pi);
+            }
+            return removed;
+        }
+
+        /// <summary>
         /// Notifies UI bindings that pack metadata on the active state may
         /// have changed. Pack identity now lives on the state's
         /// <see cref="TrackerState.PackageInstance"/> back-reference; this
@@ -1470,8 +1502,11 @@ Failed to save workspace to ```{0}```.
             if (!primary.LoadProgressFromJObject(stateData))
             {
                 // Restoration failed — drop the orphan state from the PI so
-                // we don't leak it into subsequent state lookups.
-                try { pi.RemoveState(primary.Id); } catch { /* defensive */ }
+                // we don't leak it into subsequent state lookups. Routed
+                // through RemoveStateFromPackage so a freshly-allocated
+                // PI (one that just got this primary added and nothing
+                // else) is also released.
+                try { RemoveStateFromPackage(primary); } catch { /* defensive */ }
                 return null;
             }
 
@@ -1653,14 +1688,17 @@ Failed to save workspace to ```{0}```.
                 if (oldState != null)
                 {
                     // The replaced tab's state belongs to its
-                    // PackageInstance — remove it through the PI so the
-                    // per-state extension lifecycle observer is notified
-                    // and the state's catalogs are disposed cleanly.
-                    // States created via the empty-tab flow have no PI,
-                    // in which case dispose directly.
-                    var oldPi = oldState.PackageInstance;
-                    if (oldPi != null)
-                        oldPi.RemoveState(oldState.Id);
+                    // PackageInstance — remove it through the
+                    // RemoveStateFromPackage helper so the per-state
+                    // extension lifecycle observer is notified, the
+                    // state's catalogs are disposed cleanly, AND the
+                    // old PI is released if this leaves it stateless.
+                    // (Without the auto-close the user accumulates
+                    // empty PIs every time they activate a different
+                    // pack into an existing tab.) States created via
+                    // the empty-tab flow have no PI; dispose directly.
+                    if (oldState.PackageInstance != null)
+                        RemoveStateFromPackage(oldState);
                     else
                         oldState.Dispose();
                 }
