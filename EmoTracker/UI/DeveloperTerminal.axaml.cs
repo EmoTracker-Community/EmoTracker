@@ -409,6 +409,15 @@ namespace EmoTracker.UI
             }
         }
 
+        // Stable brushes so we can compare by reference to know whether
+        // the row is currently in its "selected" or "hovered" state.
+        static readonly IBrush AutoCompleteRowBgSelected =
+            new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D));
+        static readonly IBrush AutoCompleteRowBgHover =
+            new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35));
+        static readonly IBrush AutoCompleteRowBgIdle =
+            new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+
         Border BuildAutoCompleteRow(TerminalCommand cmd, int index)
         {
             bool isSelected = index == mAutoCompleteSelectedIndex;
@@ -447,22 +456,34 @@ namespace EmoTracker.UI
             var row = new Border
             {
                 Padding = new Thickness(10, 5, 10, 5),
-                Background = isSelected
-                    ? new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D))
-                    : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
+                Background = isSelected ? AutoCompleteRowBgSelected : AutoCompleteRowBgIdle,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Child = grid,
             };
 
             int capturedIndex = index;
+
+            // Hover provides a transient visual affordance only —
+            // hovering does NOT change which entry is selected. Without
+            // that decoupling, the BringIntoView scroll triggered by
+            // keyboard navigation could slide rows under the static
+            // cursor; the resulting PointerEntered then re-pointed
+            // mAutoCompleteSelectedIndex at whatever the cursor
+            // happened to be over, making the keyboard nav appear to
+            // jump backward or randomly. Selected rows skip the hover
+            // tint so they stay visually distinct.
             row.PointerEntered += (_, __) =>
             {
-                if (mAutoCompleteSelectedIndex != capturedIndex)
-                {
-                    mAutoCompleteSelectedIndex = capturedIndex;
-                    RenderAutoCompleteItems();
-                }
+                if (capturedIndex != mAutoCompleteSelectedIndex)
+                    row.Background = AutoCompleteRowBgHover;
             };
+            row.PointerExited += (_, __) =>
+            {
+                if (capturedIndex != mAutoCompleteSelectedIndex)
+                    row.Background = AutoCompleteRowBgIdle;
+            };
+
+            // Click is the only mouse path that changes selection.
             row.PointerReleased += (_, ev) =>
             {
                 if (ev.InitialPressMouseButton != MouseButton.Left) return;
