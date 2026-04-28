@@ -142,7 +142,7 @@ namespace EmoTracker.UI
                 await Task.Run(() =>
                 {
                     img = IconUtility.GetImage(
-                        package.Open(file, true, true));
+                        package.Open(file, ignoreVariants: true, ignoreOverrides: true));
                     isImagePreview = img != null;
 
                     if (img == null)

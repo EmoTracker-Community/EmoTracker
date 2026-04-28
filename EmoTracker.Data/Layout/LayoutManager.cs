@@ -81,7 +81,7 @@ namespace EmoTracker.Data.Layout
             {
                 try
                 {
-                    using (StreamReader reader = new StreamReader(package.Open(path)))
+                    using (StreamReader reader = new StreamReader(package.Open(path, this.State?.PackageInstance?.ActiveVariant)))
                     {
                         JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
                         if (root != null)
@@ -130,7 +130,7 @@ namespace EmoTracker.Data.Layout
             {
                 try
                 {
-                    using (StreamReader reader = new StreamReader(package.Open("tracker_layout.json")))
+                    using (StreamReader reader = new StreamReader(package.Open("tracker_layout.json", this.State?.PackageInstance?.ActiveVariant)))
                     {
                         JObject root = (JObject)JToken.ReadFrom(new JsonTextReader(reader));
                         JObject layouts = root.GetValue<JObject>("layouts");

@@ -943,13 +943,13 @@ ActiveGamePackage.OverridePath)
                 IGamePackage package = obj as IGamePackage;
                 IGamePackageVariant variant = obj as IGamePackageVariant;
 
-                if (package != null)
-                {
-                    ActivatePackage(package, null);
-                }
-                else if (variant != null)
+                if (variant != null)
                 {
                     ActivatePackage(variant.Package, variant);
+                }
+                else if (package != null)
+                {
+                    ActivatePackage(package, null);
                 }
             });
         }
@@ -1712,7 +1712,6 @@ Failed to save workspace to ```{0}```.
             if (existing != null) return existing;
 
             var pi = new PackageInstance(package, variant);
-            package.ActiveVariant = variant;
 
             // Phase 7.1.h: register the PI BEFORE the load so the
             // PackageInstanceForPackageResolver can find it during pack
@@ -1938,7 +1937,7 @@ Failed to save workspace to ```{0}```.
                     using (new LoggingBlock(primaryScripts))
                     {
                         if (ActiveGamePackage != null)
-                            BroadcastLayout.Load(ActiveGamePackage.Open("broadcast_layout.json"), ActiveGamePackage);
+                            BroadcastLayout.Load(ActiveGamePackage.Open("broadcast_layout.json", PrimaryState?.PackageInstance?.ActiveVariant), ActiveGamePackage);
                     }
                 }
             }

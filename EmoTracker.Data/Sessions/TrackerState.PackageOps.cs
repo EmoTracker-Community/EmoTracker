@@ -118,7 +118,6 @@ namespace EmoTracker.Data.Sessions
 
                 if (package != null)
                 {
-                    package.ActiveVariant = variant;
                     ApplicationSettings.Instance.LastActivePackage = package.UniqueID;
                     ApplicationSettings.Instance.LastActivePackageVariant = variant?.UniqueID;
                 }
@@ -262,9 +261,9 @@ An error occurred while saving. This may be due to anti-virus/malware software p
                         return false;
 
                     // Swap to a fresh PackageInstance for the save's
-                    // (pack, variant), then drive the load.
-                    if (package != null)
-                        package.ActiveVariant = packageVariant;
+                    // (pack, variant), then drive the load. The PI's own
+                    // ActiveVariant carries the per-tab variant identity;
+                    // no global slot needs to be set.
                     PackageInstance = new PackageInstance(package, packageVariant);
                     PackageLoader.LoadInto(this, package, packageVariant, suspendPackReadyEvent: true);
 

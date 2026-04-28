@@ -138,7 +138,7 @@ namespace EmoTracker.Data
                 {
                     using (new LocationDatabase.SuspendRefreshScope(state?.Locations))
                     {
-                        using (StreamReader reader = new StreamReader(package.Open(path)))
+                        using (StreamReader reader = new StreamReader(package.Open(path, state?.PackageInstance?.ActiveVariant)))
                         {
                             JArray items = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
                             foreach (JObject item in items)

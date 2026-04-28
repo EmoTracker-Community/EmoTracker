@@ -51,7 +51,8 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (pack == null)
                         return JsonSerializer.Serialize(new { error = "No pack loaded" });
 
-                    using var stream = pack.Open(path);
+                    var variant = ApplicationModel.Instance.PrimaryState?.PackageInstance?.ActiveVariant;
+                    using var stream = pack.Open(path, variant);
                     if (stream == null)
                         return JsonSerializer.Serialize(new { error = $"File not found: {path}" });
 

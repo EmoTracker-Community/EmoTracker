@@ -231,7 +231,7 @@ namespace EmoTracker.Data
                 {
                     PushSuspendRefresh();
 
-                    using (Stream s = package.Open(path))
+                    using (Stream s = package.Open(path, state?.PackageInstance?.ActiveVariant))
                     {
                         if (s != null)
                         {

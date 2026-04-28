@@ -421,7 +421,8 @@ end
                 {
                     object[] result = null;
 
-                    using (Stream s = package.Open(path))
+                    var variant = (this.OwnerState as Sessions.TrackerState)?.PackageInstance?.ActiveVariant;
+                    using (Stream s = package.Open(path, variant))
                     {
                         if (s != null && s.Length > 0)
                         {

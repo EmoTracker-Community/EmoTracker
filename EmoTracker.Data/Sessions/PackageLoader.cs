@@ -212,7 +212,7 @@ namespace EmoTracker.Data.Sessions
             if (package == null) return;
 
             bool bLoadedSettings = false;
-            using (Stream s = package.Open("settings.json"))
+            using (Stream s = package.Open("settings.json", target.PackageInstance?.ActiveVariant))
             {
                 if (s != null)
                 {
@@ -252,7 +252,7 @@ namespace EmoTracker.Data.Sessions
                 {
                     try
                     {
-                        using (Stream s = package.Open("tracker_layout.json"))
+                        using (Stream s = package.Open("tracker_layout.json", target.PackageInstance?.ActiveVariant))
                         {
                             if (s == null) return;
                             using (StreamReader reader = new StreamReader(s))

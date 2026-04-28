@@ -54,7 +54,7 @@ namespace EmoTracker.UI.Media.Resolvers
                     if (!pi.SourceImageCache.TryGetValue(filePath, out object boxedBase)
                         || boxedBase is not SKBitmap baseSK)
                     {
-                        using (Stream s = pkg.Open(filePath))
+                        using (Stream s = pkg.Open(filePath, pi?.ActiveVariant))
                         {
                             if (s == null)
                                 return null;
@@ -80,7 +80,7 @@ namespace EmoTracker.UI.Media.Resolvers
                 // Filtering happens outside the lock — it operates on `working`
                 // (our exclusive copy) and doesn't touch the cache.
                 working = Utility.IconUtility.ApplyFilterSpecToSKBitmap(
-                    pkg, working, concreteRef.Filter);
+                    pkg, pi?.ActiveVariant, working, concreteRef.Filter);
 
                 // Convert to Avalonia IImage once at the end, computing the
                 // alpha mask for InputMaskingImage hit-testing.

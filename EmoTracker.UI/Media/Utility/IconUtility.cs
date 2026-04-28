@@ -416,7 +416,7 @@ namespace EmoTracker.UI.Media.Utility
         /// are disposed automatically.  The INPUT bitmap is consumed (may be
         /// disposed or returned).
         /// </summary>
-        internal static SKBitmap ApplyFilterSpecToSKBitmap(IGamePackage package, SKBitmap bmp, string filterSpec)
+        internal static SKBitmap ApplyFilterSpecToSKBitmap(IGamePackage package, IGamePackageVariant variant, SKBitmap bmp, string filterSpec)
         {
             if (bmp == null)
                 return null;
@@ -456,7 +456,7 @@ namespace EmoTracker.UI.Media.Utility
                         {
                             if (package != null && args.Length >= 1)
                             {
-                                SKBitmap overlay = DecodeSKBitmap(package.Open(args[0]));
+                                SKBitmap overlay = DecodeSKBitmap(package.Open(args[0], variant));
                                 if (overlay != null)
                                     bmp = ApplyOverlaySK(bmp, overlay);
                             }
@@ -475,7 +475,7 @@ namespace EmoTracker.UI.Media.Utility
                             }
                         }
                         else if (mod.StartsWith("@disabled", StringComparison.OrdinalIgnoreCase))
-                            bmp = ApplyFilterSpecToSKBitmap(package, bmp, EmoTracker.Data.Sessions.ActiveSession.Primary?.DisabledImageFilterSpec ?? "grayscale, dim");
+                            bmp = ApplyFilterSpecToSKBitmap(package, variant, bmp, EmoTracker.Data.Sessions.ActiveSession.Primary?.DisabledImageFilterSpec ?? "grayscale, dim");
 
                         // Dispose the intermediate bitmap if a new one was produced
                         if (bmp != prev)
@@ -593,14 +593,14 @@ namespace EmoTracker.UI.Media.Utility
         // These are kept for any call sites that still pass IImage.  They convert
         // to SKBitmap, apply the fast SKBitmap filter, convert back.
 
-        public static IImage ApplyOverlayImage(IGamePackage package, IImage image, params string[] args)
+        public static IImage ApplyOverlayImage(IGamePackage package, IGamePackageVariant variant, IImage image, params string[] args)
         {
             if (package == null)
                 return image;
 
             if (args.Length >= 1)
             {
-                IImage overlay = GetImage(package.Open(args[0]));
+                IImage overlay = GetImage(package.Open(args[0], variant));
                 if (overlay != null)
                     return ApplyOverlayImage(image, overlay);
             }
@@ -699,7 +699,7 @@ namespace EmoTracker.UI.Media.Utility
         /// Legacy IImage-based filter chain.  Kept for backward compatibility.
         /// Resolvers should prefer the SKBitmap pipeline.
         /// </summary>
-        public static IImage ApplyFilterSpecToImage(IGamePackage package, IImage image, string filterSpec)
+        public static IImage ApplyFilterSpecToImage(IGamePackage package, IGamePackageVariant variant, IImage image, string filterSpec)
         {
             if (image == null)
                 return null;
@@ -726,11 +726,11 @@ namespace EmoTracker.UI.Media.Utility
                         else if (mod.StartsWith("brightness", StringComparison.OrdinalIgnoreCase))
                             image = IconUtility.AdjustBrightness(package, image, args);
                         else if (mod.StartsWith("overlay", StringComparison.OrdinalIgnoreCase))
-                            image = IconUtility.ApplyOverlayImage(package, image, args);
+                            image = IconUtility.ApplyOverlayImage(package, variant, image, args);
                         else if (mod.StartsWith("saturation", StringComparison.OrdinalIgnoreCase))
                             image = IconUtility.AdjustSaturation(package, image, args);
                         else if (mod.StartsWith("@disabled", StringComparison.OrdinalIgnoreCase))
-                            image = IconUtility.ApplyFilterSpecToImage(package, image, EmoTracker.Data.Sessions.ActiveSession.Primary?.DisabledImageFilterSpec ?? "grayscale, dim");
+                            image = IconUtility.ApplyFilterSpecToImage(package, variant, image, EmoTracker.Data.Sessions.ActiveSession.Primary?.DisabledImageFilterSpec ?? "grayscale, dim");
                     }
                 }
             }

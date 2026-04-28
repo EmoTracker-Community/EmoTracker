@@ -54,12 +54,10 @@ namespace EmoTracker.Extensions.VariantSwitcher
             }
 
             var command = EmoTracker.ApplicationModel.Instance.ActivatePackCommand;
-            // Read the active variant from the PackageInstance, NOT from
-            // pkg.ActiveVariant. The IGamePackage instance is shared
-            // across every PackageInstance built from the same pack, so
-            // its ActiveVariant reflects whichever PI activated last —
-            // not this tab's PI. PackageInstance.ActiveVariant is
-            // immutable and tab-local.
+            // PackageInstance.ActiveVariant is set once at PI construction
+            // and is tab-local; the per-tab menu correctly highlights
+            // its own active variant regardless of what other tabs /
+            // windows have active.
             var activeVariant = pi.ActiveVariant;
             foreach (var variant in variants)
             {

@@ -60,7 +60,7 @@ namespace EmoTracker.Data
             {
                 try
                 {
-                    using (Stream s = package.Open(path))
+                    using (Stream s = package.Open(path, state?.PackageInstance?.ActiveVariant))
                     {
                         if (s != null)
                         {

@@ -224,7 +224,7 @@ namespace EmoTracker.Data.Media
         /// them on the reference.  The stream is opened, header is read, and
         /// the stream is disposed immediately.
         /// </summary>
-        static void PopulateDimensions(ImageReference result, IGamePackage package, string rawPath)
+        static void PopulateDimensions(ImageReference result, IGamePackage package, IGamePackageVariant variant, string rawPath)
         {
             try
             {
@@ -233,7 +233,7 @@ namespace EmoTracker.Data.Media
                 if (filePath.StartsWith("gamepackage://"))
                     filePath = filePath.Substring("gamepackage://".Length);
 
-                using (Stream s = package.Open(filePath))
+                using (Stream s = package.Open(filePath, variant))
                 {
                     if (s != null)
                     {
@@ -280,7 +280,7 @@ namespace EmoTracker.Data.Media
                 PackageInstance = Sessions.ActiveSession.FindPackageInstanceFor(package),
             };
 
-            PopulateDimensions(result, package, path);
+            PopulateDimensions(result, package, result.PackageInstance?.ActiveVariant, path);
             NotifyCreated(result);
 
             return result;
