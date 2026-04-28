@@ -46,7 +46,7 @@
                 <TextBlock Foreground="WhiteSmoke"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextWrapping="Wrap" Margin="15"
-                           Text="No package loaded. Install packages using the Package Manager (arrow icon in the title bar)."/>
+                           Text="No package loaded. Install packages using the Package Manager (arrow icon in the status bar)."/>
             </Grid>
 
             <!-- Notifications overlay -->
