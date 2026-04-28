@@ -595,9 +595,27 @@ end
             // (not an opaque userdata wrapper), so this branch typically
             // lands on bridge-typed objects we should have caught above.
             // Anything that falls through is shared-by-reference between
-            // source and destination — acceptable for stateless shared
-            // objects (e.g. enums-as-objects), risky otherwise. The warning
-            // surfaces unexpected cases.
+            // source and destination — acceptable for stateless / content-
+            // immutable shared objects, risky otherwise.
+            //
+            // Known-safe pass-through types are silenced:
+            //   - ImageReference (and subclasses): pack scripts construct
+            //     these via ImageReference:FromPackRelativePath and store
+            //     them in user tables. Their externally-observable state
+            //     (URI, Filter, layered/filter compositions) is set at
+            //     construction and never mutated afterwards. The base's
+            //     ResolvedImage / SourceWidth / SourceHeight cache slots
+            //     ARE mutable, but they're framework-populated and
+            //     idempotent — sharing the cached resolution between
+            //     fork and source actually reduces memory pressure.
+            //   - System.Enum: enum values are immutable primitives that
+            //     happen not to match the boxed-primitive switch above.
+            //     Pack scripts pull AccessibilityLevel.* etc. into tables
+            //     constantly; pass through silently.
+            // Anything else is genuinely unexpected and gets warned.
+            if (sourceValue is EmoTracker.Data.Media.ImageReference) return sourceValue;
+            if (sourceValue is System.Enum) return sourceValue;
+
             mWarn(string.Format("LuaStateCloner: passing through reference of type {0}; unexpected for non-bridge globals.",
                 sourceValue.GetType().FullName));
             return sourceValue;
