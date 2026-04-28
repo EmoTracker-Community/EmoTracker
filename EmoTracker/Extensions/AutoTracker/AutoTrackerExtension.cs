@@ -134,9 +134,24 @@ namespace EmoTracker.Extensions.AutoTracker
             PackageLoader.OnPackageLoadStarting -= OnAnyPackageLoadStarting;
             PackageLoader.OnPackageLoadComplete -= OnAnyPackageLoadComplete;
             StopAutoTracking();
+            // Unsubscribe from the SHARED provider singletons. The
+            // AutoTrackingProviderRegistry returns the same
+            // IAutoTrackingProvider instance to every per-state AT, so
+            // leaving subscriptions live after detach turns this AT into
+            // a zombie listener — future device-change / connection-status
+            // events fire its handler on whatever thread the provider
+            // dispatches from, which (for SNI) is a worker thread, and
+            // the handler then writes to provider state from the wrong
+            // thread, corrupting all live ATs that share the singleton.
+            if (mSelectedProvider != null)
+            {
+                mSelectedProvider.AvailableDevicesChanged -= SelectedProvider_AvailableDevicesChanged;
+                mSelectedProvider = null;
+            }
             Clear();
             Error = false;
             DisposeTimer();
+            mState = null;
         }
 
         public ITrackerExtension Fork(TrackerState destState)
@@ -274,11 +289,18 @@ namespace EmoTracker.Extensions.AutoTracker
 
         private void SelectedProvider_AvailableDevicesChanged(object sender, EventArgs e)
         {
-            if (SelectedProvider != null && SelectedProvider.DefaultDevice == null && SelectedProvider.AvailableDevices.Count > 0)
-                SelectedProvider.DefaultDevice = SelectedProvider.AvailableDevices[0];
-
+            // SNI fires AvailableDevicesChanged from a worker thread on
+            // device hot-plug / disconnect. Anything that touches provider
+            // state (including DefaultDevice writes, which can trigger
+            // device verification inside SNI) MUST run on the UI thread —
+            // otherwise SNI logs "Call from invalid thread" and the
+            // shared singleton ends up in a corrupted state visible to
+            // every per-state AT subscribed to it.
             Dispatch.BeginInvoke(() =>
             {
+                if (SelectedProvider != null && SelectedProvider.DefaultDevice == null && SelectedProvider.AvailableDevices.Count > 0)
+                    SelectedProvider.DefaultDevice = SelectedProvider.AvailableDevices[0];
+
                 InvalidateCommandAvailability();
                 NotifyPropertyChanged(nameof(SelectedProvider));
             });
@@ -317,8 +339,15 @@ namespace EmoTracker.Extensions.AutoTracker
 
         private void ActiveProvider_ConnectionStatusChanged(object sender, bool connected)
         {
-            if (mActiveProvider != null)
-                Connected = connected;
+            // SNI fires ConnectionStatusChanged from worker threads on
+            // socket-level connect/disconnect. Marshal to the UI thread
+            // before mutating Connected (which fires PropertyChanged
+            // observed by Avalonia bindings).
+            Dispatch.BeginInvoke(() =>
+            {
+                if (mActiveProvider != null)
+                    Connected = connected;
+            });
         }
 
         // ---------- Raw Read API ------------------------------------------
