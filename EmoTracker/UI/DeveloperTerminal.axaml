@@ -19,8 +19,17 @@
             <RowDefinition Height="Auto" />   <!-- input prompt -->
         </Grid.RowDefinitions>
 
-        <!-- ===================================================== Header -->
+        <!-- ===================================================== Header
+             ZIndex="1" so the header always paints on top of the
+             scrollback row's content. Without this, the
+             SelectableTextBlock occasionally renders past its row
+             boundary into the header area during scroll transitions
+             — especially with the MinHeight=Viewport binding that
+             keeps the scrollback widget filling the viewport so
+             drag-select works from empty space. The header's opaque
+             #252526 background hides any such bleed. -->
         <Border Grid.Row="0"
+                ZIndex="1"
                 Background="#252526"
                 BorderBrush="#3A3A3A"
                 BorderThickness="0,0,0,1"
@@ -100,6 +109,7 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Background="#1E1E1E"
+                      ClipToBounds="True"
                       Padding="6,4">
             <SelectableTextBlock Name="ScrollbackText"
                                  FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
