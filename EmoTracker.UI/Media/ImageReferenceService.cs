@@ -35,7 +35,21 @@ namespace EmoTracker.UI.Media
         // refs without a PI (FromExternalURI, tests), we fall back to
         // mFallbackCache below.
         readonly ConcurrentDictionary<ImageReference, IImage> mFallbackCache = new ConcurrentDictionary<ImageReference, IImage>();
-        readonly object mResolutionLock = new object();
+        // Note: we deliberately do NOT hold a process-wide resolution
+        // lock. With multiple worker threads, the safety story is:
+        //   * IImage cache: ConcurrentDictionary handles concurrent
+        //     get/set on different keys; same-key races just store the
+        //     same image twice (idempotent).
+        //   * Per-PI source-bitmap cache: protected by
+        //     PackageInstance.SourceImageCacheLock inside the
+        //     ConcreteImageReferenceResolver, so pack reads + base
+        //     SKBitmap retention are serialised per-PI.
+        //   * Same-key dedupe: at most one entry per key sits in the
+        //     work queue (mQueueIndex); recursive sub-resolves go
+        //     through the cache fast path on hit.
+        // Wasted CPU on a same-key race is bounded by the rare case of
+        // a request being re-queued while a worker is mid-resolve,
+        // which collapses to "two threads computed the same image".
 
         // Returns the (typed) ImageReference cache for the supplied
         // reference: the back-referenced PackageInstance's ImageCache, or
@@ -140,8 +154,15 @@ namespace EmoTracker.UI.Media
         long mInsertionOrder;
         readonly ManualResetEventSlim mQueueSignal = new ManualResetEventSlim(false);
 
-        // ── Worker Thread ───────────────────────────────────────────────
-        Thread mWorkerThread;
+        // ── Worker Threads ──────────────────────────────────────────────
+        // One worker per logical core so image resolution can use the
+        // full CPU on systems where the user is loading large packs (or
+        // many packs across multi-state workspaces). Image decode +
+        // filter passes are CPU-bound for typical PNG icon work; per-PI
+        // source-bitmap loading is serialised by SourceImageCacheLock,
+        // and the IImage cache is a ConcurrentDictionary, so the workers
+        // can run in parallel without a global resolution lock.
+        List<Thread> mWorkerThreads;
         volatile bool mShutdown;
 
         /// <summary>
@@ -161,7 +182,7 @@ namespace EmoTracker.UI.Media
         /// </summary>
         public void Start()
         {
-            if (mWorkerThread != null)
+            if (mWorkerThreads != null)
                 return;
 
             mShutdown = false;
@@ -208,17 +229,28 @@ namespace EmoTracker.UI.Media
                 QueueResolution(imageRef, ImagePriority.Normal);
             };
 
-            mWorkerThread = new Thread(WorkerLoop)
+            // One worker thread per logical CPU core. Image decode +
+            // filter passes are CPU-bound, so saturating the available
+            // cores cuts pack-load time noticeably on multi-state /
+            // multi-pack workspaces. ProcessorCount of 0 (very rare in
+            // sandboxed environments) is clamped to 1.
+            int workerCount = Math.Max(1, Environment.ProcessorCount);
+            mWorkerThreads = new List<Thread>(workerCount);
+            for (int i = 0; i < workerCount; i++)
             {
-                Name = "ImageReferenceService Worker",
-                IsBackground = true,
-                Priority = ThreadPriority.BelowNormal
-            };
-            mWorkerThread.Start();
+                var t = new Thread(WorkerLoop)
+                {
+                    Name = "ImageReferenceService Worker " + i,
+                    IsBackground = true,
+                    Priority = ThreadPriority.BelowNormal,
+                };
+                mWorkerThreads.Add(t);
+                t.Start();
+            }
         }
 
         /// <summary>
-        /// Signals the background worker to stop and waits for it to finish.
+        /// Signals the background workers to stop and waits for them to finish.
         /// Call at application shutdown.
         /// </summary>
         public void Stop()
@@ -228,10 +260,18 @@ namespace EmoTracker.UI.Media
 
             ImageReference.OnImageReferenceCreated = null;
 
-            // Don't block indefinitely – the thread is IsBackground so it
-            // will be torn down if the process exits.
-            mWorkerThread?.Join(2000);
-            mWorkerThread = null;
+            if (mWorkerThreads != null)
+            {
+                // Don't block indefinitely on any single thread — they're
+                // IsBackground so the process tear-down will catch any
+                // straggler that ignored the shutdown flag (e.g. one that's
+                // mid-Skia decode and won't yield until that finishes).
+                foreach (var t in mWorkerThreads)
+                {
+                    try { t.Join(2000); } catch { /* defensive */ }
+                }
+                mWorkerThreads = null;
+            }
         }
 
         /// <summary>
@@ -331,20 +371,12 @@ namespace EmoTracker.UI.Media
                 return cachedSrc;
             }
 
-            // Slow path: acquire lock for resolution
-            IImage result;
-            lock (mResolutionLock)
-            {
-                // Double-check after acquiring lock
-                if (TryGetCached(imageRef, out cachedSrc))
-                {
-                    if (SyncMode && imageRef.ResolvedImage as IImage != cachedSrc)
-                        imageRef.ResolvedImage = cachedSrc;
-                    return cachedSrc;
-                }
-
-                result = ResolveAndCache(imageRef);
-            }
+            // Slow path: resolve. No global lock — per-key safety comes
+            // from the ConcurrentDictionary cache + per-PI source lock
+            // inside ConcreteImageReferenceResolver. Two threads racing
+            // on the same key duplicate the resolve work but store
+            // semantically-equivalent results.
+            IImage result = ResolveAndCache(imageRef);
 
             // In sync mode, set ResolvedImage directly so path-through
             // bindings see the image immediately.  This is safe because
@@ -472,17 +504,15 @@ namespace EmoTracker.UI.Media
                     try
                     {
                         IImage resolved;
-                        lock (mResolutionLock)
-                        {
-                            // Double-check under lock
-                            if (TryGetCached(imageRef, out resolved))
-                            {
-                                PostResolvedImage(imageRef, resolved);
-                                continue;
-                            }
-
+                        // No global lock here — multiple workers can
+                        // resolve different keys concurrently. Same-key
+                        // races (rare; only when a request is re-queued
+                        // while another worker is mid-resolve) collapse
+                        // to "two threads computed the same bitmap" —
+                        // the cache stores semantically-equivalent
+                        // results either way.
+                        if (!TryGetCached(imageRef, out resolved))
                             resolved = ResolveAndCache(imageRef);
-                        }
 
                         PostResolvedImage(imageRef, resolved);
                     }
