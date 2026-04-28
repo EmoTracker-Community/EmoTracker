@@ -9,76 +9,113 @@
              mc:Ignorable="d"
              Background="#1A1A1A">
 
-    <Grid>
-        <ItemsControl Name="TabsHost"
-                      ItemsSource="{Binding #TabStripRoot.OpenStates}"
-                      VerticalAlignment="Stretch">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="0" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="sessions:TrackerState">
-                    <!-- Outer border carries the top accent (active tab gets a 2px
-                         coloured top edge per VS Code style; inactive tabs no top
-                         accent). Inner border gives the tab its body, padding,
-                         click area, and right-edge separator. -->
-                    <Border Name="TabBorder"
-                            Padding="8,3"
-                            BorderBrush="#2A2A2A"
-                            BorderThickness="0,2,1,0"
-                            Background="#1A1A1A"
-                            PointerPressed="OnTabPointerPressed"
-                            PointerReleased="OnTabPointerReleased"
-                            PointerMoved="OnTabPointerMoved"
-                            Tag="{Binding}">
-                        <Border.ContextMenu>
-                            <ContextMenu>
-                                <MenuItem Header="Open in New Window" Click="OnContextOpenInNewWindow" Tag="{Binding}" />
-                                <MenuItem Header="Save…" Click="OnContextSave" Tag="{Binding}" />
-                                <Separator />
-                                <MenuItem Header="Close" Click="OnContextClose" Tag="{Binding}" />
-                            </ContextMenu>
-                        </Border.ContextMenu>
-                        <Grid ColumnDefinitions="Auto,*,Auto"
-                              VerticalAlignment="Center">
-                            <!-- Phase 7.11 polish: modified-marker dot, visible
-                                 only when this state has unsaved changes. -->
-                            <TextBlock Grid.Column="0"
-                                       Text="•"
-                                       Foreground="#FFB454"
-                                       FontSize="14"
-                                       LineHeight="11"
-                                       Margin="0,0,4,0"
-                                       VerticalAlignment="Center"
-                                       IsVisible="{Binding IsDirty}" />
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding Name, FallbackValue='(unnamed)'}"
-                                       Foreground="#CCCCCC"
-                                       FontSize="11"
-                                       VerticalAlignment="Center"
-                                       MaxWidth="160"
-                                       TextTrimming="CharacterEllipsis" />
-                            <Button Grid.Column="2"
-                                    Content="✕"
-                                    FontSize="9"
-                                    Margin="6,0,0,0"
-                                    Padding="3,0"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Foreground="#888"
-                                    VerticalAlignment="Center"
-                                    Click="OnCloseTab"
-                                    Tag="{Binding}" />
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+    <!-- Layout:
+         [ScrollViewer holding the tab strip ───────────────] [▾]
+         The ScrollViewer auto-shows a horizontal scrollbar when
+         there are too many tabs to fit; the dropdown button on
+         the right opens a list of every open tab so the user can
+         jump to any tab regardless of scroll position. -->
+    <Grid ColumnDefinitions="*,Auto">
+        <ScrollViewer Grid.Column="0"
+                      Name="TabsScrollViewer"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Disabled">
+            <ItemsControl Name="TabsHost"
+                          ItemsSource="{Binding #TabStripRoot.OpenStates}"
+                          VerticalAlignment="Stretch">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="0" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="sessions:TrackerState">
+                        <!-- Outer border carries the top accent (active tab gets a 2px
+                             coloured top edge per VS Code style; inactive tabs no top
+                             accent). Inner border gives the tab its body, padding,
+                             click area, and right-edge separator. -->
+                        <Border Name="TabBorder"
+                                Padding="8,3"
+                                BorderBrush="#2A2A2A"
+                                BorderThickness="0,2,1,0"
+                                Background="#1A1A1A"
+                                PointerPressed="OnTabPointerPressed"
+                                PointerReleased="OnTabPointerReleased"
+                                PointerMoved="OnTabPointerMoved"
+                                Tag="{Binding}">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Open in New Window" Click="OnContextOpenInNewWindow" Tag="{Binding}" />
+                                    <MenuItem Header="Save…" Click="OnContextSave" Tag="{Binding}" />
+                                    <Separator />
+                                    <MenuItem Header="Close" Click="OnContextClose" Tag="{Binding}" />
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                  VerticalAlignment="Center">
+                                <!-- Phase 7.11 polish: modified-marker dot, visible
+                                     only when this state has unsaved changes. -->
+                                <TextBlock Grid.Column="0"
+                                           Text="•"
+                                           Foreground="#FFB454"
+                                           FontSize="14"
+                                           LineHeight="11"
+                                           Margin="0,0,4,0"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding IsDirty}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding Name, FallbackValue='(unnamed)'}"
+                                           Foreground="#CCCCCC"
+                                           FontSize="11"
+                                           VerticalAlignment="Center"
+                                           MaxWidth="160"
+                                           TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="2"
+                                        Content="✕"
+                                        FontSize="9"
+                                        Margin="6,0,0,0"
+                                        Padding="3,0"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Foreground="#888"
+                                        VerticalAlignment="Center"
+                                        Click="OnCloseTab"
+                                        Tag="{Binding}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Right-side dropdown button: opens a flyout listing every
+             open tab so the user can jump to any of them regardless
+             of horizontal scroll position. The flyout's MenuItems are
+             built in code-behind on each open so the list reflects
+             the current OpenStates collection (and active-tab marker). -->
+        <Button Grid.Column="1"
+                Name="TabsDropdownButton"
+                Background="Transparent"
+                BorderThickness="1,0,0,0"
+                BorderBrush="#2A2A2A"
+                Padding="8,0"
+                VerticalAlignment="Stretch"
+                Foreground="#CCCCCC"
+                ToolTip.Tip="All open tabs"
+                Click="OnTabsDropdownClicked">
+            <TextBlock Text="⌄"
+                       FontSize="14"
+                       VerticalAlignment="Center"
+                       Foreground="#888" />
+            <Button.Flyout>
+                <MenuFlyout Placement="Bottom" />
+            </Button.Flyout>
+        </Button>
 
         <!-- Empty-state placeholder -->
         <TextBlock Name="EmptyHint"
+                   Grid.Column="0"
+                   Grid.ColumnSpan="2"
                    Text="No states open — load a pack via the bottom bar"
                    Foreground="#555"
                    FontSize="10"

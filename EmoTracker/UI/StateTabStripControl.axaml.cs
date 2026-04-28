@@ -104,6 +104,63 @@ namespace EmoTracker.UI
             Avalonia.Threading.Dispatcher.UIThread.Post(RefreshHighlights);
         }
 
+        // ---------- Dropdown (right-side "all tabs") ------------------------
+
+        // Build the flyout's MenuItems from the current OpenStates each time
+        // the dropdown is requested. Avalonia's Button auto-opens its Flyout
+        // on click; we hook into the click to refresh the items first so
+        // the menu always reflects the live OpenStates collection (with
+        // current dirty markers + a checkmark on the active tab).
+        void OnTabsDropdownClicked(object sender, RoutedEventArgs e)
+        {
+            if (mContext == null) return;
+            var flyout = this.FindControl<Button>("TabsDropdownButton")?.Flyout as MenuFlyout;
+            if (flyout == null) return;
+
+            flyout.Items.Clear();
+            foreach (var state in mContext.OpenStates)
+            {
+                bool isActive = ReferenceEquals(state, mContext.ActiveState);
+                var header = new TextBlock
+                {
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                };
+                // Modified-marker dot + name. Use inlines so the dot's
+                // colour is the same orange the strip uses for IsDirty.
+                if (state.IsDirty)
+                {
+                    header.Inlines = new Avalonia.Controls.Documents.InlineCollection
+                    {
+                        new Avalonia.Controls.Documents.Run("● ")
+                        {
+                            Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB4, 0x54)),
+                        },
+                        new Avalonia.Controls.Documents.Run(state.Name ?? "(unnamed)"),
+                    };
+                }
+                else
+                {
+                    header.Text = state.Name ?? "(unnamed)";
+                }
+
+                var item = new MenuItem
+                {
+                    Header = header,
+                    Icon = isActive
+                        ? new TextBlock { Text = "✓", FontSize = 11, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }
+                        : null,
+                };
+                var capturedState = state;
+                item.Click += (s2, e2) =>
+                {
+                    if (mContext == null) return;
+                    if (!ReferenceEquals(mContext.ActiveState, capturedState))
+                        mContext.ActiveState = capturedState;
+                };
+                flyout.Items.Add(item);
+            }
+        }
+
         // Hide the strip + reserve only minimal space when there are
         // 0 or 1 tabs — the single-state scenario looks identical to
         // pre-7.8 (no strip), and the empty-state hint shows when the
