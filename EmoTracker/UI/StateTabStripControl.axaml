@@ -7,55 +7,27 @@
              x:Class="EmoTracker.UI.StateTabStripControl"
              Name="TabStripRoot"
              mc:Ignorable="d"
-             Background="#1A1A1A">
+             Background="#1A1A1A"
+             ClipToBounds="True">
 
-    <!-- Outer Grid lets EmptyHint overlay the strip when there are
-         no states (UserControl needs a single root, and the empty-
-         state placeholder sits as a sibling overlay rather than
-         inside the dock). -->
-    <Grid>
+    <!-- Layout: explicit Grid with two columns; ScrollViewer fills *,
+         Button sized Auto on the right. ClipToBounds on the
+         UserControl + ScrollViewer keeps the inner StackPanel of
+         tabs from rendering past the column boundary. -->
+    <Grid ClipToBounds="True">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
 
-    <!-- Layout: dropdown docked to the right (always reachable, never
-         scrolls); the rest of the strip width hosts a horizontally-
-         scrollable ItemsControl for the tabs. The scrollbar itself is
-         hidden — overflow tabs are reachable by mouse-wheel scroll
-         (or the dropdown for jump-to-tab). DockPanel guarantees the
-         docked Button sizes to its content first and the fill area
-         takes the remaining width, regardless of how wide the inner
-         StackPanel of tabs gets. -->
-    <DockPanel LastChildFill="True">
-
-        <!-- Right-side dropdown button: opens a flyout listing every
-             open tab so the user can jump to any of them regardless
-             of horizontal scroll position. The flyout's MenuItems are
-             built in code-behind on each open so the list reflects
-             the current OpenStates collection (and active-tab marker). -->
-        <Button DockPanel.Dock="Right"
-                Name="TabsDropdownButton"
-                Background="#1A1A1A"
-                BorderThickness="1,0,0,0"
-                BorderBrush="#2A2A2A"
-                Padding="10,0"
-                VerticalAlignment="Stretch"
-                Foreground="#CCCCCC"
-                ToolTip.Tip="All open tabs"
-                Click="OnTabsDropdownClicked">
-            <TextBlock Text="▾"
-                       FontSize="14"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Center"
-                       Foreground="#CCCCCC" />
-            <Button.Flyout>
-                <MenuFlyout Placement="Bottom" />
-            </Button.Flyout>
-        </Button>
-
-        <!-- Tab strip area (fill). The ScrollViewer keeps overflow
-             tabs reachable via mouse-wheel without showing a visible
-             scrollbar. -->
-        <ScrollViewer Name="TabsScrollViewer"
+        <!-- Tab strip (column 0). HorizontalScrollBarVisibility=Hidden
+             keeps the scrollbar invisible while still allowing the
+             control to scroll horizontally via mouse wheel. -->
+        <ScrollViewer Grid.Column="0"
+                      Name="TabsScrollViewer"
                       HorizontalScrollBarVisibility="Hidden"
-                      VerticalScrollBarVisibility="Disabled">
+                      VerticalScrollBarVisibility="Disabled"
+                      ClipToBounds="True">
             <ItemsControl Name="TabsHost"
                           ItemsSource="{Binding #TabStripRoot.OpenStates}"
                           VerticalAlignment="Stretch">
@@ -66,10 +38,6 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="sessions:TrackerState">
-                        <!-- Outer border carries the top accent (active tab gets a 2px
-                             coloured top edge per VS Code style; inactive tabs no top
-                             accent). Inner border gives the tab its body, padding,
-                             click area, and right-edge separator. -->
                         <Border Name="TabBorder"
                                 Padding="8,3"
                                 BorderBrush="#2A2A2A"
@@ -89,8 +57,6 @@
                             </Border.ContextMenu>
                             <Grid ColumnDefinitions="Auto,*,Auto"
                                   VerticalAlignment="Center">
-                                <!-- Phase 7.11 polish: modified-marker dot, visible
-                                     only when this state has unsaved changes. -->
                                 <TextBlock Grid.Column="0"
                                            Text="•"
                                            Foreground="#FFB454"
@@ -124,18 +90,57 @@
             </ItemsControl>
         </ScrollViewer>
 
-    </DockPanel>
+        <!-- Right-side dropdown button (column 1, Auto-sized). Always
+             pinned to the right; never participates in the tab
+             scroller. The Popup is constructed and managed in code-
+             behind to give us deterministic item population on
+             every open (Avalonia's Button.Flyout has timing issues
+             between Click event firing and flyout opening that left
+             the menu empty). -->
+        <Button Grid.Column="1"
+                Name="TabsDropdownButton"
+                Background="#1A1A1A"
+                BorderThickness="1,0,0,0"
+                BorderBrush="#2A2A2A"
+                Padding="10,0"
+                MinWidth="28"
+                VerticalAlignment="Stretch"
+                ToolTip.Tip="All open tabs"
+                Click="OnTabsDropdownClicked">
+            <TextBlock Text="▾"
+                       FontSize="14"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       Foreground="#CCCCCC" />
+        </Button>
 
-    <!-- Empty-state placeholder, overlay -->
-    <TextBlock Name="EmptyHint"
-               Text="No states open — load a pack via the bottom bar"
-               Foreground="#555"
-               FontSize="10"
-               VerticalAlignment="Center"
-               HorizontalAlignment="Left"
-               Margin="8,0"
-               IsVisible="False" />
+        <!-- Popup hosting the per-window tab list. Spans both columns
+             so PlacementTarget=TabsDropdownButton anchors it under
+             the dropdown. Children built in code-behind on each
+             open. -->
+        <Popup Name="TabsDropdownPopup"
+               Placement="BottomEdgeAlignedRight"
+               PlacementTarget="{Binding ElementName=TabsDropdownButton}"
+               IsLightDismissEnabled="True">
+            <Border Background="#222222"
+                    BorderBrush="#3A3A3A"
+                    BorderThickness="1"
+                    Padding="0">
+                <ItemsControl Name="TabsDropdownItems" />
+            </Border>
+        </Popup>
 
+        <!-- Empty-state placeholder, overlay -->
+        <TextBlock Name="EmptyHint"
+                   Grid.Column="0"
+                   Grid.ColumnSpan="2"
+                   Text="No states open — load a pack via the bottom bar"
+                   Foreground="#555"
+                   FontSize="10"
+                   VerticalAlignment="Center"
+                   HorizontalAlignment="Left"
+                   Margin="8,0"
+                   IsVisible="False" />
     </Grid>
 
 </UserControl>

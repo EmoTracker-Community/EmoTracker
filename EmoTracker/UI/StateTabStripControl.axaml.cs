@@ -106,58 +106,155 @@ namespace EmoTracker.UI
 
         // ---------- Dropdown (right-side "all tabs") ------------------------
 
-        // Build the flyout's MenuItems from the current OpenStates each time
-        // the dropdown is requested. Avalonia's Button auto-opens its Flyout
-        // on click; we hook into the click to refresh the items first so
-        // the menu always reflects the live OpenStates collection (with
-        // current dirty markers + a checkmark on the active tab).
+        // Click handler on the dropdown Button: builds the popup's tab
+        // list from the current OpenStates and opens the popup. We
+        // manage the Popup directly (rather than via Button.Flyout)
+        // because Avalonia's auto-open-on-click had timing issues
+        // between Click firing and the flyout becoming visible —
+        // populating items in the Click handler left the flyout
+        // empty when it actually displayed.
         void OnTabsDropdownClicked(object sender, RoutedEventArgs e)
         {
             if (mContext == null) return;
-            var flyout = this.FindControl<Button>("TabsDropdownButton")?.Flyout as MenuFlyout;
-            if (flyout == null) return;
+            var popup = this.FindControl<Avalonia.Controls.Primitives.Popup>("TabsDropdownPopup");
+            var items = this.FindControl<ItemsControl>("TabsDropdownItems");
+            if (popup == null || items == null) return;
 
-            flyout.Items.Clear();
+            // Rebuild the entry list against the current OpenStates so
+            // the menu shows live data (dirty markers, active-tab
+            // checkmark) regardless of when this AT was last opened.
+            var entries = new System.Collections.ObjectModel.ObservableCollection<Border>();
             foreach (var state in mContext.OpenStates)
             {
-                bool isActive = ReferenceEquals(state, mContext.ActiveState);
-                var header = new TextBlock
-                {
-                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                };
-                // Modified-marker dot + name. Use inlines so the dot's
-                // colour is the same orange the strip uses for IsDirty.
-                if (state.IsDirty)
-                {
-                    header.Inlines = new Avalonia.Controls.Documents.InlineCollection
-                    {
-                        new Avalonia.Controls.Documents.Run("● ")
-                        {
-                            Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB4, 0x54)),
-                        },
-                        new Avalonia.Controls.Documents.Run(state.Name ?? "(unnamed)"),
-                    };
-                }
-                else
-                {
-                    header.Text = state.Name ?? "(unnamed)";
-                }
+                entries.Add(BuildDropdownEntry(state, popup));
+            }
+            items.ItemsSource = entries;
 
-                var item = new MenuItem
+            popup.IsOpen = !popup.IsOpen;
+        }
+
+        // Build one row of the dropdown menu: dirty-marker dot (orange,
+        // visible only when IsDirty), tab name, optional active-tab
+        // check. Clicking the row activates the corresponding state
+        // and (importantly) scrolls it into view in the strip so the
+        // user can see the tab they just selected.
+        Border BuildDropdownEntry(TrackerState state, Avalonia.Controls.Primitives.Popup popup)
+        {
+            bool isActive = mContext != null && ReferenceEquals(state, mContext.ActiveState);
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+
+            var dot = new TextBlock
+            {
+                Text = "●",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB4, 0x54)),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0),
+                IsVisible = state.IsDirty,
+            };
+            Grid.SetColumn(dot, 0);
+            grid.Children.Add(dot);
+
+            var name = new TextBlock
+            {
+                Text = state.Name ?? "(unnamed)",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                MinWidth = 140,
+            };
+            Grid.SetColumn(name, 1);
+            grid.Children.Add(name);
+
+            if (isActive)
+            {
+                var check = new TextBlock
                 {
-                    Header = header,
-                    Icon = isActive
-                        ? new TextBlock { Text = "✓", FontSize = 11, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }
-                        : null,
+                    Text = "✓",
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x4F, 0xC1, 0xFF)),
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    Margin = new Thickness(8, 0, 0, 0),
                 };
-                var capturedState = state;
-                item.Click += (s2, e2) =>
+                Grid.SetColumn(check, 2);
+                grid.Children.Add(check);
+            }
+
+            var entry = new Border
+            {
+                Padding = new Thickness(10, 6),
+                Background = isActive
+                    ? new SolidColorBrush(Color.FromRgb(0x2D, 0x2D, 0x2D))
+                    : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
+                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+                Child = grid,
+            };
+
+            // Subtle hover affordance.
+            entry.PointerEntered += (_, __) =>
+            {
+                if (!isActive)
+                    entry.Background = new SolidColorBrush(Color.FromRgb(0x35, 0x35, 0x35));
+            };
+            entry.PointerExited += (_, __) =>
+            {
+                if (!isActive)
+                    entry.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+            };
+
+            var capturedState = state;
+            entry.PointerReleased += (_, ev) =>
+            {
+                if (ev.InitialPressMouseButton != Avalonia.Input.MouseButton.Left) return;
+                if (mContext == null) return;
+                if (!ReferenceEquals(mContext.ActiveState, capturedState))
+                    mContext.ActiveState = capturedState;
+                ScrollTabIntoView(capturedState);
+                popup.IsOpen = false;
+            };
+
+            return entry;
+        }
+
+        // Scroll the strip's ScrollViewer so the tab for `state` is
+        // visible. Used after the user picks a tab from the dropdown
+        // — without this they'd see the active-tab change in the
+        // content area but the tab strip might still be scrolled
+        // far away from where the new tab actually sits.
+        void ScrollTabIntoView(TrackerState state)
+        {
+            var scroll = this.FindControl<ScrollViewer>("TabsScrollViewer");
+            var host = this.FindControl<ItemsControl>("TabsHost");
+            if (scroll == null || host == null) return;
+
+            foreach (var v in host.GetVisualDescendants())
+            {
+                if (v is Border b && ReferenceEquals(b.Tag, state))
                 {
-                    if (mContext == null) return;
-                    if (!ReferenceEquals(mContext.ActiveState, capturedState))
-                        mContext.ActiveState = capturedState;
-                };
-                flyout.Items.Add(item);
+                    var p = b.TranslatePoint(new Point(0, 0), host);
+                    if (!p.HasValue) return;
+
+                    double left = p.Value.X;
+                    double right = left + b.Bounds.Width;
+                    double viewLeft = scroll.Offset.X;
+                    double viewRight = viewLeft + scroll.Viewport.Width;
+
+                    if (left < viewLeft)
+                    {
+                        // Scroll left so the tab's leading edge is at the viewport's left.
+                        scroll.Offset = new Vector(left, scroll.Offset.Y);
+                    }
+                    else if (right > viewRight)
+                    {
+                        // Scroll right so the tab's trailing edge is at the viewport's right.
+                        scroll.Offset = new Vector(right - scroll.Viewport.Width, scroll.Offset.Y);
+                    }
+                    return;
+                }
             }
         }
 
