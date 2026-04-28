@@ -40,3 +40,8 @@ using System.Runtime.InteropServices;
 // that are part of the parse-time setup path. Production callers don't need
 // them — they go through the JSON parse entry point.
 [assembly: InternalsVisibleTo("EmoTracker.SourceGenerators.Tests")]
+// Expose internals to the main app so per-state extensions
+// (AutoTrackerExtension's fork-replay path) can read ScriptManager's
+// fork-time hooks (ForkSource, ForkCloner, MemoryWatchRegistrations)
+// without forcing those onto the public API surface.
+[assembly: InternalsVisibleTo("EmoTracker")]

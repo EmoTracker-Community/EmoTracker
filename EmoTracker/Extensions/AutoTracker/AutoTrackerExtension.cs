@@ -86,8 +86,39 @@ namespace EmoTracker.Extensions.AutoTracker
             if (pkg != null)
                 ActivePlatform = pkg.Platform;
 
+            // Replay memory-watch registrations recorded on the fork
+            // source (typically the definitional state, where init.lua
+            // ran). The source's recorded LuaFunction callbacks live in
+            // its (closed-on-fork-time-but-not-yet-here) interpreter; we
+            // remap each through this state's ForkCloner so the dest-side
+            // function reference is registered with our (newly-attached)
+            // memory service. Without this, the watches that init.lua
+            // registered against a definitional state with no service
+            // would be silently lost on every primary fork.
+            ReplayMemoryWatchesFromForkSource(state);
+
             // Boot the polling timer.
             BootTimer();
+        }
+
+        void ReplayMemoryWatchesFromForkSource(TrackerState state)
+        {
+            var src = state.Scripts.ForkSource;
+            var cloner = state.Scripts.ForkCloner;
+            if (src == null || cloner == null) return;
+
+            foreach (var reg in src.MemoryWatchRegistrations)
+            {
+                // CloneValue handles closures captured outside _G (memory
+                // watch callbacks are typically inline closures held only
+                // by the C# wrapper, never globally reachable). It returns
+                // the cached clone when the function was already produced
+                // by CloneAll; otherwise it produces a fresh clone with
+                // upvalues remapped through the bridge identity map.
+                var luaFunc = cloner.CloneValue(reg.LuaFunc) as NLua.LuaFunction;
+                if (luaFunc == null) continue; // diagnostic warned in cloner
+                state.Scripts.AddMemoryWatch(reg.Name, reg.StartAddress, reg.Length, luaFunc, reg.Period);
+            }
         }
 
         public void OnDetachedFromState(TrackerState state)

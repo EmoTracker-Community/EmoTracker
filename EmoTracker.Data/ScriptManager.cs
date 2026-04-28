@@ -482,6 +482,45 @@ end
             mMemoryService = service;
         }
 
+        /// <summary>
+        /// Memory-watch registrations made through <see cref="AddMemoryWatch"/>
+        /// since the last <see cref="Reset"/>. Stored regardless of whether
+        /// <see cref="mMemoryService"/> was set at registration time, so a
+        /// state whose Lua ran <c>scripts/init.lua</c> with no memory
+        /// service attached (e.g. the definitional state — package loads
+        /// run there before any IMemoryWatchService binds) can still
+        /// project its watches into a fork that DOES have a memory
+        /// service. Each entry's <c>luaFunc</c> is a reference into the
+        /// owning state's Lua interpreter; forks replay them through
+        /// <see cref="LuaStateCloner.Resolve"/> on this manager's
+        /// <see cref="ForkCloner"/> to map source-side functions to the
+        /// destination's clones.
+        /// </summary>
+        internal sealed class MemoryWatchRegistration
+        {
+            public string Name;
+            public ulong StartAddress;
+            public ulong Length;
+            public LuaFunction LuaFunc;
+            public int Period;
+        }
+
+        readonly List<MemoryWatchRegistration> mMemoryWatchRegistrations = new();
+        internal IReadOnlyList<MemoryWatchRegistration> MemoryWatchRegistrations
+            => mMemoryWatchRegistrations;
+
+        /// <summary>
+        /// The <see cref="ScriptManager"/> this manager was forked from, or
+        /// null if this manager was never the destination of a clone (e.g.
+        /// the definitional state, or a fresh empty state). Set by
+        /// <see cref="RunCloneFrom"/>; cleared by <see cref="Reset"/>.
+        /// Consumers reach back through here to replay fork-time-only
+        /// side effects whose Lua function references need to be remapped
+        /// via <see cref="ForkCloner"/> (e.g. AutoTracker's memory-watch
+        /// re-registration on fork).
+        /// </summary>
+        internal ScriptManager ForkSource { get; private set; }
+
         INotificationService mNotificationService = null;
         public void SetNotificationService(INotificationService service)
         {
@@ -712,6 +751,12 @@ end
             // Drop the cloner so callers see "no clone happened" rather
             // than crashing.
             ForkCloner = null;
+            ForkSource = null;
+
+            // Drop recorded memory-watch registrations. The LuaFunction
+            // references within point at the about-to-be-closed
+            // interpreter; holding them past Reset would dangle.
+            mMemoryWatchRegistrations.Clear();
 
             // mExpressionCache is a per-state cache of provider-count
             // results keyed on Lua-callable codes. After Reset the codes
@@ -1010,6 +1055,21 @@ end
 
         public IMemorySegment AddMemoryWatch(string name, ulong startAddress, ulong length, LuaFunction callback, int period = 1000)
         {
+            // Record the registration metadata regardless of whether a
+            // memory service is attached — forks of this state replay
+            // these tuples (with luaFunc remapped via ForkCloner.Resolve)
+            // so the fork's AutoTracker ends up with watches even when
+            // init.lua ran on a state with no service attached (the
+            // definitional-state pack-load case).
+            mMemoryWatchRegistrations.Add(new MemoryWatchRegistration
+            {
+                Name = name,
+                StartAddress = startAddress,
+                Length = length,
+                LuaFunc = callback,
+                Period = period,
+            });
+
             if (mMemoryService != null)
             {
                 return mMemoryService.AddMemoryWatch(name, startAddress, length,
@@ -1337,6 +1397,11 @@ end
                 source.mLua, mLua, bridgeMap, OutputWarning,
                 destinationResolver: this.OwnerState as IModelResolver);
             ForkCloner.CloneAll();
+            // Stash the source so post-fork side effects (e.g.
+            // AutoTracker memory-watch replay) can walk source-side
+            // registrations and remap LuaFunction references through the
+            // cloner. Cleared by Reset.
+            ForkSource = source;
         }
 
         /// <summary>
