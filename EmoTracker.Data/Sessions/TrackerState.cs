@@ -515,6 +515,13 @@ namespace EmoTracker.Data.Sessions
             // model objects.
             copy.Scripts.BootstrapInterpreter();
             copy.Scripts.RunCloneFrom(this.Scripts, modelIdentityMap);
+            // Carry the source's developer-terminal scrollback across
+            // so the fork's terminal opens with the source's pack-load
+            // output + init.lua diagnostics + prior transcripts — not
+            // an empty buffer. (TrackerState.Fork bypasses
+            // ScriptManager.OnForked which would normally do this; we
+            // call the explicit seed here instead.)
+            copy.Scripts.SeedLogOutputFromFork(this.Scripts);
 
             // ---- LuaItem rewire (Phase 5 step 7 wiring) --------------------
             foreach (var pair in modelIdentityMap)

@@ -363,6 +363,24 @@ end
             get { return mLogOutput; }
         }
 
+        /// <summary>
+        /// Seed this manager's <see cref="LogOutput"/> with a snapshot
+        /// of <paramref name="source"/>'s lines. Used by
+        /// <see cref="Sessions.TrackerState.Fork"/> so the fork's
+        /// developer-terminal opens with the source's pack-load /
+        /// init.lua / prior-command transcript visible — instead of
+        /// the empty buffer a freshly-constructed ScriptManager
+        /// otherwise gives. Replaces this manager's existing entries.
+        /// </summary>
+        [NLua.LuaHide]
+        public void SeedLogOutputFromFork(ScriptManager source)
+        {
+            if (source == null) return;
+            mLogOutput.Clear();
+            foreach (var line in source.mLogOutput)
+                mLogOutput.Add(line);
+        }
+
         public DelegateCommand ClearLogCommand
         {
             get { return mClearLogCommand; }
@@ -1282,15 +1300,11 @@ end
             mMemoryService = src.mMemoryService;
             mNotificationService = src.mNotificationService;
 
-            // Terminal history: copy the source's scrollback into the
-            // fork so the fork's developer-terminal opens with the
-            // source's pack-load output, init.lua diagnostics, prior
-            // command transcripts, etc. — not an empty buffer. The
-            // LogLine records are immutable value-shaped (Text + Color
-            // strings); shallow-copying is safe.
-            mLogOutput.Clear();
-            foreach (var line in src.mLogOutput)
-                mLogOutput.Add(line);
+            // Note: LogOutput copy is NOT done here. TrackerState.Fork
+            // bypasses this OnForked path (it manually bootstraps a
+            // fresh ScriptManager + runs RunCloneFrom rather than going
+            // through InitializeAsForkOf), so the production fork flow
+            // does the copy explicitly via SeedLogOutputFromFork below.
 
             // mExpressionCache — per plan §5.9, a forked manager's cache
             // starts empty rather than copying the source's. The field
