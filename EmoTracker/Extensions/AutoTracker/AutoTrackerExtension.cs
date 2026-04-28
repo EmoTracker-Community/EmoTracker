@@ -71,8 +71,16 @@ namespace EmoTracker.Extensions.AutoTracker
             state.Scripts.SetGlobalObject("AutoTracker", this);
             state.Scripts.SetMemoryWatchService(this);
 
-            // Hook PackageLoader's complete event filtered to this state
-            // so the provider list refreshes when the state's pack reloads.
+            // Hook PackageLoader's events filtered to this state.
+            //   * OnPackageLoadStarting clears the segment list BEFORE the
+            //     new init.lua runs — without this, Reload re-attaches the
+            //     state's Lua interpreter while the AutoTracker still
+            //     holds segments whose callbacks reference the now-closed
+            //     interpreter, and the next memory poll hangs in SafeCall
+            //     trying to invoke a stale LuaFunction.
+            //   * OnPackageLoadComplete refreshes the platform-driven
+            //     provider list when the state's pack reloads.
+            PackageLoader.OnPackageLoadStarting += OnAnyPackageLoadStarting;
             PackageLoader.OnPackageLoadComplete += OnAnyPackageLoadComplete;
 
             // Seed providers from THIS state's PackageInstance — by the
@@ -123,6 +131,7 @@ namespace EmoTracker.Extensions.AutoTracker
 
         public void OnDetachedFromState(TrackerState state)
         {
+            PackageLoader.OnPackageLoadStarting -= OnAnyPackageLoadStarting;
             PackageLoader.OnPackageLoadComplete -= OnAnyPackageLoadComplete;
             StopAutoTracking();
             Clear();
@@ -147,6 +156,37 @@ namespace EmoTracker.Extensions.AutoTracker
 
         public JToken SerializeToJson() => null;
         public bool DeserializeFromJson(JToken token) => true;
+
+        void OnAnyPackageLoadStarting(object sender, EmoTracker.Data.Sessions.PackageLoader.PackageLoadEventArgs e)
+        {
+            // Filter to OUR state. PackageLoader fires the event for every
+            // state load; we only react to our own.
+            if (e == null) return;
+            if (!ReferenceEquals(e.Target, mState)) return;
+
+            // The state's Lua interpreter is about to be Reset() — close +
+            // re-open. Drop our memory segments now so we don't carry
+            // callbacks that reference the soon-to-be-closed interpreter.
+            // StopAutoTracking first to drain any in-flight poll cleanly;
+            // the active provider connection itself is preserved (the user
+            // chose to stay connected across reloads), but the watch list
+            // is rebuilt by the new init.lua's AddMemoryWatch calls.
+            //
+            // Without this hook, the next memory poll after reload+
+            // reconnect invokes SafeCall on a LuaFunction whose underlying
+            // Lua state is closed, which hangs the UI thread inside NLua.
+            bool wasConnected = ActiveProvider != null;
+            var preservedProvider = SelectedProvider;
+
+            // Drain in-flight + dispose stale segments. Note Clear() also
+            // clears the pending update queue.
+            Clear();
+
+            // Restore the connection target so the user doesn't have to
+            // re-pick it after init.lua repopulates the watch list.
+            if (preservedProvider != null)
+                SelectedProvider = preservedProvider;
+        }
 
         void OnAnyPackageLoadComplete(object sender, EmoTracker.Data.Sessions.PackageLoader.PackageLoadEventArgs e)
         {

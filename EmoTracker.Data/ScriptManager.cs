@@ -1072,9 +1072,24 @@ end
 
             if (mMemoryService != null)
             {
+                // Capture the Lua interpreter this registration was made
+                // against. If the manager is later Reset() (e.g. pack
+                // reload), mLua is replaced with a fresh interpreter and
+                // the captured `callback` LuaFunction's underlying state
+                // is closed. Any in-flight memory poll that managed to
+                // queue a Dispatch.BeginInvoke before AutoTrackerExtension's
+                // OnPackageLoadStarting handler cleared the segments would
+                // then try to invoke the stale LuaFunction — which hangs
+                // the UI thread inside NLua's Call. The guard below makes
+                // such late-firing dispatches a no-op.
+                var capturedLua = mLua;
+
                 return mMemoryService.AddMemoryWatch(name, startAddress, length,
                 (IMemorySegment segment) => // Callback
                 {
+                    if (mLua == null || !ReferenceEquals(mLua, capturedLua))
+                        return true; // stale registration; new init.lua re-registered against current mLua
+
                     try
                     {
                         using (new LocationDatabase.SuspendRefreshScope((this.OwnerState as Sessions.TrackerState)?.Locations))
@@ -1097,7 +1112,12 @@ end
                 },
                 (IMemorySegment segment) => // Dispose Callback
                 {
-                    if (callback != null)
+                    // Only dispose the LuaFunction if the interpreter
+                    // it belongs to is still alive — otherwise the
+                    // underlying handle is already gone and Dispose
+                    // throws / hangs. The callback's handle is freed
+                    // by the interpreter's own Close in that case.
+                    if (callback != null && ReferenceEquals(mLua, capturedLua))
                         callback.Dispose();
 
                 }, period);
