@@ -134,24 +134,32 @@ namespace EmoTracker.Extensions.AutoTracker
             PackageLoader.OnPackageLoadStarting -= OnAnyPackageLoadStarting;
             PackageLoader.OnPackageLoadComplete -= OnAnyPackageLoadComplete;
             StopAutoTracking();
-            // Unsubscribe from the SHARED provider singletons. The
-            // AutoTrackingProviderRegistry returns the same
-            // IAutoTrackingProvider instance to every per-state AT, so
-            // leaving subscriptions live after detach turns this AT into
-            // a zombie listener — future device-change / connection-status
-            // events fire its handler on whatever thread the provider
-            // dispatches from, which (for SNI) is a worker thread, and
-            // the handler then writes to provider state from the wrong
-            // thread, corrupting all live ATs that share the singleton.
+            // Unsubscribe from this AT's owned provider — defensive,
+            // since DisposeProviders below will also dispose them.
             if (mSelectedProvider != null)
             {
                 mSelectedProvider.AvailableDevicesChanged -= SelectedProvider_AvailableDevicesChanged;
                 mSelectedProvider = null;
             }
+            // Dispose the per-AT provider instances we minted in
+            // ActivePlatform's setter. Each AT owns its provider
+            // instances; releasing them here releases their underlying
+            // OS handles (USB / serial / network) so a fresh AT can
+            // bind cleanly without inheriting a previous AT's state.
+            DisposeProviders();
             Clear();
             Error = false;
             DisposeTimer();
             mState = null;
+        }
+
+        void DisposeProviders()
+        {
+            foreach (var provider in mApplicableProviders)
+            {
+                try { provider?.Dispose(); } catch { }
+            }
+            mApplicableProviders.Clear();
         }
 
         public ITrackerExtension Fork(TrackerState destState)
@@ -247,7 +255,12 @@ namespace EmoTracker.Extensions.AutoTracker
             {
                 if (SetProperty(ref mActivePlatform, value))
                 {
-                    mApplicableProviders.Clear();
+                    // Dispose previously-owned provider instances before
+                    // replacing the list. GetProvidersForPack now mints
+                    // fresh per-state instances, so leaving old ones
+                    // un-disposed leaks their underlying OS handles
+                    // (USB / serial / network sockets).
+                    DisposeProviders();
 
                     // Use THIS state's pack rather than the app's primary —
                     // multiple states across windows may have different
