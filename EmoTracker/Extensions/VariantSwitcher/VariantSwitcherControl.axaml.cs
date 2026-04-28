@@ -40,7 +40,8 @@ namespace EmoTracker.Extensions.VariantSwitcher
             // menu must reflect the per-tab pack identity, not the
             // app's primary.
             var state = extension?.State;
-            var pkg = state?.PackageInstance?.GamePackage;
+            var pi = state?.PackageInstance;
+            var pkg = pi?.GamePackage;
             var variants = pkg?.AvailableVariants?.ToList();
             if (variants == null || variants.Count == 0)
             {
@@ -53,7 +54,13 @@ namespace EmoTracker.Extensions.VariantSwitcher
             }
 
             var command = EmoTracker.ApplicationModel.Instance.ActivatePackCommand;
-            var activeVariant = pkg.ActiveVariant;
+            // Read the active variant from the PackageInstance, NOT from
+            // pkg.ActiveVariant. The IGamePackage instance is shared
+            // across every PackageInstance built from the same pack, so
+            // its ActiveVariant reflects whichever PI activated last —
+            // not this tab's PI. PackageInstance.ActiveVariant is
+            // immutable and tab-local.
+            var activeVariant = pi.ActiveVariant;
             foreach (var variant in variants)
             {
                 menu.Items.Add(new MenuItem
