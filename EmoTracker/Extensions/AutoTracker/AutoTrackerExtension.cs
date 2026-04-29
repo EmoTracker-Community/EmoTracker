@@ -18,32 +18,32 @@ namespace EmoTracker.Extensions.AutoTracker
     /// <summary>
     /// Per-state auto-tracker runtime. One instance per
     /// <see cref="TrackerState"/>: owns the state's selected provider,
-    /// active provider, connection status, memory-watch list, and the
-    /// 30 ms polling timer that drives reads.
+    /// active provider, connection status, and the 30 ms polling timer
+    /// that drives reads.
     ///
     /// <para>
-    /// Lua / pack scripts on this state reach the instance via
-    /// <c>state.Scripts.SetGlobalObject("AutoTracker", this)</c> and
-    /// <c>state.Scripts.SetMemoryWatchService(this)</c>, both wired in
-    /// <see cref="OnAttachedToState"/>. Memory watches added by pack
-    /// scripts on a fork land on the fork's instance — independent of
-    /// the source's connection / watch list.
+    /// Phase 7.13: memory segments + timers are now owned by the
+    /// per-state <see cref="ScriptManager"/> directly — pack scripts call
+    /// <c>ScriptHost:AddMemoryWatch(...)</c> which mints a
+    /// <see cref="LuaMemorySegment"/>, registers it on the state's
+    /// resolver (so the LuaStateCloner can remap pack-cached references
+    /// across forks), and stores it on
+    /// <c>ScriptManager.MemorySegments</c>. This extension just iterates
+    /// those collections each poll tick and pumps each entry through
+    /// <c>UpdateWithConnector</c> with this state's active provider.
     /// </para>
     ///
     /// <para>
-    /// <b>Fork support.</b> <see cref="Fork"/> currently allocates a
-    /// fresh, disconnected instance bound to the destination state. The
-    /// memory-watch list is rebuilt by re-running pack scripts on the
-    /// fork's <see cref="ScriptManager"/>, which calls
-    /// <see cref="AddMemoryWatch"/> on the fork. We do NOT carry the
-    /// source's active-provider connection across to the fork — each
-    /// state owns its connection, and starting a second connection
-    /// against the same emulator from a fork is not what users expect
-    /// when forking; if the user wants the fork's auto-tracker connected
-    /// they re-connect explicitly.
+    /// <b>Fork support.</b> <see cref="Fork"/> allocates a fresh,
+    /// disconnected instance bound to the destination state. The
+    /// memory-segment list lives on the state's ScriptManager and forks
+    /// natively (segments are <see cref="ModelTypeBase"/>); no replay or
+    /// re-registration is needed here. We do NOT carry the source's
+    /// active-provider connection across — each state owns its
+    /// connection.
     /// </para>
     /// </summary>
-    public class AutoTrackerExtension : ObservableObject, ITrackerExtension, IMemoryWatchService, IDisposable
+    public class AutoTrackerExtension : ObservableObject, ITrackerExtension, IDisposable
     {
         public string Name => "Auto Tracking";
         public string UID => "emotracker_auto_tracking";
@@ -66,20 +66,17 @@ namespace EmoTracker.Extensions.AutoTracker
         {
             mState = state ?? throw new ArgumentNullException(nameof(state));
 
-            // Wire script hooks first so memory watches added during the
-            // remainder of the package-load (e.g. by init.lua) land here.
+            // Wire the AutoTracker bridge so pack scripts (init.lua) can
+            // find providers / device info. Memory segments themselves
+            // are NOT owned by us any more — they live on
+            // state.Scripts.MemorySegments (Phase 7.13).
             state.Scripts.SetGlobalObject("AutoTracker", this);
-            state.Scripts.SetMemoryWatchService(this);
 
-            // Hook PackageLoader's events filtered to this state.
-            //   * OnPackageLoadStarting clears the segment list BEFORE the
-            //     new init.lua runs — without this, Reload re-attaches the
-            //     state's Lua interpreter while the AutoTracker still
-            //     holds segments whose callbacks reference the now-closed
-            //     interpreter, and the next memory poll hangs in SafeCall
-            //     trying to invoke a stale LuaFunction.
-            //   * OnPackageLoadComplete refreshes the platform-driven
-            //     provider list when the state's pack reloads.
+            // Hook PackageLoader's OnPackageLoadComplete to refresh the
+            // platform-driven provider list when the state's pack reloads.
+            // (OnPackageLoadStarting used to clear our owned segment list
+            // before the new init.lua ran; that's now handled by
+            // ScriptManager.Reset which the load goes through.)
             PackageLoader.OnPackageLoadStarting += OnAnyPackageLoadStarting;
             PackageLoader.OnPackageLoadComplete += OnAnyPackageLoadComplete;
 
@@ -87,46 +84,13 @@ namespace EmoTracker.Extensions.AutoTracker
             // time OnAttachedToState fires, the state has been registered
             // with its PackageInstance (and for primary states forked
             // from a loaded definitional, the pack data is already
-            // populated). Reading from ApplicationModel.ActiveGamePackage
-            // race-conditioned with primary-state assignment; reading
-            // from the state's own back-reference is deterministic.
+            // populated).
             var pkg = state.PackageInstance?.GamePackage;
             if (pkg != null)
                 ActivePlatform = pkg.Platform;
 
-            // Replay memory-watch registrations recorded on the fork
-            // source (typically the definitional state, where init.lua
-            // ran). The source's recorded LuaFunction callbacks live in
-            // its (closed-on-fork-time-but-not-yet-here) interpreter; we
-            // remap each through this state's ForkCloner so the dest-side
-            // function reference is registered with our (newly-attached)
-            // memory service. Without this, the watches that init.lua
-            // registered against a definitional state with no service
-            // would be silently lost on every primary fork.
-            ReplayMemoryWatchesFromForkSource(state);
-
             // Boot the polling timer.
             BootTimer();
-        }
-
-        void ReplayMemoryWatchesFromForkSource(TrackerState state)
-        {
-            var src = state.Scripts.ForkSource;
-            var cloner = state.Scripts.ForkCloner;
-            if (src == null || cloner == null) return;
-
-            foreach (var reg in src.MemoryWatchRegistrations)
-            {
-                // CloneValue handles closures captured outside _G (memory
-                // watch callbacks are typically inline closures held only
-                // by the C# wrapper, never globally reachable). It returns
-                // the cached clone when the function was already produced
-                // by CloneAll; otherwise it produces a fresh clone with
-                // upvalues remapped through the bridge identity map.
-                var luaFunc = cloner.CloneValue(reg.LuaFunc) as NLua.LuaFunction;
-                if (luaFunc == null) continue; // diagnostic warned in cloner
-                state.Scripts.AddMemoryWatch(reg.Name, reg.StartAddress, reg.Length, luaFunc, reg.Period);
-            }
         }
 
         public void OnDetachedFromState(TrackerState state)
@@ -228,7 +192,13 @@ namespace EmoTracker.Extensions.AutoTracker
 
         public bool Active
         {
-            get { return mApplicableProviders.Count > 0 && mActiveMemoryUpdates.Count > 0; }
+            get
+            {
+                if (mApplicableProviders.Count == 0) return false;
+                var scripts = mState?.Scripts;
+                if (scripts == null) return false;
+                return scripts.MemorySegments.Count > 0 || scripts.MemoryTimers.Count > 0;
+            }
         }
 
         bool mbError = false;
@@ -470,8 +440,16 @@ namespace EmoTracker.Extensions.AutoTracker
             {
                 if (SelectedProvider != null)
                 {
-                    foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
-                        update.MarkDirty();
+                    // Mark every per-state segment dirty so the next poll
+                    // ignores its "I read recently, skip me" guard and
+                    // forces a fresh read against the just-connected
+                    // device.
+                    var scripts = mState?.Scripts;
+                    if (scripts != null)
+                    {
+                        foreach (var seg in scripts.MemorySegments) seg.MarkDirty();
+                        foreach (var t in scripts.MemoryTimers) t.MarkDirty();
+                    }
 
                     try
                     {
@@ -527,10 +505,22 @@ namespace EmoTracker.Extensions.AutoTracker
 
             if (ActiveProvider != null && Connected)
             {
-                foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
+                // Phase 7.13: source-of-truth for what to poll is the
+                // per-state ScriptManager — it owns LuaMemorySegment +
+                // MemoryTimer instances directly. Iterate both.
+                var scripts = mState?.Scripts;
+                if (scripts != null)
                 {
-                    if (update.ShouldUpdate(now))
-                        PushPendingMemoryUpdate(update);
+                    foreach (var seg in scripts.MemorySegments)
+                    {
+                        if (seg.ShouldUpdate(now))
+                            PushPendingMemoryUpdate(seg);
+                    }
+                    foreach (var t in scripts.MemoryTimers)
+                    {
+                        if (t.ShouldUpdate(now))
+                            PushPendingMemoryUpdate(t);
+                    }
                 }
 
                 PackageManager.Game game = null;
@@ -586,56 +576,11 @@ namespace EmoTracker.Extensions.AutoTracker
             }
         }
 
-        // ---------- Memory watch service ----------------------------------
-
-        readonly List<IUpdateWithConnector> mActiveMemoryUpdates = new List<IUpdateWithConnector>();
-
-        public IMemorySegment AddMemoryWatch(string name, ulong startAddress, ulong length, Func<IMemorySegment, bool> callback, Action<IMemorySegment> disposeCallback, int period)
-        {
-            lock (this)
-            {
-                MemorySegment segment = new MemorySegment(name, startAddress, length, callback, disposeCallback, period);
-                mActiveMemoryUpdates.Add(segment);
-                NotifyPropertyChanged(nameof(Active));
-                return segment;
-            }
-        }
-
-        public void RemoveMemoryWatch(IMemorySegment segmentBase)
-        {
-            lock (this)
-            {
-                MemorySegment segment = segmentBase as MemorySegment;
-                if (segment != null && mActiveMemoryUpdates.Contains(segment))
-                {
-                    mActiveMemoryUpdates.Remove(segment);
-                    segment.Dispose();
-                }
-            }
-        }
-
-        public MemoryTimer AddMemoryTimer(string name, Func<IAutoTrackingProvider, PackageManager.Game, bool> callback, int period)
-        {
-            lock (this)
-            {
-                MemoryTimer timer = new MemoryTimer(name, callback, period);
-                mActiveMemoryUpdates.Add(timer);
-                NotifyPropertyChanged(nameof(Active));
-                return timer;
-            }
-        }
-
-        public void RemoveMemoryTimer(MemoryTimer timer)
-        {
-            lock (this)
-            {
-                if (timer != null && mActiveMemoryUpdates.Contains(timer))
-                {
-                    mActiveMemoryUpdates.Remove(timer);
-                    DisposeObject(timer);
-                }
-            }
-        }
+        // ---------- Memory polling queue ----------------------------------
+        // Phase 7.13: segments + timers are owned by the per-state
+        // ScriptManager. The polling loop above pulls from
+        // mState.Scripts.MemorySegments / MemoryTimers each tick and
+        // queues entries that are due for an update here.
 
         readonly Queue<IUpdateWithConnector> mPendingMemoryUpdateTasks = new Queue<IUpdateWithConnector>();
 
@@ -678,8 +623,9 @@ namespace EmoTracker.Extensions.AutoTracker
             lock (this)
             {
                 mPendingMemoryUpdateTasks.Clear();
-                DisposeCollection(mActiveMemoryUpdates);
-                mActiveMemoryUpdates.Clear();
+                // Segments / timers themselves are owned by the per-state
+                // ScriptManager and disposed via its Reset path; we just
+                // drop the in-flight queue here.
             }
         }
 

@@ -513,6 +513,32 @@ namespace EmoTracker.Data.Sessions
             // OnForked-runs-cloner-with-fixed-6-bridges shape because
             // step 8's whole point is to extend that map with per-state
             // model objects.
+            // ---- AutoTracker memory segments (Phase 7.13) ------------------
+            // Pre-fork each LuaMemorySegment registered in the source's
+            // ScriptManager BEFORE the cloner walks pack-script tables.
+            // CodeTracker-style packs cache segment refs in user tables
+            // (`SEGMENTS.ItemData = ScriptHost:AddMemoryWatch(...)`); the
+            // cloner's ModelTypeBase remap path resolves source-segment
+            // DefinitionIds through copy's IModelResolver and substitutes
+            // the fork-side segment automatically. Without seeding the
+            // fork's segments BEFORE RunCloneFrom, the cloner falls
+            // through to userdata pass-through and pack tables on the
+            // fork keep pointing at source-state segments (whose buffer
+            // is driven by the source's autotracker, often idle).
+            //
+            // The Lua callback (LuaMemorySegment.Callback) is NOT cloned
+            // here — its handle binds to the source's interpreter and
+            // can only be remapped AFTER copy.Scripts.RunCloneFrom
+            // populates its ForkCloner. RewireForkedLuaSegment below
+            // does that pass.
+            foreach (var srcSeg in this.Scripts.MemorySegments)
+            {
+                var forkSeg = (AutoTracking.LuaMemorySegment)srcSeg.Fork(copy);
+                copy.Scripts.AdoptForkedSegment(forkSeg);
+                copy.RegisterModel(forkSeg);
+                modelIdentityMap[srcSeg] = forkSeg;
+            }
+
             copy.Scripts.BootstrapInterpreter();
             copy.Scripts.RunCloneFrom(this.Scripts, modelIdentityMap);
             // Carry the source's developer-terminal scrollback across
@@ -529,6 +555,20 @@ namespace EmoTracker.Data.Sessions
                 if (pair.Key is LuaItem srcLua && pair.Value is LuaItem forkLua)
                 {
                     copy.Scripts.RewireForkedLuaItem(forkLua, srcLua);
+                }
+            }
+
+            // ---- LuaMemorySegment callback rewire (Phase 7.13) -------------
+            // The fork's segments were created above with null Callback
+            // (the source's LuaFunction binds to the source's
+            // interpreter). Now that copy.Scripts has its own bootstrapped
+            // interpreter + ForkCloner, clone each source's Callback into
+            // the fork's interpreter and assign onto the fork's segment.
+            foreach (var pair in modelIdentityMap)
+            {
+                if (pair.Key is AutoTracking.LuaMemorySegment srcSeg && pair.Value is AutoTracking.LuaMemorySegment forkSeg)
+                {
+                    copy.Scripts.RewireForkedLuaSegment(forkSeg, srcSeg);
                 }
             }
 

@@ -1,26 +1,31 @@
-using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Packages;
 using NLua;
 using System;
 
-namespace EmoTracker.Extensions.AutoTracker
+namespace EmoTracker.Data.AutoTracking
 {
+    /// <summary>
+    /// A periodic per-state callback driven by the autotracker's polling
+    /// loop. Unlike <see cref="MemorySegment"/> it does not read a memory
+    /// window — it just fires its callback every <see cref="Period"/> ms
+    /// while the autotracker is running.
+    ///
+    /// <para>
+    /// Owned by per-state code (typically the same place as
+    /// <see cref="MemorySegment"/> instances); the autotracker extension
+    /// pumps each one through <see cref="UpdateWithConnector"/> on each
+    /// poll tick.
+    /// </para>
+    /// </summary>
     public class MemoryTimer : IUpdateWithConnector, IDisposable
     {
-        string mName;
-        Func<IAutoTrackingProvider, PackageManager.Game, bool> mCallback;
+        readonly string mName;
+        readonly Func<IAutoTrackingProvider, PackageManager.Game, bool> mCallback;
+        readonly int mPeriod;
         DateTime mLastUpdate;
-        int mPeriod = 500;
 
-        public string Name
-        {
-            get { return mName; }
-        }
-
-        public int Period
-        {
-            get { return mPeriod; }
-        }
+        public string Name => mName;
+        public int Period => mPeriod;
 
         public MemoryTimer(string name, Func<IAutoTrackingProvider, PackageManager.Game, bool> callback, int period = 500)
         {

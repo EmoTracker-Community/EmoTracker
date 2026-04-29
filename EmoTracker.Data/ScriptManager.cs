@@ -495,38 +495,19 @@ end
             mLogOutput.Clear();
         }
 
-        IMemoryWatchService mMemoryService = null;
-        public void SetMemoryWatchService(IMemoryWatchService service)
-        {
-            mMemoryService = service;
-        }
+        // Phase 7.13: per-state memory segments + timers, owned directly
+        // by the ScriptManager. Pack init scripts call AddMemoryWatch /
+        // AddMemoryTimer below; AutoTrackerExtension reads from
+        // MemorySegments / MemoryTimers to drive its polling loop. Both
+        // collections are cleared by Reset(); segments are forkable via
+        // ModelTypeBase, so a state-fork carries the segments across
+        // automatically (their LuaFunction callbacks are re-cloned on
+        // the fork via RewireForkedLuaSegment after RunCloneFrom).
+        readonly List<AutoTracking.LuaMemorySegment> mMemorySegments = new();
+        public IReadOnlyList<AutoTracking.LuaMemorySegment> MemorySegments => mMemorySegments;
 
-        /// <summary>
-        /// Memory-watch registrations made through <see cref="AddMemoryWatch"/>
-        /// since the last <see cref="Reset"/>. Stored regardless of whether
-        /// <see cref="mMemoryService"/> was set at registration time, so a
-        /// state whose Lua ran <c>scripts/init.lua</c> with no memory
-        /// service attached (e.g. the definitional state — package loads
-        /// run there before any IMemoryWatchService binds) can still
-        /// project its watches into a fork that DOES have a memory
-        /// service. Each entry's <c>luaFunc</c> is a reference into the
-        /// owning state's Lua interpreter; forks replay them through
-        /// <see cref="LuaStateCloner.Resolve"/> on this manager's
-        /// <see cref="ForkCloner"/> to map source-side functions to the
-        /// destination's clones.
-        /// </summary>
-        internal sealed class MemoryWatchRegistration
-        {
-            public string Name;
-            public ulong StartAddress;
-            public ulong Length;
-            public LuaFunction LuaFunc;
-            public int Period;
-        }
-
-        readonly List<MemoryWatchRegistration> mMemoryWatchRegistrations = new();
-        internal IReadOnlyList<MemoryWatchRegistration> MemoryWatchRegistrations
-            => mMemoryWatchRegistrations;
+        readonly List<AutoTracking.MemoryTimer> mMemoryTimers = new();
+        public IReadOnlyList<AutoTracking.MemoryTimer> MemoryTimers => mMemoryTimers;
 
         /// <summary>
         /// The <see cref="ScriptManager"/> this manager was forked from, or
@@ -772,10 +753,21 @@ end
             ForkCloner = null;
             ForkSource = null;
 
-            // Drop recorded memory-watch registrations. The LuaFunction
-            // references within point at the about-to-be-closed
-            // interpreter; holding them past Reset would dangle.
-            mMemoryWatchRegistrations.Clear();
+            // Dispose + drop the per-state memory segments + timers.
+            // Their LuaFunction callbacks reference the about-to-be-
+            // closed interpreter; holding them past Reset would dangle.
+            // The pack's next init.lua re-registers fresh segments via
+            // AddMemoryWatch with the new interpreter's LuaFunctions.
+            foreach (var seg in mMemorySegments)
+            {
+                try { seg.Dispose(); } catch { /* defensive */ }
+            }
+            mMemorySegments.Clear();
+            foreach (var t in mMemoryTimers)
+            {
+                try { t.Dispose(); } catch { /* defensive */ }
+            }
+            mMemoryTimers.Clear();
 
             // mExpressionCache is a per-state cache of provider-count
             // results keyed on Lua-callable codes. After Reset the codes
@@ -1072,83 +1064,96 @@ end
             }
         }
 
-        public IMemorySegment AddMemoryWatch(string name, ulong startAddress, ulong length, LuaFunction callback, int period = 1000)
+        /// <summary>
+        /// Pack-script entry point for <c>ScriptHost:AddMemoryWatch(...)</c>.
+        /// Mints a per-state <see cref="LuaMemorySegment"/>, registers it
+        /// with the owning state's <see cref="IModelResolver"/> (so the
+        /// LuaStateCloner can remap pack-cached segment references via
+        /// DefinitionId on fork), and returns it to Lua. The segment is
+        /// stored on this manager's <see cref="MemorySegments"/> list —
+        /// the per-state <see cref="AutoTrackerExtension"/> reads from
+        /// there to drive its polling loop.
+        ///
+        /// <para>
+        /// No <c>IMemoryWatchService</c> bridge is involved any more
+        /// (Phase 7.13). The segment IS the bridge: it owns its
+        /// <see cref="LuaFunction"/> callback, dispatches onto the UI
+        /// thread inside <see cref="LuaMemorySegment.OnSegmentDataUpdated"/>,
+        /// and forks natively as a <see cref="ModelTypeBase"/>.
+        /// </para>
+        /// </summary>
+        public AutoTracking.LuaMemorySegment AddMemoryWatch(string name, ulong startAddress, ulong length, LuaFunction callback, int period = 1000)
         {
-            // Record the registration metadata regardless of whether a
-            // memory service is attached — forks of this state replay
-            // these tuples (with luaFunc remapped via ForkCloner.Resolve)
-            // so the fork's AutoTracker ends up with watches even when
-            // init.lua ran on a state with no service attached (the
-            // definitional-state pack-load case).
-            mMemoryWatchRegistrations.Add(new MemoryWatchRegistration
-            {
-                Name = name,
-                StartAddress = startAddress,
-                Length = length,
-                LuaFunc = callback,
-                Period = period,
-            });
-
-            if (mMemoryService != null)
-            {
-                // Capture the Lua interpreter this registration was made
-                // against. If the manager is later Reset() (e.g. pack
-                // reload), mLua is replaced with a fresh interpreter and
-                // the captured `callback` LuaFunction's underlying state
-                // is closed. Any in-flight memory poll that managed to
-                // queue a Dispatch.BeginInvoke before AutoTrackerExtension's
-                // OnPackageLoadStarting handler cleared the segments would
-                // then try to invoke the stale LuaFunction — which hangs
-                // the UI thread inside NLua's Call. The guard below makes
-                // such late-firing dispatches a no-op.
-                var capturedLua = mLua;
-
-                return mMemoryService.AddMemoryWatch(name, startAddress, length,
-                (IMemorySegment segment) => // Callback
-                {
-                    if (mLua == null || !ReferenceEquals(mLua, capturedLua))
-                        return true; // stale registration; new init.lua re-registered against current mLua
-
-                    try
-                    {
-                        using (new LocationDatabase.SuspendRefreshScope((this.OwnerState as Sessions.TrackerState)?.Locations))
-                        {
-                            if (callback != null)
-                            {
-                                object[] results = SafeCall(callback, segment);
-
-                                if (results != null && results.Length > 0)
-                                    return Convert.ToBoolean(results.First());
-                            }
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Output(e.ToString());
-                    }
-
-                    return true;
-                },
-                (IMemorySegment segment) => // Dispose Callback
-                {
-                    // Only dispose the LuaFunction if the interpreter
-                    // it belongs to is still alive — otherwise the
-                    // underlying handle is already gone and Dispose
-                    // throws / hangs. The callback's handle is freed
-                    // by the interpreter's own Close in that case.
-                    if (callback != null && ReferenceEquals(mLua, capturedLua))
-                        callback.Dispose();
-
-                }, period);
-            }
-
-            return null;
+            var segment = new AutoTracking.LuaMemorySegment(name, startAddress, length, period);
+            segment.OwnerState = this.OwnerState;
+            segment.Callback = callback;
+            mMemorySegments.Add(segment);
+            (this.OwnerState as Sessions.TrackerState)?.RegisterModel(segment);
+            return segment;
         }
 
         public void RemoveMemoryWatch(IMemorySegment segment)
         {
-            if (mMemoryService != null)
-                mMemoryService.RemoveMemoryWatch(segment);
+            if (segment is AutoTracking.LuaMemorySegment lms)
+            {
+                if (mMemorySegments.Remove(lms))
+                    lms.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Pack-script entry point for <c>ScriptHost:AddMemoryTimer(...)</c>.
+        /// Mints a periodic per-state callback driven by the autotracker
+        /// polling loop (no memory window — just a "tick every Period ms"
+        /// hook). Stored on <see cref="MemoryTimers"/> for the per-state
+        /// <see cref="AutoTrackerExtension"/> to consume.
+        /// </summary>
+        public AutoTracking.MemoryTimer AddMemoryTimer(string name,
+            Func<AutoTracking.IAutoTrackingProvider, Packages.PackageManager.Game, bool> callback,
+            int period = 500)
+        {
+            var timer = new AutoTracking.MemoryTimer(name, callback, period);
+            mMemoryTimers.Add(timer);
+            return timer;
+        }
+
+        public void RemoveMemoryTimer(AutoTracking.MemoryTimer timer)
+        {
+            if (timer == null) return;
+            if (mMemoryTimers.Remove(timer))
+                timer.Dispose();
+        }
+
+        /// <summary>
+        /// Phase 7.13 fork-time hook: adds an already-forked
+        /// <see cref="LuaMemorySegment"/> (produced by
+        /// <see cref="MemorySegment.Fork"/> on the source) to this
+        /// manager's <see cref="MemorySegments"/> list. Called by
+        /// <see cref="Sessions.TrackerState.Fork"/> BEFORE
+        /// <see cref="RunCloneFrom"/> so the segment is registered on the
+        /// fork before the cloner walks pack-script tables.
+        /// </summary>
+        internal void AdoptForkedSegment(AutoTracking.LuaMemorySegment forkSegment)
+        {
+            if (forkSegment == null) return;
+            mMemorySegments.Add(forkSegment);
+        }
+
+        /// <summary>
+        /// Phase 7.13 fork-time hook: re-clones the source's
+        /// <see cref="LuaMemorySegment.Callback"/> through this fork's
+        /// <see cref="ForkCloner"/> so the Callback's underlying
+        /// LuaFunction binds to the FORK's interpreter rather than the
+        /// source's. Called by <see cref="Sessions.TrackerState.Fork"/>
+        /// after <see cref="RunCloneFrom"/> populates the cloner's
+        /// identity map.
+        /// </summary>
+        internal void RewireForkedLuaSegment(AutoTracking.LuaMemorySegment forkSegment, AutoTracking.LuaMemorySegment srcSegment)
+        {
+            if (forkSegment == null || srcSegment == null) return;
+            if (ForkCloner == null) return;
+            if (srcSegment.Callback == null) return;
+            forkSegment.Callback = ForkCloner.CloneValue(srcSegment.Callback) as LuaFunction;
         }
 
         public INotificationService NotificationService
@@ -1288,16 +1293,13 @@ end
             // goes through ExecuteLuaString or direct mLua[k] = v on the
             // fork's interpreter.
             //
-            // mMemoryService is shared by reference. The watch
-            // registrations a pack made (via AddMemoryWatch) on the source
-            // continue to fire against the source's interpreter — they're
-            // not re-registered on the fork. Plan §5.6 says watches should
-            // be per-state; that lifecycle work is deferred to Phase 6
-            // alongside per-state TrackerState which owns the watch
-            // registration / deregistration story.
+            // Phase 7.13: memory segments fork natively as ModelTypeBase
+            // (TrackerState.Fork iterates src.MemorySegments and forks
+            // each, then RewireForkedLuaSegment re-clones the LuaFunction
+            // callback through ForkCloner). No mMemoryService bridge
+            // needed.
             mPackage = src.mPackage;
             mGlobals = src.mGlobals;
-            mMemoryService = src.mMemoryService;
             mNotificationService = src.mNotificationService;
 
             // Note: LogOutput copy is NOT done here. TrackerState.Fork
