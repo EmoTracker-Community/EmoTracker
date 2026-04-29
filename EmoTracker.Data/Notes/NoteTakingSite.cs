@@ -14,8 +14,20 @@ namespace EmoTracker.Data.Notes
         // consulting any ambient slot.
         internal EmoTracker.Core.DataModel.ModelTypeBase Owner { get; set; }
 
+        // Direct OwnerState binding for sites that aren't owned by a
+        // ModelTypeBase — e.g., the per-state NoteTakingExtension's
+        // own site, which lives on a tracker-extension surface
+        // rather than under a Location. Takes precedence over the
+        // Owner-derived resolution when set.
+        Sessions.TrackerState mOwnerStateOverride;
+
+        public void SetOwnerState(Sessions.TrackerState state)
+        {
+            mOwnerStateOverride = state;
+        }
+
         Sessions.TrackerState OwnerState
-            => Owner?.OwnerState as Sessions.TrackerState;
+            => mOwnerStateOverride ?? (Owner?.OwnerState as Sessions.TrackerState);
         ObservableCollection<Note> mNotes = new ObservableCollection<Note>();
 
         public IEnumerable<Note> Notes
