@@ -249,6 +249,23 @@ namespace EmoTracker.Data
                                 {
                                     mItemIndex[instance] = mItems.Count;
                                     mItems.Add(instance);
+                                    // Invalidate the code-provider index. Items
+                                    // loaded LATER in this stream (or in a
+                                    // subsequent IncrementalLoad call from a
+                                    // different items.json) need the next
+                                    // FindProvidingItemForCode lookup to see
+                                    // them — without this flip, the lazy
+                                    // EnsureCodeIndex sees mCodeIndexBuilt=true
+                                    // (set by an earlier wrapper item's
+                                    // parse-time lookup) and skips the rebuild,
+                                    // producing a stale index that misses the
+                                    // newly-added items. Concretely: a
+                                    // toggle_badged wrapper whose base toggle
+                                    // appears AFTER the first wrapper item in
+                                    // the JSON would resolve its base_item
+                                    // against a stale index and silently end
+                                    // up with BaseItem=null.
+                                    mCodeIndexDirty = true;
                                     if (instance is global::EmoTracker.Core.DataModel.ModelTypeBase mtb)
                                     {
                                         state?.Resolver.Register(mtb);
