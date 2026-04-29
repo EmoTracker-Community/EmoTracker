@@ -473,7 +473,24 @@ namespace EmoTracker.UI.Media
 
         void PostResolvedImage(ImageReference imageRef, IImage resolved)
         {
-            if (resolved == null) return;
+            if (resolved == null)
+            {
+                // Resolution failed (file missing, decode error,
+                // PackageInstance disposed mid-resolve, etc.). The
+                // existing pending instances stay on their
+                // placeholders, but we MUST clear the pending list
+                // for this key — otherwise a subsequent ImageReference
+                // with the same key that arrives later would skip
+                // queue (because nothing's cached but the key is
+                // tracked as in-flight) and join a list whose worker
+                // already gave up. Clearing lets a future re-creation
+                // retry the resolution.
+                lock (mInstancesLock)
+                {
+                    mPendingInstances.Remove(imageRef);
+                }
+                return;
+            }
 
             // Collect ALL object instances that share this equality key,
             // and re-StoreCached under the same lock that
