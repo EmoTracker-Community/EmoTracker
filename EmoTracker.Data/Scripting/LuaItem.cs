@@ -26,6 +26,7 @@ namespace EmoTracker.Data.Scripting
         LuaFunction mProvidesCode;
         LuaFunction mCanProvideCode;
         LuaFunction mAdvanceToCode;
+        LuaFunction mGetAllProvidedCodes;
 
         LuaFunction mSave;
         LuaFunction mLoad;
@@ -98,6 +99,35 @@ namespace EmoTracker.Data.Scripting
             }
         }
 
+        /// <summary>
+        /// Pack-registerable callback: returns the static set of every code
+        /// this LuaItem could ever provide via <see cref="ProvidesCodeFunc"/>,
+        /// across every state of the item. The pack assigns a function whose
+        /// signature is <c>function(self) → table-of-strings</c>; the table
+        /// values are extracted (keys are ignored, so both array-style
+        /// <c>{ "lamp", "fire" }</c> and set-style
+        /// <c>{ lamp = true, fire = true }</c> tables are accepted).
+        ///
+        /// <para>
+        /// When registered, lets <see cref="ItemDatabase"/> place the
+        /// LuaItem in its static code → providers index alongside non-Lua
+        /// items, so accessibility-rule lookups for codes the item does NOT
+        /// declare here skip it entirely (no per-lookup
+        /// <see cref="ProvidesCode"/> Lua call). Leave unregistered to keep
+        /// fully dynamic dispatch (the legacy fallback).
+        /// </para>
+        /// </summary>
+        public LuaFunction GetAllProvidedCodesFunc
+        {
+            get { return mGetAllProvidedCodes; }
+            set
+            {
+                LuaFunction prevValue = mGetAllProvidedCodes;
+                if (SetProperty(ref mGetAllProvidedCodes, value))
+                    DisposeObject(prevValue);
+            }
+        }
+
         public LuaFunction SaveFunc
         {
             get { return mSave; }
@@ -144,6 +174,7 @@ namespace EmoTracker.Data.Scripting
             DisposeObjectAndDefault(ref mProvidesCode);
             DisposeObjectAndDefault(ref mCanProvideCode);
             DisposeObjectAndDefault(ref mAdvanceToCode);
+            DisposeObjectAndDefault(ref mGetAllProvidedCodes);
             DisposeObjectAndDefault(ref mSave);
             DisposeObjectAndDefault(ref mLoad);
             DisposeObjectAndDefault(ref mPropertyChanged);
@@ -236,6 +267,76 @@ namespace EmoTracker.Data.Scripting
             }
 
             return 0;
+        }
+
+        /// <summary>
+        /// If the pack registered <see cref="GetAllProvidedCodesFunc"/>,
+        /// invoke it and unpack the returned Lua table into a string list.
+        /// Otherwise return null (legacy behavior — the item is treated as
+        /// dynamic by <see cref="ItemDatabase"/> and gets brute-force
+        /// queried on every <see cref="ProvidesCode"/> lookup).
+        ///
+        /// <para>
+        /// The Lua callback may return either an array-style table
+        /// (<c>{ "lamp", "fire" }</c>) or a set-style table
+        /// (<c>{ lamp = true, fire = true }</c>); in the set-style case the
+        /// keys (not the values) are used as codes. Numeric / boolean keys
+        /// are skipped — only string entries become codes.
+        /// </para>
+        /// </summary>
+        public override IEnumerable<string> GetAllProvidedCodes()
+        {
+            // No callback → indeterminate. Return null to preserve legacy
+            // ItemDatabase behavior (brute-force ProvidesCode dispatch).
+            if (mGetAllProvidedCodes == null) return null;
+
+            try
+            { 
+                object[] result = GetCallbackScriptManager().SafeCall(mGetAllProvidedCodes, this);
+                if (result == null || result.Length == 0) return null;
+
+                var codes = new List<string>();
+                if (result[0] is LuaTable table)
+                {
+                    // Array-style values first: tables typically index as
+                    // 1, 2, 3, ... so iterate Values yielding "lamp", "fire".
+                    foreach (var v in table.Values)
+                    {
+                        if (v is string s && !string.IsNullOrEmpty(s))
+                            codes.Add(s);
+                    }
+                    // If no string values were found, fall back to keys —
+                    // accommodates set-style { lamp = true, fire = true }
+                    // tables where the codes are stored on the key side.
+                    if (codes.Count == 0)
+                    {
+                        foreach (var k in table.Keys)
+                        {
+                            if (k is string s && !string.IsNullOrEmpty(s))
+                                codes.Add(s);
+                        }
+                    }
+                }
+                else if (result[0] is string single && !string.IsNullOrEmpty(single))
+                {
+                    // Convenience: callback may return a single comma-
+                    // separated code string instead of a table.
+                    foreach (var part in single.Split(','))
+                    {
+                        var trimmed = part.Trim();
+                        if (!string.IsNullOrEmpty(trimmed)) codes.Add(trimmed);
+                    }
+                }
+                return codes;
+            }
+            catch (Exception e)
+            {
+                GetCallbackScriptManager()?.OutputException(e);
+                // Fail safe: signal "indeterminate" so the item stays in
+                // the dynamic-dispatch list and ProvidesCode is still
+                // consulted at lookup time.
+                return null;
+            }
         }
 
         protected override void ParseDataInternal(JObject data, IGamePackage package)
@@ -494,15 +595,16 @@ namespace EmoTracker.Data.Scripting
             // result in the identity map for later Resolve calls (e.g.
             // closures captured by other LuaItems pointing to the same
             // table).
-            mItemState        = (LuaTable)    cloner.CloneValue(source.mItemState);
-            mOnLeftClick      = (LuaFunction) cloner.CloneValue(source.mOnLeftClick);
-            mOnRightClick     = (LuaFunction) cloner.CloneValue(source.mOnRightClick);
-            mProvidesCode     = (LuaFunction) cloner.CloneValue(source.mProvidesCode);
-            mCanProvideCode   = (LuaFunction) cloner.CloneValue(source.mCanProvideCode);
-            mAdvanceToCode    = (LuaFunction) cloner.CloneValue(source.mAdvanceToCode);
-            mSave             = (LuaFunction) cloner.CloneValue(source.mSave);
-            mLoad             = (LuaFunction) cloner.CloneValue(source.mLoad);
-            mPropertyChanged  = (LuaFunction) cloner.CloneValue(source.mPropertyChanged);
+            mItemState              = (LuaTable)    cloner.CloneValue(source.mItemState);
+            mOnLeftClick            = (LuaFunction) cloner.CloneValue(source.mOnLeftClick);
+            mOnRightClick           = (LuaFunction) cloner.CloneValue(source.mOnRightClick);
+            mProvidesCode           = (LuaFunction) cloner.CloneValue(source.mProvidesCode);
+            mCanProvideCode         = (LuaFunction) cloner.CloneValue(source.mCanProvideCode);
+            mAdvanceToCode          = (LuaFunction) cloner.CloneValue(source.mAdvanceToCode);
+            mGetAllProvidedCodes    = (LuaFunction) cloner.CloneValue(source.mGetAllProvidedCodes);
+            mSave                   = (LuaFunction) cloner.CloneValue(source.mSave);
+            mLoad                   = (LuaFunction) cloner.CloneValue(source.mLoad);
+            mPropertyChanged        = (LuaFunction) cloner.CloneValue(source.mPropertyChanged);
 
             mOwnerScriptManager = ownerScriptManager;
         }

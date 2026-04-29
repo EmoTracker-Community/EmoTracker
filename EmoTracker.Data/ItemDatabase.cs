@@ -104,6 +104,65 @@ namespace EmoTracker.Data
             mCodeIndexBuilt = true;
         }
 
+        /// <summary>
+        /// Drops <paramref name="item"/> from every bucket in
+        /// <c>mCodeToProviders</c> and from <c>mDynamicCodeItems</c>,
+        /// then re-inserts it under whatever
+        /// <see cref="ItemBase.GetAllProvidedCodes"/> currently returns.
+        /// Used to reflect runtime changes in an item's advertised code
+        /// set (e.g. a LuaItem whose code-list callback depends on state).
+        ///
+        /// <para>
+        /// No-op if the index has not been built yet — the next
+        /// <see cref="BuildCodeIndex"/> call will pick up the item's
+        /// current codes from scratch.
+        /// </para>
+        /// </summary>
+        public void ReindexItem(ITrackableItem item)
+        {
+            if (item == null) return;
+            if (!mCodeIndexBuilt) return;
+
+            // Remove from every existing bucket. Walking each list once
+            // is acceptable because mCodeToProviders is small (one entry
+            // per provided code across the whole catalog) and items
+            // appear in only a handful of buckets each.
+            foreach (var list in mCodeToProviders.Values)
+            {
+                list.Remove(item);
+            }
+            mDynamicCodeItems.Remove(item);
+
+            // Re-classify based on the current GetAllProvidedCodes result.
+            if (item is ItemBase itemBase)
+            {
+                var codes = itemBase.GetAllProvidedCodes();
+                if (codes == null)
+                {
+                    mDynamicCodeItems.Add(item);
+                }
+                else
+                {
+                    foreach (string code in codes)
+                    {
+                        if (string.IsNullOrEmpty(code)) continue;
+                        if (!mCodeToProviders.TryGetValue(code, out var list))
+                        {
+                            list = new List<ITrackableItem>();
+                            mCodeToProviders[code] = list;
+                        }
+                        list.Add(item);
+                    }
+                }
+            }
+            else
+            {
+                // Non-ItemBase implementors — treat as dynamic (matches
+                // BuildCodeIndex's branch).
+                mDynamicCodeItems.Add(item);
+            }
+        }
+
         public void RegisterItem(ITrackableItem item)
         {
             if (!mItemIndex.ContainsKey(item))

@@ -178,6 +178,37 @@ namespace EmoTracker.Data.Items
         /// </summary>
         public virtual IEnumerable<string> GetAllProvidedCodes() => null;
 
+        /// <summary>
+        /// Re-evaluates this item's <see cref="GetAllProvidedCodes"/> and
+        /// updates the owning <see cref="ItemDatabase"/>'s code-provider
+        /// index in place: the item is removed from every code bucket
+        /// (and from the dynamic-fallback list) it currently occupies,
+        /// then re-inserted under whatever its callback now returns.
+        ///
+        /// <para>
+        /// Call this when the set of codes the item could ever provide has
+        /// changed at runtime — for example a <see cref="Scripting.LuaItem"/>
+        /// whose <c>GetAllProvidedCodesFunc</c> result depends on mutable
+        /// state. Without re-indexing, accessibility-rule lookups via
+        /// <c>ItemDatabase.ProviderCountForCode</c> would either miss the
+        /// item entirely (if its newly-advertised codes weren't in the
+        /// index at build time) or query stale codes for it.
+        /// </para>
+        ///
+        /// <para>
+        /// No-op when the item has no owning state (e.g. detached test
+        /// instances) or when the item database hasn't yet built its
+        /// initial index — in the latter case
+        /// <see cref="ItemDatabase.BuildCodeIndex"/> will sweep up this
+        /// item's current codes during the next build.
+        /// </para>
+        /// </summary>
+        public void ReindexProvidedCodes()
+        {
+            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
+            itemDb?.ReindexItem(this);
+        }
+
 
         #region -- Static Methods ---
 

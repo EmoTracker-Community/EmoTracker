@@ -141,6 +141,10 @@ namespace EmoTracker.Data
             // global propagates to this state's cache.
             mRuleCache.Enabled = Locations.AccessibilityRule.EnableCache;
             Locations.AccessibilityRule.EnableCacheChanged += OnEnableCacheChanged;
+
+            // Invalidate the lazy name-index whenever the location set
+            // changes membership. Lazy-rebuilt on next FindLocation call.
+            mAllLocations.CollectionChanged += (_, __) => InvalidateNameIndex();
         }
 
         void OnEnableCacheChanged(bool enabled)
@@ -336,18 +340,50 @@ namespace EmoTracker.Data
             return null;
         }
 
+        // Lazy-built case-insensitive name → Location index. Backs
+        // FindLocation, which is hammered during accessibility refresh
+        // for every @-prefixed code rule. The legacy linear scan
+        // re-fetched each Location.Name through MutableKeyValueStore +
+        // DeepCopyForStore on every call, which (per profile) burned
+        // ~62ms / 437ms (14%) of refresh time on a CodeTracker lamp
+        // toggle. The index amortizes that to one Name read per
+        // location across the index build, hit by O(1) thereafter.
+        //
+        // Invalidation: cleared whenever AllLocations changes
+        // membership (Add/Remove/Reset). Mid-session name renames
+        // without a membership change would leave the index stale; in
+        // practice Location.Name is set during pack-load and rarely
+        // mutates after that. If a future feature renames Locations
+        // dynamically it should call InvalidateNameIndex() explicitly.
+        Dictionary<string, Location> mNameIndex;
+
+        void EnsureNameIndex()
+        {
+            if (mNameIndex != null) return;
+            var idx = new Dictionary<string, Location>(StringComparer.OrdinalIgnoreCase);
+            foreach (Location location in mAllLocations)
+            {
+                if (location == null) continue;
+                var nm = location.Name;
+                if (string.IsNullOrEmpty(nm)) continue;
+                // Preserve "first match wins" semantics from the legacy
+                // linear scan: do not overwrite an existing entry.
+                if (!idx.ContainsKey(nm))
+                    idx[nm] = location;
+            }
+            mNameIndex = idx;
+        }
+
+        internal void InvalidateNameIndex()
+        {
+            mNameIndex = null;
+        }
+
         public Location FindLocation(string name)
         {
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                foreach (Location location in AllLocations)
-                {
-                    if (name.Equals(location.Name, StringComparison.OrdinalIgnoreCase))
-                        return location;
-                }
-            }
-
-            return null;
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            EnsureNameIndex();
+            return mNameIndex.TryGetValue(name, out var loc) ? loc : null;
         }
 
         /// <summary>
