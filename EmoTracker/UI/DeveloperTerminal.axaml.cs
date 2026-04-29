@@ -169,7 +169,9 @@ namespace EmoTracker.UI
         {
             // Re-render the SelectableTextBlock's inlines and re-scroll.
             // The OutputRaw path can fire from any thread; ensure the UI
-            // mutation happens on the dispatcher.
+            // mutation happens on the dispatcher. ScrollToEnd handles
+            // its own sync-layout so Extent.Height is current at the
+            // moment we compute maxScroll (see ScrollToEnd's comment).
             Dispatcher.UIThread.Post(() =>
             {
                 RenderScrollback();
@@ -192,12 +194,8 @@ namespace EmoTracker.UI
             if (lines == null) return;
 
             var inlines = new Avalonia.Controls.Documents.InlineCollection();
-            bool first = true;
             foreach (var line in lines)
             {
-                if (!first) inlines.Add(new Avalonia.Controls.Documents.LineBreak());
-                first = false;
-
                 var run = new Avalonia.Controls.Documents.Run(line.Text ?? "");
                 if (!string.IsNullOrEmpty(line.Color))
                 {
@@ -211,6 +209,7 @@ namespace EmoTracker.UI
                     }
                 }
                 inlines.Add(run);
+                inlines.Add(new Avalonia.Controls.Documents.LineBreak());
             }
             tb.Inlines = inlines;
         }
@@ -219,6 +218,21 @@ namespace EmoTracker.UI
         {
             var scroll = this.FindControl<ScrollViewer>("ScrollbackScroller");
             if (scroll == null) return;
+
+            // Force a synchronous Measure + Arrange before reading
+            // Extent.Height. Inlines-collection writes invalidate
+            // layout but don't immediately remeasure — the actual
+            // measure happens at Render priority on the next
+            // dispatcher pass. Without UpdateLayout here, callers
+            // that invoke ScrollToEnd right after mutating Inlines
+            // (RenderScrollback in OnLogOutputChanged, BindToState
+            // on initial open, etc.) read STALE Extent.Height (the
+            // previous text's height) and compute maxScroll against
+            // that, leaving Offset.Y short of the new bottom. The
+            // visible symptom: most recent log lines hidden below
+            // the viewport, behind the input prompt row.
+            scroll.UpdateLayout();
+
             // If the user scrolled away from the bottom recently, don't
             // yank them back — only auto-scroll when they were at (or
             // near) the bottom already.
