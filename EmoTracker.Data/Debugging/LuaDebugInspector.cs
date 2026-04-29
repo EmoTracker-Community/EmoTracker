@@ -448,23 +448,31 @@ namespace EmoTracker.Data.Debugging
                 case LuaType.UserData:
                 case LuaType.LightUserData:
                     {
-                        // For the inline display we use Lua's __tostring
-                        // metamethod (NLua installs one on every wrapped
-                        // C# object that returns the managed instance's
-                        // ToString result). This is a single C-side call
-                        // — much cheaper than the userdata-roundtrip
-                        // unwrap and avoids invoking any pack-side
-                        // reflection that might hold long-running locks.
+                        // We deliberately do NOT call __tostring (i.e.
+                        // do not pass callMetamethod=true) on userdata
+                        // during the iteration walk. NLua's
+                        // __tostring metamethod ultimately invokes the
+                        // wrapped C# object's ToString, and pack
+                        // authors sometimes wire up classes whose
+                        // ToString — directly or transitively — ends
+                        // up running pack-side Lua. Triggering pack
+                        // Lua during a debugger inspection re-enters
+                        // the very state the user is trying to
+                        // examine, and observed behavior on
+                        // CodeTracker is that an autotracker
+                        // callback at scripts/auto/segmentupdates.lua
+                        // fires "invalid key to 'next'" the moment
+                        // we touch certain userdatas in the globals
+                        // view.
                         //
-                        // Expansion is opt-in: we tag the variable with a
-                        // PendingUnwrap handle that does the real
-                        // unwrap + reflection only if the user clicks
-                        // to drill in. Avoids hanging the panel when a
-                        // table contains many userdata entries (the
-                        // panel renders every userdata as a row but only
-                        // the ones the user opens pay the unwrap cost).
-                        try { display = L.ToString(idx, callMetamethod: true) ?? "userdata"; }
-                        catch { display = "userdata"; }
+                        // Display falls back to a typed placeholder.
+                        // Real ToString + reflected properties show
+                        // up the moment the user clicks the chevron
+                        // (handled by HandleKind.PendingUnwrap below
+                        // via the much-safer GetObjectFromPath
+                        // roundtrip — that path doesn't dispatch
+                        // metamethods).
+                        display = "<userdata>";
                         typeName = "UserData";
 
                         // Stash a registry ref so PendingUnwrap can re-

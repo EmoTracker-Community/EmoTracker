@@ -73,7 +73,7 @@ namespace EmoTracker.Data.Scripting
             "__et_cloner_idmap", "__et_cloner_idmap_counter",
             "__et_cloner_tmp",
             "__et_cloner_func_info", "__et_cloner_dump_bytes",
-            "__et_cloner_get_upvalue",
+            "__et_cloner_get_upvalue", "__et_cloner_array_len",
             "__et_cloner_load_bytes", "__et_cloner_set_upvalue",
             "__et_cloner_pending_bytes",
         };
@@ -176,6 +176,17 @@ function __et_cloner_func_info(f)
     -- matcher relies on the cloned function reporting the same
     -- source string the pre-fork copy did.
     return info.what, info.nups, info.source or info.short_src or '?'
+end
+-- Returns the source table's array-length border (#t). Used by
+-- the cloner to pre-size destination tables so sparse arrays
+-- (containing nil holes) preserve their length semantics across
+-- a fork. Without this, lua_next-driven iteration skips the nil
+-- slots and the destination's array part collapses, causing #t
+-- on the fork to read smaller than on the source. Pack scripts
+-- that key behavior on #t (table.unpack, ipairs-like loops over
+-- known indices) then misinterpret the cloned table.
+function __et_cloner_array_len(t)
+    return #t
 end
 function __et_cloner_dump_bytes(f)
     -- string.dump(f, false) preserves debug info (line numbers,
@@ -639,14 +650,57 @@ end
 
         LuaTable CloneTable(LuaTable srcTable, int srcId)
         {
-            // Allocate a fresh empty table on the destination. NLua's most
-            // direct way is via DoString returning a table reference — there
-            // is no Lua.NewTable() that returns a free-standing handle in
-            // this version. We allocate via a temporary global, copy the
-            // reference, and clear the temporary slot.
-            mDestination.DoString("__et_cloner_tmp = {}");
-            LuaTable destTable = (LuaTable)mDestination["__et_cloner_tmp"];
-            mDestination["__et_cloner_tmp"] = null;
+            // Pre-size the destination table to match the source's
+            // `#` length. Critical for tables with nil holes
+            // (e.g. `{ nil, nil, nil, true }` from pack autotracker
+            // scripts): lua_next-driven iteration only sees non-nil
+            // entries, so without explicit pre-allocation the
+            // destination's array part collapses and `#` reads
+            // smaller than the source's, breaking pack code that
+            // keys behavior on length (table.unpack, numeric loops
+            // bounded by `#t`).
+            //
+            // We hint with narr only — nrec defaults to 0; Lua's
+            // table will grow the hash part lazily as we set
+            // non-array keys. Worst case is a couple of rehashes,
+            // which is fine for the low fork frequency.
+            int narr = 0;
+            try
+            {
+                using (var lenFunc = (LuaFunction)mSource["__et_cloner_array_len"])
+                {
+                    if (lenFunc != null)
+                    {
+                        var lenResult = lenFunc.Call(srcTable);
+                        if (lenResult != null && lenResult.Length > 0)
+                            narr = Convert.ToInt32(lenResult[0]);
+                    }
+                }
+            }
+            catch { narr = 0; }
+
+            LuaTable destTable;
+            try
+            {
+                // CreateTable pushes a fresh table onto the dest's
+                // stack with the requested array capacity. Stash to
+                // a temp global so we can pull a NLua LuaTable
+                // handle out (NLua doesn't expose a way to wrap an
+                // arbitrary stack-resident table directly).
+                mDestination.State.CreateTable(narr, 0);
+                mDestination.State.SetGlobal("__et_cloner_tmp");
+                destTable = (LuaTable)mDestination["__et_cloner_tmp"];
+                mDestination["__et_cloner_tmp"] = null;
+            }
+            catch
+            {
+                // Fall back to the legacy DoString allocation if
+                // anything in the CreateTable path fails. Better to
+                // lose array sizing than break the fork.
+                mDestination.DoString("__et_cloner_tmp = {}");
+                destTable = (LuaTable)mDestination["__et_cloner_tmp"];
+                mDestination["__et_cloner_tmp"] = null;
+            }
 
             // Record the (source -> destination) mapping BEFORE recursing so
             // cycles terminate: a recursive clone of a value that points

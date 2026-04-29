@@ -83,18 +83,7 @@ namespace EmoTracker.Data
 
             if (mSuspendRefreshStack.Count == 0)
             {
-                // Phase 7.1.h: pop unconditionally triggers a refresh, not just
-                // a pending-only flush. Pack load is a "lots of things just
-                // changed" event by definition; if no setter fired during the
-                // load (e.g. items remained at default Active=false the whole
-                // time), the pending count stays at 0 and bPendingOnly: true
-                // would no-op, leaving every section's mCachedAccessibility
-                // at the default None. That's what was producing the all-red
-                // map after fork: Section.OnForked copies the cached value
-                // verbatim from source, so source-stays-None means fork-is-None.
-                // Forcing a non-pending-only refresh here ensures the source
-                // converges before fork even when no setters fired during load.
-                RefreshAccessibility(bPendingOnly: false);
+                RefreshAccessibility(bPendingOnly: true);
             }
         }
 

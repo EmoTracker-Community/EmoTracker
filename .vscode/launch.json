@@ -19,7 +19,7 @@
             "preLaunchTask": "build Avalonia (Debug)",
             "program": "${workspaceFolder}/EmoTracker/bin/Debug/net10.0/EmoTracker.dll",
             "args": ["-dev"],
-            "env": { "EMOTRACKER_DAP_TRACE": "1" },
+            // "env": { "EMOTRACKER_DAP_TRACE": "1" },
             "cwd": "${workspaceFolder}/EmoTracker/bin/Debug/net10.0",
             "stopAtEntry": false,
             "console": "internalConsole"
