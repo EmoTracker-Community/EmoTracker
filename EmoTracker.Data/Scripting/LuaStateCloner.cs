@@ -178,7 +178,15 @@ function __et_cloner_func_info(f)
     return info.what, info.nups, info.source or info.short_src or '?'
 end
 function __et_cloner_dump_bytes(f)
-    local s = string.dump(f, true)
+    -- string.dump(f, false) preserves debug info (line numbers,
+    -- local variable names, source mapping). Required so the
+    -- cloned function still reports its real file:line through
+    -- debug.getinfo — without it, every cloned closure on a fork
+    -- would surface as source='?' line=0 in the Lua debugger
+    -- call stack. The bytecode is slightly larger with debug
+    -- info but the cost is dwarfed by the value of having
+    -- working stack traces on forked states.
+    local s = string.dump(f, false)
     local bytes = {}
     for i = 1, #s do
         bytes[i] = s:byte(i)

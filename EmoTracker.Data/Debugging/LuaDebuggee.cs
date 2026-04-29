@@ -87,12 +87,30 @@ namespace EmoTracker.Data.Debugging
         public string Name { get; }
 
         /// <summary>
-        /// Pack root absolute path, when the pack was loaded from a
-        /// directory. Used to resolve VS Code's absolute breakpoint
-        /// paths against the pack-relative chunknames Lua reports.
-        /// Null when the pack came from an archive (no on-disk paths).
+        /// Resolver for the pack-root absolute path. Invoked
+        /// on-demand whenever the inspector needs to resolve a
+        /// Lua-reported chunkname into a VS-Code-openable path.
+        /// Resolved lazily because for forked TrackerStates the
+        /// owning <c>PackageInstance</c> isn't stamped until AFTER
+        /// <c>BootstrapInterpreter</c> runs — capturing the value
+        /// at debuggee-construction time gives null on every fork.
         /// </summary>
-        public string PackRootPath { get; set; }
+        public Func<string> PackRootPathResolver { get; set; }
+
+        /// <summary>
+        /// Pack root absolute path. Reads through
+        /// <see cref="PackRootPathResolver"/> if set. Returning null
+        /// is fine — sources just won't carry an absolute Path
+        /// (debugger UIs fall back to the chunkname).
+        /// </summary>
+        public string PackRootPath
+        {
+            get
+            {
+                try { return PackRootPathResolver?.Invoke(); }
+                catch { return null; }
+            }
+        }
 
         // -- Hook installation --------------------------------------
 
@@ -469,6 +487,7 @@ namespace EmoTracker.Data.Debugging
             {
                 StatePtr = stateP,
                 State = mState,
+                Lua = mLua,
                 CurrentArPtr = arP,
                 Reason = reason,
                 CallDepthAtPause = mCallDepth,
@@ -566,9 +585,38 @@ namespace EmoTracker.Data.Debugging
         /// the error unwinds. Returns the traceback string the
         /// xpcall handler should propagate as the error value.
         /// </summary>
+        // Dedupe key for the most recently broken-on exception
+        // message + the time we last broke on it. Pack-script bugs
+        // in autotracker callbacks tend to fire on every poll
+        // cycle; without deduplication, the user gets a fresh
+        // pause every ~30ms, faster than they can interact. We
+        // suppress repeats of the same error within
+        // <see cref="kErrorDedupeWindow"/> so the user can resume
+        // once and actually drive the debugger.
+        string mLastErrorKey;
+        DateTime mLastErrorAt;
+        static readonly TimeSpan kErrorDedupeWindow = TimeSpan.FromSeconds(2);
+
         internal void EnterExceptionPause(string errMessage, string traceback)
         {
+            // Always log so we can confirm the upcall actually
+            // reached us — the Lua-side handler's pcall around the
+            // upcall would otherwise silently swallow any throw.
+            Info("EnterExceptionPause: name='{0}' breakOn={1} err='{2}'",
+                Name, BreakOnException, Truncate(errMessage, 120));
+
             if (!BreakOnException) return;
+
+            // Suppress repeats of the same error within the dedupe
+            // window. The key combines the error message text +
+            // current call depth so two distinct stacks reporting
+            // the same message still both pause.
+            string key = errMessage + "@" + mCallDepth;
+            var now = DateTime.UtcNow;
+            if (key == mLastErrorKey && (now - mLastErrorAt) < kErrorDedupeWindow)
+                return;
+            mLastErrorKey = key;
+            mLastErrorAt = now;
 
             mBreakOnExceptionLatched = true;
             try
@@ -580,6 +628,12 @@ namespace EmoTracker.Data.Debugging
                 EnterPause(IntPtr.Zero, IntPtr.Zero, PauseReason.Exception, errMessage);
             }
             finally { mBreakOnExceptionLatched = false; }
+        }
+
+        static string Truncate(string s, int max)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            return s.Length <= max ? s : s.Substring(0, max) + "…";
         }
 
         // -- Helpers ------------------------------------------------
@@ -633,6 +687,13 @@ namespace EmoTracker.Data.Debugging
     {
         public IntPtr StatePtr;
         public KeraLua.Lua State;
+        // NLua's Lua wrapper around the same state, exposed so the
+        // inspector can roundtrip a stack-resident userdata through
+        // a temp global and pull out the underlying C# object via
+        // NLua's path-based getter — that's the cleanest way to
+        // unwrap NLua's userdata back to the managed instance for
+        // reflection-based property display.
+        public NLua.Lua Lua;
         public IntPtr CurrentArPtr;
         public PauseReason Reason;
         public int CallDepthAtPause;

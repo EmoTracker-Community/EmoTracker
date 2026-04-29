@@ -33,13 +33,14 @@ namespace EmoTracker.Data.Debugging
         //
         // Frame ids are also handles, but with a distinct kind.
 
-        enum HandleKind { Frame, FrameLocals, FrameUpvalues, FrameGlobals, Table }
+        enum HandleKind { Frame, FrameLocals, FrameUpvalues, FrameGlobals, Table, Managed, PendingUnwrap }
 
         sealed class Handle
         {
             public HandleKind Kind;
             public int FrameLevel;        // Lua-side stack level (0 = current)
             public int LuaRegistryRef;    // luaL_ref slot for tables (LUA_REFNIL when N/A)
+            public object ManagedObject;  // C# instance for HandleKind.Managed
         }
 
         // Per-debuggee handle table. Keyed on a debuggee instance so
@@ -73,8 +74,11 @@ namespace EmoTracker.Data.Debugging
                 // don't leak roots across pauses.
                 foreach (var h in t.Map.Values)
                 {
-                    if (h.Kind == HandleKind.Table && h.LuaRegistryRef != 0)
+                    if ((h.Kind == HandleKind.Table || h.Kind == HandleKind.PendingUnwrap)
+                        && h.LuaRegistryRef != 0)
+                    {
                         try { d.PausedCtx?.State.Unref(LuaRegistry.Index, h.LuaRegistryRef); } catch { }
+                    }
                 }
                 t.Map.Clear();
                 t.Next = 1;
@@ -144,7 +148,13 @@ namespace EmoTracker.Data.Debugging
             {
                 new DapScope { Name = "Locals", VariablesReference = locals, Expensive = false, PresentationHint = "locals" },
                 new DapScope { Name = "Upvalues", VariablesReference = upvals, Expensive = false, PresentationHint = "arguments" },
-                new DapScope { Name = "Globals", VariablesReference = globs, Expensive = true },
+                // Mark Globals not-expensive so VS Code auto-fetches
+                // its contents on frame select. Iterating _G is a
+                // single Next-loop over a table that's hundreds of
+                // entries at most — fast, and surfacing it
+                // automatically matches what every other Lua
+                // debugger does.
+                new DapScope { Name = "Globals", VariablesReference = globs, Expensive = false },
             };
         }
 
@@ -163,8 +173,42 @@ namespace EmoTracker.Data.Debugging
                 HandleKind.FrameUpvalues => ListUpvalues(d, h.FrameLevel),
                 HandleKind.FrameGlobals => ListGlobals(d),
                 HandleKind.Table => ListTable(d, h),
+                HandleKind.Managed => ListManagedObject(d, h.ManagedObject),
+                HandleKind.PendingUnwrap => ListPendingUnwrap(d, h),
                 _ => new List<DapVariable>(),
             };
+        }
+
+        // Lazy unwrap: when the user expands a userdata variable, we
+        // pull the wrapped C# object via the registry-stashed
+        // userdata reference and reflect its public properties.
+        // Doing this lazily (instead of eagerly during the table
+        // walk) means we only pay the reflection cost for objects
+        // the user actually opens — pack-script tables with many
+        // userdata entries no longer freeze the variables panel.
+        static List<DapVariable> ListPendingUnwrap(LuaDebuggee d, Handle h)
+        {
+            var ctx = d.PausedCtx;
+            if (ctx == null) return new List<DapVariable>();
+            var L = ctx.State;
+            int top = L.GetTop();
+            try
+            {
+                L.RawGetInteger(LuaRegistry.Index, h.LuaRegistryRef);
+                if (!L.IsUserData(-1) && !L.IsLightUserData(-1))
+                    return new List<DapVariable>();
+                int udIdx = L.GetTop();
+                object managed = TryUnwrapUserData(d, udIdx);
+                if (managed == null) return new List<DapVariable>();
+                return ListManagedObject(d, managed);
+            }
+            catch (Exception ex)
+            {
+                if (LuaDebuggee.sTrace)
+                    LuaDebuggee.Trace("ListPendingUnwrap: regRef={0} threw: {1}", h.LuaRegistryRef, ex.Message);
+                return new List<DapVariable>();
+            }
+            finally { L.SetTop(top); }
         }
 
         static List<DapVariable> ListLocals(LuaDebuggee d, int level)
@@ -256,23 +300,98 @@ namespace EmoTracker.Data.Debugging
                 if (!L.IsTable(-1)) return vars;
                 int tIdx = L.GetTop();
                 IterateTableTop(d, L, tIdx, vars);
+                if (LuaDebuggee.sTrace)
+                    LuaDebuggee.Trace("ListTable: regRef={0} produced {1} entries", h.LuaRegistryRef, vars.Count);
             }
             finally { L.SetTop(top); }
             return vars;
         }
 
+        // Hard cap on entries returned per table-expansion request.
+        // Very large tables (entire stdlib globals view, pack-author
+        // catalogs that list every item, etc.) can run into hundreds
+        // of entries. Caller-side panels handle that fine; what we
+        // protect against here is pathological iteration where
+        // lua_next somehow doesn't terminate (we've seen
+        // "External component has thrown" mid-iter from KeraLua,
+        // and rare cases involving sparse arrays with nil holes).
+        const int kMaxIterEntries = 5000;
+
         // Iterate the table at stack index tIdx. Caller is responsible
         // for SetTop balance.
+        //
+        // Belt-and-braces try/catches: lua_next can throw "external
+        // component has thrown" for individual entries (observed
+        // in the wild on a CodeTracker autotracker callback's
+        // `value` parameter — a single bad entry caused the entire
+        // expansion to return zero children). Per-entry catches
+        // skip the bad entry and keep going; the outer catch is
+        // a final stop so a totally-broken table at least returns
+        // whatever entries we did get.
+        //
+        // The iteration cap is the third line of defense — even if
+        // lua_next somehow gets stuck in a non-terminating loop
+        // (e.g. a corrupted hash chain), we'll bail out and return
+        // a "...truncated" marker rather than hang the panel.
         static void IterateTableTop(LuaDebuggee d, KeraLua.Lua L, int tIdx, List<DapVariable> outVars)
         {
-            L.PushNil();
-            while (L.Next(tIdx))
+            int iter = 0;
+            bool truncated = false;
+            try
             {
-                // Stack: ..., key (-2), value (-1)
-                string keyDisplay = ToDisplayString(L, -2);
-                int valueIdx = L.GetTop();
-                outVars.Add(MakeVariableFromIndex(d, keyDisplay, valueIdx));
-                L.Pop(1); // pop value, keep key for next iteration
+                L.PushNil();
+                while (L.Next(tIdx))
+                {
+                    iter++;
+                    if (iter > kMaxIterEntries)
+                    {
+                        // Pop the value (lua_next leaves k,v on stack)
+                        // — we still need to leave the key so a final
+                        // pop balances correctly when the loop exits
+                        // through the `truncated` path. Then drop the
+                        // key explicitly, mirroring the normal end-of-
+                        // iteration cleanup that lua_next does on its
+                        // own when it returns false.
+                        L.Pop(2);
+                        truncated = true;
+                        break;
+                    }
+
+                    // Stack: ..., key (-2), value (-1)
+                    string keyDisplay;
+                    try { keyDisplay = ToDisplayString(L, -2) ?? "?"; }
+                    catch
+                    {
+                        L.Pop(1);
+                        continue;
+                    }
+
+                    int valueIdx = L.GetTop();
+                    DapVariable v;
+                    try { v = MakeVariableFromIndex(d, keyDisplay, valueIdx); }
+                    catch
+                    {
+                        L.Pop(1);
+                        continue;
+                    }
+                    outVars.Add(v);
+                    L.Pop(1); // pop value, keep key for next iteration
+                }
+            }
+            catch (Exception ex)
+            {
+                if (LuaDebuggee.sTrace)
+                    LuaDebuggee.Trace("IterateTable iter={0} loop threw: {1}", iter, ex.Message);
+            }
+
+            if (truncated)
+            {
+                outVars.Add(new DapVariable
+                {
+                    Name = "…",
+                    Value = "<truncated after " + kMaxIterEntries + " entries>",
+                    Type = "info",
+                });
             }
         }
 
@@ -319,6 +438,8 @@ namespace EmoTracker.Data.Debugging
                         var ht = TableFor(d);
                         varRef = ht.Add(new Handle { Kind = HandleKind.Table, LuaRegistryRef = reg });
                         display = "table";
+                        if (LuaDebuggee.sTrace)
+                            LuaDebuggee.Trace("MakeVar table: name='{0}' varRef={1} regRef={2}", name, varRef, reg);
                         break;
                     }
                 case LuaType.Function:
@@ -326,8 +447,36 @@ namespace EmoTracker.Data.Debugging
                     break;
                 case LuaType.UserData:
                 case LuaType.LightUserData:
-                    display = ToDisplayString(L, idx) ?? "userdata";
-                    break;
+                    {
+                        // For the inline display we use Lua's __tostring
+                        // metamethod (NLua installs one on every wrapped
+                        // C# object that returns the managed instance's
+                        // ToString result). This is a single C-side call
+                        // — much cheaper than the userdata-roundtrip
+                        // unwrap and avoids invoking any pack-side
+                        // reflection that might hold long-running locks.
+                        //
+                        // Expansion is opt-in: we tag the variable with a
+                        // PendingUnwrap handle that does the real
+                        // unwrap + reflection only if the user clicks
+                        // to drill in. Avoids hanging the panel when a
+                        // table contains many userdata entries (the
+                        // panel renders every userdata as a row but only
+                        // the ones the user opens pay the unwrap cost).
+                        try { display = L.ToString(idx, callMetamethod: true) ?? "userdata"; }
+                        catch { display = "userdata"; }
+                        typeName = "UserData";
+
+                        // Stash a registry ref so PendingUnwrap can re-
+                        // resolve the userdata at expansion time. (The
+                        // current `idx` won't be valid by then — Lua
+                        // stack slots are scoped to the current request.)
+                        L.PushCopy(idx);
+                        int reg = L.Ref(LuaRegistry.Index);
+                        var ht = TableFor(d);
+                        varRef = ht.Add(new Handle { Kind = HandleKind.PendingUnwrap, LuaRegistryRef = reg });
+                        break;
+                    }
                 default:
                     display = ToDisplayString(L, idx) ?? type.ToString();
                     break;
@@ -356,6 +505,167 @@ namespace EmoTracker.Data.Debugging
                 return $"<{t}>";
             }
             catch { return "<?>"; }
+        }
+
+        // -- Managed-object inspection ---------------------------------
+        //
+        // NLua wraps every C# object passed to Lua as a userdata with
+        // an opaque metatable. Without unwrapping, the debugger panel
+        // shows "<UserData>" which tells the user nothing. By
+        // roundtripping the userdata through a Lua global, NLua's
+        // path-based getter returns the underlying C# instance and
+        // we can render its real type + ToString() value, plus expand
+        // its public properties via reflection.
+
+        // Temp-global slot used during the roundtrip. Single shared
+        // name across the inspector — we always set then clear it
+        // immediately so concurrent reads aren't a concern (we're
+        // single-threaded inside the paused executor by construction).
+        const string sUnwrapTempGlobal = "__et_dbg_unwrap";
+
+        static object TryUnwrapUserData(LuaDebuggee d, int stackIdx)
+        {
+            var ctx = d.PausedCtx;
+            if (ctx?.Lua == null || ctx.State == null) return null;
+            var L = ctx.State;
+            int top = L.GetTop();
+            try
+            {
+                L.PushCopy(stackIdx);
+                L.SetGlobal(sUnwrapTempGlobal);
+                object value;
+                try { value = ctx.Lua[sUnwrapTempGlobal]; }
+                catch { value = null; }
+                // Always clear the temp global so it never lingers.
+                try { ctx.Lua[sUnwrapTempGlobal] = null; } catch { }
+                return value;
+            }
+            catch { return null; }
+            finally { L.SetTop(top); }
+        }
+
+        // BindingFlags used for property/field reflection. Public
+        // instance only — pack authors rarely need private members
+        // and exposing them widens the surface for accidental
+        // side-effect-y getters.
+        static readonly System.Reflection.BindingFlags sMemberFlags =
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance;
+
+        // Reflection result cache. Property/field metadata is fixed
+        // per Type, so we cache the discovered MemberInfo[] arrays
+        // to avoid the (somewhat expensive) BindingFlags lookup on
+        // every expand of an object of the same type.
+        static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, (System.Reflection.PropertyInfo[] props, System.Reflection.FieldInfo[] fields)> sMemberCache = new();
+
+        static (System.Reflection.PropertyInfo[] props, System.Reflection.FieldInfo[] fields) GetMembers(Type t)
+        {
+            return sMemberCache.GetOrAdd(t, type =>
+            {
+                System.Reflection.PropertyInfo[] props;
+                System.Reflection.FieldInfo[] fields;
+                try { props = type.GetProperties(sMemberFlags); }
+                catch { props = Array.Empty<System.Reflection.PropertyInfo>(); }
+                try { fields = type.GetFields(sMemberFlags); }
+                catch { fields = Array.Empty<System.Reflection.FieldInfo>(); }
+                return (props, fields);
+            });
+        }
+
+        static List<DapVariable> ListManagedObject(LuaDebuggee d, object obj)
+        {
+            var vars = new List<DapVariable>();
+            if (obj == null) return vars;
+
+            var t = obj.GetType();
+            var (props, fields) = GetMembers(t);
+
+            // Public instance properties (read-only properties are
+            // always shown; write-only properties are skipped — no
+            // value to display). Indexers are skipped because we
+            // don't know what index to read with.
+            foreach (var p in props)
+            {
+                if (!p.CanRead) continue;
+                if (p.GetIndexParameters().Length > 0) continue;
+                // Skip properties whose getter is virtual + might
+                // have heavy side effects. Heuristic: skip
+                // "Item" indexer-style + properties that return
+                // IEnumerable (avoids enumerating large catalogs
+                // when the user just opens a top-level object).
+                if (p.Name == "Item") continue;
+
+                object v;
+                try { v = p.GetValue(obj); }
+                catch (Exception ex) { v = "<getter threw: " + (ex.InnerException?.Message ?? ex.Message) + ">"; }
+                vars.Add(MakeManagedVar(d, p.Name, v, p.PropertyType));
+            }
+
+            // Public instance fields (rare but possible — pack-script
+            // bridge classes often expose a handful of fields).
+            foreach (var f in fields)
+            {
+                object v;
+                try { v = f.GetValue(obj); }
+                catch (Exception ex) { v = "<read threw: " + ex.Message + ">"; }
+                vars.Add(MakeManagedVar(d, f.Name, v, f.FieldType));
+            }
+
+            // Sort alphabetically — reflection ordering is
+            // implementation-defined and pack authors expect a
+            // predictable view.
+            vars.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            return vars;
+        }
+
+        // Build a DapVariable for a managed value (the result of a
+        // property getter / field read). Primitives render inline;
+        // complex types become expandable handles backed by another
+        // ListManagedObject call.
+        static DapVariable MakeManagedVar(LuaDebuggee d, string name, object value, Type declaredType)
+        {
+            string display;
+            int varRef = 0;
+            string typeName = declaredType?.Name ?? value?.GetType().Name ?? "?";
+
+            if (value == null)
+            {
+                display = "null";
+            }
+            else if (value is string s)
+            {
+                display = "\"" + s + "\"";
+            }
+            else if (value is bool b)
+            {
+                display = b ? "true" : "false";
+            }
+            else
+            {
+                var vType = value.GetType();
+                if (vType.IsPrimitive || vType.IsEnum || vType == typeof(decimal))
+                {
+                    try { display = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture); }
+                    catch { display = value.ToString(); }
+                }
+                else
+                {
+                    // Complex object — show ToString() and make
+                    // expandable so the user can drill in.
+                    try { display = value.ToString() ?? "<" + vType.Name + ">"; }
+                    catch { display = "<" + vType.Name + ">"; }
+                    typeName = vType.Name;
+                    var ht = TableFor(d);
+                    varRef = ht.Add(new Handle { Kind = HandleKind.Managed, ManagedObject = value });
+                }
+            }
+
+            return new DapVariable
+            {
+                Name = name,
+                Value = display,
+                Type = typeName,
+                VariablesReference = varRef,
+            };
         }
 
         // -- Source mapping --------------------------------------------

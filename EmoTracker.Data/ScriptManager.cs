@@ -277,11 +277,24 @@ function print(...)
 -- the error unwinds. The pcall around the upcall ensures a
 -- buggy debugger plumbing path can never break the underlying
 -- error path.
+-- DAP exception-break upcall. Pure-Lua wrapper that routes through
+-- ScriptHost (the per-state ScriptManager userdata) to reach the
+-- OnLuaErrorForDap C# method. NLua's userdata method dispatch
+-- handles argument marshalling correctly — direct delegate /
+-- RegisterFunction bindings of OnLuaErrorForDap failed at call
+-- time with 'invalid arguments', for reasons specific to NLua's
+-- non-userdata dispatch paths. The pcall in __et_safe_call_handler
+-- ensures debugger plumbing failures never break the underlying
+-- error path (the traceback string is still propagated).
+function __et_dap_on_error(err, tb)
+    if ScriptHost and ScriptHost.OnLuaErrorForDap then
+        ScriptHost:OnLuaErrorForDap(tostring(err), tostring(tb))
+    end
+end
+
 function __et_safe_call_handler(err)
     local tb = debug.traceback(err, 2)
-    if __et_dap_on_error ~= nil then
-        pcall(__et_dap_on_error, tostring(err), tb)
-    end
+    pcall(__et_dap_on_error, err, tb)
     return tb
 end
 
@@ -675,12 +688,18 @@ end
             mLua.HookException += MLua_HookException;
             mLua.RegisterFunction("_output", this, this.GetType().GetMethod("OutputRaw"));
 
-            // Bind the C#-side upcall used by __et_safe_call_handler
-            // so xpcall errors can pause the executor thread when a
-            // DAP session is attached + exception break is armed.
-            // No-op when no debug server is running (the Lua-side
-            // handler tests for nil before calling).
-            mLua.RegisterFunction("__et_dap_on_error", this, this.GetType().GetMethod("OnLuaErrorForDap"));
+            // The C# upcall used by __et_safe_call_handler is reached
+            // via ScriptHost (which is `this`) — see the Lua-side
+            // SystemLua snippet that defines __et_dap_on_error as a
+            // pure-Lua wrapper around `ScriptHost:OnLuaErrorForDap`.
+            // We tried RegisterFunction(target, MethodInfo) and a
+            // direct Action<string,string> delegate assignment, and
+            // both failed NLua's argument-binding step at pcall time
+            // ("Invalid arguments to method call" / "Cannot invoke
+            // delegate"). Going through ScriptHost's userdata
+            // method-dispatch path uses the same machinery as every
+            // other Lua-to-C# call in the codebase — well-trodden
+            // and known to bind (string, string) cleanly.
 
             //  Remove disallowed os methods
             try
@@ -742,7 +761,14 @@ end
                 mLua[entry.Key] = entry.Value;
             }
 
-            mLua.DoString(SystemLua);
+            // Run SystemLua via LoadAndRunBuffer (rather than NLua's
+            // DoString) so it gets a real chunkname Lua can report.
+            // Without this, every frame from _safe_call /
+            // __et_safe_call_handler / __et_dap_on_error in the
+            // Lua-debugger call stack would surface as the default
+            // "chunk", indistinguishable from any string-loaded
+            // user code.
+            LoadAndRunBuffer(System.Text.Encoding.UTF8.GetBytes(SystemLua), "@<system>");
 
             // Register this interpreter with the DAP server, if one
             // is running (dev-mode only). Each ScriptManager
@@ -760,12 +786,23 @@ end
                     Debuggee = new Debugging.LuaDebuggee(mLua, label);
                     Debugging.LuaDebugServer.Instance.RegisterDebuggee(Debuggee);
 
-                    // Best-effort pack-root resolution. Lets DAP
-                    // surface absolute file paths so VS Code can
-                    // open the file at the breakpoint with one
-                    // click instead of just showing the chunk name.
-                    try { Debuggee.PackRootPath = ownerState?.PackageInstance?.GamePackage?.Source?.PackPath; }
-                    catch { /* defensive — packs without a disk-backed source skip this */ }
+                    // Pack-root resolution via a live callback so
+                    // forked TrackerStates (whose PackageInstance is
+                    // stamped AFTER BootstrapInterpreter runs) still
+                    // get a path once the fork is registered. Without
+                    // the indirection, debuggees on forks would
+                    // permanently report a null PackRootPath and DAP
+                    // sources would never carry a clickable file path.
+                    Debuggee.PackRootPathResolver = () =>
+                    {
+                        try
+                        {
+                            return (this.OwnerState as Sessions.TrackerState)
+                                ?.PackageInstance?.GamePackage?.Source?.PackPath
+                                ?? mPackage?.Source?.PackPath;
+                        }
+                        catch { return null; }
+                    };
                 }
                 catch (Exception ex)
                 {
@@ -786,8 +823,19 @@ end
         /// is attached or when exception break is off — the regular
         /// traceback path continues unaffected.
         /// </summary>
+        // Public (no [LuaHide]) so NLua's userdata-method dispatch
+        // surfaces this on the `ScriptHost` global. The Lua-side
+        // __et_dap_on_error in SystemLua wraps the call so the
+        // xpcall error handler reaches us without hitting NLua's
+        // brittle delegate / RegisterFunction binding paths (those
+        // failed with "Invalid arguments to method call" for
+        // reasons that don't reproduce against the userdata path).
         public void OnLuaErrorForDap(string err, string traceback)
         {
+            Debugging.LuaDebuggee.Info("OnLuaErrorForDap: state='{0}' err='{1}'",
+                (this.OwnerState as Sessions.TrackerState)?.Name ?? "?",
+                err == null ? "" : (err.Length > 120 ? err.Substring(0, 120) + "…" : err));
+
             try { Debuggee?.EnterExceptionPause(err, traceback); }
             catch { /* never let debugger plumbing throw into Lua */ }
         }

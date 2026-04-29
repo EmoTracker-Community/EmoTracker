@@ -314,8 +314,13 @@ namespace EmoTracker.Data.Debugging
                 }
             }
             mBreakOnExceptionLatched = armed;
+            int n = 0;
             foreach (var d in mServer.AllDebuggees())
+            {
                 d.BreakOnException = armed;
+                n++;
+            }
+            LuaDebuggee.Info("setExceptionBreakpoints: armed={0} debuggees={1}", armed, n);
             SendResponse(req);
         }
 
