@@ -124,7 +124,20 @@ namespace EmoTracker.Data.Scripting
             {
                 LuaFunction prevValue = mGetAllProvidedCodes;
                 if (SetProperty(ref mGetAllProvidedCodes, value))
+                {
                     DisposeObject(prevValue);
+                    // Re-classify in the owning state's code-provider
+                    // index. Two situations this catches: (a) the
+                    // pack-script lazily registers this callback after
+                    // BuildCodeIndex has already run, so the item was
+                    // initially filed as dynamic and stays brute-
+                    // forced forever; (b) the callback's advertised
+                    // set of codes changed (rare but possible if a
+                    // pack rebinds it). Either way, ReindexItem on
+                    // ItemDatabase is a cheap O(buckets) walk.
+                    var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
+                    itemDb?.ReindexItem(this);
+                }
             }
         }
 

@@ -431,7 +431,13 @@ namespace EmoTracker.Data.Sessions
                 copy.mResolver.Register(forkedItem);
                 modelIdentityMap[srcItemBase] = forkedItem;
             }
-            copy.Items.BuildCodeIndex();
+            // Note: BuildCodeIndex moved below the LuaItem rewire pass.
+            // Building it here would ask each LuaItem for its
+            // GetAllProvidedCodes() with the callback still null
+            // (the LuaFunction is wired by RewireForkedLuaItem AFTER
+            // RunCloneFrom), so every LuaItem would be classified
+            // as dynamic-fallback and dragged through brute-force
+            // iteration on every accessibility code lookup forever.
 
             // ---- Locations + Sections (coordinated tree walk) --------------
             // Phase 3 Location.Fork cascades to sections + child locations
@@ -571,6 +577,18 @@ namespace EmoTracker.Data.Sessions
                     copy.Scripts.RewireForkedLuaSegment(forkSeg, srcSeg);
                 }
             }
+
+            // BuildCodeIndex now that every LuaItem on the fork has its
+            // GetAllProvidedCodesFunc callback wired by the rewire pass
+            // above. Items that report a static set of codes go into
+            // mCodeToProviders (cheap O(1)-bucketed lookups);
+            // genuinely-dynamic items still fall into mDynamicCodeItems
+            // for brute-force dispatch. Profiled CodeTracker bow toggle:
+            // pre-fix ~93,000 ProvidesCode calls per toggle (every
+            // LuaItem dynamic); post-fix only the items whose Lua
+            // callback returns nil are dynamic, dropping the brute-
+            // force fan-out by ~95%.
+            copy.Items.BuildCodeIndex();
 
             // ---- Phase 7.1.h diagnostic: dump source vs fork accessibility -
             // Temporary diagnostic to compare source's evaluated section

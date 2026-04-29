@@ -36,6 +36,16 @@ namespace EmoTracker.Data
         List<ITrackableItem> mDynamicCodeItems = new List<ITrackableItem>();
         bool mCodeIndexBuilt = false;
 
+        // Dirty flag: set whenever something invalidates the index
+        // (item registered, item callback rebound, etc.). Read by
+        // EnsureCodeIndex() to lazily rebuild on the next code lookup.
+        // This is the long-term defense against ordering bugs like
+        // the fork-time "BuildCodeIndex before LuaItem rewire" issue
+        // — even if a caller forgets to invoke BuildCodeIndex at the
+        // right moment, the next ProviderCountForCode call gets a
+        // fresh, correctly-classified index.
+        bool mCodeIndexDirty = false;
+
         public IEnumerable<ITrackableItem> Items
         {
             get { return mItems; }
@@ -102,6 +112,34 @@ namespace EmoTracker.Data
             }
 
             mCodeIndexBuilt = true;
+            mCodeIndexDirty = false;
+        }
+
+        /// <summary>
+        /// Marks the code-provider index as needing a rebuild on the
+        /// next lookup. Cheap — just flips a flag; the actual rebuild
+        /// happens lazily via <see cref="EnsureCodeIndex"/> on the
+        /// next <see cref="ProviderCountForCode"/> /
+        /// <see cref="FindProvidingItemForCode"/> call. Call this
+        /// from any path that adds an item or changes an item's
+        /// advertised codes when an explicit
+        /// <see cref="BuildCodeIndex"/> at the right moment isn't
+        /// guaranteed.
+        /// </summary>
+        public void InvalidateCodeIndex()
+        {
+            mCodeIndexDirty = true;
+        }
+
+        /// <summary>
+        /// Build the index now if it's stale. The lookup hot paths
+        /// each call this on entry — keeps the index consistent
+        /// without burdening callers with explicit ordering. The
+        /// guard is a single bool read in the steady state.
+        /// </summary>
+        void EnsureCodeIndex()
+        {
+            if (!mCodeIndexBuilt || mCodeIndexDirty) BuildCodeIndex();
         }
 
         /// <summary>
@@ -169,6 +207,10 @@ namespace EmoTracker.Data
             {
                 mItemIndex[item] = mItems.Count;
                 mItems.Add(item);
+                // The new item hasn't been classified into the
+                // code-provider index. Mark dirty so the next lookup
+                // rebuilds and picks it up.
+                mCodeIndexDirty = true;
             }
         }
 
@@ -229,6 +271,7 @@ namespace EmoTracker.Data
 
         internal bool CodeIsProvided(string code)
         {
+            EnsureCodeIndex();
             if (mCodeIndexBuilt)
             {
                 // Check indexed items
@@ -271,6 +314,7 @@ namespace EmoTracker.Data
             //  Item codes never constrain accessibility
             maxAccessibilityLevel = AccessibilityLevel.Normal;
 
+            EnsureCodeIndex();
             if (mCodeIndexBuilt)
             {
                 uint nCount = 0;
@@ -303,6 +347,7 @@ namespace EmoTracker.Data
             if (string.IsNullOrWhiteSpace(code))
                 return null;
 
+            EnsureCodeIndex();
             if (mCodeIndexBuilt)
             {
                 if (mCodeToProviders.TryGetValue(code, out var indexed))
@@ -339,6 +384,7 @@ namespace EmoTracker.Data
             if (string.IsNullOrWhiteSpace(code))
                 return found.ToArray();
 
+            EnsureCodeIndex();
             if (mCodeIndexBuilt)
             {
                 if (mCodeToProviders.TryGetValue(code, out var indexed))
