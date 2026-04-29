@@ -269,13 +269,30 @@ function print(...)
     end
  end
 
--- Safe-call wrapper: invokes a function via xpcall so that debug.traceback
--- captures the Lua call stack at the point of failure.  Returns:
+-- Safe-call error handler. Builds the traceback that callers
+-- propagate as the error value. When a DAP debug session is
+-- attached and exception break is armed, the C#-side
+-- __et_dap_on_error upcall pauses the executor thread inside this
+-- handler so VS Code can inspect locals at the throw frame BEFORE
+-- the error unwinds. The pcall around the upcall ensures a
+-- buggy debugger plumbing path can never break the underlying
+-- error path.
+function __et_safe_call_handler(err)
+    local tb = debug.traceback(err, 2)
+    if __et_dap_on_error ~= nil then
+        pcall(__et_dap_on_error, tostring(err), tb)
+    end
+    return tb
+end
+
+-- Safe-call wrapper: invokes a function via xpcall so that the
+-- error handler captures the Lua call stack at the point of
+-- failure. Returns:
 --   true, result1, result2, ...   on success
 --   false, errorMessageWithTraceback   on failure
 function _safe_call(fn, ...)
     local args = table.pack(...)
-    return xpcall(function() return fn(table.unpack(args, 1, args.n)) end, debug.traceback)
+    return xpcall(function() return fn(table.unpack(args, 1, args.n)) end, __et_safe_call_handler)
 end
 
 -- Note: __et_proxy_cache is intentionally NOT initialized here —
@@ -356,6 +373,17 @@ end
 
         IGamePackage mPackage;
         Lua mLua;
+
+        // -- Lua debugger (DAP) integration --
+        //
+        // Allocated on bootstrap iff Debugging.LuaDebugServer.Instance
+        // is set (dev-mode + the LuaDebugServer extension started).
+        // Disposed/unregistered on Reset so a forked-and-discarded
+        // state doesn't leak a registry entry. Public so the app
+        // extension can map a state's PackPath onto it post-load
+        // (we don't know the pack root at bootstrap time — pack
+        // assignment happens later in Load()).
+        public Debugging.LuaDebuggee Debuggee { get; private set; }
 
         [NLua.LuaHide]
         public IEnumerable<LogLine> LogOutput
@@ -564,6 +592,13 @@ end
             mLua.HookException += MLua_HookException;
             mLua.RegisterFunction("_output", this, this.GetType().GetMethod("OutputRaw"));
 
+            // Bind the C#-side upcall used by __et_safe_call_handler
+            // so xpcall errors can pause the executor thread when a
+            // DAP session is attached + exception break is armed.
+            // No-op when no debug server is running (the Lua-side
+            // handler tests for nil before calling).
+            mLua.RegisterFunction("__et_dap_on_error", this, this.GetType().GetMethod("OnLuaErrorForDap"));
+
             //  Remove disallowed os methods
             try
             {
@@ -625,6 +660,53 @@ end
             }
 
             mLua.DoString(SystemLua);
+
+            // Register this interpreter with the DAP server, if one
+            // is running (dev-mode only). Each ScriptManager
+            // (definitional, primary, every fork) gets its own
+            // debuggee with a distinct DAP "thread" id so VS Code
+            // can target a specific state's interpreter for stepping
+            // and inspection.
+            if (Debugging.LuaDebugServer.Instance != null)
+            {
+                try
+                {
+                    string label = ownerState?.Name;
+                    if (string.IsNullOrEmpty(label))
+                        label = "lua:" + this.DefinitionId.ToString("N").Substring(0, 8);
+                    Debuggee = new Debugging.LuaDebuggee(mLua, label);
+                    Debugging.LuaDebugServer.Instance.RegisterDebuggee(Debuggee);
+
+                    // Best-effort pack-root resolution. Lets DAP
+                    // surface absolute file paths so VS Code can
+                    // open the file at the breakpoint with one
+                    // click instead of just showing the chunk name.
+                    try { Debuggee.PackRootPath = ownerState?.PackageInstance?.GamePackage?.Source?.PackPath; }
+                    catch { /* defensive — packs without a disk-backed source skip this */ }
+                }
+                catch (Exception ex)
+                {
+                    OutputWarning("[Debugger] failed to register state: {0}", ex.Message);
+                    Debuggee = null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Lua-side upcall registered as <c>__et_dap_on_error</c>.
+        /// Invoked from the <c>__et_safe_call_handler</c> xpcall
+        /// error handler whenever a Lua error fires under
+        /// <see cref="SafeCall"/>. When a DAP session is attached
+        /// and exception break is armed, this pauses the executor
+        /// thread inside the error handler so VS Code can inspect
+        /// locals before the stack unwinds. No-op when no debugger
+        /// is attached or when exception break is off — the regular
+        /// traceback path continues unaffected.
+        /// </summary>
+        public void OnLuaErrorForDap(string err, string traceback)
+        {
+            try { Debuggee?.EnterExceptionPause(err, traceback); }
+            catch { /* never let debugger plumbing throw into Lua */ }
         }
 
         [NLua.LuaHide]
@@ -739,6 +821,17 @@ end
         [NLua.LuaHide]
         public void Reset()
         {
+            // Unregister + dispose the debuggee BEFORE closing the
+            // underlying Lua state. The debuggee's Dispose path tries
+            // to remove its hook from the state; doing it post-Close
+            // would AV.
+            if (Debuggee != null)
+            {
+                try { Debugging.LuaDebugServer.Instance?.UnregisterDebuggee(Debuggee); } catch { }
+                try { Debuggee.Dispose(); } catch { }
+                Debuggee = null;
+            }
+
             if (mLua != null)
             {
                 mLua.Close();
