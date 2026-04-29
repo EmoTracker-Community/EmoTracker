@@ -167,7 +167,15 @@ function __et_cloner_lookup(v)
 end
 function __et_cloner_func_info(f)
     local info = debug.getinfo(f, 'Su')
-    return info.what, info.nups, info.short_src or '?'
+    -- Return info.source (full chunkname Lua tracked at load time,
+    -- e.g. @scripts/custom/owswap.lua) rather than info.short_src
+    -- (which strips the leading @ Lua uses to mark from-file).
+    -- Preserving the prefix lets the cloner round-trip a function
+    -- through dump/load while keeping debug.getinfo source identity
+    -- stable across interpreters — the Lua debugger breakpoint
+    -- matcher relies on the cloned function reporting the same
+    -- source string the pre-fork copy did.
+    return info.what, info.nups, info.source or info.short_src or '?'
 end
 function __et_cloner_dump_bytes(f)
     local s = string.dump(f, true)
@@ -747,7 +755,17 @@ end
             LuaFunction destFunc;
             using (var loadFunc = (LuaFunction)mDestination["__et_cloner_load_bytes"])
             {
-                var loadResult = loadFunc.Call(destBytesTable, "et_clone_" + srcId + "_" + sourceName);
+                // Pass the original chunkname (already '@'-prefixed
+                // for file-loaded functions, per
+                // __et_cloner_func_info) straight to load() — the
+                // cloned function's debug.getinfo.source ends up
+                // identical to the source state's, so a breakpoint
+                // set on '@scripts/custom/foo.lua' fires on both
+                // pre-fork and post-fork copies of the same closure.
+                // We previously prefixed with "et_clone_<id>_" for
+                // debug-readability; that broke the source-identity
+                // link the Lua debugger needs.
+                var loadResult = loadFunc.Call(destBytesTable, sourceName);
                 if (loadResult == null || loadResult.Length == 0 || !(loadResult[0] is LuaFunction df))
                 {
                     string err = (loadResult != null && loadResult.Length >= 2) ? (loadResult[1] as string) : "unknown error";

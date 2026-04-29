@@ -136,6 +136,59 @@ namespace EmoTracker.Data.Debugging
         // any breakpoints at all.
         volatile bool mAnyBreakpoints;
 
+        // Diagnostic toggle. Set EMOTRACKER_DAP_TRACE=1 in the env to
+        // log infrequent events (registration, breakpoint set,
+        // pause/resume, first-time-seen Lua source) through the
+        // logging sink. Hook-line events are NOT logged — they fire
+        // ~1M times during a typical CodeTracker init.lua and even
+        // formatted log lines would tank performance.
+        public static readonly bool sTrace =
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("EMOTRACKER_DAP_TRACE"));
+
+        // Sink wired by the app-layer extension (LuaDebuggerExtension)
+        // to a real logger (Serilog, etc.). EmoTracker.Data has no
+        // Serilog dependency, and the app is a WinExe so
+        // Console.WriteLine has nowhere to go — using a delegate
+        // sink keeps the data layer log-framework-agnostic while
+        // still giving us visibility through the dev terminal /
+        // Serilog file sinks.
+        public static Action<string> Sink { get; set; }
+
+        public static void Trace(string format, params object[] args)
+        {
+            if (!sTrace) return;
+            try
+            {
+                string line = "[LuaDbg] " + string.Format(format, args);
+                Sink?.Invoke(line);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Always-on info log (not gated by EMOTRACKER_DAP_TRACE).
+        /// Use for infrequent events the user needs visibility into
+        /// even without opting into verbose tracing — debuggee
+        /// lifecycle, DAP session connect/disconnect,
+        /// setBreakpoints. Routes through the same sink as
+        /// <see cref="Trace"/>.
+        /// </summary>
+        public static void Info(string format, params object[] args)
+        {
+            try
+            {
+                string line = "[LuaDbg] " + string.Format(format, args);
+                Sink?.Invoke(line);
+            }
+            catch { }
+        }
+
+        // Source paths we've already logged once at hook time. Lets
+        // the trace surface "Lua reports source X" exactly once per
+        // unique source instead of on every single line, so the user
+        // can spot path-mismatch issues without drowning in output.
+        readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> mSeenSources = new();
+
         // -- Step mode ---------------------------------------------
 
         enum StepMode { None, StepOver, StepIn, StepOut }
@@ -167,6 +220,7 @@ namespace EmoTracker.Data.Debugging
             // re-arming the hook on every step transition.
             mActiveMask = LuaHookMask.Call | LuaHookMask.Return | LuaHookMask.Line;
             mState.SetHook(mHookDelegate, mActiveMask, 0);
+            Info("debuggee created: name='{0}' mask={1}", Name, mActiveMask);
         }
 
         public void Dispose()
@@ -196,6 +250,7 @@ namespace EmoTracker.Data.Debugging
                 {
                     var hs = new HashSet<int>(lines);
                     mBreakpoints[normalizedSource] = hs;
+                    Info("setBp on '{0}': '{1}' = [{2}]", Name, normalizedSource, string.Join(",", hs));
                 }
 
                 bool any = false;
@@ -205,6 +260,56 @@ namespace EmoTracker.Data.Debugging
                 }
                 mAnyBreakpoints = any;
             }
+        }
+
+        /// <summary>
+        /// Match the line at the currently-executing Lua source
+        /// against the breakpoint table. Tries exact-match first;
+        /// falls back to bidirectional suffix matching so an
+        /// absolute-path breakpoint key
+        /// (<c>c:/users/.../packs/foo/scripts/init.lua</c>) hits the
+        /// pack-relative chunk name Lua reports
+        /// (<c>scripts/init.lua</c>) and vice versa. The suffix scan
+        /// only runs when the exact-match miss happens, so the
+        /// no-breakpoint hot path is unaffected.
+        /// </summary>
+        bool MatchBreakpoint(string normalizedLuaSource, int line)
+        {
+            HashSet<int> exact;
+            lock (mBreakpointsLock)
+            {
+                if (mBreakpoints.TryGetValue(normalizedLuaSource, out exact) && exact != null && exact.Contains(line))
+                    return true;
+
+                // Suffix match. The Lua source is the chunk name (typically
+                // pack-relative); the breakpoint key is the VS Code path
+                // (typically absolute). We need '/foo/bar.lua' to match
+                // 'c:/.../foo/bar.lua' but NOT 'something_foo/bar.lua' —
+                // hence the leading-slash anchor.
+                string suffixAnchor = "/" + normalizedLuaSource;
+                foreach (var kv in mBreakpoints)
+                {
+                    if (kv.Value == null || !kv.Value.Contains(line)) continue;
+                    string k = kv.Key;
+                    if (k.EndsWith(normalizedLuaSource, StringComparison.OrdinalIgnoreCase) &&
+                        (k.Length == normalizedLuaSource.Length ||
+                         k[k.Length - normalizedLuaSource.Length - 1] == '/'))
+                    {
+                        return true;
+                    }
+                    // Inverse: VS Code path is shorter than the chunk
+                    // name (rare — but happens if Lua source is e.g. a
+                    // resolved absolute path while VS Code sent
+                    // pack-relative).
+                    if (normalizedLuaSource.EndsWith(k, StringComparison.OrdinalIgnoreCase) &&
+                        (normalizedLuaSource.Length == k.Length ||
+                         normalizedLuaSource[normalizedLuaSource.Length - k.Length - 1] == '/'))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -290,8 +395,12 @@ namespace EmoTracker.Data.Debugging
             }
             if (evType != LuaHookEvent.Line) return;
 
-            // Fast path: nothing armed.
-            if (!mPauseRequested && mStepMode == StepMode.None && !mAnyBreakpoints && !mBreakOnExceptionLatched)
+            // Fast path: nothing armed. When EMOTRACKER_DAP_TRACE
+            // is set we keep going so the once-per-source diagnostic
+            // log surfaces even without breakpoints — useful for
+            // verifying path mappings without setting a real
+            // breakpoint first.
+            if (!sTrace && !mPauseRequested && mStepMode == StepMode.None && !mAnyBreakpoints && !mBreakOnExceptionLatched)
                 return;
 
             // Manual pause — fire on the next line we observe.
@@ -323,19 +432,20 @@ namespace EmoTracker.Data.Debugging
             // Breakpoint check. Get source + line via GetInfo("Sl",
             // ar). 'S' fills Source/ShortSource/LineDefined, 'l'
             // fills CurrentLine.
-            if (mAnyBreakpoints)
+            if (TryGetCurrentLocation(stateP, arP, out string src, out int line))
             {
-                if (TryGetCurrentLocation(stateP, arP, out string src, out int line))
+                string norm = NormalizeSource(src);
+                // First-time-seen log only when verbose tracing is
+                // armed — useful for diagnosing path-mismatch issues
+                // (Lua source vs. VS Code breakpoint path), but we
+                // don't want one log line per Lua file in the steady
+                // state.
+                if (sTrace && mSeenSources.TryAdd(norm, 0))
+                    Trace("first-line on '{0}': source='{1}'", Name, norm);
+                if (mAnyBreakpoints && MatchBreakpoint(norm, line))
                 {
-                    string norm = NormalizeSource(src);
-                    HashSet<int> set;
-                    lock (mBreakpointsLock)
-                        mBreakpoints.TryGetValue(norm, out set);
-                    if (set != null && set.Contains(line))
-                    {
-                        EnterPause(stateP, arP, PauseReason.Breakpoint, null);
-                        return;
-                    }
+                    EnterPause(stateP, arP, PauseReason.Breakpoint, null);
+                    return;
                 }
             }
         }
@@ -373,6 +483,14 @@ namespace EmoTracker.Data.Debugging
                 PauseReason.Exception => DapStopReason.Exception,
                 _ => DapStopReason.Pause,
             };
+            // Pause/resume happens once per breakpoint hit and once
+            // per step — fine to surface at trace level for
+            // diagnostics without spamming the always-on log.
+            if (sTrace)
+            {
+                bool hasSession = LuaDebugServer.Instance?.HasActiveSession ?? false;
+                Trace("EnterPause: name='{0}' reason={1} sessionAttached={2}", Name, dapReason, hasSession);
+            }
             LuaDebugServer.Instance?.NotifyStopped(this, dapReason, text);
 
             // Drain requests until the user resumes. Each request

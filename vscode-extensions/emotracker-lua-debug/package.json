@@ -2,7 +2,7 @@
   "name": "emotracker-lua-debug",
   "displayName": "EmoTracker Lua Debugger",
   "description": "Attach to a running EmoTracker dev build to debug pack-script Lua. Set breakpoints, step, inspect locals/upvalues/globals, break on Lua errors.",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "publisher": "emotracker-community",
   "engines": {
     "vscode": "^1.74.0"
@@ -15,6 +15,13 @@
     "onDebug"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "lua",
+        "extensions": [".lua"],
+        "aliases": ["Lua"]
+      }
+    ],
     "breakpoints": [
       { "language": "lua" }
     ],

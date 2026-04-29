@@ -475,7 +475,19 @@ end
                             byte[] buffer = new byte[s.Length];
                             if (s.Read(buffer, 0, buffer.Length) == buffer.Length)
                             {
-                                result = mLua.DoString(buffer, path);
+                                // Bypass NLua's DoString so we control
+                                // the chunkname Lua sees. Prefix with
+                                // "@" — Lua's standard convention for
+                                // "this chunk came from a file" — so
+                                // debug.getinfo's Source returns
+                                // "@<path>", which the Lua debugger
+                                // hook + tooling like VS Code can
+                                // resolve cleanly. NLua's own DoString
+                                // appears to lose the chunkname in
+                                // some load paths, leaving every
+                                // chunk reporting as the default
+                                // "chunk".
+                                result = LoadAndRunBuffer(buffer, "@" + path);
                             }
                         }
                         else
@@ -511,6 +523,77 @@ end
         public object[] LoadScript(string path)
         {
             return LoadScript(mPackage, path);
+        }
+
+        /// <summary>
+        /// Lua-load a byte buffer with an explicit chunk name (we
+        /// pass <c>"@&lt;path&gt;"</c>) and run it. Replaces the
+        /// previous <c>NLua.Lua.DoString(byte[], string)</c> call
+        /// inside <see cref="LoadScript"/> because NLua's load path
+        /// was producing chunks whose <c>debug.getinfo().source</c>
+        /// resolved to the default <c>"chunk"</c> string rather than
+        /// the chunk name we passed — breaking the Lua debugger's
+        /// breakpoint matching, since the hook had no way to tell
+        /// which file was executing.
+        /// </summary>
+        [NLua.LuaHide]
+        object[] LoadAndRunBuffer(byte[] buffer, string chunkName)
+        {
+            var L = mLua.State;
+            int topBefore = L.GetTop();
+
+            var loadStatus = L.LoadBuffer(buffer, chunkName);
+            if (loadStatus != KeraLua.LuaStatus.OK)
+            {
+                string err = L.ToString(-1, callMetamethod: false) ?? "load error";
+                L.SetTop(topBefore);
+                throw new NLua.Exceptions.LuaScriptException(err, chunkName);
+            }
+
+            // PCall with multret (-1) so multi-return chunks surface
+            // their results. errfunc=0 means use the default error
+            // formatter (no traceback, but our _safe_call wrapper
+            // adds one when needed for callbacks).
+            var callStatus = L.PCall(0, -1, 0);
+            if (callStatus != KeraLua.LuaStatus.OK)
+            {
+                string err = L.ToString(-1, callMetamethod: false) ?? "runtime error";
+                L.SetTop(topBefore);
+                throw new NLua.Exceptions.LuaScriptException(err, chunkName);
+            }
+
+            // Translate the return values off the stack into managed
+            // objects, mirroring NLua's DoString return shape. For
+            // the script-load path callers usually ignore the result;
+            // we return an array of plain values (string/number/
+            // boolean) without wrapping tables — pack scripts that
+            // need a wrapped table go through the regular global
+            // surface instead.
+            int top = L.GetTop();
+            int count = top - topBefore;
+            if (count <= 0) return null;
+
+            var results = new object[count];
+            for (int i = 0; i < count; ++i)
+            {
+                int idx = topBefore + 1 + i;
+                results[i] = ConvertStackValue(L, idx);
+            }
+            L.SetTop(topBefore);
+            return results;
+        }
+
+        static object ConvertStackValue(KeraLua.Lua L, int idx)
+        {
+            switch (L.Type(idx))
+            {
+                case KeraLua.LuaType.Nil: return null;
+                case KeraLua.LuaType.Boolean: return L.ToBoolean(idx);
+                case KeraLua.LuaType.Number:
+                    return L.IsInteger(idx) ? (object)L.ToInteger(idx) : (object)L.ToNumber(idx);
+                case KeraLua.LuaType.String: return L.ToString(idx, callMetamethod: false);
+                default: return L.ToString(idx, callMetamethod: false);
+            }
         }
 
         public ScriptManager()

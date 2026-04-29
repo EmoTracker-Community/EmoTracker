@@ -62,11 +62,22 @@ namespace EmoTracker.Extensions.LuaDebugger
                 if (!string.IsNullOrEmpty(portEnv) && int.TryParse(portEnv, out int envPort))
                     port = envPort;
 
+                // Bridge debug-layer trace output into Serilog so
+                // EMOTRACKER_DAP_TRACE=1 surfaces in the same log
+                // sink as the rest of the app (visible to a debug
+                // build via the developer terminal + Serilog file
+                // sink). Without this bridge, Console.WriteLine
+                // would be swallowed because EmoTracker is a WinExe
+                // and never attaches a console.
+                LuaDebuggee.Sink = msg => Log.Information(msg);
+
                 mServer = new LuaDebugServer(port);
                 mServer.Start();
                 Active = true;
                 StatusText = $"Listening on port {port}";
                 Log.Information("[LuaDbg] DAP server listening on port {Port}", port);
+                if (LuaDebuggee.sTrace)
+                    Log.Information("[LuaDbg] EMOTRACKER_DAP_TRACE is on — verbose tracing enabled");
             }
             catch (Exception ex)
             {

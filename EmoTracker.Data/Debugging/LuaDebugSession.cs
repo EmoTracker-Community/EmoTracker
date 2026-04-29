@@ -177,6 +177,7 @@ namespace EmoTracker.Data.Debugging
 
         void Handle(DapMessage req)
         {
+            LuaDebuggee.Trace("session req: '{0}' seq={1}", req.Command, req.Seq);
             switch (req.Command)
             {
                 case "initialize": OnInitialize(req); break;
@@ -262,6 +263,8 @@ namespace EmoTracker.Data.Debugging
             string sourcePath = src?["path"]?.Value<string>();
             string sourceName = src?["name"]?.Value<string>();
             string normalized = LuaDebuggee.NormalizeSource(sourcePath ?? sourceName ?? string.Empty);
+            LuaDebuggee.Trace("setBreakpoints: path='{0}' name='{1}' normalized='{2}' lines={3}",
+                sourcePath, sourceName, normalized, breakpoints?.Count ?? 0);
 
             var lines = new List<int>();
             var responseBps = new JArray();
