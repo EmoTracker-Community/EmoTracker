@@ -230,14 +230,19 @@ namespace EmoTracker.Data.Debugging
             Name = name ?? "lua";
 
             mHookDelegate = HookCallback;
-            // Install Call/Return + Line up front. Lua hooks are
-            // cheap when no work is done in them; our gate paths
-            // exit immediately when there's nothing armed. We need
-            // Line at least sometimes (for breakpoints/steps); leaving
-            // Call/Return on always lets us track depth without
-            // re-arming the hook on every step transition.
-            mActiveMask = LuaHookMask.Call | LuaHookMask.Return | LuaHookMask.Line;
-            mState.SetHook(mHookDelegate, mActiveMask, 0);
+            // Hook is installed lazily via RecomputeHookMask() — we
+            // pay no per-Lua-event cost while there are no
+            // breakpoints, no step, no manual pause, and no trace
+            // mode. A profile of a single bow toggle on CodeTracker
+            // showed the always-on Call|Return|Line hook accounting
+            // for ~290ms of a 645ms toggle (45%) — the cost was
+            // mostly Marshal.PtrToStructure copying the entire
+            // lua_Debug struct on every event. Now the hook stays
+            // dormant until the user arms something, and the hot
+            // path peeks just the event-type int from the
+            // activation record.
+            mActiveMask = LuaHookMask.Disabled;
+            RecomputeHookMask();
             Info("debuggee created: name='{0}' mask={1}", Name, mActiveMask);
         }
 
@@ -247,6 +252,46 @@ namespace EmoTracker.Data.Debugging
             // closed (Reset path), SetHook will throw — swallow.
             try { mState.SetHook(null, LuaHookMask.Disabled, 0); } catch { }
             mRequests.CompleteAdding();
+        }
+
+        /// <summary>
+        /// Recompute the hook mask based on what features are
+        /// currently armed and (re-)install on the Lua state. Call
+        /// this any time a feature becomes armed or disarmed —
+        /// breakpoint set/cleared, manual pause requested, step
+        /// requested, debug session detached. Idempotent: skips the
+        /// SetHook call when the mask hasn't changed.
+        ///
+        /// <para>
+        /// We DON'T install a hook for exception-break alone — that
+        /// path runs through the Lua-side <c>__et_safe_call_handler</c>
+        /// xpcall error handler, not the C debug hook.
+        /// </para>
+        /// </summary>
+        void RecomputeHookMask()
+        {
+            // Hard top-level gate: no DAP client attached → no hook,
+            // period. Even if some stale flag is still set
+            // (mAnyBreakpoints from a detached session, etc.) we
+            // refuse to instrument pack code when no one is
+            // listening. Trace mode bypasses this so dev-time
+            // diagnostics still surface without a real client.
+            bool hasSession = LuaDebugServer.Instance?.HasActiveSession ?? false;
+            bool needLine = sTrace || (hasSession && (mAnyBreakpoints || mPauseRequested || mStepMode != StepMode.None));
+            LuaHookMask mask = needLine
+                ? (LuaHookMask.Call | LuaHookMask.Return | LuaHookMask.Line)
+                : LuaHookMask.Disabled;
+
+            if (mask == mActiveMask) return;
+            mActiveMask = mask;
+            try
+            {
+                if (mask == LuaHookMask.Disabled)
+                    mState.SetHook(null, LuaHookMask.Disabled, 0);
+                else
+                    mState.SetHook(mHookDelegate, mask, 0);
+            }
+            catch { /* state closed */ }
         }
 
         // -- Public API used by LuaDebugSession ---------------------
@@ -278,6 +323,7 @@ namespace EmoTracker.Data.Debugging
                 }
                 mAnyBreakpoints = any;
             }
+            RecomputeHookMask();
         }
 
         /// <summary>
@@ -353,6 +399,7 @@ namespace EmoTracker.Data.Debugging
         public void RequestPause()
         {
             mPauseRequested = true;
+            RecomputeHookMask();
         }
         volatile bool mPauseRequested;
 
@@ -367,39 +414,54 @@ namespace EmoTracker.Data.Debugging
             mPauseRequested = false;
             mStepMode = StepMode.None;
             BreakOnException = false;
+            // Drop breakpoints too — they belonged to the now-gone
+            // session. A fresh session starts with empty state and
+            // pushes its own breakpoints via ReplayStateOnto, so we
+            // don't accidentally pause on a line nobody asked us to
+            // pause on.
+            lock (mBreakpointsLock)
+            {
+                mBreakpoints.Clear();
+                mAnyBreakpoints = false;
+            }
             // Wake any blocked executor with a synthetic Continue.
             if (IsPaused)
             {
                 try { mRequests.Add(new DebugRequest { RequestKind = DebugRequest.Kind.Continue }); } catch { }
             }
+            RecomputeHookMask();
         }
 
         // -- Hook callback ------------------------------------------
 
         // Fires on the executing thread (whichever thread is calling
         // into Lua). Stays as light as possible in the common case
-        // (no breakpoints, no step) — three branches, one volatile
-        // read, return.
+        // (no breakpoints, no step) — three branches, a single
+        // 4-byte read, return.
+        //
+        // The activation record (lua_Debug) starts with `int event`
+        // at offset 0. Marshal.ReadInt32 reads that one int directly
+        // without copying the rest of the struct, which is what
+        // KeraLua's LuaDebug.FromIntPtr does (~5x slower per hook
+        // call on a Debug build because it marshals every field
+        // including string pointers).
         void HookCallback(IntPtr stateP, IntPtr arP)
         {
-            // Wrap the activation record. Lua's hook conventions:
-            // for Line events, Event=Line and CurrentLine is set;
-            // for Call/Return, Event=Call/Return.
-            //
-            // We use the IntPtr-flavored GetInfo so we don't pay for
-            // a managed copy until we know we want one.
-            var ev = LuaDebug.FromIntPtr(arP);
-            var evType = ev.Event;
+            int evType = System.Runtime.InteropServices.Marshal.ReadInt32(arP, 0);
 
             // Track depth for stepping using Call/Return events. We
             // can't ask Lua for the current depth cheaply outside of
             // GetStack-loops, so we maintain a counter ourselves.
-            if (evType == LuaHookEvent.Call || evType == LuaHookEvent.TailCall)
+            //
+            // Numeric values match KeraLua.LuaHookEvent:
+            //   Call=0, Return=1, Line=2, Count=3, TailCall=4
+            const int kCall = 0, kReturn = 1, kLine = 2, kTailCall = 4;
+            if (evType == kCall || evType == kTailCall)
             {
                 mCallDepth++;
                 return;
             }
-            if (evType == LuaHookEvent.Return)
+            if (evType == kReturn)
             {
                 mCallDepth--;
                 if (mStepMode == StepMode.StepOut && mCallDepth < mStepAnchorDepth)
@@ -411,7 +473,7 @@ namespace EmoTracker.Data.Debugging
                 }
                 return;
             }
-            if (evType != LuaHookEvent.Line) return;
+            if (evType != kLine) return;
 
             // Fast path: nothing armed. When EMOTRACKER_DAP_TRACE
             // is set we keep going so the once-per-source diagnostic
@@ -539,6 +601,12 @@ namespace EmoTracker.Data.Debugging
             {
                 lock (mPauseLock) mPaused = false;
                 PausedCtx = null;
+                // Recompute now that pause state has cleared. If
+                // ServeRequest set a step mode (StepOver / StepIn /
+                // StepOut) the hook stays armed so the next line
+                // event fires; if Continue was the resume reason,
+                // the hook turns off (assuming no breakpoints set).
+                RecomputeHookMask();
             }
         }
 
