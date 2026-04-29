@@ -1,6 +1,9 @@
 using EmoTracker.Core;
+using EmoTracker.Data;
+using EmoTracker.Data.Notes;
 using EmoTracker.Data.Sessions;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 
@@ -19,7 +22,7 @@ namespace EmoTracker.Extensions.NoteTaking
     /// cyan when at least one location has notes.
     /// </para>
     /// </summary>
-    public sealed class NoteTakingExtension : ObservableObject, ITrackerExtension
+    public sealed class NoteTakingExtension : ObservableObject, ITrackerExtension, INoteTaking
     {
         public string Name => "Note Taking";
         public string UID => "emotracker_note_taking";
@@ -34,6 +37,86 @@ namespace EmoTracker.Extensions.NoteTaking
         // indicator's `Empty`-bound foreground walks our state's locations
         // to compute the grey/cyan color.
         public object StatusBarControl => new NoteTakingStatusBarIndicator { DataContext = this };
+
+        // -- INoteTaking aggregation --------------------------------
+        //
+        // The status-bar surface re-uses the same NoteTakingIconPopup
+        // template as per-Location surfaces, where the DataContext is
+        // a NoteTakingSite (which implements INoteTaking). For the
+        // status-bar surface the DataContext is this extension — so
+        // we implement INoteTaking too, aggregating across every
+        // location's NoteTakingSite. Without this, the popup's
+        // <ItemsControl ItemsSource="{Binding Notes}"/> binding
+        // failed at the extension because no Notes property existed.
+        //
+        // Aggregation flattens each per-site Notes collection into
+        // a fresh enumerable on each access; PropertyChanged for
+        // "Notes" fires whenever any per-location site notifies a
+        // membership change, so the popup re-binds.
+
+        /// <summary>
+        /// All notes across every location in this state, flattened.
+        /// </summary>
+        public IEnumerable<Note> Notes
+        {
+            get
+            {
+                var state = mState;
+                if (state == null) yield break;
+                var locs = state.Locations?.AllLocations;
+                if (locs == null) yield break;
+                foreach (var loc in locs)
+                {
+                    var site = loc?.NoteTakingSite;
+                    if (site == null) continue;
+                    foreach (var note in site.Notes)
+                        yield return note;
+                }
+            }
+        }
+
+        /// <summary>
+        /// AddNote at the aggregate level is a no-op — there's no
+        /// implicit target location to attach the note to. The
+        /// per-location surface (where the DataContext IS a specific
+        /// NoteTakingSite) is the right place to add. Returning
+        /// false makes the ItemsControl's "Add note" button a
+        /// quiet no-op when the popup is opened from the status bar.
+        /// </summary>
+        public bool AddNote(Note note) => false;
+
+        /// <summary>
+        /// Removes <paramref name="note"/> from whichever location's
+        /// site contains it. Walks the locations once until a site
+        /// claims ownership; cheap because deletes are infrequent
+        /// and the location count is bounded.
+        /// </summary>
+        public bool RemoveNote(Note note)
+        {
+            if (note == null) return false;
+            var state = mState;
+            if (state == null) return false;
+            var locs = state.Locations?.AllLocations;
+            if (locs == null) return false;
+            foreach (var loc in locs)
+            {
+                var site = loc?.NoteTakingSite;
+                if (site != null && site.RemoveNote(note))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Clears every per-location site in this state.</summary>
+        public void Clear()
+        {
+            var state = mState;
+            if (state == null) return;
+            var locs = state.Locations?.AllLocations;
+            if (locs == null) return;
+            foreach (var loc in locs)
+                loc?.NoteTakingSite?.Clear();
+        }
 
         /// <summary>
         /// True iff no location in this state has any notes. Computed
@@ -93,6 +176,7 @@ namespace EmoTracker.Extensions.NoteTaking
             UnhookLocations();
             HookLocations();
             NotifyPropertyChanged(nameof(Empty));
+            NotifyPropertyChanged(nameof(Notes));
         }
 
         void HookLocations()
@@ -125,8 +209,16 @@ namespace EmoTracker.Extensions.NoteTaking
 
         void OnNoteTakingSitePropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(EmoTracker.Data.Notes.NoteTakingSite.Empty))
+            // NoteTakingSite fires PropertyChanged for "Empty" /
+            // "Any" on every collection-change. Re-emit "Empty" for
+            // the existing status-icon binding and "Notes" for the
+            // status-bar popup's aggregated ItemsControl binding.
+            if (e.PropertyName == nameof(EmoTracker.Data.Notes.NoteTakingSite.Empty)
+                || e.PropertyName == nameof(EmoTracker.Data.Notes.NoteTakingSite.Any))
+            {
                 NotifyPropertyChanged(nameof(Empty));
+                NotifyPropertyChanged(nameof(Notes));
+            }
         }
     }
 }

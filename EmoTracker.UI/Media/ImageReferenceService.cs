@@ -212,18 +212,52 @@ namespace EmoTracker.UI.Media
             {
                 // Multiple ImageReference objects can share the same equality
                 // key (same URI + filter) while being distinct object
-                // instances. If the image is already cached (first instance
-                // was resolved), set the result immediately.
-                IImage cached = GetCachedImage(imageRef);
+                // instances. The cache-check + pending-register sequence
+                // must be ATOMIC w.r.t. the worker's StoreCached +
+                // TakePendingInstances. Without atomicity:
+                //   T1 (worker): StoreCached(K, img)
+                //   T2 (here):   GetCachedImage(K) -> null  (sees stale empty)
+                //   T1 (worker): TakePendingInstances(K) -> []
+                //   T2 (here):   RegisterPendingInstance(K) -> creates new empty list
+                //   T2 (here):   QueueResolution -> sees cache hit, no-op
+                // and the new instance orphans on the placeholder forever.
+                //
+                // Locking the registration sequence + having the worker
+                // store-cache under the same lock closes the window: T2
+                // either sees the cache hit and applies directly, or
+                // registers in time for T1's TakePending to find it.
+                IImage cached;
+                bool shouldQueue = false;
+                lock (mInstancesLock)
+                {
+                    if (TryGetCached(imageRef, out cached))
+                    {
+                        // Cache hit — apply directly outside the lock
+                        // (don't hold mInstancesLock across a property
+                        // setter that fires PropertyChanged).
+                    }
+                    else
+                    {
+                        // Cache miss — register so the worker fans out
+                        // its result to us. Only the first registrant
+                        // for this key needs to enqueue work; subsequent
+                        // distinct instances ride along on the same
+                        // resolution.
+                        if (!mPendingInstances.TryGetValue(imageRef, out var list))
+                        {
+                            list = new List<ImageReference>();
+                            mPendingInstances[imageRef] = list;
+                            shouldQueue = true;
+                        }
+                        list.Add(imageRef);
+                    }
+                }
+
                 if (cached != null)
                 {
                     imageRef.ResolvedImage = cached;
                     return;
                 }
-
-                // Register this instance so when resolution completes for
-                // any equal key, ALL instances get their ResolvedImage updated.
-                RegisterPendingInstance(imageRef);
 
                 // Set a correctly-sized placeholder as ResolvedImage immediately
                 // so Avalonia's layout system measures controls at the right
@@ -234,7 +268,8 @@ namespace EmoTracker.UI.Media
                     imageRef.ResolvedImage = GetPlaceholder(imageRef);
                 }
 
-                QueueResolution(imageRef, ImagePriority.Normal);
+                if (shouldQueue)
+                    QueueResolution(imageRef, ImagePriority.Normal);
             };
 
             mQueue.Start();
@@ -440,12 +475,31 @@ namespace EmoTracker.UI.Media
         {
             if (resolved == null) return;
 
-            // Collect ALL object instances that share this equality key.
-            // Only one instance enters the queue, but many may exist
-            // (e.g. 10 items using the same small-key icon). Every
-            // instance's ResolvedImage must be set so their bindings
-            // update.
-            var instances = TakePendingInstances(imageRef);
+            // Collect ALL object instances that share this equality key,
+            // and re-StoreCached under the same lock that
+            // OnImageReferenceCreated uses for its cache-check +
+            // pending-register sequence. Atomicity here is what stops a
+            // newly-created reference with the same key from registering
+            // in pending AFTER we've taken pending — it instead sees the
+            // cache hit (because we re-store under the lock) and applies
+            // the resolved image directly without ever touching pending.
+            // (StoreCached is idempotent — ResolveAndCache already wrote
+            // it earlier; this re-store is just to guarantee the cache
+            // visibility ordering w.r.t. the lock.)
+            List<ImageReference> instances;
+            lock (mInstancesLock)
+            {
+                StoreCached(imageRef, resolved);
+                if (mPendingInstances.TryGetValue(imageRef, out var list))
+                {
+                    mPendingInstances.Remove(imageRef);
+                    instances = list;
+                }
+                else
+                {
+                    instances = null;
+                }
+            }
 
             // ResolvedImage must be set on the UI thread so that
             // PropertyChanged fires there and Avalonia bindings update.
