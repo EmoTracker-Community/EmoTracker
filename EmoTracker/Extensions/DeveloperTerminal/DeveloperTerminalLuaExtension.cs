@@ -1,8 +1,10 @@
+using EmoTracker.Data;
 using EmoTracker.Data.Sessions;
 using NLua;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 
 namespace EmoTracker.Extensions.DeveloperTerminal
@@ -49,6 +51,20 @@ namespace EmoTracker.Extensions.DeveloperTerminal
                 Name = "time",
                 Description = "Time a Lua expression's wall-clock execution. Usage: /time <expr>",
                 Execute = CmdTime,
+            });
+
+            mCommands.Add(new TerminalCommand
+            {
+                Name = "slowcalls",
+                Description = "Show top N slowest C#→Lua callbacks recorded since startup (or since /resetslowcalls). Usage: /slowcalls [N=20]",
+                Execute = CmdSlowCalls,
+            });
+
+            mCommands.Add(new TerminalCommand
+            {
+                Name = "resetslowcalls",
+                Description = "Clear the /slowcalls timing tally.",
+                Execute = CmdResetSlowCalls,
             });
         }
 
@@ -142,6 +158,68 @@ namespace EmoTracker.Extensions.DeveloperTerminal
             {
                 state.Scripts.OutputError(ex.Message);
             }
+        }
+
+        void CmdSlowCalls(TrackerState state, string args)
+        {
+            if (state?.Scripts == null) return;
+
+            int n = 20;
+            if (!string.IsNullOrWhiteSpace(args) && int.TryParse(args.Trim(), out int parsed) && parsed > 0)
+                n = parsed;
+
+            var snapshot = state.Scripts.GetCallStatsSnapshot()?.ToList();
+            if (snapshot == null || snapshot.Count == 0)
+            {
+                state.Scripts.Output("No call timings recorded. Make sure the app was launched with -dev, then trigger some pack callbacks (item toggles, autotracker activity).");
+                return;
+            }
+
+            // Sort by total time descending. Tie-break by count so
+            // higher-frequency hot spots win when totals match.
+            var top = snapshot
+                .OrderByDescending(s => s.TotalTicks)
+                .ThenByDescending(s => s.Count)
+                .Take(n)
+                .ToList();
+
+            double freq = Stopwatch.Frequency;
+
+            // Header. Column widths chosen to fit the typical dev
+            // terminal width (~120 chars) without wrapping for normal
+            // pack callbacks; long location strings will trail off
+            // the right edge but stay readable.
+            const string fmt = "{0,8} {1,12} {2,10} {3,10}  {4}";
+            state.Scripts.Output(string.Format(fmt, "count", "total ms", "avg ms", "max ms", "function"));
+            state.Scripts.Output(string.Format(fmt, "-----", "--------", "------", "------", "--------"));
+
+            foreach (var s in top)
+            {
+                double total = s.TotalTicks / freq * 1000.0;
+                double avg = s.Count > 0 ? total / s.Count : 0.0;
+                double max = s.MaxTicks / freq * 1000.0;
+
+                string loc = string.IsNullOrEmpty(s.Name)
+                    ? string.Format("{0}:{1}", s.Source, s.Line)
+                    : string.Format("{0}:{1} ({2})", s.Source, s.Line, s.Name);
+
+                state.Scripts.Output(string.Format(fmt,
+                    s.Count,
+                    total.ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+                    avg.ToString("F3", System.Globalization.CultureInfo.InvariantCulture),
+                    max.ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+                    loc));
+            }
+
+            state.Scripts.Output(string.Format("({0} callbacks tracked, showing top {1})",
+                snapshot.Count, top.Count));
+        }
+
+        void CmdResetSlowCalls(TrackerState state, string args)
+        {
+            if (state?.Scripts == null) return;
+            state.Scripts.ResetCallStats();
+            state.Scripts.Output("Cleared call timing tally.");
         }
 
         // ====================================================================

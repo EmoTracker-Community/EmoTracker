@@ -298,6 +298,18 @@ function __et_safe_call_handler(err)
     return tb
 end
 
+-- Resolves a Lua function's source identity for the dev-mode call
+-- timing tally. Returns (source, linedefined, name); used by the
+-- C#-side ScriptManager.SafeCall hot path to key per-callback
+-- timing stats. Off the timing critical path: called once per
+-- unique LuaFunction wrapper (cached afterwards).
+function __et_func_key(f)
+    local info = debug.getinfo(f, 'Sn')
+    return info and (info.source or '?') or '?',
+           info and (info.linedefined or 0) or 0,
+           info and (info.name or '') or ''
+end
+
 -- Safe-call wrapper: invokes a function via xpcall so that the
 -- error handler captures the Lua call stack at the point of
 -- failure. Returns:
@@ -386,6 +398,118 @@ end
 
         IGamePackage mPackage;
         Lua mLua;
+
+        // -- Lua-call timing instrumentation (-dev only) --
+        //
+        // When IsDevMode is true, every C#→Lua invocation routed
+        // through SafeCall is timed and tallied per-function. The
+        // dev-terminal /slowcalls command surfaces and /resetslowcalls
+        // clears this data. Off-path overhead in non-dev builds is
+        // a single static-readonly bool check (constant-folded by
+        // the JIT on Release); the dev-mode branch adds a Stopwatch
+        // timestamp pair (~50 ns) plus a ConditionalWeakTable lookup.
+        public sealed class CallStats
+        {
+            public string Source;
+            public int Line;
+            public string Name;
+            public long TotalTicks;
+            public long MaxTicks;
+            public int Count;
+        }
+
+        static readonly bool sCallTimingEnabled = UserDirectory.IsDevMode;
+
+        readonly System.Collections.Concurrent.ConcurrentDictionary<string, CallStats> mCallStats =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, CallStats>();
+
+        // Per-LuaFunction → CallStats cache. ConditionalWeakTable so
+        // we don't pin LuaFunction wrappers (NLua may dispose +
+        // recreate them). The first SafeCall on a given wrapper
+        // pays the debug.getinfo cost; subsequent calls go straight
+        // to Interlocked updates on the cached struct.
+        readonly System.Runtime.CompilerServices.ConditionalWeakTable<LuaFunction, CallStats> mFuncStatsCache =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<LuaFunction, CallStats>();
+
+        /// <summary>
+        /// Snapshot of all collected SafeCall timings, suitable for
+        /// pretty-printing. Returns an empty enumeration when
+        /// <c>-dev</c> mode wasn't enabled (so the timing path is
+        /// off and nothing has been recorded).
+        /// </summary>
+        public List<CallStats> GetCallStatsSnapshot()
+        {
+            return new List<CallStats>(mCallStats.Values);
+        }
+
+        /// <summary>Clears the SafeCall timing tally.</summary>
+        public void ResetCallStats()
+        {
+            mCallStats.Clear();
+        }
+
+        // Hot-path-friendly stats record. Cheap when the wrapper is
+        // already cached (one CWT read); pays the debug.getinfo
+        // cost once per unique LuaFunction.
+        [NLua.LuaHide]
+        CallStats GetOrCreateStatsFor(LuaFunction func)
+        {
+            if (mFuncStatsCache.TryGetValue(func, out var cached))
+                return cached;
+
+            string source = "?";
+            int line = 0;
+            string name = "";
+            try
+            {
+                using (var keyFn = mLua["__et_func_key"] as LuaFunction)
+                {
+                    if (keyFn != null)
+                    {
+                        var r = keyFn.Call(func);
+                        if (r != null && r.Length >= 1) source = r[0] as string ?? "?";
+                        if (r != null && r.Length >= 2) line = Convert.ToInt32(r[1] ?? 0);
+                        if (r != null && r.Length >= 3) name = r[2] as string ?? "";
+                    }
+                }
+            }
+            catch { /* defensive — never let timing break a real call */ }
+
+            // Strip Lua's "@" file prefix for readability.
+            if (!string.IsNullOrEmpty(source) && (source[0] == '@' || source[0] == '='))
+                source = source.Substring(1);
+
+            // Key: source:line plus the function name (when known).
+            // Two functions on the same line in the same source share
+            // a key — fine in practice, the slot remains
+            // unambiguous for typical pack code where a closure on a
+            // line is the only one that could cost timing weight.
+            string key = string.IsNullOrEmpty(name)
+                ? string.Format("{0}:{1}", source, line)
+                : string.Format("{0}:{1} ({2})", source, line, name);
+
+            var stats = mCallStats.GetOrAdd(key, _ => new CallStats { Source = source, Line = line, Name = name });
+            // Add ignores duplicates if another thread raced us; OK,
+            // the GetOrAdd above resolved the canonical instance.
+            try { mFuncStatsCache.Add(func, stats); } catch (ArgumentException) { /* already added by another thread */ }
+            return stats;
+        }
+
+        [NLua.LuaHide]
+        void RecordCall(LuaFunction func, long elapsedTicks)
+        {
+            var stats = GetOrCreateStatsFor(func);
+            System.Threading.Interlocked.Add(ref stats.TotalTicks, elapsedTicks);
+            System.Threading.Interlocked.Increment(ref stats.Count);
+            // CAS-loop max update.
+            long curMax;
+            do
+            {
+                curMax = stats.MaxTicks;
+                if (elapsedTicks <= curMax) return;
+            }
+            while (System.Threading.Interlocked.CompareExchange(ref stats.MaxTicks, elapsedTicks, curMax) != curMax);
+        }
 
         // -- Lua debugger (DAP) integration --
         //
@@ -1038,7 +1162,24 @@ end
                 callArgs[0] = func;
                 Array.Copy(args, 0, callArgs, 1, args.Length);
 
-                object[] result = safeCall.Call(callArgs);
+                // Wall-clock the call so /slowcalls can rank by total
+                // time. Stopwatch.GetTimestamp is ~10 ns; in non-dev
+                // builds the static branch folds out entirely.
+                long startTicks = sCallTimingEnabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+                object[] result;
+                try
+                {
+                    result = safeCall.Call(callArgs);
+                }
+                finally
+                {
+                    if (sCallTimingEnabled)
+                    {
+                        long elapsed = System.Diagnostics.Stopwatch.GetTimestamp() - startTicks;
+                        try { RecordCall(func, elapsed); }
+                        catch { /* timing must never break the call */ }
+                    }
+                }
 
                 if (result == null || result.Length == 0)
                     return null;
