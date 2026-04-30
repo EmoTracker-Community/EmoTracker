@@ -103,10 +103,18 @@
                             <Separator />
                             <MenuItem Header="Application">
                                 <MenuItem Header="File">
-                                    <MenuItem Header="Open" Command="{Binding OpenCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+O" />
+                                    <!-- Use Ctrl (not Cmd) for menu shortcut display so the
+                                         hint reads "Ctrl+S" on Windows and Linux instead of
+                                         "Win+S". Avalonia parses "Cmd" as KeyModifiers.Meta,
+                                         which renders as the OS Super/Meta key on every
+                                         platform — that's the Win key on Windows. macOS
+                                         users will see "Ctrl+X" rather than "⌘X" until a
+                                         platform-aware key gesture extension is added; the
+                                         shortcut still routes correctly on all platforms. -->
+                                    <MenuItem Header="Open" Command="{Binding OpenCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+O" />
                                     <Separator />
-                                    <MenuItem Header="Save" Command="{Binding SaveCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+S" />
-                                    <MenuItem Header="Save As..." Command="{Binding SaveAsCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+Shift+S" />
+                                    <MenuItem Header="Save" Command="{Binding SaveCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+S" />
+                                    <MenuItem Header="Save As..." Command="{Binding SaveAsCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+Shift+S" />
                                     <MenuItem Header="Save All…" Command="{Binding SaveAllCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                                 </MenuItem>
                                 <Separator />
@@ -130,7 +138,7 @@
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding EnableDpiConversion, Mode=TwoWay, Source={x:Static media_utility:IconUtility.Instance}}" />
                                 <Separator />
-                                <MenuItem Header="Reset Layout Scale" Command="{Binding ResetLayoutScaleCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+D0" />
+                                <MenuItem Header="Reset Layout Scale" Command="{Binding ResetLayoutScaleCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Ctrl+D0" />
                             </MenuItem>
                             <MenuItem Header="Tracking">
                                 <!-- Phase 7 XAML migration: the six per-state toggles route
