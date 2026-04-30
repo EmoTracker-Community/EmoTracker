@@ -117,6 +117,13 @@ namespace EmoTracker
                     if (value != null)
                         value.PropertyChanged += OnActiveWindowContextPropertyChanged;
                     NotifyPropertyChanged(nameof(PrimaryState));
+                    // Window focus changed → the user is now interacting
+                    // with a different tab/pack. Persist its (pack, variant)
+                    // as the "last active" so a subsequent app relaunch
+                    // restores whichever pack the user most recently
+                    // touched, not whichever pack happened to be in the
+                    // first window at startup.
+                    PersistLastActivePackageFromCurrentTab();
                 }
             }
         }
@@ -124,7 +131,30 @@ namespace EmoTracker
         void OnActiveWindowContextPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(WindowContext.ActiveState))
+            {
                 NotifyPropertyChanged(nameof(PrimaryState));
+                // Tab switch within the focused window → same intent as
+                // the window-focus path above.
+                PersistLastActivePackageFromCurrentTab();
+            }
+        }
+
+        // Snapshot the focused tab's pack/variant into ApplicationSettings.
+        // Empty / not-yet-loaded tabs (PackageInstance.GamePackage null) are
+        // skipped so a transient empty tab during state restore can't clobber
+        // the user's last real selection. The setters dedupe themselves
+        // (SetProperty on identical values is a no-op), so calling this on
+        // every focus/tab tick is cheap.
+        void PersistLastActivePackageFromCurrentTab()
+        {
+            var state = mCurrentlyActiveWindowContext?.ActiveState;
+            var pi    = state?.PackageInstance;
+            var pkg   = pi?.GamePackage;
+            if (pkg == null) return;
+
+            var settings = ApplicationSettings.Instance;
+            settings.LastActivePackage        = pkg.UniqueID;
+            settings.LastActivePackageVariant = pi.ActiveVariant?.UniqueID;
         }
 
         // Phase 7.6: register a window's context. Called by the
