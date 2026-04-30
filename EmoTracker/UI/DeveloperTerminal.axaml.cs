@@ -73,6 +73,14 @@ namespace EmoTracker.UI
                         text.MinHeight = System.Math.Max(0, scroller.Viewport.Height - 2);
                     }
                 };
+
+                // Drive the sticky-bottom auto-scroll flag from the
+                // scroller itself rather than from individual input
+                // gestures. Any way the user moves the offset (wheel,
+                // scrollbar drag, keyboard, touch) ends up here; if it
+                // lands at-bottom we stay sticky, otherwise we drop out
+                // of auto-scroll until they come back.
+                scroller.ScrollChanged += OnScrollbackScrollChanged;
             }
         }
 
@@ -124,6 +132,11 @@ namespace EmoTracker.UI
             }
 
             UpdateStatePickerLabel();
+            // (Re)bind always lands the viewport at the bottom and
+            // re-engages sticky auto-scroll — the user gets the tail
+            // of the new state's transcript, and incoming output
+            // continues to scroll until they explicitly scroll up.
+            mAutoScrollSticky = true;
             ScrollToEnd();
         }
 
@@ -163,11 +176,31 @@ namespace EmoTracker.UI
 
         // ---- Scrollback auto-scroll --------------------------------------
 
-        DateTime mLastUserScrollTime = DateTime.MinValue;
+        // Sticky-bottom auto-scroll. True when the viewport is parked at
+        // (or essentially at) the bottom of the scrollback — in that
+        // state, new log lines auto-scroll the viewport so the most-
+        // recent output is always visible. Becomes false the moment the
+        // user scrolls away from the bottom; flips back to true when
+        // they scroll back. Initial value: true (fresh terminals start
+        // auto-scrolled).
+        bool mAutoScrollSticky = true;
+
+        // Tolerance (pixels) for "at the bottom" — accounts for rounded
+        // pixel sizing, partial-line trailing whitespace, and the
+        // SelectableTextBlock's MinHeight=Viewport-2 trick. A value of
+        // 4 is generous enough that the user doesn't have to land
+        // pixel-exact on the bottom to re-engage auto-scroll, but
+        // tight enough that a small upward drag of a single line
+        // disengages it.
+        const double AutoScrollBottomThreshold = 4.0;
 
         void OnLogOutputChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            // Re-render the SelectableTextBlock's inlines and re-scroll.
+            // Re-render the SelectableTextBlock's inlines. If we were
+            // parked at the bottom (sticky), follow the new content;
+            // otherwise leave the offset where the user put it so the
+            // line they're reading doesn't shift away.
+            //
             // The OutputRaw path can fire from any thread; ensure the UI
             // mutation happens on the dispatcher. ScrollToEnd handles
             // its own sync-layout so Extent.Height is current at the
@@ -175,8 +208,32 @@ namespace EmoTracker.UI
             Dispatcher.UIThread.Post(() =>
             {
                 RenderScrollback();
-                ScrollToEnd();
+                if (mAutoScrollSticky)
+                    ScrollToEnd();
             });
+        }
+
+        // Sticky-bottom evaluator. Fires for every offset / extent
+        // / viewport change on the scrollback ScrollViewer.
+        //
+        // Filter rule: when the extent grows but the offset doesn't
+        // move (new content was appended while the user is still
+        // reading mid-scroll), we MUST NOT clear sticky. Without that
+        // filter, a sticky=true viewport would drop sticky the
+        // instant new content arrived, because the formerly-at-bottom
+        // offset is suddenly N pixels short of the new bottom — and
+        // we'd never auto-scroll again until the next user gesture.
+        // The OnLogOutputChanged path explicitly re-scrolls right
+        // after this fires, so we'd see at-bottom on the FOLLOWING
+        // ScrollChanged (offset-delta non-zero, lands at bottom) and
+        // sticky stays true through the new-content cycle.
+        void OnScrollbackScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            if (sender is not ScrollViewer scroll) return;
+            if (e.OffsetDelta.Y == 0 && e.ExtentDelta.Y != 0) return;
+
+            double maxScroll = System.Math.Max(0, scroll.Extent.Height - scroll.Viewport.Height);
+            mAutoScrollSticky = scroll.Offset.Y >= maxScroll - AutoScrollBottomThreshold;
         }
 
         // Build a single colored-Run-per-line stream into the
@@ -214,6 +271,11 @@ namespace EmoTracker.UI
             tb.Inlines = inlines;
         }
 
+        // Unconditional scroll-to-bottom. Callers gate this themselves
+        // (auto-scroll only fires it when sticky; BindToState fires it
+        // unconditionally on every (re)bind so a freshly-attached state
+        // shows its tail). Re-engages sticky as a side effect via the
+        // ScrollChanged handler when the new offset lands at-bottom.
         void ScrollToEnd()
         {
             var scroll = this.FindControl<ScrollViewer>("ScrollbackScroller");
@@ -233,22 +295,8 @@ namespace EmoTracker.UI
             // the viewport, behind the input prompt row.
             scroll.UpdateLayout();
 
-            // If the user scrolled away from the bottom recently, don't
-            // yank them back — only auto-scroll when they were at (or
-            // near) the bottom already.
-            double maxScroll = scroll.Extent.Height - scroll.Viewport.Height;
-            if ((DateTime.Now - mLastUserScrollTime).TotalSeconds < 30 &&
-                scroll.Offset.Y < maxScroll - 32)
-            {
-                return;
-            }
+            double maxScroll = System.Math.Max(0, scroll.Extent.Height - scroll.Viewport.Height);
             scroll.Offset = new Vector(scroll.Offset.X, maxScroll);
-        }
-
-        protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
-        {
-            mLastUserScrollTime = DateTime.Now;
-            base.OnPointerWheelChanged(e);
         }
 
         // ---- Input parsing ------------------------------------------------
