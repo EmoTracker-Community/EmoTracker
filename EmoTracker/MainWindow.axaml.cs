@@ -84,6 +84,10 @@ namespace EmoTracker
             // slot, which couldn't differentiate between multiple windows).
             WindowContext.PropertyChanged += OnWindowContextPropertyChanged;
             EmoTracker.Data.Sessions.PackageLoader.OnPackageLoadComplete += OnAnyPackageLoadComplete;
+            // Hook the seeded ActiveState's AllowResize-change notification
+            // up front; OnWindowContextPropertyChanged rebinds it whenever
+            // the active tab switches.
+            RebindActiveStateAllowResize();
 
             if (ApplicationSettings.Instance.InitialWidth >= 0.0)
                 Width = ApplicationSettings.Instance.InitialWidth;
@@ -497,12 +501,146 @@ namespace EmoTracker
                 UpdateResizeMode();
         }
 
+        // Read the resize policy from THIS WINDOW's active state, not
+        // from the singleton ApplicationModel. Per-window UX matters
+        // when multiple windows are open and the user is switching
+        // tabs in this window: the resize policy belongs to the pack
+        // that's currently visible HERE, not to whichever state happens
+        // to be the global PrimaryState.
+        //
+        // When the policy turns OFF (locked size), drop SizeToContent
+        // back to Manual immediately and re-engage WidthAndHeight on a
+        // post-layout dispatcher tick. The deferral lets the pending
+        // layout invalidations from the surrounding code path flow
+        // through a measure pass before WidthAndHeight re-locks the
+        // window to the natural size of the now-final content.
+        // Specifically:
+        //   - RefreshTrackerLayout just nulled+reassigned
+        //     TrackerLayout.DataContext; the LayoutControl's new
+        //     measure happens on the next layout pass, not at the
+        //     point of assignment.
+        //   - The tab strip's IsVisible flips on the OpenStates count
+        //     transition (1→2 makes it visible). When the user adds a
+        //     second tab and then switches back to the fixed-size tab,
+        //     the natural window height = strip + tracker layout +
+        //     status bar — the strip's emergence is part of that
+        //     measure and must have settled before the lock.
+        // Without the deferral, WidthAndHeight measures partially-
+        // realized content and the window locks too short — visible
+        // symptom: tab strip + tracker layout exceed the window's
+        // height and the layout clips at the bottom.
+        //
+        // We always go through Manual on the way back to WidthAndHeight
+        // (rather than skipping when current is already Manual). The
+        // assignment is what triggers the re-measure; if we read
+        // "already WidthAndHeight" and skipped, a second AllowResize=
+        // false tick that arrives during the same layout cycle wouldn't
+        // re-measure either.
         private void UpdateResizeMode()
         {
-            if (!ApplicationModel.Instance.AllowResize)
+            // Prefer this window's active state; fall back to the
+            // application-wide AllowResize for early-init paths where
+            // WindowContext.ActiveState isn't bound yet.
+            var state = WindowContext?.ActiveState;
+            bool allow = state != null
+                ? state.AllowResize
+                : ApplicationModel.Instance.AllowResize;
+
+            if (!allow)
             {
                 CanResize = false;
-                SizeToContent = SizeToContent.WidthAndHeight;
+                // Release any current SizeToContent so the dispatcher
+                // tick below re-engages it as a fresh assignment that
+                // Avalonia treats as an invalidation worth measuring.
+                SizeToContent = SizeToContent.Manual;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    // Re-check resize policy on dispatch — the active
+                    // state could have flipped while we were queued
+                    // (e.g. user clicked a different tab between the
+                    // synchronous Manual assignment and this tick).
+                    // Skip when the new policy is now resizable; the
+                    // tab-switch handler that ran in the meantime
+                    // already wrote the correct CanResize/SizeToContent.
+                    var s2 = WindowContext?.ActiveState;
+                    bool a2 = s2 != null
+                        ? s2.AllowResize
+                        : ApplicationModel.Instance.AllowResize;
+                    if (a2) return;
+
+                    // Drop any pinned Width/Height carried over from the
+                    // prior Manual phase. While SizeToContent was Manual
+                    // (the resizable previous tab) Avalonia retained the
+                    // window's current bounds as explicit Width/Height
+                    // values; if those bounds were smaller than the
+                    // fixed-size pack's natural size + a now-visible tab
+                    // strip, the WidthAndHeight assignment below would
+                    // measure but stay pinned. NaN is Avalonia's
+                    // "no explicit size" sentinel — the SizeToContent
+                    // auto-sizer is then unconstrained.
+                    //
+                    // Repro this fixes: open a fixed-size pack alone
+                    // (tab strip hidden, n=1) → Ctrl+T to add an empty
+                    // resizable tab (strip becomes visible, n=2) → click
+                    // back to the fixed-size tab. Without the NaN reset,
+                    // the window stays at the prior height which fits
+                    // fixed_layout + status_bar but NOT the now-visible
+                    // strip; the bottom row of the tracker layout is
+                    // clipped behind the status bar.
+                    Width = double.NaN;
+                    Height = double.NaN;
+                    CanResize = false;
+
+                    // The fundamental obstacle here: Avalonia's
+                    // Window-level measure pass — even under
+                    // SizeToContent.WidthAndHeight — does NOT pass
+                    // infinite available size to its content. It
+                    // passes the current Bounds (e.g. 300x258 from
+                    // the prior locked-down state). Children with a
+                    // RowDefinition="*" or VerticalAlignment="Stretch"
+                    // path then report DesiredSize that's clipped to
+                    // that constraint, even when their natural
+                    // content is larger.
+                    //
+                    // Concretely on this repro: with the strip now
+                    // visible (28px) and the status bar (22px), the
+                    // tracker-layout row gets 258 - 28 - 22 = 208 px
+                    // and reports DesiredSize=208 even though its
+                    // true natural height is 236 px. SizeToContent
+                    // sees 258 as the total and locks the window at
+                    // its existing height — the bottom of the
+                    // tracker layout clips behind the status bar.
+                    //
+                    // Workaround: drive the measure ourselves with
+                    // an unconstrained available size, then assign
+                    // the resulting DesiredSize as the window's new
+                    // explicit Width/Height while SizeToContent is
+                    // still Manual. Re-engage WidthAndHeight only
+                    // after the natural-size pass has landed.
+                    //
+                    // The explicit Measure(infinity) call asks every
+                    // descendant to report its TRUE natural size,
+                    // ignoring the Window's current bounds.
+                    InvalidateMeasure();
+                    Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var nat = ((Avalonia.Layout.Layoutable)this).DesiredSize;
+
+                    // Pin Width/Height to the unconstrained natural
+                    // size, then turn on WidthAndHeight. The Window
+                    // adopts these as its new auto-size and the
+                    // subsequent layout pass arranges children to
+                    // match — since Width/Height now match the
+                    // natural total, the constrained-measure cycle
+                    // doesn't trigger again.
+                    if (nat.Width > 0 && nat.Height > 0
+                        && !double.IsInfinity(nat.Width) && !double.IsInfinity(nat.Height))
+                    {
+                        Width = nat.Width;
+                        Height = nat.Height;
+                    }
+                    SizeToContent = SizeToContent.WidthAndHeight;
+                    UpdateLayout();
+                }, Avalonia.Threading.DispatcherPriority.Background);
             }
             else
             {
@@ -565,20 +703,60 @@ namespace EmoTracker
         }
 
         // Phase 7 XAML migration: forward WindowContext.ActiveState
-        // changes into a layout refresh on this window.
+        // changes into a layout refresh on this window. Also re-wire
+        // the per-state AllowResize subscription + push the new
+        // resize mode immediately so a tab switch into a fixed-size
+        // pack snaps the window into its constrained shape without
+        // waiting for the next ApplicationModel.AllowResize tick.
+        private EmoTracker.Data.Sessions.TrackerState mActiveStateForResize;
+
         private void OnWindowContextPropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(WindowContext.ActiveState))
+            {
                 RefreshTrackerLayout();
+                RebindActiveStateAllowResize();
+                UpdateResizeMode();
+            }
+        }
+
+        // Hook the new active state's AllowResize PropertyChanged so a
+        // pack-reload that flips the flag (or a save-load that restores
+        // a previously fixed-size pack) drives a resize-mode update on
+        // this window. Drops the previous state's hook to avoid
+        // re-firing for other windows' state changes.
+        private void RebindActiveStateAllowResize()
+        {
+            var newState = WindowContext?.ActiveState;
+            if (ReferenceEquals(newState, mActiveStateForResize)) return;
+            if (mActiveStateForResize != null)
+                mActiveStateForResize.PropertyChanged -= OnActiveStateAllowResizeChanged;
+            mActiveStateForResize = newState;
+            if (mActiveStateForResize != null)
+                mActiveStateForResize.PropertyChanged += OnActiveStateAllowResizeChanged;
+        }
+
+        private void OnActiveStateAllowResizeChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(EmoTracker.Data.Sessions.TrackerState.AllowResize))
+                UpdateResizeMode();
         }
 
         // When any pack-load completes, if this window's active state was
-        // the load target, refresh layout (its Layouts are now populated).
+        // the load target, refresh layout (its Layouts are now populated)
+        // and snap the resize mode + size to the freshly-loaded pack's
+        // AllowResize. Without the resize update here, opening a fixed-
+        // size pack into the active tab would render the layout but
+        // leave the window at its previous (resizable) bounds.
         private void OnAnyPackageLoadComplete(object sender, EmoTracker.Data.Sessions.PackageLoader.PackageLoadEventArgs e)
         {
             if (e?.Target != null && ReferenceEquals(e.Target, WindowContext?.ActiveState))
             {
-                Avalonia.Threading.Dispatcher.UIThread.Post(RefreshTrackerLayout);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    RefreshTrackerLayout();
+                    UpdateResizeMode();
+                });
             }
         }
 

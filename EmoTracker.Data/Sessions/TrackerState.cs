@@ -504,6 +504,18 @@ namespace EmoTracker.Data.Sessions
             copy.Settings.MapEnabled = this.Settings.MapEnabled;
             copy.Settings.SwapLeftRight = this.Settings.SwapLeftRight;
 
+            // ---- Per-state pack-driven scalar settings ---------------------
+            // AllowResize / DisabledImageFilterSpec are populated on the
+            // DefinitionalState by PackageLoader.LoadPackageSettings (from
+            // the pack's settings.json). Forks must inherit these or the
+            // window-level resize / disabled-item-filter behaviour wired to
+            // the active state will read defaults — e.g. a pack with
+            // allow_resize=false would still let the host window resize
+            // until the user reloads, because the forked primary's
+            // AllowResize stays at the default `true`.
+            copy.AllowResize = this.AllowResize;
+            copy.DisabledImageFilterSpec = this.DisabledImageFilterSpec;
+
             // ---- Phase 7.11 polish: a freshly-forked state isn't dirty.
             // The transactable writes during the fork pipeline (e.g.
             // OnForked side effects, layout content stamping) set the
