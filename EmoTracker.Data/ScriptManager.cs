@@ -1106,16 +1106,23 @@ end
             // closed interpreter; holding them past Reset would dangle.
             // The pack's next init.lua re-registers fresh segments via
             // AddMemoryWatch with the new interpreter's LuaFunctions.
+            bool segmentsHadEntries = mMemorySegments.Count > 0;
             foreach (var seg in mMemorySegments)
             {
                 try { seg.Dispose(); } catch { /* defensive */ }
             }
             mMemorySegments.Clear();
+            if (segmentsHadEntries)
+                NotifyPropertyChanged(nameof(MemorySegments));
+
+            bool timersHadEntries = mMemoryTimers.Count > 0;
             foreach (var t in mMemoryTimers)
             {
                 try { t.Dispose(); } catch { /* defensive */ }
             }
             mMemoryTimers.Clear();
+            if (timersHadEntries)
+                NotifyPropertyChanged(nameof(MemoryTimers));
 
             // mExpressionCache is a per-state cache of provider-count
             // results keyed on Lua-callable codes. After Reset the codes
@@ -1454,6 +1461,10 @@ end
             segment.Callback = callback;
             mMemorySegments.Add(segment);
             (this.OwnerState as Sessions.TrackerState)?.RegisterModel(segment);
+            // Notify so subscribers (e.g. AutoTrackerExtension's Active
+            // property) re-evaluate visibility against the new count.
+            // The List<> isn't observable, so we surface mutations here.
+            NotifyPropertyChanged(nameof(MemorySegments));
             return segment;
         }
 
@@ -1462,7 +1473,10 @@ end
             if (segment is AutoTracking.LuaMemorySegment lms)
             {
                 if (mMemorySegments.Remove(lms))
+                {
                     lms.Dispose();
+                    NotifyPropertyChanged(nameof(MemorySegments));
+                }
             }
         }
 
@@ -1479,6 +1493,7 @@ end
         {
             var timer = new AutoTracking.MemoryTimer(name, callback, period);
             mMemoryTimers.Add(timer);
+            NotifyPropertyChanged(nameof(MemoryTimers));
             return timer;
         }
 
@@ -1486,7 +1501,10 @@ end
         {
             if (timer == null) return;
             if (mMemoryTimers.Remove(timer))
+            {
                 timer.Dispose();
+                NotifyPropertyChanged(nameof(MemoryTimers));
+            }
         }
 
         /// <summary>
@@ -1502,6 +1520,7 @@ end
         {
             if (forkSegment == null) return;
             mMemorySegments.Add(forkSegment);
+            NotifyPropertyChanged(nameof(MemorySegments));
         }
 
         /// <summary>

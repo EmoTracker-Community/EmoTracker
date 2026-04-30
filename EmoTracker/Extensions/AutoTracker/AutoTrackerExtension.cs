@@ -10,6 +10,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
@@ -80,6 +81,19 @@ namespace EmoTracker.Extensions.AutoTracker
             PackageLoader.OnPackageLoadStarting += OnAnyPackageLoadStarting;
             PackageLoader.OnPackageLoadComplete += OnAnyPackageLoadComplete;
 
+            // Watch the per-state ScriptManager for MemorySegments /
+            // MemoryTimers mutations. Pack init.lua registers these
+            // during pack-load (covered by OnAnyPackageLoadComplete
+            // below), but packs can also register/unregister mid-
+            // session — for example via a settings-driven branch in
+            // init.lua, or via a pack-script callback that responds to
+            // a config change. Active depends on whether ANY watches
+            // exist, so we forward those mutation signals onto our own
+            // PropertyChanged for Active / StatusBarControl so the
+            // status-bar slot collapses + re-appears as registrations
+            // come and go.
+            state.Scripts.PropertyChanged += OnScriptsPropertyChanged;
+
             // Seed providers from THIS state's PackageInstance — by the
             // time OnAttachedToState fires, the state has been registered
             // with its PackageInstance (and for primary states forked
@@ -91,12 +105,22 @@ namespace EmoTracker.Extensions.AutoTracker
 
             // Boot the polling timer.
             BootTimer();
+
+            // Forks attach with segments already in place (carried via
+            // TrackerState.Fork's AdoptForkedSegment loop) and providers
+            // just seeded above. Push an Active / StatusBarControl tick
+            // so any binding established before this call resolves with
+            // the correct visibility from the start.
+            NotifyPropertyChanged(nameof(Active));
+            NotifyPropertyChanged(nameof(StatusBarControl));
         }
 
         public void OnDetachedFromState(TrackerState state)
         {
             PackageLoader.OnPackageLoadStarting -= OnAnyPackageLoadStarting;
             PackageLoader.OnPackageLoadComplete -= OnAnyPackageLoadComplete;
+            if (state?.Scripts != null)
+                state.Scripts.PropertyChanged -= OnScriptsPropertyChanged;
             StopAutoTracking();
             // Unsubscribe from this AT's owned provider — defensive,
             // since DisposeProviders below will also dispose them.
@@ -139,7 +163,17 @@ namespace EmoTracker.Extensions.AutoTracker
         // Fresh status-bar control instance per call (Avalonia visuals
         // are single-parent — multiple windows binding the per-state
         // indicator each get their own instance pointing at this DC).
-        public object StatusBarControl => new AutoTrackerExtensionView { DataContext = this };
+        //
+        // Returns null when the extension isn't <see cref="Active"/> (no
+        // applicable providers, OR no memory watches / timers registered
+        // by the pack). The status-bar host's per-extension wrapper has
+        // <c>IsVisible="{Binding StatusBarControl, Converter=…IsNotNull}"</c>
+        // — null collapses the entire slot so the icon takes zero space,
+        // including its Margin. <see cref="Active"/> changes raise
+        // <c>PropertyChanged(nameof(StatusBarControl))</c> so the host
+        // re-fetches and re-evaluates visibility.
+        public object StatusBarControl
+            => Active ? new AutoTrackerExtensionView { DataContext = this } : null;
 
         public JToken SerializeToJson() => null;
         public bool DeserializeFromJson(JToken token) => true;
@@ -188,6 +222,23 @@ namespace EmoTracker.Extensions.AutoTracker
                 ActivePlatform = default;
 
             NotifyPropertyChanged(nameof(Active));
+            NotifyPropertyChanged(nameof(StatusBarControl));
+        }
+
+        // Forward MemorySegments / MemoryTimers mutations on the per-
+        // state ScriptManager onto Active + StatusBarControl. Hook is
+        // installed in OnAttachedToState; ScriptManager raises these
+        // PropertyChanged events from AddMemoryWatch / AddMemoryTimer /
+        // RemoveMemoryWatch / RemoveMemoryTimer / AdoptForkedSegment /
+        // Reset.
+        void OnScriptsPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ScriptManager.MemorySegments)
+                || e.PropertyName == nameof(ScriptManager.MemoryTimers))
+            {
+                NotifyPropertyChanged(nameof(Active));
+                NotifyPropertyChanged(nameof(StatusBarControl));
+            }
         }
 
         public bool Active
@@ -243,6 +294,11 @@ namespace EmoTracker.Extensions.AutoTracker
                             mApplicableProviders.Add(provider);
                     }
                     NotifyPropertyChanged(nameof(ApplicableProviders));
+                    // Provider count is one of the two inputs to Active;
+                    // when the platform changes we may be flipping from
+                    // "no providers" to "has providers" or vice versa.
+                    NotifyPropertyChanged(nameof(Active));
+                    NotifyPropertyChanged(nameof(StatusBarControl));
                 }
             }
         }
