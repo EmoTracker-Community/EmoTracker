@@ -453,34 +453,6 @@ namespace EmoTracker.Extensions.NDI
                 if (snapshot == null || _disposed)
                     return;
 
-                // Derive the NDI pixel format from the snapshot's reported format rather
-                // than inferring it from the OS.  The compositor backend decides channel
-                // order (BGRA on Windows/D3D, RGBA on macOS/Metal), and reading it here
-                // handles any future backend changes automatically.
-                // Derive NDI pixel format from the snapshot's reported format.
-                // A null format means the compositor returned an unusable snapshot
-                // (e.g. the visual tree isn't ready yet); fall back to the platform
-                // default rather than dropping the frame.
-                // macOS/Metal uses RGBA, Windows/D3D and Linux use BGRA.
-                NDIlib.FourCC_type_e platformDefault = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                    ? NDIlib.FourCC_type_e.FourCC_type_RGBA
-                    : NDIlib.FourCC_type_e.FourCC_type_BGRA;
-
-                NDIlib.FourCC_type_e ndiFormat;
-                switch (snapshot.Format)
-                {
-                    case PixelFormat f when f == PixelFormat.Bgra8888:
-                        ndiFormat = NDIlib.FourCC_type_e.FourCC_type_BGRA;
-                        break;
-                    case PixelFormat f when f == PixelFormat.Rgba8888:
-                        ndiFormat = NDIlib.FourCC_type_e.FourCC_type_RGBA;
-                        break;
-                    default:
-                        LogUnsupportedFormatWarning(snapshot.Format);
-                        ndiFormat = platformDefault;
-                        break;
-                }
-
                 int width  = snapshot.PixelSize.Width;
                 int height = snapshot.PixelSize.Height;
                 int stride     = width * 4;
@@ -508,9 +480,38 @@ namespace EmoTracker.Extensions.NDI
                     ctx.DrawImage(snapshot, new Rect(0, 0, width / renderScale, height / renderScale));
                 }
 
+                // Derive the NDI pixel format from the RTB's actual format —
+                // NOT from snapshot.Format. The compositor-produced snapshot's
+                // Format property is unreliable (it's a GPU-resident bitmap
+                // whose Avalonia-public PixelFormat may be reported as null),
+                // and even if it weren't, the bytes we hand to NDI come from
+                // _rtb.CopyPixels — so the RTB's format is what defines the
+                // byte order in our buffer. RTB defaults to Bgra8888 on every
+                // platform Avalonia supports today; we still query rather
+                // than hard-code so a future backend that picks Rgba8888 is
+                // handled transparently.
+                NDIlib.FourCC_type_e platformDefault = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                    ? NDIlib.FourCC_type_e.FourCC_type_RGBA
+                    : NDIlib.FourCC_type_e.FourCC_type_BGRA;
+
+                PixelFormat? rtbFormat = _rtb.Format;
+                NDIlib.FourCC_type_e ndiFormat;
+                if (rtbFormat == PixelFormat.Bgra8888)
+                    ndiFormat = NDIlib.FourCC_type_e.FourCC_type_BGRA;
+                else if (rtbFormat == PixelFormat.Rgba8888)
+                    ndiFormat = NDIlib.FourCC_type_e.FourCC_type_RGBA;
+                else
+                {
+                    LogUnsupportedFormatWarning(rtbFormat);
+                    ndiFormat = platformDefault;
+                }
+
                 byte[] pixels = new byte[bufferSize];
 
                 // Pin the managed array so its address is stable during the native copy.
+                // RTB.CopyPixels in Avalonia 11 returns premultiplied pixels — the
+                // ProcessOneFrame path un-premultiplies before sending so the
+                // straight-alpha BGRA / RGBA contract NDI requires is honoured.
                 GCHandle gch = GCHandle.Alloc(pixels, GCHandleType.Pinned);
                 try
                 {
