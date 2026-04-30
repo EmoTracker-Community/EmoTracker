@@ -480,10 +480,16 @@ namespace EmoTracker.Extensions.NDI
                     ctx.DrawImage(snapshot, new Rect(0, 0, width / renderScale, height / renderScale));
                 }
 
-                // Derive the NDI pixel format from the RTB's actual format.
-                // RTB defaults to Bgra8888 on every platform Avalonia supports
-                // today; we query rather than hard-code so a future backend
-                // that picks Rgba8888 is handled transparently.
+                // Derive the NDI pixel format from the RTB's actual format —
+                // NOT from snapshot.Format. The compositor-produced snapshot's
+                // Format property is unreliable (it's a GPU-resident bitmap
+                // whose Avalonia-public PixelFormat may be reported as null),
+                // and even if it weren't, the bytes we hand to NDI come from
+                // _rtb.CopyPixels — so the RTB's format is what defines the
+                // byte order in our buffer. RTB defaults to Bgra8888 on every
+                // platform Avalonia supports today; we still query rather
+                // than hard-code so a future backend that picks Rgba8888 is
+                // handled transparently.
                 NDIlib.FourCC_type_e platformDefault = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
                     ? NDIlib.FourCC_type_e.FourCC_type_RGBA
                     : NDIlib.FourCC_type_e.FourCC_type_BGRA;
