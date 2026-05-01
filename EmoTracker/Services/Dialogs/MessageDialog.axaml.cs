@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media;
 using System;
 using System.Threading.Tasks;
@@ -136,6 +137,16 @@ namespace EmoTracker.Services.Dialogs
                 MinWidth   = 80,
                 CornerRadius = new CornerRadius(6),
                 BorderThickness = new Thickness(0),
+                // Avalonia's Fluent theme centers Button content via a
+                // Style setter, but Style setters only apply to controls
+                // declared in XAML. Programmatic `new Button { ... }`
+                // instances skip that hookup and inherit the
+                // ContentControl default of Left/Top alignment, leaving
+                // the label hugging the inner-left edge of the padded
+                // button. Set both axes explicitly so labels are centered
+                // regardless of how the button is constructed.
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment   = VerticalAlignment.Center,
                 Background = primary ? PrimaryBrush         : SecondaryBrush,
                 Foreground = primary ? PrimaryForegroundBr  : SecondaryForegroundBr,
                 FontWeight = primary ? FontWeight.SemiBold  : FontWeight.Normal,
