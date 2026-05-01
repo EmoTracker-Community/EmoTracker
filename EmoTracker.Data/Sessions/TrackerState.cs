@@ -449,6 +449,15 @@ namespace EmoTracker.Data.Sessions
                 var forkedRoot = (Location)this.Locations.Root.Fork(copy);
                 RegisterLocationTreeOnFork(this.Locations.Root, forkedRoot, copy, modelIdentityMap);
                 copy.Locations.SetRootFromFork(forkedRoot);
+                // RegisterLocationTreeOnFork added Root to mAllLocations
+                // at index 0; pack-load's LoadLocation never does. Re-
+                // index against the source so save/load round-trips
+                // resolve location references through the fork-side
+                // mLocationIndex consistently with the freshly-pack-
+                // loaded state on the receiving side. See the doc on
+                // LocationDatabase.ReindexFromSource for the full
+                // off-by-one explanation.
+                copy.Locations.ReindexFromSource(this.Locations, modelIdentityMap);
             }
 
             // ---- Maps -------------------------------------------------------

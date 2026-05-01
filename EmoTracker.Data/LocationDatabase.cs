@@ -411,6 +411,70 @@ namespace EmoTracker.Data
         }
 
         /// <summary>
+        /// Strip the synthetic <see cref="Root"/> entry from
+        /// <c>mAllLocations</c> / <c>mLocationIndex</c> after a fork walk
+        /// and re-index the remaining real locations to match the source
+        /// state's order one-for-one.
+        ///
+        /// <para>
+        /// <b>Why this is necessary:</b> pack-load's <c>LoadLocation</c>
+        /// never adds <c>mRoot</c> to <c>mAllLocations</c> — the synthetic
+        /// root is a parent placeholder that real locations attach to as
+        /// children. The fork path, however, registers the root via the
+        /// generic <c>RegisterLocationTreeOnFork</c> recursive walk
+        /// (<c>TrackerState.cs:725</c>), which calls
+        /// <see cref="AddLocationFromFork"/> for every node in the tree
+        /// — root included. Without correction, fork's <c>mAllLocations</c>
+        /// is shifted by one slot relative to the source's: root sits at
+        /// fork-index 0, while the source's first real location sits at
+        /// source-index 0.
+        /// </para>
+        ///
+        /// <para>
+        /// That shift breaks save / load round-trips. Save serialises
+        /// indices using the FORK's <c>mLocationIndex</c>, so a saved
+        /// reference reads e.g. <c>"3:Master Sword Pedestal"</c>. On load,
+        /// <see cref="ResolvePersistableLocationReference"/> indexes into
+        /// the FRESHLY-pack-loaded state's <c>mAllLocations</c> (which
+        /// has no root entry), so position 3 resolves to a different
+        /// location, the name-match check fails, and
+        /// <see cref="Load"/> bails returning <c>false</c> — silently
+        /// dropping every section's chest counts, captured items, and
+        /// pinned-status state on reload.
+        /// </para>
+        ///
+        /// <para>
+        /// This method clears the locations index and rebuilds it by
+        /// walking the source's <c>mAllLocations</c> in order (which
+        /// already excludes root) and resolving each entry to its
+        /// fork-side counterpart through <paramref name="identityMap"/>.
+        /// After the call, fork-side index N maps to the same logical
+        /// location as source-side index N.
+        /// </para>
+        ///
+        /// <para>
+        /// <c>mVisibleLocations</c> is left alone — it was populated by
+        /// <see cref="AddLocationFromFork"/>'s <c>HasLocalItems</c> guard
+        /// in the same pre-order DFS the source's pack-load used, so
+        /// its order already matches the source's <c>mVisibleLocations</c>
+        /// without re-walking.
+        /// </para>
+        /// </summary>
+        internal void ReindexFromSource(LocationDatabase source, System.Collections.Generic.Dictionary<object, object> identityMap)
+        {
+            mAllLocations.Clear();
+            mLocationIndex.Clear();
+            foreach (Location srcLoc in source.mAllLocations)
+            {
+                if (identityMap.TryGetValue(srcLoc, out object forkObj) && forkObj is Location forkLoc)
+                {
+                    mLocationIndex[forkLoc] = mAllLocations.Count;
+                    mAllLocations.Add(forkLoc);
+                }
+            }
+        }
+
+        /// <summary>
         /// Phase 6 step 8: sets <see cref="Root"/> on the fork. Used by
         /// <c>TrackerState.Fork()</c> after the source's root location is
         /// forked via Phase 3's coordinated <c>Location.Fork</c>.
