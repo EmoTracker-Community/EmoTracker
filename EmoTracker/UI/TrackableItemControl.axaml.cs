@@ -46,6 +46,21 @@ namespace EmoTracker.UI
             mRegressCmd = new RightClickCommand(this);
 
             InitializeComponent();
+
+            // Avalonia's Button fires its Click command for any pointer button, not just
+            // left.  Intercept right-clicks during the tunnel phase (before the inner
+            // Button sees PointerPressed) so the Button never enters its pressed state
+            // for right-clicks and therefore never fires OnLeftClickCommand for them.
+            AddHandler(
+                Avalonia.Input.InputElement.PointerPressedEvent,
+                OnPreviewPointerPressed,
+                Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        }
+
+        private void OnPreviewPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+        {
+            if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+                e.Handled = true;
         }
 
         // ---- IconWidth ----
