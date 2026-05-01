@@ -6,15 +6,18 @@
         Height="450"
         Width="800"
         WindowStartupLocation="CenterOwner">
-    <Grid Background="#212121">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <!-- Layout uses DockPanel — not Grid — to avoid issue #70 where the
+         ScrollViewer's content escaped the middle row of an
+         "Auto,*,Auto" Grid and overlapped both the search bar and the
+         Export Overrides button at the bottom. With DockPanel, the
+         Top-docked search bar and Bottom-docked button claim their
+         natural heights first; the ScrollViewer (LastChildFill = true,
+         the default) gets exactly the remaining client area, and its
+         content presenter clips correctly. -->
+    <DockPanel Background="#212121">
 
-        <!-- Search bar header -->
-        <Grid Grid.Row="0" Background="#252030">
+        <!-- Search bar header (docked top) -->
+        <Grid DockPanel.Dock="Top" Background="#252030">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition />
@@ -35,11 +38,25 @@
                      Text="{Binding FilterText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
         </Grid>
 
-        <!-- Records list -->
-        <ScrollViewer Grid.Row="1"
-                      HorizontalScrollBarVisibility="Disabled">
+        <!-- Export button (docked bottom). HorizontalContentAlignment=Center
+             because the inner TextBlock would otherwise default to left-edge
+             alignment within the stretched ContentControl. -->
+        <Button DockPanel.Dock="Bottom"
+                Click="ExportOverridesButton_Click"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Center">
+            <TextBlock Text="Export Overrides" Margin="0,5" />
+        </Button>
+
+        <!-- Records list (LastChildFill = remaining space). ClipToBounds
+             on both the ScrollViewer and the inner ItemsControl is set
+             defensively to ensure no descendant escapes the viewport even
+             if a future template change introduces an oversize child. -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                      ClipToBounds="True">
             <ItemsControl ItemsSource="{Binding Records}"
-                          Margin="0,10,0,10">
+                          Margin="0,10,0,10"
+                          ClipToBounds="True">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="10,2"
@@ -84,11 +101,5 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <!-- Export button -->
-        <Button Grid.Row="2"
-                Click="ExportOverridesButton_Click"
-                HorizontalAlignment="Stretch">
-            <TextBlock Text="Export Overrides" Margin="0,5" />
-        </Button>
-    </Grid>
+    </DockPanel>
 </Window>
