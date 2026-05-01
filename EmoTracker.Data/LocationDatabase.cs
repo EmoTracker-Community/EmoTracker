@@ -388,6 +388,26 @@ namespace EmoTracker.Data
             if (location == null) return;
             mLocationIndex[location] = mAllLocations.Count;
             mAllLocations.Add(location);
+
+            // Mirror the pack-load guard at line 664: locations whose
+            // own subtree contributes sections (HasLocalItems) belong to
+            // the visible-locations index. Without this, a forked state's
+            // mVisibleLocations stays empty even though its tree carries
+            // sections — and LocationDatabase.Save iterates only
+            // mVisibleLocations to build the JSON entries, so the entire
+            // "location_database" key gets stripped from the save file
+            // (the "any properties?" guard at line 863 strips the
+            // wrapper when no entries were emitted). On reload Load()
+            // finds no key, short-circuits, and chest counts / captured
+            // items / cleared state are silently dropped.
+            //
+            // The sibling Group.AddLocation call from pack-load's
+            // visibility branch is INTENTIONALLY omitted here: Group.Fork
+            // rebuilds its own mLocationRefs via OnForked, so duplicating
+            // the AddLocation call would double-register the location in
+            // the group on the fork side.
+            if (location.HasLocalItems)
+                mVisibleLocations.Add(location);
         }
 
         /// <summary>
