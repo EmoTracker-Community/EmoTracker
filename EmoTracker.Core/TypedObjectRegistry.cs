@@ -7,7 +7,7 @@ namespace EmoTracker.Core
 {
     public class TypedObjectRegistry<T> where T : class
     {
-        private static String sRegistryLock = "Registry";
+        private static readonly object sRegistryLock = new();
         private static List<T> sSupportRegistry;
         public static IEnumerable<T> SupportRegistry
         {
@@ -41,10 +41,9 @@ namespace EmoTracker.Core
                             types.Add(t);
                     }
                 }
-                catch (ReflectionTypeLoadException e)
+                catch (ReflectionTypeLoadException e) when (e.LoaderExceptions != null)
                 {
-                    var loaderExceptions = e.LoaderExceptions;
-                    foreach (var item in loaderExceptions)
+                    foreach (var item in e.LoaderExceptions)
                     {
                         System.Diagnostics.Debug.Print("Assembly loading error: " + item.Message);
                     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace EmoTracker.Core
@@ -28,13 +29,21 @@ namespace EmoTracker.Core
             }
         }
 
+        CancellationToken mCancellationToken;
+
         public ObservableCollectionUniqueSetAggregrator(ObservableCollection<DstType> dest, Func<SrcType, DstType> itemConverter, params ObservableCollection<SrcType>[] sources)
+            : this(dest, itemConverter, default, sources)
         {
+        }
+
+        public ObservableCollectionUniqueSetAggregrator(ObservableCollection<DstType> dest, Func<SrcType, DstType> itemConverter, CancellationToken cancellationToken, params ObservableCollection<SrcType>[] sources)
+        {
+            mCancellationToken = cancellationToken;
             //  Use the provided dest as our unique set
             mUniqueSet = dest;
 
             //  Initialize our synchronizer
-            mSynchronizer = new ObservableCollectionAggregatorSynchronizer<SrcType, DstType>(mNonUniqueAggregate, itemConverter, sources) { EnableDispose = this.EnableDispose };
+            mSynchronizer = new ObservableCollectionAggregatorSynchronizer<SrcType, DstType>(mNonUniqueAggregate, itemConverter, cancellationToken, sources) { EnableDispose = this.EnableDispose };
             mNonUniqueAggregate.CollectionChanged += mNonUniqueAggregate_CollectionChanged;
 
             UpdateUniqueSet();
@@ -78,11 +87,22 @@ namespace EmoTracker.Core
 
         public override void Dispose()
         {
+            Cancel();
             DisposeObjectAndDefault(ref mSynchronizer);
             DisposeCollection(mNonUniqueAggregate);
             DisposeCollection(mUniqueSet);
 
             base.Dispose();
+        }
+
+        /// <summary>
+        /// Cancels the synchronization by unsubscribing from all source change handlers.
+        /// </summary>
+        public void Cancel()
+        {
+            if (mSynchronizer != null)
+                mSynchronizer.Cancel();
+            mNonUniqueAggregate.CollectionChanged -= mNonUniqueAggregate_CollectionChanged;
         }
     }
 
@@ -96,6 +116,11 @@ namespace EmoTracker.Core
 
         public TrivialObservableCollectionUniqueSetAggregrator(ObservableCollection<T> dest, params ObservableCollection<T>[] sources) :
             base(dest, ItemConverter, sources)
+        {
+        }
+
+        public TrivialObservableCollectionUniqueSetAggregrator(ObservableCollection<T> dest, CancellationToken cancellationToken, params ObservableCollection<T>[] sources) :
+            base(dest, ItemConverter, cancellationToken, sources)
         {
         }
 

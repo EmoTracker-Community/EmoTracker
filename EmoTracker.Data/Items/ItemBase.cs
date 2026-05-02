@@ -214,7 +214,7 @@ namespace EmoTracker.Data.Items
 
         public static ITrackableItem CreateItem(JObject data, IGamePackage package, Sessions.TrackerState state)
         {
-            ItemBase instance = JsonTypeTagsAttribute.CreateIntanceForTypeTag<ItemBase>(data.GetValue<string>("type"));
+            ItemBase instance = JsonTypeTagsAttribute.CreateInstanceForTypeTag<ItemBase>(data.GetValue<string>("type"));
 
             if (instance != null)
             {

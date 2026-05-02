@@ -9,7 +9,7 @@ namespace EmoTracker.Core
 {
     public class TypeRegistry<T> where T : class
     {
-        private static String sRegistryLock = "Registry";
+        private static readonly object sRegistryLock = new();
         private static List<Type> sSupportRegistry;
         public static IEnumerable<Type> SupportRegistry
         {
@@ -29,16 +29,30 @@ namespace EmoTracker.Core
         {
             sSupportRegistry = new List<Type>();
 
-            var types =
-                from a in AppDomain.CurrentDomain.GetAssemblies()
-                from t in a.GetTypes()
-                where typeof(T).IsInterface ? t.GetInterfaces().Contains(typeof(T)) : t.IsSubclassOf(typeof(T))
-                select t;
-
-            foreach (Type t in types)
+            foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (!t.IsAbstract && !t.ContainsGenericParameters)
-                    sSupportRegistry.Add(t);
+                try
+                {
+                    foreach (Type t in a.GetTypes())
+                    {
+                        if ((typeof(T).IsInterface ? t.GetInterfaces().Contains(typeof(T)) : t.IsSubclassOf(typeof(T)))
+                            && !t.IsAbstract && !t.ContainsGenericParameters)
+                        {
+                            sSupportRegistry.Add(t);
+                        }
+                    }
+                }
+                catch (ReflectionTypeLoadException e) when (e.LoaderExceptions != null)
+                {
+                    foreach (var item in e.LoaderExceptions)
+                    {
+                        System.Diagnostics.Debug.Print("Assembly loading error: " + item.Message);
+                    }
+                }
+                catch (Exception e)
+                {
+                    System.Diagnostics.Debug.Print("Failed to load assembly with error: " + e);
+                }
             }
         }
     }
