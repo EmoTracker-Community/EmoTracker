@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using EmoTracker.Core.DataModel;
 
 namespace EmoTracker.Core
 {
@@ -55,7 +56,7 @@ namespace EmoTracker.Core
             });
         }
 
-        public static T CreateInstanceForTypeTag<T>(string type)
+        public static T CreateInstanceForTypeTag<T>(string type, ITrackerStateContext state = null)
             where T : class
         {
             if (string.IsNullOrWhiteSpace(type))
@@ -64,7 +65,10 @@ namespace EmoTracker.Core
             var cache = GetOrCreateTagCache(typeof(T));
             if (cache.TryGetValue(type.Trim(), out var targetType))
             {
-                return Activator.CreateInstance(targetType) as T;
+                var instance = Activator.CreateInstance(targetType) as T;
+                if (instance is ModelTypeBase mtb && state != null)
+                    mtb.OwnerState = state;
+                return instance;
             }
             return null;
         }

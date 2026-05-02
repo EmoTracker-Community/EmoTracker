@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using Newtonsoft.Json.Linq;
@@ -75,275 +76,291 @@ namespace EmoTracker.Data.Layout
         BottomRight = 8
     }
 
-    public abstract class LayoutItem : ObservableObject
+    /// <summary>
+    /// Phase 4: <see cref="LayoutItem"/> is now a <see cref="ModelTypeBase"/>. Most
+    /// properties are <c>[KVOverridable]</c> — definition value lives in
+    /// <see cref="ModelTypeBase.ImmutableData"/> under <c>{Name}__def</c>; per-state
+    /// override (when present) lives in <see cref="ModelTypeBase.MutableData"/> under
+    /// <c>{Name}</c>. The <c>OverrideXxx</c> computed flags inspect the resolved
+    /// value the same way they did pre-Phase-4 (sentinels — <c>-1.0</c> for unset
+    /// doubles, <c>null</c> / empty for unset strings).
+    ///
+    /// <para>
+    /// <see cref="UniqueID"/> is <c>[KVImmutable]</c>: it is the definition-time
+    /// identity of the layout element, never mutates at runtime.
+    /// </para>
+    /// <para>
+    /// <see cref="Fork"/> uses an <see cref="Activator"/>-based default so concrete
+    /// leaves without owned subtrees (e.g. <c>TextBlock</c>, <c>Image</c>, <c>Item</c>)
+    /// don't need their own override. Subclasses holding owned children
+    /// (<c>Container</c>, <c>TabPanel</c>, <c>MapPanel</c>, <c>Map</c> via
+    /// <c>MapPanel</c>) override to walk + fork the subtree.
+    /// </para>
+    /// </summary>
+    public abstract partial class LayoutItem : ModelTypeBase
     {
-        string mBackground;
-        string mForeground;
-        private string mMargin;
-        private HorizontalAlignment mHorizontalAlignment = HorizontalAlignment.Stretch;
-        private VerticalAlignment mVerticalAlignment = VerticalAlignment.Stretch;
+        // ---- [KVImmutable] -------------------------------------------------
 
-        double mScale = -1.0;
-        double mWidth = -1.0;
-        double mHeight = -1.0;
-        double mMinWidth = -1.0;
-        double mMinHeight = -1.0;
-        double mMaxWidth = -1.0;
-        double mMaxHeight = -1.0;
-        double mCanvasX = -1.0;
-        double mCanvasY = -1.0;
-        double mCanvasDepth = -1.0;
+        /// <summary>
+        /// Definition-time identifier for this element. Set during parse via the
+        /// per-parse definition dictionary (see <see cref="TryParse"/>). Never
+        /// mutates at runtime; shared by reference across forks via
+        /// <see cref="ModelTypeBase.ImmutableData"/>.
+        /// </summary>
+        [KVImmutable]
+        public partial string UniqueID { get; }
 
-        string mUniqueID;
+        // ---- [KVOverridable] visual / layout properties --------------------
 
-        string mDockLocation;
-        bool mbEnableDropShadow = false;
-        bool mbEnableBroadcastDropShadow = false;
-        bool mbHitTestVisible = true;
+        [KVOverridable]
+        public partial string Background { get; set; }
 
-        public string UniqueID
+        [KVOverridable]
+        public partial string Foreground { get; set; }
+
+        [KVOverridable]
+        public partial string DockLocation { get; set; }
+
+        [KVOverridable]
+        public partial string Margin { get; set; }
+
+        [KVOverridable]
+        public partial HorizontalAlignment HorizontalAlignment { get; set; }
+
+        [KVOverridable]
+        public partial VerticalAlignment VerticalAlignment { get; set; }
+
+        // [DependentProperty] cascades preserve the pre-Phase-4 INPC behavior:
+        // the original Width/Height/Scale/etc. setters explicitly raised
+        // PropertyChanged for the matching OverrideXxx (and EffectiveScale)
+        // computed flag. Because computed flags are getter-only, the cascade
+        // is the only way XAML bindings on EffectiveScale (used heavily in
+        // LayoutControl.axaml) and OverrideXxx flags refresh when the
+        // underlying KVOverridable property is mutated at runtime.
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideScale))]
+        [DependentProperty(nameof(EffectiveScale))]
+        public partial double Scale { get; set; }
+
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideWidth))]
+        public partial double Width { get; set; }
+
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideHeight))]
+        public partial double Height { get; set; }
+
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideMinWidth))]
+        public partial double MinWidth { get; set; }
+
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideMinHeight))]
+        public partial double MinHeight { get; set; }
+
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideMaxWidth))]
+        public partial double MaxWidth { get; set; }
+
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideMaxHeight))]
+        public partial double MaxHeight { get; set; }
+
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideCanvasX))]
+        public partial double CanvasX { get; set; }
+
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideCanvasY))]
+        public partial double CanvasY { get; set; }
+
+        [KVOverridable]
+        [DependentProperty(nameof(OverrideCanvasDepth))]
+        public partial double CanvasDepth { get; set; }
+
+        [KVOverridable]
+        public partial bool DropShadow { get; set; }
+
+        [KVOverridable]
+        public partial bool BroadcastShadow { get; set; }
+
+        [KVOverridable]
+        public partial bool HitTestVisible { get; set; }
+
+        // ---- "Override*" computed flags (preserve pre-Phase-4 semantics) ----
+
+        public bool OverrideBackground => !string.IsNullOrEmpty(Background);
+        public bool OverrideForeground => !string.IsNullOrEmpty(Foreground);
+        public bool OverrideDockLocation => !string.IsNullOrEmpty(DockLocation);
+        public bool OverrideWidth => Width >= 0.0;
+        public bool OverrideHeight => Height >= 0.0;
+        public bool OverrideMinWidth => MinWidth >= 0.0;
+        public bool OverrideMinHeight => MinHeight >= 0.0;
+        public bool OverrideMaxWidth => MaxWidth >= 0.0;
+        public bool OverrideMaxHeight => MaxHeight >= 0.0;
+        public bool OverrideScale => Scale > 0.0;
+        public bool OverrideCanvasX => CanvasX > 0.0;
+        public bool OverrideCanvasY => CanvasY > 0.0;
+        public bool OverrideCanvasDepth => CanvasDepth > 0.0;
+        public double EffectiveScale => OverrideScale ? Scale : 1.0;
+
+        // -------- Construction / parse -------------------------------------
+
+        /// <summary>
+        /// Seeds <see cref="ImmutableData"/> with the LayoutItem-level sentinel
+        /// defaults that match the pre-Phase-4 field initializers (Width = -1.0,
+        /// HorizontalAlignment = Stretch, HitTestVisible = true, etc.) so that
+        /// programmatically-constructed-but-unparsed LayoutItems behave the
+        /// same as before. <see cref="TryParse"/> later replaces ImmutableData
+        /// wholesale, so this seed is a no-op when parse runs.
+        /// </summary>
+        protected LayoutItem()
         {
-            get { return mUniqueID; }
-        }
-
-        public bool DropShadow
-        {
-            get { return mbEnableDropShadow; }
-            set { SetProperty(ref mbEnableDropShadow, value); }
-        }
-
-        public bool BroadcastShadow
-        {
-            get { return mbEnableBroadcastDropShadow; }
-            set { SetProperty(ref mbEnableBroadcastDropShadow, value); }
-        }
-
-        public bool HitTestVisible
-        {
-            get { return mbHitTestVisible; }
-            set { SetProperty(ref mbHitTestVisible, value); }
-        }
-
-        public bool OverrideBackground
-        {
-            get { return !string.IsNullOrEmpty(mBackground); }
-        }
-
-        public bool OverrideForeground
-        {
-            get { return !string.IsNullOrEmpty(mForeground); }
-        }
-
-        public bool OverrideDockLocation
-        {
-            get { return !string.IsNullOrEmpty(mDockLocation); }
-        }
-
-        public bool OverrideWidth
-        {
-            get { return mWidth >= 0.0; }
-        }
-
-        public bool OverrideHeight
-        {
-            get { return mHeight >= 0.0; }
-        }
-
-        public bool OverrideMinWidth
-        {
-            get { return mMinWidth >= 0.0; }
-        }
-
-        public bool OverrideMinHeight
-        {
-            get { return mMinHeight >= 0.0; }
-        }
-
-        public bool OverrideMaxWidth
-        {
-            get { return mMaxWidth >= 0.0; }
-        }
-
-        public bool OverrideMaxHeight
-        {
-            get { return mMaxHeight >= 0.0; }
-        }
-
-        public bool OverrideScale
-        {
-            get { return mScale > 0.0; }
-        }
-
-        public double EffectiveScale
-        {
-            get { return OverrideScale ? mScale : 1.0; }
-        }
-
-        public bool OverrideCanvasX
-        {
-            get { return mCanvasX > 0.0; }
-        }
-
-        public bool OverrideCanvasY
-        {
-            get { return mCanvasY > 0.0; }
-        }
-
-        public bool OverrideCanvasDepth
-        {
-            get { return mCanvasDepth > 0.0; }
-        }
-
-        public string Background
-        {
-            get { return mBackground; }
-            set { SetProperty(ref mBackground, value); }
-        }
-
-        public string Foreground
-        {
-            get { return mForeground; }
-            set { SetProperty(ref mForeground, value); }
-        }
-
-        public string DockLocation
-        {
-            get { return mDockLocation; }
-            set { SetProperty(ref mDockLocation, value); }
-        }
-
-        public double Scale
-        {
-            get { return mScale; }
-            protected set { SetProperty(ref mScale, value); NotifyPropertyChanged("OverrideScale"); NotifyPropertyChanged("EffectiveScale"); }
+            var def = new Dictionary<string, object>
+            {
+                { DefinitionIdKey, this.DefinitionId },
+                { nameof(Margin) + "__def", "0" },
+                { nameof(HorizontalAlignment) + "__def", HorizontalAlignment.Stretch },
+                { nameof(VerticalAlignment) + "__def", VerticalAlignment.Stretch },
+                { nameof(Scale) + "__def", -1.0 },
+                { nameof(Width) + "__def", -1.0 },
+                { nameof(Height) + "__def", -1.0 },
+                { nameof(MinWidth) + "__def", -1.0 },
+                { nameof(MinHeight) + "__def", -1.0 },
+                { nameof(MaxWidth) + "__def", -1.0 },
+                { nameof(MaxHeight) + "__def", -1.0 },
+                { nameof(CanvasX) + "__def", -1.0 },
+                { nameof(CanvasY) + "__def", -1.0 },
+                { nameof(CanvasDepth) + "__def", -1.0 },
+                { nameof(HitTestVisible) + "__def", true },
+            };
+            ImmutableData = new ImmutableKeyValueStore(def);
         }
 
-        public double Width
-        {
-            get { return mWidth; }
-            protected set { SetProperty(ref mWidth, value); NotifyPropertyChanged("OverrideWidth"); }
-        }
-        public double Height
-        {
-            get { return mHeight; }
-            protected set { SetProperty(ref mHeight, value); NotifyPropertyChanged("OverrideHeight"); }
-        }
-
-        public double MinWidth
-        {
-            get { return mMinWidth; }
-            protected set { SetProperty(ref mMinWidth, value); NotifyPropertyChanged("OverrideMinWidth"); }
-        }
-        public double MinHeight
-        {
-            get { return mMinHeight; }
-            protected set { SetProperty(ref mMinHeight, value); NotifyPropertyChanged("OverrideMinHeight"); }
-        }
-
-        public double MaxWidth
-        {
-            get { return mMaxWidth; }
-            protected set { SetProperty(ref mMaxWidth, value); NotifyPropertyChanged("OverrideMaxWidth"); }
-        }
-        public double MaxHeight
-        {
-            get { return mMaxHeight; }
-            protected set { SetProperty(ref mMaxHeight, value); NotifyPropertyChanged("OverrideMaxHeight"); }
-        }
-
-        public double CanvasX
-        {
-            get { return mCanvasX; }
-            protected set { SetProperty(ref mCanvasX, value); NotifyPropertyChanged("OverrideCanvasX"); }
-        }
-
-        public double CanvasY
-        {
-            get { return mCanvasY; }
-            protected set { SetProperty(ref mCanvasY, value); NotifyPropertyChanged("OverrideCanvasY"); }
-        }
-
-        public double CanvasDepth
-        {
-            get { return mCanvasDepth; }
-            protected set { SetProperty(ref mCanvasDepth, value); NotifyPropertyChanged("OverrideCanvasDepth"); }
-        }
-
-        public string Margin
-        {
-            get { return mMargin; }
-            set { SetProperty(ref mMargin, value); }
-        }
-        public HorizontalAlignment HorizontalAlignment
-        {
-            get { return mHorizontalAlignment; }
-            set { SetProperty(ref mHorizontalAlignment, value); }
-        }
-        public VerticalAlignment VerticalAlignment
-        {
-            get { return mVerticalAlignment; }
-            set { SetProperty(ref mVerticalAlignment, value); }
-        }
-
+        /// <summary>
+        /// Outer parse entry point: populates <see cref="ImmutableData"/> with the
+        /// parsed definition values (UniqueID + each <c>[KVOverridable]</c>
+        /// property's <c>__def</c> slot) and then delegates to
+        /// <see cref="TryParseInternal"/> for type-specific data. Subclasses
+        /// continue to override <see cref="TryParseInternal"/> as before.
+        /// </summary>
         protected bool TryParse(JObject data, IGamePackage package)
         {
             if (data == null)
                 return false;
 
-            mUniqueID = data.GetValue<string>("uid", null);
-            
-            if (!string.IsNullOrWhiteSpace(mUniqueID))
+            // Build the definition store. SwapLeftRight is a parse-time, pack-wide
+            // setting (read once per pack); the mirror logic is applied to the
+            // definition values directly so forks all start from the mirrored
+            // shape — same observable behavior as pre-Phase-4.
+            var def = new Dictionary<string, object>
             {
-                LayoutManager.Instance.RegisterLayoutItemForUID(mUniqueID, this);
+                { DefinitionIdKey, this.DefinitionId },
+            };
+
+            string uniqueID = data.GetValue<string>("uid", null);
+            if (!string.IsNullOrWhiteSpace(uniqueID))
+            {
+                def[nameof(UniqueID)] = uniqueID;
             }
 
-            Background = data.GetValue<string>("background", null);
-            Foreground = data.GetValue<string>("foreground", null);
-            DockLocation = data.GetValue<string>("dock", null);
-            Margin = data.GetValue<string>("margin", "0");
+            string background = data.GetValue<string>("background", null);
+            string foreground = data.GetValue<string>("foreground", null);
+            string dockLocation = data.GetValue<string>("dock", null);
+            string margin = data.GetValue<string>("margin", "0");
 
-            if (Tracker.Instance.SwapLeftRight)
+            var swapLeftRight = (this.OwnerState as Sessions.TrackerState)?.Settings.SwapLeftRight ?? false;
+            if (swapLeftRight)
             {
                 bool bModified = false;
 
-                if (string.Equals(DockLocation, "left", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(dockLocation, "left", StringComparison.OrdinalIgnoreCase))
                 {
-                    DockLocation = "right";
+                    dockLocation = "right";
                     bModified = true;
                 }
-                else if (string.Equals(DockLocation, "right", StringComparison.OrdinalIgnoreCase))
+                else if (string.Equals(dockLocation, "right", StringComparison.OrdinalIgnoreCase))
                 {
-                    DockLocation = "left";
+                    dockLocation = "left";
                     bModified = true;
                 }
 
-                if (bModified && !string.IsNullOrWhiteSpace(Margin))
+                if (bModified && !string.IsNullOrWhiteSpace(margin))
                 {
-                    string[] tokens = Margin.Split(',');
+                    string[] tokens = margin.Split(',');
                     if (tokens.Length == 4)
                     {
-                        Margin = string.Format("{0},{1},{2},{3}", tokens[2], tokens[1], tokens[0], tokens[3]);
+                        margin = string.Format("{0},{1},{2},{3}", tokens[2], tokens[1], tokens[0], tokens[3]);
                     }
                 }
             }
 
-            HorizontalAlignment = data.GetEnumValue<HorizontalAlignment>("h_alignment", HorizontalAlignment.Stretch);
-            VerticalAlignment = data.GetEnumValue<VerticalAlignment>("v_alignment", VerticalAlignment.Stretch);
-            Scale = data.GetValue<double>("scale", -1.0);
-            Width = data.GetValue<double>("width", -1.0);
-            Height = data.GetValue<double>("height", -1.0);
-            MinWidth = data.GetValue<double>("min_width", -1.0);
-            MinHeight = data.GetValue<double>("min_height", -1.0);
-            MaxWidth = data.GetValue<double>("max_width", -1.0);
-            MaxHeight = data.GetValue<double>("max_height", -1.0);
-            CanvasX = data.GetValue<double>("canvas_left", -1.0);
-            CanvasY = data.GetValue<double>("canvas_top", -1.0);
-            CanvasDepth = data.GetValue<double>("canvas_depth", -1.0);
-            DropShadow = data.GetValue<bool>("dropshadow", false);
-            BroadcastShadow = data.GetValue<bool>("broadcast_shadow", false);
-            HitTestVisible = data.GetValue<bool>("hit_test_visible", true);
+            def[nameof(Background) + "__def"] = background;
+            def[nameof(Foreground) + "__def"] = foreground;
+            def[nameof(DockLocation) + "__def"] = dockLocation;
+            def[nameof(Margin) + "__def"] = margin;
+
+            def[nameof(HorizontalAlignment) + "__def"] = data.GetEnumValue<HorizontalAlignment>("h_alignment", HorizontalAlignment.Stretch);
+            def[nameof(VerticalAlignment) + "__def"] = data.GetEnumValue<VerticalAlignment>("v_alignment", VerticalAlignment.Stretch);
+            def[nameof(Scale) + "__def"] = data.GetValue<double>("scale", -1.0);
+            def[nameof(Width) + "__def"] = data.GetValue<double>("width", -1.0);
+            def[nameof(Height) + "__def"] = data.GetValue<double>("height", -1.0);
+            def[nameof(MinWidth) + "__def"] = data.GetValue<double>("min_width", -1.0);
+            def[nameof(MinHeight) + "__def"] = data.GetValue<double>("min_height", -1.0);
+            def[nameof(MaxWidth) + "__def"] = data.GetValue<double>("max_width", -1.0);
+            def[nameof(MaxHeight) + "__def"] = data.GetValue<double>("max_height", -1.0);
+            def[nameof(CanvasX) + "__def"] = data.GetValue<double>("canvas_left", -1.0);
+            def[nameof(CanvasY) + "__def"] = data.GetValue<double>("canvas_top", -1.0);
+            def[nameof(CanvasDepth) + "__def"] = data.GetValue<double>("canvas_depth", -1.0);
+            def[nameof(DropShadow) + "__def"] = data.GetValue<bool>("dropshadow", false);
+            def[nameof(BroadcastShadow) + "__def"] = data.GetValue<bool>("broadcast_shadow", false);
+            def[nameof(HitTestVisible) + "__def"] = data.GetValue<bool>("hit_test_visible", true);
+
+            // Subclass extension point: lets concrete leaves seed their own
+            // [KVOverridable] / [KVImmutable] __def entries before the
+            // ImmutableData store is frozen. Subclasses that hold no extra
+            // definition state simply don't override.
+            PopulateDefinitionData(data, package, def);
+
+            ImmutableData = new ImmutableKeyValueStore(def);
+
+            // UID registration is a side effect of parse, not of definition data —
+            // every fork registers itself with the singleton LayoutManager today.
+            // Phase 6 introduces per-state managers; the registration is wrapped
+            // in a virtual hook so a per-state-aware override can swap the
+            // target LayoutManager without touching this base class.
+            if (!string.IsNullOrWhiteSpace(uniqueID))
+            {
+                RegisterUniqueID(uniqueID);
+            }
 
             return TryParseInternal(data, package);
+        }
+
+        /// <summary>
+        /// Registers <paramref name="uniqueID"/> on the appropriate
+        /// <see cref="LayoutManager"/>. Defaults to the singleton; Phase 6
+        /// per-state model graphs override to register against their state's
+        /// manager. Also invoked on a fork's <see cref="OnForked"/> so the
+        /// new instance is reachable by UID lookup in its target manager.
+        /// </summary>
+        protected virtual void RegisterUniqueID(string uniqueID)
+        {
+            // Phase 6 step 11: prefer the owning state's LayoutManager.
+            var layouts = (this.OwnerState as Sessions.TrackerState)?.Layouts;
+            layouts?.RegisterLayoutItemForUID(uniqueID, this);
+        }
+
+        /// <summary>
+        /// Subclass extension point invoked from <see cref="TryParse"/> after the
+        /// base layout-item definition keys are populated and before
+        /// <see cref="ImmutableData"/> is frozen. Concrete leaves with their own
+        /// <c>[KVOverridable]</c> or <c>[KVImmutable]</c> properties override this
+        /// to add their <c>{Name}__def</c> entries to <paramref name="definition"/>.
+        /// Subclasses with no type-specific definition state need not override.
+        /// </summary>
+        protected virtual void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
+        {
         }
 
         protected void ParseLayoutItemList(JArray list, ICollection<LayoutItem> destination, IGamePackage package)
@@ -352,7 +369,7 @@ namespace EmoTracker.Data.Layout
             {
                 foreach (JObject entry in list)
                 {
-                    LayoutItem item = CreateLayoutItem(entry, package);
+                    LayoutItem item = CreateLayoutItem(entry, package, this.OwnerState);
                     if (item != null)
                         destination.Add(item);
                 }
@@ -361,17 +378,74 @@ namespace EmoTracker.Data.Layout
 
         protected abstract bool TryParseInternal(JObject data, IGamePackage package);
 
-        public static LayoutItem CreateLayoutItem(JObject data, IGamePackage package)
+        /// <summary>
+        /// Polymorphic factory: instantiates a concrete <see cref="LayoutItem"/>
+        /// whose <see cref="JsonTypeTagsAttribute"/> matches the data's "type"
+        /// field, stamps <see cref="ModelTypeBase.OwnerState"/> at
+        /// construction time, then parses. State threading is required so
+        /// nested children created by <c>TryParseInternal</c> (containers
+        /// recursing into their children) inherit the same state.
+        /// </summary>
+        public static LayoutItem CreateLayoutItem(JObject data, IGamePackage package, EmoTracker.Core.DataModel.ITrackerStateContext state)
         {
             if (data != null)
             {
-                LayoutItem instance = JsonTypeTagsAttribute.CreateInstanceForTypeTag<LayoutItem>(data.GetValue<string>("type"));
+                LayoutItem instance = JsonTypeTagsAttribute.CreateInstanceForTypeTag<LayoutItem>(data.GetValue<string>("type"), state);
 
                 if (instance != null && instance.TryParse(data, package))
                     return instance;
             }
 
             return null;
+        }
+
+        // -------- Fork ------------------------------------------------------
+
+        /// <summary>
+        /// Default Activator-based Fork: allocates a fresh instance of the concrete
+        /// type, stamps OwnerState, and runs <see cref="ModelTypeBase.InitializeAsForkOf"/>.
+        /// Subclasses holding owned subtrees override to also walk + fork their
+        /// children, passing <paramref name="destOwnerState"/> through.
+        /// </summary>
+        public override ModelTypeBase Fork(ITrackerStateContext destOwnerState)
+        {
+            if (destOwnerState == null) throw new ArgumentNullException(nameof(destOwnerState));
+            var copy = (LayoutItem)Activator.CreateInstance(this.GetType());
+            copy.OwnerState = destOwnerState;
+            copy.InitializeAsForkOf(this);
+            return copy;
+        }
+
+        /// <summary>
+        /// Phase 7 polish: enumerate this layout item's owned <see cref="LayoutItem"/>
+        /// children. Used by <c>TrackerState.Fork</c>'s OwnerState-stamping walk
+        /// so per-fork item / location resolution flows through the fork's
+        /// resolver rather than the source's.
+        /// <para>
+        /// Subclasses with owned children (Container, DockPanel, CanvasPanel,
+        /// ArrayPanel, TabPanel, ButtonPopup, ScrollPanel, ViewBox, etc.)
+        /// override to yield their children. Leaves return empty.
+        /// </para>
+        /// </summary>
+        public virtual System.Collections.Generic.IEnumerable<LayoutItem> EnumerateChildren()
+        {
+            yield break;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            // Re-register the fork's UID with its target LayoutManager — under
+            // Phase 4's singleton model this just re-points the UID at the
+            // fork (overwriting the source's registration); Phase 6 per-state
+            // managers will record the fork against its own state's manager
+            // and the source remains reachable in its own state's manager.
+            // Documented Phase 4 limitation: see plan §4.8.
+            string uid = UniqueID;
+            if (!string.IsNullOrWhiteSpace(uid))
+            {
+                RegisterUniqueID(uid);
+            }
         }
     }
 }

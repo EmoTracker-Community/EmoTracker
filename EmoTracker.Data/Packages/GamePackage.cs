@@ -42,7 +42,7 @@ namespace EmoTracker.Data.Packages
 
             public bool IsActive
             {
-                get { return Tracker.Instance.ActiveGamePackageVariant == this; }
+                get { return Sessions.ActiveSession.Primary?.PackageInstance?.ActiveVariant == this; }
             }
 
             public string UniqueID
@@ -71,7 +71,6 @@ namespace EmoTracker.Data.Packages
         List<string> mAutoTrackerProviders = new List<string>();
 
         ObservableCollection<IGamePackageVariant> mAvailableVariants = new ObservableCollection<IGamePackageVariant>();
-        Variant mActiveVariant;
 
         string mOverridePath;
 
@@ -116,7 +115,7 @@ namespace EmoTracker.Data.Packages
 
         public bool IsActive
         {
-            get { return Tracker.Instance.ActiveGamePackage == this; }
+            get { return Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage == this; }
         }
 
         public string Name { get { return mName; } }
@@ -143,13 +142,6 @@ namespace EmoTracker.Data.Packages
 
         string IGamePackage.OverridePath { get { return OverridePath; } }
 
-        [DependentProperty("VariantOverridePath")]
-        Variant ActiveVariant
-        {
-            get { return mActiveVariant; }
-            set { SetProperty(ref mActiveVariant, value); }
-        }
-
         public IEnumerable<IGamePackageVariant> AvailableVariants
         {
             get { return mAvailableVariants; }
@@ -164,12 +156,6 @@ namespace EmoTracker.Data.Packages
             }
 
             return null;
-        }
-
-        IGamePackageVariant IGamePackage.ActiveVariant
-        {
-            get { return mActiveVariant; }
-            set { ActiveVariant = value as Variant; }
         }
 
         public bool IsValid
@@ -235,7 +221,7 @@ namespace EmoTracker.Data.Packages
             return null;
         }
 
-        public Stream Open(string path, bool ignoreVariants = false, bool ignoreOverrides = false)
+        public Stream Open(string path, IGamePackageVariant variant = null, bool ignoreVariants = false, bool ignoreOverrides = false)
         {
             if (string.IsNullOrWhiteSpace(path))
                 return null;
@@ -243,12 +229,16 @@ namespace EmoTracker.Data.Packages
             path = NormalizePath(path);
 
             Stream s = null;
+            // Cast through the concrete Variant type only for the
+            // BasePath / OverridePath getters (those aren't on the
+            // IGamePackageVariant interface).
+            var concreteVariant = variant as Variant;
 
-            if (!ignoreOverrides && !ignoreVariants && s == null && ActiveVariant != null)
-                s = OpenOverrideUsingRoot(path, ActiveVariant.OverridePath);
+            if (!ignoreOverrides && !ignoreVariants && s == null && concreteVariant != null)
+                s = OpenOverrideUsingRoot(path, concreteVariant.OverridePath);
 
-            if (!ignoreVariants && s == null && ActiveVariant != null)
-                s = mSource.Open(NormalizePath(Path.Combine(ActiveVariant.BasePath, path)));
+            if (!ignoreVariants && s == null && concreteVariant != null)
+                s = mSource.Open(NormalizePath(Path.Combine(concreteVariant.BasePath, path)));
 
             if (!ignoreOverrides && s == null)
                 s = OpenOverrideUsingRoot(path, OverridePath);
@@ -259,9 +249,9 @@ namespace EmoTracker.Data.Packages
             return s;
         }
 
-        public bool Exists(string path, bool ignoreVariants = false, bool ignoreOverrides = false)
+        public bool Exists(string path, IGamePackageVariant variant = null, bool ignoreVariants = false, bool ignoreOverrides = false)
         {
-            using (Stream s = Open(path, ignoreVariants, ignoreOverrides))
+            using (Stream s = Open(path, variant, ignoreVariants, ignoreOverrides))
             {
                 return s != null;
             }

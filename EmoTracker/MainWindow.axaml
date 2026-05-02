@@ -17,13 +17,16 @@
         Background="#111111"
         MinWidth="220" MinHeight="61"
         Width="1280" Height="960"
-        Title="{Binding MainWindowTitle, Source={x:Static local:ApplicationModel.Instance}}"
+        Title="{Binding #HostWindow.WindowContext.WindowTitle}"
         Topmost="{Binding AlwaysOnTop, Source={x:Static data:ApplicationSettings.Instance}}">
 
-<Grid RowDefinitions="*,Auto">
+<Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- Phase 7.8: tab strip across the top -->
+        <ui:StateTabStripControl Grid.Row="0" Name="StateTabStrip" />
 
         <!-- Main content -->
-        <Grid Grid.Row="0">
+        <Grid Grid.Row="1">
             <!-- LayoutTransformControl participates in the layout pass (unlike RenderTransform),
                  so Ctrl+scroll zoom correctly resizes the allocated layout space. -->
             <LayoutTransformControl Name="TrackerScaleGrid">
@@ -35,13 +38,15 @@
                 <ui:LayoutControl x:Name="TrackerLayout" />
             </LayoutTransformControl>
 
-            <!-- No-package placeholder: visible only when no package is active -->
+            <!-- Phase 7 XAML migration: per-window placeholder visibility.
+                 No-package placeholder is shown when this window's active
+                 state has no pack loaded. -->
             <Grid Background="#080808" IsHitTestVisible="False" Name="NoPackagePlaceholder"
-                  IsVisible="{Binding ActiveGamePackage, Source={x:Static data:Tracker.Instance}, Converter={x:Static converters:NullToTrueConverter.Instance}}">
+                  IsVisible="{Binding #HostWindow.WindowContext.ActiveGamePackage, Converter={x:Static converters:NullToTrueConverter.Instance}}">
                 <TextBlock Foreground="WhiteSmoke"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextWrapping="Wrap" Margin="15"
-                           Text="No package loaded. Install packages using the Package Manager (arrow icon in the title bar)."/>
+                           Text="No package loaded. Install packages using the Package Manager (arrow icon in the status bar)."/>
             </Grid>
 
             <!-- Notifications overlay -->
@@ -77,7 +82,7 @@
         </Grid>
 
         <!-- Status bar -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.Background>
                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
                     <GradientStop Color="#111111" Offset="0"/>
@@ -98,10 +103,16 @@
                             <Separator />
                             <MenuItem Header="Application">
                                 <MenuItem Header="File">
-                                    <MenuItem Header="Open" Command="{Binding OpenCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+O" />
+                                    <!-- {ui:PlatformGesture X} resolves to the platform-default
+                                         command modifier (Ctrl on Windows / Linux, ⌘ on macOS),
+                                         so menu shortcuts display correctly on every host. The
+                                         plain "Cmd+X" string parses as KeyModifiers.Meta — the
+                                         Win key on Windows — which is what landed us in #66. -->
+                                    <MenuItem Header="Open" Command="{Binding OpenCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="{ui:PlatformGesture O}" />
                                     <Separator />
-                                    <MenuItem Header="Save" Command="{Binding SaveCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+S" />
-                                    <MenuItem Header="Save As..." Command="{Binding SaveAsCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+Shift+S" />
+                                    <MenuItem Header="Save" Command="{Binding SaveCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="{ui:PlatformGesture S}" />
+                                    <MenuItem Header="Save As..." Command="{Binding SaveAsCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="{ui:PlatformGesture Shift+S}" />
+                                    <MenuItem Header="Save All…" Command="{Binding SaveAllCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                                 </MenuItem>
                                 <Separator />
                                 <MenuItem Header="Broadcast View" Command="{Binding ShowBroadcastViewCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F2" />
@@ -112,39 +123,43 @@
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding AlwaysOnTop, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 <Separator />
+                                <!-- Phase 7 XAML migration: per-window active state's Settings -->
                                 <MenuItem Header="Enable Map"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding MapEnabled, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.MapEnabled, Mode=TwoWay}" />
                                 <MenuItem Header="Swap Left/Right"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding SwapLeftRight, Mode=TwoWay, Source={x:Static data:Tracker.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.SwapLeftRight, Mode=TwoWay}" />
                                 <Separator />
                                 <MenuItem Header="Map DPI Awareness"
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding EnableDpiConversion, Mode=TwoWay, Source={x:Static media_utility:IconUtility.Instance}}" />
                                 <Separator />
-                                <MenuItem Header="Reset Layout Scale" Command="{Binding ResetLayoutScaleCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="Cmd+D0" />
+                                <MenuItem Header="Reset Layout Scale" Command="{Binding ResetLayoutScaleCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="{ui:PlatformGesture D0}" />
                             </MenuItem>
                             <MenuItem Header="Tracking">
+                                <!-- Phase 7 XAML migration: the six per-state toggles route
+                                     through this window's WindowContext.ActiveState.Settings.
+                                     PromptOnRefreshClose stays app-wide (it's a UI behavior). -->
                                 <MenuItem Header="Always Allow Chest Manipulation"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding AlwaysAllowClearing, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.AlwaysAllowClearing, Mode=TwoWay}" />
                                 <MenuItem Header="Ignore All Logic"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding IgnoreAllLogic, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.IgnoreAllLogic, Mode=TwoWay}" />
                                 <MenuItem Header="Prompt When Refreshing/Closing"
                                           ToggleType="CheckBox"
                                           IsChecked="{Binding PromptOnRefreshClose, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 <MenuItem Header="Show All Locations" InputGesture="F11"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding DisplayAllLocations, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.DisplayAllLocations, Mode=TwoWay}" />
                                 <Separator />
                                 <MenuItem Header="Pin Locations on Item Capture"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding PinLocationsOnItemCapture, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.PinLocationsOnItemCapture, Mode=TwoWay}" />
                                 <MenuItem Header="Unpin Locations when Cleared"
                                           ToggleType="CheckBox"
-                                          IsChecked="{Binding AutoUnpinLocationsOnClear, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
+                                          IsChecked="{Binding #HostWindow.WindowContext.ActiveState.Settings.AutoUnpinLocationsOnClear, Mode=TwoWay}" />
                                 <Separator />
                                 <MenuItem Header="Reload" Command="{Binding RefreshCommand, Source={x:Static local:ApplicationModel.Instance}}" InputGesture="F5" />
                             </MenuItem>
@@ -182,7 +197,7 @@
                                               IsChecked="{Binding SupportLua53VersionChecks, Mode=TwoWay, Source={x:Static data:ApplicationSettings.Instance}}" />
                                 </MenuItem>
                                 <Separator />
-                                <MenuItem Header="Developer Console" Command="{Binding ShowDeveloperConsoleCommand, Source={x:Static local:ApplicationModel.Instance}}" />
+                                <MenuItem Header="Developer Terminal" Command="{Binding ShowDeveloperTerminalCommand, Source={x:Static local:ApplicationModel.Instance}}" />
                             </MenuItem>
                         </ContextMenu>
                     </Button.ContextMenu>
@@ -229,9 +244,10 @@
                 </Button>
             </StackPanel>
 
-            <!-- Extension indicators (right) -->
+            <!-- Extension indicators (right). Aggregates app + window +
+                 package + tracker extensions for THIS window's active tab. -->
             <ItemsControl HorizontalAlignment="Right"
-                          ItemsSource="{Binding Extensions, Source={x:Static extensions:ExtensionManager.Instance}}"
+                          ItemsSource="{Binding $parent[Window].WindowContext.ActiveExtensions}"
                           VerticalAlignment="Center" Margin="0,2,20,2">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -240,7 +256,13 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
+                        <!-- Collapse the wrapper entirely when the extension
+                             returns null from StatusBarControl (e.g. NDI
+                             when not broadcasting, Voice when disabled,
+                             Twitch when channel name not configured) so
+                             unused slots don't consume WrapPanel width. -->
                         <ContentControl Content="{Binding StatusBarControl}"
+                                        IsVisible="{Binding StatusBarControl, Converter={x:Static ObjectConverters.IsNotNull}}"
                                         VerticalAlignment="Center" Margin="3,2" MaxHeight="18"/>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -251,7 +273,7 @@
                     Width="12" Height="12"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="0,0,2,1"
-                    IsVisible="{Binding AllowResize, Source={x:Static data:Tracker.Instance}}">
+                    IsVisible="{Binding AllowResize, Source={x:Static local:ApplicationModel.Instance}}">
                 <!-- Three diagonal dot lines -->
                 <Line StartPoint="10,2" EndPoint="2,10" Stroke="#555555" StrokeThickness="1"/>
                 <Line StartPoint="10,5" EndPoint="5,10" Stroke="#555555" StrokeThickness="1"/>

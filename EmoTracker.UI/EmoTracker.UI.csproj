@@ -5,7 +5,7 @@
     <OutputType>Library</OutputType>
     <RootNamespace>EmoTracker.UI</RootNamespace>
     <AssemblyName>EmoTracker.UI</AssemblyName>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
@@ -24,6 +24,17 @@
     <PackageReference Include="Markdig" Version="0.38.0" />
     <PackageReference Include="Avalonia.HtmlRenderer" Version="11.2.0" />
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
+  </ItemGroup>
+
+  <!--
+    Override the transitive Avalonia.FreeDesktop -> Tmds.DBus.Protocol 0.21.2 dep
+    (GHSA-xrw6-gwf8-vvr9: malicious D-Bus peers can spoof signals, exhaust file
+    descriptors, and crash the app via malformed message bodies). 0.21.3 is the
+    backported patch — same 0.21.x API surface as what Avalonia consumes, drop-in
+    compatible. Direct PackageReference wins over the transitive resolution.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
   <!-- Exclude WPF-only file; Avalonia implementation is Controls/MarkdownViewer.cs -->

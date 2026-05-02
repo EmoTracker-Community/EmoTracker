@@ -6,9 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
-using MessageBox.Avalonia.Enums;
-using MsBox.Avalonia;
-using MsBox.Avalonia.Enums;
+using EmoTracker.Services.Dialogs;
 
 namespace EmoTracker.Services
 {
@@ -21,16 +19,21 @@ namespace EmoTracker.Services
     }
 
     /// <summary>
-    /// Avalonia dialog service using MsBox.Avalonia for message boxes and
-    /// Avalonia StorageProvider for file pickers.
+    /// Avalonia dialog service: in-house <see cref="MessageDialog"/> for
+    /// message boxes (replacing MsBox.Avalonia, which crashed on Ctrl+C
+    /// from a modal — issue #68) and Avalonia <see cref="IStorageProvider"/>
+    /// for file pickers.
     /// </summary>
     public class AvaloniaDialogService : IDialogService
     {
         private static Window? GetMainWindow() =>
             (Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
 
-        // Sync methods — delegate to async versions; safe only when not on UI thread.
-        // Command handlers should use the Async variants instead.
+        // Sync methods are no-ops by design. The interface keeps them for API
+        // compat, but a synchronous modal would block the UI thread (and only
+        // a handful of pre-async call sites still use them). Async variants
+        // are the supported entry points; sync calls are observably no-ops
+        // exactly as they were under MsBox.Avalonia.
         public bool? ShowYesNoCancel(string title, string message) => true;
         public bool ShowYesNo(string title, string message, bool defaultYes = true) => defaultYes;
         public void ShowOK(string title, string message) { }
@@ -39,27 +42,27 @@ namespace EmoTracker.Services
 
         public async Task<bool?> ShowYesNoCancelAsync(string title, string message)
         {
-            var box = MessageBoxManager.GetMessageBoxStandard(title, message, ButtonEnum.YesNoCancel);
-            var result = await box.ShowWindowDialogAsync(GetMainWindow());
+            var result = await MessageDialog.ShowAsync(
+                GetMainWindow(), title, message, MessageDialogButtons.YesNoCancel);
             return result switch
             {
-                ButtonResult.Yes => (bool?)true,
-                ButtonResult.No => false,
-                _ => null
+                MessageDialogResult.Yes => (bool?)true,
+                MessageDialogResult.No  => false,
+                _                       => null,   // Cancel / Esc / suppressed
             };
         }
 
         public async Task<bool> ShowYesNoAsync(string title, string message, bool defaultYes = true)
         {
-            var box = MessageBoxManager.GetMessageBoxStandard(title, message, ButtonEnum.YesNo);
-            var result = await box.ShowWindowDialogAsync(GetMainWindow());
-            return result == ButtonResult.Yes;
+            var result = await MessageDialog.ShowAsync(
+                GetMainWindow(), title, message, MessageDialogButtons.YesNo, defaultYes);
+            return result == MessageDialogResult.Yes;
         }
 
         public async Task ShowOKAsync(string title, string message)
         {
-            var box = MessageBoxManager.GetMessageBoxStandard(title, message, ButtonEnum.Ok);
-            await box.ShowWindowDialogAsync(GetMainWindow());
+            await MessageDialog.ShowAsync(
+                GetMainWindow(), title, message, MessageDialogButtons.Ok);
         }
 
         public async Task<string> OpenFileAsync(string filter, string initialDirectory)

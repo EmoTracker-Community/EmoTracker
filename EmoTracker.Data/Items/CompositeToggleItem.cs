@@ -1,20 +1,42 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 
 namespace EmoTracker.Data.Items
 {
     [JsonTypeTags("composite_toggle")]
-    public class CompositeToggleItem : ItemBase
+    public partial class CompositeToggleItem : ItemBase
     {
-        ToggleItem mItemA;
-        ToggleItem mItemB;
+        // Cross-item references represented by identity (Phase 2.5). Each
+        // ModelReference holds the target's DefinitionId and a per-instance
+        // cache slot; resolution flows through this holder's
+        // GetModelResolver() (which returns the global ambient resolver in
+        // Phase 2.5; per-state resolvers will plug in later). On Fork, OnForked
+        // copies the references via ForFork(this) so the new fork has its own
+        // cache, and resolution chases the fork's resolver — naturally
+        // upgrading to per-state behavior when state lifecycle lands.
+        ModelReference<ToggleItem> mItemA;
+        ModelReference<ToggleItem> mItemB;
 
+        // Definition data: parsed once at pack-load.
         CodeProvider mProvidedCodes = new CodeProvider();
-
         Dictionary<KeyValuePair<bool, bool>, ImageReference> mIcons = new Dictionary<KeyValuePair<bool, bool>, ImageReference>();
+
+        public CompositeToggleItem()
+        {
+            mItemA = new ModelReference<ToggleItem>(this);
+            mItemB = new ModelReference<ToggleItem>(this);
+        }
+
+        public CompositeToggleItem(global::EmoTracker.Core.DataModel.ITrackerStateContext state)
+        {
+            mItemA = new ModelReference<ToggleItem>(this);
+            mItemB = new ModelReference<ToggleItem>(this);
+            OwnerState = state;
+        }
 
         public class Stage : CodeProvider
         {
@@ -44,20 +66,24 @@ namespace EmoTracker.Data.Items
 
         public override void OnLeftClick()
         {
-            if (mItemA != null)
-                mItemA.Active = !mItemA.Active;
+            var itemA = mItemA.Target;
+            if (itemA != null)
+                itemA.Active = !itemA.Active;
         }
 
         public override void OnRightClick()
         {
-            if (mItemB != null)
-                mItemB.Active = !mItemB.Active;
+            var itemB = mItemB.Target;
+            if (itemB != null)
+                itemB.Active = !itemB.Active;
         }
 
         protected void UpdateImage()
         {
-            bool activeA = mItemA != null ? mItemA.Active : false;
-            bool activeB = mItemB != null ? mItemB.Active : false;
+            var itemA = mItemA.Target;
+            var itemB = mItemB.Target;
+            bool activeA = itemA != null ? itemA.Active : false;
+            bool activeB = itemB != null ? itemB.Active : false;
 
             ImageReference icon = null;
             if (mIcons.TryGetValue(new KeyValuePair<bool, bool>(activeA, activeB), out icon))
@@ -73,14 +99,17 @@ namespace EmoTracker.Data.Items
 
             mProvidedCodes.AddCodes(data.GetValue<string>("codes"));
 
-            mItemA = ItemDatabase.Instance.FindProvidingItemForCode(data.GetValue<string>("item_left")) as ToggleItem;
-            mItemB = ItemDatabase.Instance.FindProvidingItemForCode(data.GetValue<string>("item_right")) as ToggleItem;
+            // Resolve once via the legacy by-code lookup; the resolved instance's
+            // DefinitionId becomes the stable identity carried by the ModelReference.
+            // Pre-Phase-2.5 behavior on subsequent pack reloads (re-running
+            // ParseDataInternal) is preserved: the ref is updated to point at the
+            // newly-resolved item.
+            // OwnerState must be stamped before parse so cross-references resolve.
+            var itemDb = (this.OwnerState as Sessions.TrackerState)?.Items;
+            mItemA.Set(itemDb?.FindProvidingItemForCode(data.GetValue<string>("item_left")) as ToggleItem);
+            mItemB.Set(itemDb?.FindProvidingItemForCode(data.GetValue<string>("item_right")) as ToggleItem);
 
-            if (mItemA != null)
-                mItemA.PropertyChanged += MonitoredItem_PropertyChanged;
-
-            if (mItemB != null)
-                mItemB.PropertyChanged += MonitoredItem_PropertyChanged;
+            SubscribeSiblingChanges();
 
             JArray imageMap = (JArray)data.GetValue("images");
             foreach (JObject imageData in imageMap)
@@ -100,9 +129,51 @@ namespace EmoTracker.Data.Items
             UpdateImage();
         }
 
+        // Resolves the current targets and (re-)subscribes to their PropertyChanged
+        // events. Idempotent — safe to call after ParseDataInternal and from
+        // OnForked. We unsubscribe defensively first so repeat calls don't
+        // double-subscribe.
+        void SubscribeSiblingChanges()
+        {
+            var itemA = mItemA.Target;
+            var itemB = mItemB.Target;
+            if (itemA != null)
+            {
+                itemA.PropertyChanged -= MonitoredItem_PropertyChanged;
+                itemA.PropertyChanged += MonitoredItem_PropertyChanged;
+            }
+            if (itemB != null)
+            {
+                itemB.PropertyChanged -= MonitoredItem_PropertyChanged;
+                itemB.PropertyChanged += MonitoredItem_PropertyChanged;
+            }
+        }
+
         private void MonitoredItem_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             UpdateImage();
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (CompositeToggleItem)source;
+            // Definition fields shared by reference.
+            mProvidedCodes = src.mProvidedCodes;
+            mIcons = src.mIcons;
+
+            // Cross-item references carried over by identity. ForFork(this)
+            // creates a fresh ModelReference bound to this fork — same
+            // DefinitionId, no cache — so resolution flows through this fork's
+            // GetModelResolver() on first read. Phase 2 known limitation
+            // (per §2.3): the ambient resolver still walks the singleton
+            // ItemDatabase, so the ref still resolves to the original state's
+            // sibling. The flip to per-state resolution lands when state
+            // lifecycle does.
+            mItemA = src.mItemA.ForFork(this);
+            mItemB = src.mItemB.ForFork(this);
+
+            SubscribeSiblingChanges();
         }
     }
 }

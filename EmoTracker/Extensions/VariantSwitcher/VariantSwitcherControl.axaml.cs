@@ -24,17 +24,25 @@ namespace EmoTracker.Extensions.VariantSwitcher
             if (!props.IsLeftButtonPressed && !props.IsRightButtonPressed)
                 return;
 
-            PopulateVariantsMenu(menu);
+            PopulateVariantsMenu(menu, DataContext as VariantSwitcherExtension);
             menu.PlacementTarget = control;
             menu.Open(control);
             e.Handled = true;
         }
 
-        private static void PopulateVariantsMenu(ContextMenu menu)
+        private static void PopulateVariantsMenu(ContextMenu menu, VariantSwitcherExtension extension)
         {
             menu.Items.Clear();
 
-            var variants = Tracker.Instance.ActiveGamePackage?.AvailableVariants?.ToList();
+            // Read variants from THIS instance's owning state's pack —
+            // each tab can have a different pack with different variants
+            // (or the same pack with a different active variant), so the
+            // menu must reflect the per-tab pack identity, not the
+            // app's primary.
+            var state = extension?.State;
+            var pi = state?.PackageInstance;
+            var pkg = pi?.GamePackage;
+            var variants = pkg?.AvailableVariants?.ToList();
             if (variants == null || variants.Count == 0)
             {
                 menu.Items.Add(new MenuItem
@@ -46,7 +54,11 @@ namespace EmoTracker.Extensions.VariantSwitcher
             }
 
             var command = EmoTracker.ApplicationModel.Instance.ActivatePackCommand;
-            var activeVariant = Tracker.Instance.ActiveGamePackage?.ActiveVariant;
+            // PackageInstance.ActiveVariant is set once at PI construction
+            // and is tab-local; the per-tab menu correctly highlights
+            // its own active variant regardless of what other tabs /
+            // windows have active.
+            var activeVariant = pi.ActiveVariant;
             foreach (var variant in variants)
             {
                 menu.Items.Add(new MenuItem

@@ -63,10 +63,41 @@ namespace EmoTracker.Extensions.NDI
 
         private TopLevel _renderDriver;
         private bool _renderLoopActive;
+        private readonly EmoTracker.WindowContext _hostContext;
+        private readonly Avalonia.Controls.Window _hostWindow;
 
-        public HiddenBroadcastWindow()
+        // XAML-designer / legacy ctor — no per-host wiring; the window will
+        // bind to the app-wide BroadcastLayout fallback so it still has
+        // something to render.
+        public HiddenBroadcastWindow() : this(null, null) { }
+
+        /// <summary>
+        /// Constructs a hidden broadcast window bound to
+        /// <paramref name="hostContext"/>'s active tab.
+        /// <paramref name="hostWindow"/> is the visible window whose
+        /// render loop drives capture ticks (a hidden window with
+        /// <c>Opacity=0.01</c> doesn't get its own render frames).
+        /// </summary>
+        public HiddenBroadcastWindow(EmoTracker.WindowContext hostContext, Avalonia.Controls.Window hostWindow)
         {
             InitializeComponent();
+            _hostContext = hostContext;
+            _hostWindow = hostWindow;
+
+            // Per-host data context: each window's hidden broadcaster
+            // mirrors its own active tab's broadcast layout, so multiple
+            // visible windows can each have an independent NDI feed.
+            if (hostContext != null)
+            {
+                DataContext = hostContext.BroadcastLayout;
+                hostContext.PropertyChanged += OnHostPropertyChanged;
+                NDIHost.NdiName = ResolveNdiName(hostContext);
+            }
+            else
+            {
+                DataContext = ApplicationModel.Instance.BroadcastLayout;
+                NDIHost.NdiName = "EmoTracker Broadcast View";
+            }
 
             NDIHost.PropertyChanged += OnNdiHostPropertyChanged;
 
@@ -75,6 +106,26 @@ namespace EmoTracker.Extensions.NDI
             // Show) is ignored by some backends; the Opened event is the reliable
             // hook for both operations.
             Opened += OnOpened;
+        }
+
+        private void OnHostPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(EmoTracker.WindowContext.BroadcastLayout))
+                DataContext = _hostContext?.BroadcastLayout;
+        }
+
+        // Per-host NDI source naming. Multiple HiddenBroadcastWindows
+        // running simultaneously must advertise distinct names or
+        // receivers see only the first. Uses WindowContext.Sequence —
+        // a unique, sequential per-process integer — for guaranteed
+        // collision-free names. Note: BroadcastView uses the same naming
+        // scheme so the visible/hidden broadcasters for one host share
+        // the source name — that's by design, since at most one of the
+        // pair is active at a time (toggled by EnableBackgroundNdi).
+        static string ResolveNdiName(EmoTracker.WindowContext host)
+        {
+            if (host == null) return "EmoTracker Broadcast";
+            return $"EmoTracker Broadcast {host.Sequence}";
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
@@ -89,6 +140,8 @@ namespace EmoTracker.Extensions.NDI
             _renderLoopActive = false;
             _renderDriver = null;
             Opened -= OnOpened;
+            if (_hostContext != null)
+                _hostContext.PropertyChanged -= OnHostPropertyChanged;
             NDIHost.PropertyChanged -= OnNdiHostPropertyChanged;
             NDIHost.Dispose();
             UpdateExtensionStatus(active: false);
@@ -107,11 +160,20 @@ namespace EmoTracker.Extensions.NDI
                 UpdateExtensionStatus(active: !NDIHost.IsSendPaused);
         }
 
-        private static void UpdateExtensionStatus(bool active)
+        private void UpdateExtensionStatus(bool active)
         {
-            var extension = ExtensionManager.Instance?.FindExtension<NDIExtension>();
-            if (extension != null)
-                extension.Active = active;
+            // Look up this window's NDIExtension instance (per-window
+            // IWindowExtension scope). Falls back to no-op if the host
+            // context is null (legacy ctor path).
+            if (_hostContext == null) return;
+            foreach (var ext in ExtensionManager.Instance.GetWindowExtensions(_hostContext))
+            {
+                if (ext is NDIExtension ndi)
+                {
+                    ndi.Active = active;
+                    return;
+                }
+            }
         }
 
         // ----------------------------------------------------------------------
@@ -164,13 +226,15 @@ namespace EmoTracker.Extensions.NDI
 
         /// <summary>
         /// The hidden window doesn't render itself, so its own RequestAnimationFrame
-        /// never fires.  We need a TopLevel that IS actively rendering — the main
-        /// app window is the obvious candidate since the broadcast layout mirrors
-        /// data that the main window is already displaying and re-rendering on
-        /// every state change.
+        /// never fires.  We need a TopLevel that IS actively rendering — the
+        /// host app window the user is interacting with, since the broadcast
+        /// layout mirrors what that window is already displaying and
+        /// re-rendering on every state change. Falls back to the desktop's
+        /// MainWindow when no host was supplied (legacy / designer path).
         /// </summary>
-        private static TopLevel ResolveRenderDriverTopLevel()
+        private TopLevel ResolveRenderDriverTopLevel()
         {
+            if (_hostWindow != null) return _hostWindow;
             var lifetime = Application.Current?.ApplicationLifetime
                 as IClassicDesktopStyleApplicationLifetime;
             return lifetime?.MainWindow;

@@ -20,16 +20,30 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var extensions = ExtensionManager.Instance.Extensions;
+                // List all extensions across the four scopes. Window /
+                // package / tracker scopes are listed for the application
+                // model's currently-active window's active state — this
+                // matches the surface a user sees in the active status bar.
+                var manager = ExtensionManager.Instance;
+                var win = ApplicationModel.Instance.CurrentlyActiveWindowContext;
+                var aggregated = manager.GetActiveExtensionsFor(win);
                 var result = new List<object>();
 
-                foreach (var ext in extensions)
+                foreach (var ext in aggregated)
                 {
                     var entry = new Dictionary<string, object>
                     {
                         ["name"] = ext.Name,
                         ["uid"] = ext.UID,
-                        ["priority"] = ext.Priority
+                        ["priority"] = ext.Priority,
+                        ["scope"] = ext switch
+                        {
+                            IApplicationExtension => "application",
+                            IWindowExtension => "window",
+                            IPackageExtension => "package",
+                            ITrackerExtension => "tracker",
+                            _ => "unknown"
+                        }
                     };
 
                     if (ext is McpServer.McpServerExtension mcpExt)

@@ -1,15 +1,24 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
+using System.Linq;
 
 namespace EmoTracker.Data.Layout
 {
+    /// <summary>
+    /// Phase 4: <see cref="MapPanel"/> exposes either a pack-specified
+    /// projection of a subset of maps (via the JSON <c>"maps"</c> array) or,
+    /// when none is specified, all maps in the active <see cref="MapDatabase"/>.
+    /// Explicit map references are stored as <see cref="ModelReference{Map}"/>
+    /// so a fork's <c>Maps</c> resolves through the holder's resolver — Phase 6
+    /// swaps in per-state map catalogs without touching this code.
+    /// </summary>
     [JsonTypeTags("map")]
-    public class MapPanel : LayoutItem
+    public partial class MapPanel : LayoutItem
     {
         public enum MapOrientation
         {
@@ -18,51 +27,81 @@ namespace EmoTracker.Data.Layout
             Vertical
         };
 
+        [KVOverridable]
+        public partial MapOrientation Orientation { get; set; }
 
-        MapOrientation mOrientation = MapOrientation.Auto;
-        public MapOrientation Orientation
-        {
-            get { return mOrientation; }
-            set { SetProperty(ref mOrientation, value); }
-        }
-
-        ObservableCollection<Map> mMaps;
+        // Cross-reference list: Phase 2.5 framework. Null when the JSON didn't
+        // specify a "maps" array (the getter then falls back to the ambient
+        // MapDatabase). Populated during PopulateDefinitionData / parse.
+        List<ModelReference<Map>> mMapRefs;
 
         public IEnumerable<Map> Maps
         {
             get
             {
-                if (mMaps != null)
-                    return mMaps;
+                if (mMapRefs != null)
+                    return mMapRefs.Select(r => r.Target).Where(m => m != null);
 
-                return MapDatabase.Instance.Maps;
+                // Resolve through the holder's state's MapDatabase. Models
+                // are expected to belong to a state (OwnerState set during
+                // pack-load); pre-stamping callsites return Empty rather
+                // than falling back to a global.
+                var stateMaps = (this.OwnerState as Sessions.TrackerState)?.Maps;
+                return stateMaps?.Maps ?? Enumerable.Empty<Map>();
             }
+        }
+
+        protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
+        {
+            definition[nameof(Orientation) + "__def"] = data.GetEnumValue<MapOrientation>("orientation", MapOrientation.Auto);
         }
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            if (!Data.Tracker.Instance.MapEnabled)
+            var mapEnabled = (this.OwnerState as Sessions.TrackerState)?.Settings.MapEnabled ?? false;
+            if (!mapEnabled)
                 return false;
-
-            Orientation = data.GetEnumValue<MapOrientation>("orientation", MapOrientation.Auto);
 
             JArray mapList = data.GetValue<JArray>("maps");
             if (mapList != null)
             {
-                foreach (string mapName in mapList)
+                // Parse-time map resolution goes through the holder's
+                // state's MapDatabase. OwnerState must be stamped before
+                // parse for cross-references to resolve.
+                var maps = (this.OwnerState as Sessions.TrackerState)?.Maps;
+                if (maps != null)
                 {
-                    Map instance = MapDatabase.Instance.FindMap(mapName);
-                    if (instance != null)
+                    mMapRefs = new List<ModelReference<Map>>();
+                    foreach (string mapName in mapList)
                     {
-                        if (mMaps == null)
-                            mMaps = new ObservableCollection<Map>();
-
-                        mMaps.Add(instance);
+                        Map instance = maps.FindMap(mapName);
+                        if (instance != null)
+                        {
+                            mMapRefs.Add(new ModelReference<Map>(this, instance));
+                        }
                     }
                 }
             }
 
             return true;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (MapPanel)source;
+            if (src.mMapRefs != null)
+            {
+                mMapRefs = new List<ModelReference<Map>>(src.mMapRefs.Count);
+                foreach (var r in src.mMapRefs)
+                    mMapRefs.Add(r.ForFork(this));
+            }
+            else
+            {
+                mMapRefs = null;
+            }
+            // Fire PropertyChanged on Maps so post-fork bindings re-evaluate.
+            NotifyPropertyChanged(nameof(Maps));
         }
     }
 }

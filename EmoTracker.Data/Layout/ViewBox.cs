@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("viewbox")]
-    public class ViewBox : Container
+    public partial class ViewBox : Container
     {
     }
 }

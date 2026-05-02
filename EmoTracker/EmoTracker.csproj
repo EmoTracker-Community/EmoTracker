@@ -5,7 +5,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>EmoTracker</RootNamespace>
     <AssemblyName>EmoTracker</AssemblyName>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ApplicationIcon>emohead_icon_transparent_7h3_icon.ico</ApplicationIcon>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
@@ -44,7 +44,6 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.3.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.3" />
     <PackageReference Include="Avalonia.Xaml.Behaviors" Version="11.3.0.6" />
-    <PackageReference Include="MsBox.Avalonia" Version="3.0.0-rc2" />
     <!-- NDI cross-platform P/Invoke wrapper -->
     <PackageReference Include="NDILibDotNetCoreBase" Version="2024.7.22.1" />
     <PackageReference Include="NetSparkleUpdater.SparkleUpdater" Version="3.0.4" />
@@ -67,6 +66,15 @@
     <PackageReference Include="Grpc.Net.Client" Version="2.67.0" />
     <PackageReference Include="Google.Protobuf" Version="3.29.3" />
     <PackageReference Include="Grpc.Tools" Version="2.69.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!--
+    Override the transitive Avalonia.FreeDesktop -> Tmds.DBus.Protocol 0.21.2 dep
+    (GHSA-xrw6-gwf8-vvr9). 0.21.3 is the backported patch; direct PackageReference
+    wins over the transitive resolution. See the matching note in EmoTracker.UI.csproj.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
   <!-- gRPC proto compilation for SNI provider -->

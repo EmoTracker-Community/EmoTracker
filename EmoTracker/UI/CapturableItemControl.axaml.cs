@@ -69,7 +69,7 @@ namespace EmoTracker.UI
 
                 if (section != null)
                 {
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    using (section.OpenTransaction())
                     {
                         Data.ITrackableItem? item = parameter as Data.ITrackableItem;
                         section.CapturedItem = item;
@@ -82,14 +82,27 @@ namespace EmoTracker.UI
                 }
                 else if (itemCollection != null)
                 {
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    Data.ITrackableItem? item = parameter as Data.ITrackableItem;
+                    if (item != null)
                     {
-                        Data.ITrackableItem? item = parameter as Data.ITrackableItem;
-                        if (item != null)
+                        // The collection holder isn't necessarily a TransactableModelTypeBase;
+                        // reach for its OwnerState's processor when it is a model, otherwise
+                        // skip the explicit scope (AddItem itself routes through per-state
+                        // processors when the underlying items are transactable).
+                        var holder = itemCollection as Core.DataModel.ModelTypeBase;
+                        var state = holder?.OwnerState as Data.Sessions.TrackerState;
+                        if (state?.Transactions != null)
+                        {
+                            using (state.Transactions.OpenTransaction())
+                            {
+                                itemCollection.AddItem(item);
+                            }
+                        }
+                        else
                         {
                             itemCollection.AddItem(item);
-                            mHost.PopupInstance.IsOpen = false;
                         }
+                        mHost.PopupInstance.IsOpen = false;
                     }
                 }
                 else
@@ -120,11 +133,13 @@ namespace EmoTracker.UI
 
             public void Execute(object? parameter)
             {
-                using (TransactionProcessor.Current.OpenTransaction())
+                Data.Locations.Section? section = mHost.DataContext as Data.Locations.Section;
+                if (section != null)
                 {
-                    Data.Locations.Section? section = mHost.DataContext as Data.Locations.Section;
-                    if (section != null)
+                    using (section.OpenTransaction())
+                    {
                         section.CapturedItem = null;
+                    }
                 }
             }
         }

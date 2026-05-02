@@ -4,10 +4,16 @@
     <ToolTip.Tip>
         <TextBlock Text="{Binding StatusText, StringFormat='MCP: {0}'}" />
     </ToolTip.Tip>
-    <Ellipse Width="10" Height="10" StrokeThickness="0">
+    <Ellipse Width="10" Height="10" StrokeThickness="0"
+             Classes.connected="{Binding ClientConnected}">
         <Ellipse.Styles>
+            <!-- Default: stopped / error => grey. -->
             <Style Selector="Ellipse">
                 <Setter Property="Fill" Value="#888888" />
+            </Style>
+            <!-- Connected (Active=true) => green. -->
+            <Style Selector="Ellipse.connected">
+                <Setter Property="Fill" Value="#3FBF3F" />
             </Style>
         </Ellipse.Styles>
     </Ellipse>

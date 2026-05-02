@@ -41,8 +41,8 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     initialHeight = s.InitialHeight,
                     lastActivePackage = s.LastActivePackage,
                     lastActivePackageVariant = s.LastActivePackageVariant,
-                    mapEnabled = Tracker.Instance.MapEnabled,
-                    swapLeftRight = Tracker.Instance.SwapLeftRight
+                    mapEnabled = ApplicationModel.Instance.PrimaryState?.Settings.MapEnabled ?? true,
+                    swapLeftRight = ApplicationModel.Instance.PrimaryState?.Settings.SwapLeftRight ?? false
                 });
             });
         }
@@ -135,12 +135,14 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         case "mapEnabled":
                             if (!bool.TryParse(value, out boolVal))
                                 return JsonSerializer.Serialize(new { success = false, error = "Expected true/false" });
-                            Tracker.Instance.MapEnabled = boolVal;
+                            if (ApplicationModel.Instance.PrimaryState != null)
+                                ApplicationModel.Instance.PrimaryState.Settings.MapEnabled = boolVal;
                             break;
                         case "swapLeftRight":
                             if (!bool.TryParse(value, out boolVal))
                                 return JsonSerializer.Serialize(new { success = false, error = "Expected true/false" });
-                            Tracker.Instance.SwapLeftRight = boolVal;
+                            if (ApplicationModel.Instance.PrimaryState != null)
+                                ApplicationModel.Instance.PrimaryState.Settings.SwapLeftRight = boolVal;
                             break;
                         default:
                             return JsonSerializer.Serialize(new { success = false, error = $"Unknown setting key: {key}" });

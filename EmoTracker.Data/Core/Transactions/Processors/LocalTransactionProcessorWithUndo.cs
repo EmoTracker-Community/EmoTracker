@@ -36,17 +36,17 @@ namespace EmoTracker.Data.Core.Transactions.Processors
 
             ReadSource mReadSource = ReadSource.Target;
 
-            public bool HasPropertyValue(TransactableObject src, string propertyName)
+            public bool HasPropertyValue(ITransactableObject src, string propertyName)
             {
-                KeyValuePair<TransactableObject, string> key = new KeyValuePair<TransactableObject, string>(src, propertyName);
+                KeyValuePair<ITransactableObject, string> key = new KeyValuePair<ITransactableObject, string>(src, propertyName);
                 return mValueStates.ContainsKey(key);
             }
 
-            public T GetPropertyValue<T>(TransactableObject src, string propertyName)
+            public T GetPropertyValue<T>(ITransactableObject src, string propertyName)
             {
                 try
                 {
-                    KeyValuePair<TransactableObject, string> key = new KeyValuePair<TransactableObject, string>(src, propertyName);
+                    KeyValuePair<ITransactableObject, string> key = new KeyValuePair<ITransactableObject, string>(src, propertyName);
 
                     ValueStateBase fieldValueBase;
                     if (mValueStates.TryGetValue(key, out fieldValueBase))
@@ -73,7 +73,7 @@ namespace EmoTracker.Data.Core.Transactions.Processors
 
             abstract class ValueStateBase
             {
-                public TransactableObject Source;
+                public ITransactableObject Source;
                 public Action<ITransaction> ProcessedAction;
             }
 
@@ -82,7 +82,7 @@ namespace EmoTracker.Data.Core.Transactions.Processors
                 public T OriginalValue;
                 public T TargetValue;
 
-                public ValueState(TransactableObject source, T originalValue, T targetValue, Action<ITransaction> action)
+                public ValueState(ITransactableObject source, T originalValue, T targetValue, Action<ITransaction> action)
                 {
                     Source = source;
                     ProcessedAction = action;
@@ -92,7 +92,7 @@ namespace EmoTracker.Data.Core.Transactions.Processors
             }
 
             LocalTransactionProcessorWithUndo mProcessor;
-            Dictionary<KeyValuePair<TransactableObject, string>, ValueStateBase> mValueStates = new Dictionary<KeyValuePair<TransactableObject, string>, ValueStateBase>();
+            Dictionary<KeyValuePair<ITransactableObject, string>, ValueStateBase> mValueStates = new Dictionary<KeyValuePair<ITransactableObject, string>, ValueStateBase>();
 
             public Transaction(LocalTransactionProcessorWithUndo processor)
             {
@@ -104,9 +104,9 @@ namespace EmoTracker.Data.Core.Transactions.Processors
                 get { return mValueStates.Count == 0; }
             }
 
-            public void WriteProperty<T>(TransactableObject source, string fieldName, T value, Action<ITransaction> action = null)
+            public void WriteProperty<T>(ITransactableObject source, string fieldName, T value, Action<ITransaction> action = null)
             {
-                KeyValuePair<TransactableObject, string> key = new KeyValuePair<TransactableObject, string>(source, fieldName);
+                KeyValuePair<ITransactableObject, string> key = new KeyValuePair<ITransactableObject, string>(source, fieldName);
                 mValueStates[key] = new ValueState<T>(source, source.GetTransactableProperty<T>(fieldName), value, action);
             }
 
@@ -126,7 +126,22 @@ namespace EmoTracker.Data.Core.Transactions.Processors
 
             public void Undo()
             {
-                using (new LocationDatabase.SuspendRefreshScope())
+                // Locate the LocationDatabase to suspend by walking the
+                // transactable objects in this transaction — they all share
+                // the same OwnerState (per the cross-state-mutation guard
+                // in TransactableModelTypeBase.SetTransactableProperty), so
+                // sampling the first entry is sufficient.
+                LocationDatabase locationsTarget = null;
+                foreach (var entry in mValueStates)
+                {
+                    if (entry.Value.Source is EmoTracker.Core.DataModel.ModelTypeBase mtb &&
+                        mtb.OwnerState is Sessions.TrackerState ts)
+                    {
+                        locationsTarget = ts.Locations;
+                        break;
+                    }
+                }
+                using (new LocationDatabase.SuspendRefreshScope(locationsTarget))
                 {
                     mReadSource = ReadSource.Original;
                     foreach (var entry in mValueStates)
@@ -158,7 +173,7 @@ namespace EmoTracker.Data.Core.Transactions.Processors
             get { return mOpenTransaction; }
         }
 
-        public void WriteProperty<T>(TransactableObject obj, string fieldName, T value, Action<ITransaction> transactionStateCallback = null)
+        public void WriteProperty<T>(ITransactableObject obj, string fieldName, T value, Action<ITransaction> transactionStateCallback = null)
         {
             using (OpenTransaction())
             {

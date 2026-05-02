@@ -293,7 +293,7 @@ namespace EmoTracker.Data.Packages
                     {
                         if (entry != null && entry.Status == PackageRepositoryEntry.PackageStatus.UpdateAvailable)
                         {
-                            if (entry.ExistingPackage == Tracker.Instance.ActiveGamePackage)
+                            if (entry.ExistingPackage == Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage)
                                 return true;
                         }
                     }

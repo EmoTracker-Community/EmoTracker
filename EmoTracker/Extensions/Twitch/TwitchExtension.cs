@@ -35,7 +35,7 @@ namespace EmoTracker.Extensions.Twitch
         Connected
     }
 
-    public class TwitchExtension : ObservableObject, Extension
+    public class TwitchExtension : ObservableObject, IApplicationExtension
    {
         enum DisconnectReason
         {
@@ -52,7 +52,9 @@ namespace EmoTracker.Extensions.Twitch
         DefaultPermissions mDefaultPermissions = DefaultPermissions.Moderator;
         ConnectionState mConnectionState = ConnectionState.Disconnected;
         DisconnectReason mDisconnectReason = DisconnectReason.Unknown;
-        object mStatusControl;
+        // Note: no longer cached. Avalonia visuals are single-parent, so
+        // each MainWindow that binds StatusBarControl needs its own
+        // instance — see the getter.
         TwitchClient mClient;
         bool mbActive = false;
 
@@ -85,11 +87,11 @@ namespace EmoTracker.Extensions.Twitch
         {
             get
             {
-                return mbActive ? mStatusControl : null;
+                return mbActive ? new TwitchStatusIndicator() { DataContext = this } : null;
             }
         }
 
-        public void Start()
+        public void Start(IApplicationContext app)
         {
             if (!string.IsNullOrWhiteSpace(ApplicationSettings.Instance.TwitchChannelName))
             {
@@ -101,14 +103,6 @@ namespace EmoTracker.Extensions.Twitch
         public void Stop()
         {
             Disconnect(DisconnectReason.Reset);
-        }
-
-        public void OnPackageUnloaded()
-        {
-        }
-
-        public void OnPackageLoaded()
-        {
         }
 
         public JToken SerializeToJson()
@@ -126,7 +120,6 @@ namespace EmoTracker.Extensions.Twitch
             ConnectCommand = new DelegateCommand(ConnectExecute, ConnectCanExecute);
             DisconnectCommand = new DelegateCommand(DisconnectExecute, DisconnectCanExecute);
 
-            mStatusControl = new TwitchStatusIndicator() { DataContext = this };
         }
 
         private bool DisconnectCanExecute(object obj)
@@ -326,7 +319,9 @@ namespace EmoTracker.Extensions.Twitch
                         {
                             Dispatch.BeginInvoke(() =>
                             {
-                                ITrackableItem[] items = ItemDatabase.Instance.FindProvidingItemsForCode(args[0]);
+                                // Phase 6 step 11: route through PrimaryState's ItemDatabase.
+                                var itemsDb = ApplicationModel.Instance?.PrimaryState?.Items;
+                                ITrackableItem[] items = itemsDb.FindProvidingItemsForCode(args[0]);
                                 foreach (ITrackableItem item in items)
                                 {
                                     ToggleItem toggle = item as ToggleItem;

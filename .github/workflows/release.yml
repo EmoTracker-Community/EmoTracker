@@ -19,10 +19,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET 8
+      - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Extract version
         id: version
@@ -32,7 +32,7 @@ jobs:
           echo "Detected version: $VER"
 
       - name: Publish win-x64
-        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime win-x64 --self-contained --output publish/win-x64
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net10.0 --configuration Release --runtime win-x64 --self-contained --output publish/win-x64
 
       - name: Bundle PortAudio for Windows
         shell: bash
@@ -59,13 +59,13 @@ jobs:
           echo "Bundled libvosk.dll and companion DLLs from: $VOSK_CACHE"
 
       - name: Publish osx-x64
-        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime osx-x64 --self-contained --output publish/osx-x64
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net10.0 --configuration Release --runtime osx-x64 --self-contained --output publish/osx-x64
 
       - name: Publish osx-arm64
-        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime osx-arm64 --self-contained --output publish/osx-arm64
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net10.0 --configuration Release --runtime osx-arm64 --self-contained --output publish/osx-arm64
 
       - name: Publish linux-x64
-        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net8.0 --configuration Release --runtime linux-x64 --self-contained --output publish/linux-x64
+        run: dotnet publish EmoTracker/EmoTracker.csproj --framework net10.0 --configuration Release --runtime linux-x64 --self-contained --output publish/linux-x64
 
       - name: Bundle libvosk for macOS and Linux
         shell: bash

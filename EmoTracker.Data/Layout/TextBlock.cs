@@ -1,37 +1,34 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 namespace EmoTracker.Data.Layout
 {
     [JsonTypeTags("text")]
-    public class TextBlock : LayoutItem
+    public partial class TextBlock : LayoutItem
     {
-        string mText;
-        double mFontSize = -1.0;
-
-        public string Text
-        {
-            get { return mText; }
-            set { SetProperty(ref mText, value); }
-        }
+        [KVOverridable]
+        public partial string Text { get; set; }
 
         /// <summary>
         /// Font size for the text element, in points. A value of -1.0 (the default) means
         /// "not set" — the rendered control will inherit the font size from the visual tree.
         /// </summary>
-        public double FontSize
+        [KVOverridable]
+        public partial double FontSize { get; set; }
+
+        protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
         {
-            get { return mFontSize; }
-            set { SetProperty(ref mFontSize, value); }
+            definition[nameof(Text) + "__def"] = data.GetValue<string>("text");
+            definition[nameof(FontSize) + "__def"] = data.GetValue<double>("font_size", -1.0);
         }
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            Text = data.GetValue<string>("text");
-            FontSize = data.GetValue<double>("font_size", -1.0);
             return true;
         }
     }

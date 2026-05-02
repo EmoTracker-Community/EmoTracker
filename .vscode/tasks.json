@@ -25,9 +25,25 @@
                 "build",
                 "${workspaceFolder}/EmoTracker/EmoTracker.csproj",
                 "--framework",
-                "net8.0",
+                "net10.0",
                 "--configuration",
                 "Debug",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build Avalonia (Release)",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/EmoTracker/EmoTracker.csproj",
+                "--framework",
+                "net10.0",
+                "--configuration",
+                "Release",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],

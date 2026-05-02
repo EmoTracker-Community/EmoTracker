@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +6,7 @@ using System.Linq;
 namespace EmoTracker.Data.Items
 {
     [JsonTypeTags("blank")]
-    public class BlankItem : ItemBase
+    public partial class BlankItem : ItemBase
     {
         public BlankItem()
         {
@@ -38,7 +38,7 @@ namespace EmoTracker.Data.Items
         }
 
         protected override void ParseDataInternal(JObject data, IGamePackage package)
-        {            
+        {
         }
     }
 }

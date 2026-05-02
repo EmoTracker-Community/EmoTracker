@@ -5,17 +5,36 @@
     <OutputType>Library</OutputType>
     <RootNamespace>EmoTracker.Data</RootNamespace>
     <AssemblyName>EmoTracker.Data</AssemblyName>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Phase 1: emit generated sources to disk so they're inspectable in obj/Generated. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\EmoTracker.Core\EmoTracker.Core.csproj" />
+    <!--
+      Source generator that emits the partial-property bodies for [KVImmutable] /
+      [KVMutable] / [KVTransactable]. Referenced as an Analyzer so its output gets
+      compiled into this project; ReferenceOutputAssembly=false so the generator's
+      own assembly does not become a runtime dependency.
+    -->
+    <ProjectReference Include="..\EmoTracker.SourceGenerators\EmoTracker.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="NLua" Version="1.7.8" />
   </ItemGroup>
+
+  <!--
+    Note: <InternalsVisibleTo> ItemGroup wouldn't be picked up here because
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo> disables the SDK's
+    auto-emission of assembly-level attributes. The equivalent IVT attribute
+    is declared in AssemblyInfo.cs instead.
+  -->
 
 </Project>

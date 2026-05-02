@@ -1,0 +1,84 @@
+{
+  "name": "emotracker-lua-debug",
+  "displayName": "EmoTracker Lua Debugger",
+  "description": "Attach to a running EmoTracker dev build to debug pack-script Lua. Set breakpoints, step, inspect locals/upvalues/globals, break on Lua errors.",
+  "version": "0.1.2",
+  "publisher": "emotracker-community",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Debuggers"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onDebug"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "lua",
+        "extensions": [".lua"],
+        "aliases": ["Lua"]
+      }
+    ],
+    "breakpoints": [
+      { "language": "lua" }
+    ],
+    "debuggers": [
+      {
+        "type": "emotracker-lua",
+        "label": "EmoTracker Lua",
+        "languages": ["lua"],
+        "configurationAttributes": {
+          "attach": {
+            "properties": {
+              "host": {
+                "type": "string",
+                "description": "Host running the EmoTracker dev build (default: localhost).",
+                "default": "localhost"
+              },
+              "port": {
+                "type": "number",
+                "description": "TCP port the EmoTracker DAP server is listening on (default: 27126; override with EMOTRACKER_DAP_PORT in the app).",
+                "default": 27126
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "emotracker-lua",
+            "request": "attach",
+            "name": "Attach to EmoTracker (Lua)",
+            "host": "localhost",
+            "port": 27126
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "EmoTracker: Attach to Lua",
+            "description": "Attach to a running EmoTracker dev build's in-process DAP server.",
+            "body": {
+              "type": "emotracker-lua",
+              "request": "attach",
+              "name": "Attach to EmoTracker (Lua)",
+              "host": "localhost",
+              "port": 27126
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.74.0",
+    "typescript": "^5.0.0"
+  }
+}

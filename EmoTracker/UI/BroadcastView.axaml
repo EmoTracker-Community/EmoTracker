@@ -5,7 +5,6 @@
         xmlns:app="clr-namespace:EmoTracker"
         xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
         xmlns:ndi="clr-namespace:EmoTracker.Extensions.NDI"
-        DataContext="{Binding Path=BroadcastLayout, Source={x:Static app:ApplicationModel.Instance}}"
         Title="EmoTracker: Broadcast View"
         MinWidth="200" MinHeight="100"
         SizeToContent="WidthAndHeight"
@@ -13,7 +12,6 @@
         Background="#FF212121">
     <Grid>
         <ndi:NdiSendContainer Name="NDIHost"
-                              NdiName="EmoTracker Broadcast View"
                               NdiDropShadow="{Binding Root.BroadcastShadow}"
                               NdiIntegerScale="{Binding Path=NdiOutputScale, Source={x:Static data:ApplicationSettings.Instance}}"
                               NdiFrameRateNumerator="{Binding Path=NdiFrameRate, Source={x:Static data:ApplicationSettings.Instance}}"

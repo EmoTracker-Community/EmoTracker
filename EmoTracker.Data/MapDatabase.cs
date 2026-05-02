@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Media;
@@ -11,8 +11,18 @@ using System.IO;
 
 namespace EmoTracker.Data
 {
-    public class MapDatabase : ObservableSingleton<MapDatabase>
+    /// <summary>
+    /// Phase 7.1: <see cref="MapDatabase"/> is per-state. Each
+    /// <c>TrackerState</c> owns one. Reach via the holder's
+    /// <see cref="ModelTypeBase.OwnerState"/>, or via
+    /// <c>ApplicationModel.Instance.PrimaryState.Maps</c> /
+    /// <c>Sessions.SessionContext.ActiveState.Maps</c>.
+    /// </summary>
+    public class MapDatabase : ObservableObject
     {
+        // Phase 6 step 11: back-reference to the owning TrackerState.
+        internal Sessions.TrackerState State { get; set; }
+
         ObservableCollection<Map> mMaps = new ObservableCollection<Map>();
 
         public IEnumerable<Map> Maps
@@ -30,27 +40,27 @@ namespace EmoTracker.Data
             mMaps.Clear();
         }
 
-        public bool LegacyLoad(IGamePackage package)
+        public bool LegacyLoad(IGamePackage package, Sessions.TrackerState state)
         {
             //  Do not load legacy data if we already have new-style data
             if (mMaps.Count > 0)
                 return true;
 
-            ScriptManager.Instance.OutputWarning("Loading Legacy Maps");
-            using (new LoggingBlock())
+            this.State?.Scripts.OutputWarning("Loading Legacy Maps");
+            using (new LoggingBlock(state?.Scripts))
             {
-                return IncrementalLoad("maps.json", package);
+                return IncrementalLoad("maps.json", package, state);
             }
         }
 
-        internal bool IncrementalLoad(string path, IGamePackage package)
+        internal bool IncrementalLoad(string path, IGamePackage package, Sessions.TrackerState state = null)
         {
-            ScriptManager.Instance.Output("Loading Maps: {0}", path);
-            using (new LoggingBlock())
+            this.State?.Scripts.Output("Loading Maps: {0}", path);
+            using (new LoggingBlock(state?.Scripts))
             {
                 try
                 {
-                    using (Stream s = package.Open(path))
+                    using (Stream s = package.Open(path, state?.PackageInstance?.ActiveVariant))
                     {
                         if (s != null)
                         {
@@ -59,19 +69,23 @@ namespace EmoTracker.Data
                                 JArray maps = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
                                 foreach (JObject map in maps)
                                 {
-                                    mMaps.Add(new Map()
-                                    {
-                                        Name = map.GetValue<string>("name"),
-                                        LocationSize = map.GetValue<double>("location_size", 70),
-                                        LocationBorderThickness = map.GetValue<double>("location_border_thickness", 8),
-                                        Image = ImageReference.FromPackRelativePath(package, map.GetValue<string>("img"), map.GetValue<string>("img_mods"))
-                                    });
+                                    // Stamp OwnerState + register in resolver BEFORE
+                                    // setting properties so [OnChanged] hooks resolve
+                                    // the holder's state on first access.
+                                    var mapObj = new Map();
+                                    mapObj.OwnerState = state;
+                                    state?.RegisterModel(mapObj);
+                                    mapObj.Name = map.GetValue<string>("name");
+                                    mapObj.LocationSize = map.GetValue<double>("location_size", 70);
+                                    mapObj.LocationBorderThickness = map.GetValue<double>("location_border_thickness", 8);
+                                    mapObj.Image = ImageReference.FromPackRelativePath(package, map.GetValue<string>("img"), map.GetValue<string>("img_mods"));
+                                    mMaps.Add(mapObj);
                                 }
                             }
                         }
                         else
                         {
-                            ScriptManager.Instance.Output("File not found");
+                            this.State?.Scripts.Output("File not found");
                         }
                     }
 
@@ -79,10 +93,20 @@ namespace EmoTracker.Data
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                     return false;
                 }
             }
+        }
+
+        /// <summary>
+        /// Phase 6 step 8: appends a Map to this database. Used by
+        /// <c>TrackerState.Fork()</c>'s coordinated walk.
+        /// </summary>
+        internal void AddMapFromFork(Map map)
+        {
+            if (map != null)
+                mMaps.Add(map);
         }
 
         public Map FindMap(string name)

@@ -1,19 +1,62 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 namespace EmoTracker.Data.Layout
 {
+    /// <summary>
+    /// Phase 4 reactive layout element: surfaces the owning
+    /// <see cref="Sessions.TrackerState"/>'s
+    /// <see cref="LocationDatabase.LastClearedLocation"/> through a stable
+    /// <c>Location</c> property, re-firing when the underlying database
+    /// signals a change. Subscription is wired in <c>TryParseInternal</c>
+    /// (initial pack-load) and <c>OnForked</c> (after fork) so we resolve
+    /// through this element's per-state LocationDatabase.
+    /// </summary>
     [JsonTypeTags("last_cleared_location")]
-    public class LastClearedLocation : LayoutItem
+    public partial class LastClearedLocation : LayoutItem
     {
-        bool mbDisplayCompact = true;
+        [KVOverridable]
+        public partial bool CompactDisplay { get; set; }
+
+        LocationDatabase mSubscribedLocations;
 
         public LastClearedLocation()
         {
-            LocationDatabase.Instance.PropertyChanged += Instance_PropertyChanged;
+        }
+
+        public override void Dispose()
+        {
+            UnsubscribeLocations();
+            base.Dispose();
+        }
+
+        // OwnerState is stamped at construction time. Wire the subscription
+        // wherever the element is finalised — TryParseInternal for the
+        // initial pack-load, OnForked for forks.
+        void SubscribeToOwnerStateLocations()
+        {
+            UnsubscribeLocations();
+            var locations = (this.OwnerState as Sessions.TrackerState)?.Locations;
+            if (locations != null)
+            {
+                mSubscribedLocations = locations;
+                locations.PropertyChanged += Instance_PropertyChanged;
+            }
+            NotifyPropertyChanged("Location");
+        }
+
+        void UnsubscribeLocations()
+        {
+            if (mSubscribedLocations != null)
+            {
+                mSubscribedLocations.PropertyChanged -= Instance_PropertyChanged;
+                mSubscribedLocations = null;
+            }
         }
 
         private void Instance_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -23,19 +66,24 @@ namespace EmoTracker.Data.Layout
 
         public Location Location
         {
-            get { return LocationDatabase.Instance.LastClearedLocation; }
+            get { return (this.OwnerState as Sessions.TrackerState)?.Locations.LastClearedLocation; }
         }
 
-        public bool CompactDisplay
+        protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
         {
-            get { return mbDisplayCompact; }
-            set { SetProperty(ref mbDisplayCompact, value); }
+            definition[nameof(CompactDisplay) + "__def"] = data.GetValue<bool>("compact", true);
         }
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)
         {
-            CompactDisplay = data.GetValue<bool>("compact", true);
+            SubscribeToOwnerStateLocations();
             return true;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            SubscribeToOwnerStateLocations();
         }
     }
 }

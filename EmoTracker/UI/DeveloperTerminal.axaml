@@ -1,0 +1,219 @@
+<Window x:Class="EmoTracker.UI.DeveloperTerminal"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:app="clr-namespace:EmoTracker;assembly=EmoTracker"
+        xmlns:data="clr-namespace:EmoTracker.Data;assembly=EmoTracker.Data"
+        mc:Ignorable="d"
+        Title="Developer Terminal"
+        Height="500"
+        Width="900"
+        Background="#1E1E1E"
+        FontFamily="Cascadia Mono,Consolas,Menlo,monospace">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />   <!-- header: state picker + actions -->
+            <RowDefinition Height="*" />       <!-- scrollback -->
+            <RowDefinition Height="Auto" />   <!-- input prompt -->
+        </Grid.RowDefinitions>
+
+        <!-- ===================================================== Header
+             ZIndex="1" so the header always paints on top of the
+             scrollback row's content. Without this, the
+             SelectableTextBlock occasionally renders past its row
+             boundary into the header area during scroll transitions
+             — especially with the MinHeight=Viewport binding that
+             keeps the scrollback widget filling the viewport so
+             drag-select works from empty space. The header's opaque
+             #252526 background hides any such bleed. -->
+        <Border Grid.Row="0"
+                ZIndex="1"
+                Background="#252526"
+                BorderBrush="#3A3A3A"
+                BorderThickness="0,0,0,1"
+                Padding="8,4">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <TextBlock Grid.Column="0"
+                           Text="State:"
+                           Foreground="#CCCCCC"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
+                <Button Grid.Column="1"
+                        Name="StatePickerButton"
+                        Background="#3C3C3C"
+                        BorderBrush="#3A3A3A"
+                        BorderThickness="1"
+                        Foreground="#CCCCCC"
+                        Padding="8,3"
+                        HorizontalAlignment="Left"
+                        MinWidth="220"
+                        Click="OnStatePickerClicked">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0"
+                                   Name="StatePickerLabel"
+                                   Text="(no state)"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1"
+                                   Text="▾"
+                                   FontSize="11"
+                                   Margin="6,0,0,0"
+                                   Foreground="#888"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </Button>
+
+                <Button Grid.Column="2"
+                        Name="CopyAllButton"
+                        Content="Copy All"
+                        Background="Transparent"
+                        BorderThickness="1"
+                        BorderBrush="#3A3A3A"
+                        Foreground="#CCCCCC"
+                        Padding="8,3"
+                        Margin="8,0,0,0"
+                        Click="OnCopyAllClicked"
+                        ToolTip.Tip="Copy entire scrollback to clipboard" />
+
+                <Button Grid.Column="3"
+                        Name="ClearButton"
+                        Content="Clear"
+                        Background="Transparent"
+                        BorderThickness="1"
+                        BorderBrush="#3A3A3A"
+                        Foreground="#CCCCCC"
+                        Padding="8,3"
+                        Margin="6,0,0,0"
+                        Click="OnClearClicked"
+                        ToolTip.Tip="Clear scrollback (also: /clear)" />
+            </Grid>
+        </Border>
+
+        <!-- ===================================================== Scrollback
+             Single SelectableTextBlock containing one colored Run per
+             log line. Cross-line selection works inside a single
+             widget (drag from line N to line M selects everything
+             between), and per-line color is preserved via Run.Foreground.
+             Inlines are rebuilt in code-behind whenever LogOutput
+             changes.
+
+             MinHeight is bound to the scroller's viewport height in
+             code-behind so the SelectableTextBlock always fills (or
+             exceeds) the visible scrollback area — drag-selecting
+             from anywhere inside the scrollback (including empty
+             space below the last line) hits the SelectableTextBlock
+             and starts a real selection rather than no-op'ing. -->
+        <ScrollViewer Grid.Row="1"
+                      Name="ScrollbackScroller"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Background="#1E1E1E"
+                      ClipToBounds="True"
+                      Padding="6,4">
+            <SelectableTextBlock Name="ScrollbackText"
+                                 FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                 FontSize="12"
+                                 TextWrapping="Wrap"
+                                 Foreground="#CCCCCC"
+                                 SelectionBrush="#264F78"
+                                 VerticalAlignment="Stretch"
+                                 HorizontalAlignment="Stretch" />
+        </ScrollViewer>
+
+        <!-- ===================================================== Input prompt -->
+        <Border Grid.Row="2"
+                Background="#1E1E1E"
+                BorderBrush="#3A3A3A"
+                BorderThickness="0,1,0,0"
+                Padding="6,4">
+            <Grid ColumnDefinitions="Auto,*">
+                <TextBlock Grid.Column="0"
+                           Name="PromptIndicator"
+                           Text="❯"
+                           Foreground="#4FC1FF"
+                           FontSize="14"
+                           VerticalAlignment="Center"
+                           Margin="2,0,8,0" />
+                <TextBox Grid.Column="1"
+                         Name="InputField"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Foreground="#E0E0E0"
+                         CaretBrush="#E0E0E0"
+                         SelectionBrush="#264F78"
+                         SelectionForegroundBrush="#E0E0E0"
+                         FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                         FontSize="13"
+                         AcceptsReturn="False"
+                         Watermark="Type a Lua statement, or /help for slash commands"
+                         KeyDown="OnInputKeyDown"
+                         TextChanged="OnInputTextChanged">
+                    <!-- Avalonia's default TextBox styles a focused-input
+                         glow / pointer-over background that's quite loud
+                         for an embedded prompt. Override the inner border
+                         + content-presenter backgrounds across the
+                         interactive states so the input looks calm:
+                         transparent at rest, a near-black tint when
+                         focused (just enough to indicate input is
+                         routed here), no large coloured glow. -->
+                    <TextBox.Styles>
+                        <Style Selector="TextBox /template/ Border#PART_BorderElement">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                        <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                        </Style>
+                        <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+                            <Setter Property="Background" Value="#252526" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                        <Style Selector="TextBox:focus-within /template/ Border#PART_BorderElement">
+                            <Setter Property="Background" Value="#252526" />
+                            <Setter Property="BorderBrush" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </TextBox.Styles>
+                </TextBox>
+            </Grid>
+        </Border>
+
+        <!-- ===================================================== State picker popup -->
+        <Popup Name="StatePickerPopup"
+               Placement="BottomEdgeAlignedLeft"
+               PlacementTarget="{Binding ElementName=StatePickerButton}"
+               IsLightDismissEnabled="True">
+            <Border Background="#252526"
+                    BorderBrush="#3A3A3A"
+                    BorderThickness="1"
+                    MinWidth="280">
+                <ItemsControl Name="StatePickerItems" />
+            </Border>
+        </Popup>
+
+        <!-- ===================================================== Slash-command auto-complete
+             Anchored above the input field. Opens when the user starts
+             typing a slash command; arrow keys navigate within it,
+             Tab / Enter accepts the highlighted entry, Escape dismisses.
+             Items + selection are managed in code-behind. -->
+        <Popup Name="SlashCompletePopup"
+               Placement="TopEdgeAlignedLeft"
+               PlacementTarget="{Binding ElementName=InputField}"
+               IsLightDismissEnabled="False">
+            <Border Background="#252526"
+                    BorderBrush="#3A3A3A"
+                    BorderThickness="1"
+                    MinWidth="320"
+                    MaxHeight="240">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl Name="SlashCompleteItems" />
+                </ScrollViewer>
+            </Border>
+        </Popup>
+    </Grid>
+
+</Window>

@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
@@ -8,35 +9,18 @@ using System.Collections.Generic;
 namespace EmoTracker.Data.Items
 {
     [JsonTypeTags("progressive_toggle")]
-    public class ProgressiveToggleItem : ItemBase
+    public partial class ProgressiveToggleItem : ItemBase
     {
+        // SwapActions and StageCount are public *fields* on the legacy type. We
+        // preserve them as-is so any consumer that reads or writes them via
+        // direct field access keeps compiling. They are populated only at parse
+        // time, so reference-sharing across forks (via OnForked) is correct.
         public bool SwapActions = false;
         public uint StageCount = 0;
 
-        public bool Active
-        {
-            get { return GetTransactableProperty<bool>(); }
-            set
-            {
-                SetTransactableProperty(value, (processedValue) =>
-                {
-                    UpdateImage();
-                });
-            }
-        }
-
-        public uint CurrentStage
-        {
-            get { return GetTransactableProperty<uint>(); }
-            set
-            {
-                SetTransactableProperty(value, (processedValue) =>
-                {
-                    UpdateImage();
-                });
-            }
-        }
-
+        // Definition data: parsed once at pack-load. Stage / Dictionary are
+        // reference-typed; kept as private fields per the same Phase 2 §2.6
+        // exemption used elsewhere.
         Dictionary<KeyValuePair<bool, uint>, Stage> mStages = new Dictionary<KeyValuePair<bool, uint>, Stage>();
 
         public class Stage : CodeProvider
@@ -46,6 +30,15 @@ namespace EmoTracker.Data.Items
             public ImageReference Icon { get; set; }
             public CodeProvider PrivateCodes { get { return mPrivateCodes; } }
         }
+
+        // Generator-emitted: per-state, undo-tracked, fires UpdateImage on commit.
+        [KVTransactable]
+        [OnChanged(nameof(UpdateImage))]
+        public partial bool Active { get; set; }
+
+        [KVTransactable]
+        [OnChanged(nameof(UpdateImage))]
+        public partial uint CurrentStage { get; set; }
 
         public Stage GetActiveStageForIndex(uint index)
         {
@@ -237,6 +230,15 @@ namespace EmoTracker.Data.Items
             UpdateImage();
 
             return true;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (ProgressiveToggleItem)source;
+            SwapActions = src.SwapActions;
+            StageCount = src.StageCount;
+            mStages = src.mStages;
         }
     }
 }

@@ -1,12 +1,23 @@
 using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using System;
 using System.Collections.Generic;
 using System.IO;
 
 namespace EmoTracker.Data.Media
 {
-    public abstract class ImageReference : ObservableObject
+    public abstract class ImageReference : ObservableObject, IDeepCopyable
     {
+        // ImageReference is a "logically immutable" value as far as the data-model-v2
+        // KV stores are concerned: its identity (URI, filter, layer composition) is
+        // set at construction and never changes; the only mutating field —
+        // ResolvedImage — is a UI-side cache that is intentionally shared across
+        // every observer of the same definition. Returning `this` from DeepCopy()
+        // therefore satisfies the store's "no caller can mutate stored state through
+        // its reference" invariant in spirit: there is no per-state mutation to
+        // protect against, and sharing the cache is a feature.
+        object IDeepCopyable.DeepCopy() => this;
+
         /// <summary>
         /// The resolved display-ready image for this reference.  Set by the image
         /// resolution service on the UI thread once background generation completes.
@@ -32,6 +43,17 @@ namespace EmoTracker.Data.Media
         /// Source image height in pixels.  See <see cref="SourceWidth"/>.
         /// </summary>
         public int SourceHeight { get; set; }
+
+        /// <summary>
+        /// Phase 7.1.h: the <see cref="Sessions.PackageInstance"/> this
+        /// reference was constructed against. Owns the resolved-image
+        /// cache + decoded-source cache for this reference; the resolver
+        /// reads/writes through it instead of consulting the active
+        /// session. For composite refs (Filter / Layered), inherits from
+        /// the wrapped / first-layer reference. May be null for refs
+        /// constructed outside a pack-load (external URIs, tests).
+        /// </summary>
+        public Sessions.PackageInstance PackageInstance { get; internal set; }
 
         /// <summary>
         /// Optional callback invoked whenever a new ImageReference is created via
@@ -202,7 +224,7 @@ namespace EmoTracker.Data.Media
         /// them on the reference.  The stream is opened, header is read, and
         /// the stream is disposed immediately.
         /// </summary>
-        static void PopulateDimensions(ImageReference result, IGamePackage package, string rawPath)
+        static void PopulateDimensions(ImageReference result, IGamePackage package, IGamePackageVariant variant, string rawPath)
         {
             try
             {
@@ -211,7 +233,7 @@ namespace EmoTracker.Data.Media
                 if (filePath.StartsWith("gamepackage://"))
                     filePath = filePath.Substring("gamepackage://".Length);
 
-                using (Stream s = package.Open(filePath))
+                using (Stream s = package.Open(filePath, variant))
                 {
                     if (s != null)
                     {
@@ -229,7 +251,7 @@ namespace EmoTracker.Data.Media
 
         public static ImageReference FromPackRelativePath(string path, string filter = null)
         {
-            return FromPackRelativePath(Tracker.Instance.ActiveGamePackage, path, filter);
+            return FromPackRelativePath(Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage, path, filter);
         }
 
         public static ImageReference FromPackRelativePath(IGamePackage package, string path, string filter = null)
@@ -251,10 +273,14 @@ namespace EmoTracker.Data.Media
             var result = new ConcreteImageReference()
             {
                 URI = new Uri(path),
-                Filter = filter
+                Filter = filter,
+                // Phase 7.1.h: stamp the owning PackageInstance so the
+                // resolver can find this reference's cache + open the
+                // file directly without consulting an ambient session.
+                PackageInstance = Sessions.ActiveSession.FindPackageInstanceFor(package),
             };
 
-            PopulateDimensions(result, package, path);
+            PopulateDimensions(result, package, result.PackageInstance?.ActiveVariant, path);
             NotifyCreated(result);
 
             return result;
@@ -271,7 +297,10 @@ namespace EmoTracker.Data.Media
             var result = new FilterImageReference()
             {
                 Reference = existingReference,
-                Filter = filter
+                Filter = filter,
+                // Inherit the PI back-ref from the wrapped reference so
+                // the resolver can navigate to the same per-PI caches.
+                PackageInstance = existingReference.PackageInstance,
             };
 
             // Filters don't change dimensions – inherit from the source
@@ -289,6 +318,9 @@ namespace EmoTracker.Data.Media
             {
                 URI = uri,
                 Filter = filter
+                // External URIs aren't pack-relative, so PackageInstance
+                // stays null. The resolver falls back to the service-wide
+                // cache for these.
             };
 
             NotifyCreated(result);
@@ -312,6 +344,9 @@ namespace EmoTracker.Data.Media
                 var firstLayer = instance.Layers[0];
                 instance.SourceWidth = firstLayer.SourceWidth;
                 instance.SourceHeight = firstLayer.SourceHeight;
+                // Inherit PI back-ref from the first layer (all layers
+                // typically belong to the same PI in practice).
+                instance.PackageInstance = firstLayer.PackageInstance;
 
                 NotifyCreated(instance);
 

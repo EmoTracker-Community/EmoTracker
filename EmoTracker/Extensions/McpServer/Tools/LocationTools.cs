@@ -15,13 +15,29 @@ namespace EmoTracker.Extensions.McpServer.Tools
     [McpServerToolType]
     public class LocationTools
     {
+        // Phase 6 step 11: helper that resolves the active LocationDatabase
+        // through the primary state, with a singleton fallback for the
+        // pre-pack-load window. Replaces direct ActiveLocations
+        // access.
+        static LocationDatabase ActiveLocations
+        {
+            get
+            {
+                var primary = ApplicationModel.Instance?.PrimaryState?.Locations;
+                if (primary != null) return primary;
+#pragma warning disable CS0618 // legacy fallback; pre-pack-load no PrimaryState exists
+                return ApplicationModel.Instance?.PrimaryState?.Locations;
+#pragma warning restore CS0618
+            }
+        }
+
         [McpServerTool(Name = "get_location")]
         [Description("Get full details for a location by name, including sections, children, pinned state, badges, and notes")]
         public static async Task<string> GetLocation([Description("The location name")] string name)
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var loc = LocationDatabase.Instance.FindLocation(name);
+                var loc = ActiveLocations.FindLocation(name);
                 if (loc == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -93,7 +109,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 }
 
                 var mapLocations = new List<object>();
-                foreach (var map in MapDatabase.Instance.Maps)
+                // Phase 6 step 11: app-level callsite uses ApplicationModel's
+                // PrimaryState to reach the active map database.
+                var maps = ApplicationModel.Instance.PrimaryState?.Maps?.Maps
+                    ?? System.Linq.Enumerable.Empty<Map>();
+                foreach (var map in maps)
                 {
                     foreach (var ml in map.Locations)
                     {
@@ -146,11 +166,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var loc = LocationDatabase.Instance.FindLocation(name);
+                    var loc = ActiveLocations.FindLocation(name);
                     if (loc == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{name}' not found" });
 
-                    LocationDatabase.Instance.PinLocation(loc);
+                    ActiveLocations.PinLocation(loc);
                     return JsonSerializer.Serialize(new { success = true, name = loc.Name, pinned = loc.Pinned });
                 }
                 catch (Exception ex)
@@ -168,11 +188,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var loc = LocationDatabase.Instance.FindLocation(name);
+                    var loc = ActiveLocations.FindLocation(name);
                     if (loc == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{name}' not found" });
 
-                    LocationDatabase.Instance.UnpinLocation(loc);
+                    ActiveLocations.UnpinLocation(loc);
                     return JsonSerializer.Serialize(new { success = true, name = loc.Name, pinned = loc.Pinned });
                 }
                 catch (Exception ex)
@@ -188,7 +208,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var pinned = LocationDatabase.Instance.PinnedLocations;
+                var pinned = ActiveLocations.PinnedLocations;
                 var result = new List<object>();
                 foreach (var loc in pinned)
                 {
@@ -213,7 +233,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var loc = LocationDatabase.Instance.FindLocation(locationName);
+                    var loc = ActiveLocations.FindLocation(locationName);
                     if (loc == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{locationName}' not found" });
 
@@ -221,7 +241,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (section == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Section '{sectionName}' not found in '{locationName}'" });
 
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    using (loc.OpenTransaction())
                     {
                         if (section.AvailableChestCount > 0)
                             section.AvailableChestCount = 0;
@@ -253,11 +273,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var loc = LocationDatabase.Instance.FindLocation(name);
+                    var loc = ActiveLocations.FindLocation(name);
                     if (loc == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{name}' not found" });
 
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    using (loc.OpenTransaction())
                     {
                         foreach (var section in loc.Sections)
                         {
@@ -286,7 +306,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var loc = LocationDatabase.Instance.FindLocation(name);
+                var loc = ActiveLocations.FindLocation(name);
                 if (loc == null)
                     return JsonSerializer.Serialize(new { found = false, error = $"Location '{name}' not found" });
 
@@ -324,7 +344,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var locations = LocationDatabase.Instance.AllLocations;
+                var locations = ActiveLocations.AllLocations;
                 if (locations == null)
                     return JsonSerializer.Serialize(Array.Empty<object>());
 
@@ -373,7 +393,9 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var count = Tracker.Instance.ProviderCountForCode(code, out AccessibilityLevel maxAccessibility);
+                    var target = ApplicationModel.Instance.PrimaryState;
+                    AccessibilityLevel maxAccessibility = AccessibilityLevel.None;
+                    uint count = target?.ProviderCountForCode(code, out maxAccessibility) ?? 0;
                     return JsonSerializer.Serialize(new
                     {
                         code,

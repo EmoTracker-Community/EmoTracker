@@ -1,54 +1,255 @@
 using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Core.Services;
 using EmoTracker.Data;
 using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
+using EmoTracker.Data.Sessions;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
 namespace EmoTracker.Extensions.AutoTracker
 {
-    public class AutoTrackerExtension : ObservableObject, Extension, IMemoryWatchService
+    /// <summary>
+    /// Per-state auto-tracker runtime. One instance per
+    /// <see cref="TrackerState"/>: owns the state's selected provider,
+    /// active provider, connection status, and the 30 ms polling timer
+    /// that drives reads.
+    ///
+    /// <para>
+    /// Phase 7.13: memory segments + timers are now owned by the
+    /// per-state <see cref="ScriptManager"/> directly — pack scripts call
+    /// <c>ScriptHost:AddMemoryWatch(...)</c> which mints a
+    /// <see cref="LuaMemorySegment"/>, registers it on the state's
+    /// resolver (so the LuaStateCloner can remap pack-cached references
+    /// across forks), and stores it on
+    /// <c>ScriptManager.MemorySegments</c>. This extension just iterates
+    /// those collections each poll tick and pumps each entry through
+    /// <c>UpdateWithConnector</c> with this state's active provider.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Fork support.</b> <see cref="Fork"/> allocates a fresh,
+    /// disconnected instance bound to the destination state. The
+    /// memory-segment list lives on the state's ScriptManager and forks
+    /// natively (segments are <see cref="ModelTypeBase"/>); no replay or
+    /// re-registration is needed here. We do NOT carry the source's
+    /// active-provider connection across — each state owns its
+    /// connection.
+    /// </para>
+    /// </summary>
+    public class AutoTrackerExtension : ObservableObject, ITrackerExtension, IDisposable
     {
-        #region -- Extension --
+        public string Name => "Auto Tracking";
+        public string UID => "emotracker_auto_tracking";
+        public int Priority => -100;
 
-        public string Name { get { return "Auto Tracking"; } }
+        TrackerState mState;
+        public TrackerState State => mState;
 
-        public string UID { get { return "emotracker_auto_tracking"; } }
-
-        public int Priority { get { return -100; } }
-
-        public object StatusBarControl
+        public AutoTrackerExtension()
         {
-            get
-            {
-                return new AutoTrackerExtensionView { DataContext = this };
-            }
+            StartCommand = new DelegateCommand(StartAutoTracking, CanStartAutoTracking);
+            StopCommand = new DelegateCommand(StopAutoTracking, CanStopAutoTracking);
+            SetProviderCommand = new DelegateCommand(SetProvider);
+            SetDeviceCommand = new DelegateCommand(SetDevice);
         }
 
-        public void OnPackageUnloaded()
+        // ---------- ITrackerExtension lifecycle ---------------------------
+
+        public void OnAttachedToState(TrackerState state)
         {
+            mState = state ?? throw new ArgumentNullException(nameof(state));
+
+            // Wire the AutoTracker bridge so pack scripts (init.lua) can
+            // find providers / device info. Memory segments themselves
+            // are NOT owned by us any more — they live on
+            // state.Scripts.MemorySegments (Phase 7.13).
+            state.Scripts.SetGlobalObject("AutoTracker", this);
+
+            // Hook PackageLoader's OnPackageLoadComplete to refresh the
+            // platform-driven provider list when the state's pack reloads.
+            // (OnPackageLoadStarting used to clear our owned segment list
+            // before the new init.lua ran; that's now handled by
+            // ScriptManager.Reset which the load goes through.)
+            PackageLoader.OnPackageLoadStarting += OnAnyPackageLoadStarting;
+            PackageLoader.OnPackageLoadComplete += OnAnyPackageLoadComplete;
+
+            // Watch the per-state ScriptManager for MemorySegments /
+            // MemoryTimers mutations. Pack init.lua registers these
+            // during pack-load (covered by OnAnyPackageLoadComplete
+            // below), but packs can also register/unregister mid-
+            // session — for example via a settings-driven branch in
+            // init.lua, or via a pack-script callback that responds to
+            // a config change. Active depends on whether ANY watches
+            // exist, so we forward those mutation signals onto our own
+            // PropertyChanged for Active / StatusBarControl so the
+            // status-bar slot collapses + re-appears as registrations
+            // come and go.
+            state.Scripts.PropertyChanged += OnScriptsPropertyChanged;
+
+            // Seed providers from THIS state's PackageInstance — by the
+            // time OnAttachedToState fires, the state has been registered
+            // with its PackageInstance (and for primary states forked
+            // from a loaded definitional, the pack data is already
+            // populated).
+            var pkg = state.PackageInstance?.GamePackage;
+            if (pkg != null)
+                ActivePlatform = pkg.Platform;
+
+            // Boot the polling timer.
+            BootTimer();
+
+            // Forks attach with segments already in place (carried via
+            // TrackerState.Fork's AdoptForkedSegment loop) and providers
+            // just seeded above. Push an Active / StatusBarControl tick
+            // so any binding established before this call resolves with
+            // the correct visibility from the start.
+            NotifyPropertyChanged(nameof(Active));
+            NotifyPropertyChanged(nameof(StatusBarControl));
+        }
+
+        public void OnDetachedFromState(TrackerState state)
+        {
+            PackageLoader.OnPackageLoadStarting -= OnAnyPackageLoadStarting;
+            PackageLoader.OnPackageLoadComplete -= OnAnyPackageLoadComplete;
+            if (state?.Scripts != null)
+                state.Scripts.PropertyChanged -= OnScriptsPropertyChanged;
             StopAutoTracking();
+            // Unsubscribe from this AT's owned provider — defensive,
+            // since DisposeProviders below will also dispose them.
+            if (mSelectedProvider != null)
+            {
+                mSelectedProvider.AvailableDevicesChanged -= SelectedProvider_AvailableDevicesChanged;
+                mSelectedProvider = null;
+            }
+            // Dispose the per-AT provider instances we minted in
+            // ActivePlatform's setter. Each AT owns its provider
+            // instances; releasing them here releases their underlying
+            // OS handles (USB / serial / network) so a fresh AT can
+            // bind cleanly without inheriting a previous AT's state.
+            DisposeProviders();
             Clear();
             Error = false;
+            DisposeTimer();
+            mState = null;
         }
 
-        public void OnPackageLoaded()
+        void DisposeProviders()
         {
-            if (Tracker.Instance.ActiveGamePackage != null)
-                ActivePlatform = Tracker.Instance.ActiveGamePackage.Platform;
+            foreach (var provider in mApplicableProviders)
+            {
+                try { provider?.Dispose(); } catch { }
+            }
+            mApplicableProviders.Clear();
+        }
 
-            NotifyPropertyChanged("Active");
+        public ITrackerExtension Fork(TrackerState destState)
+        {
+            // Fresh, disconnected instance bound to the destination
+            // state. Memory watches will be re-registered by the fork's
+            // ScriptManager.RunCloneFrom + RewireForkedLuaItem path during
+            // TrackerState.Fork — by the time OnAttachedToState fires here
+            // the fork's scripts are ready to (re-)register watches.
+            return new AutoTrackerExtension();
+        }
+
+        // Fresh status-bar control instance per call (Avalonia visuals
+        // are single-parent — multiple windows binding the per-state
+        // indicator each get their own instance pointing at this DC).
+        //
+        // Returns null when the extension isn't <see cref="Active"/> (no
+        // applicable providers, OR no memory watches / timers registered
+        // by the pack). The status-bar host's per-extension wrapper has
+        // <c>IsVisible="{Binding StatusBarControl, Converter=…IsNotNull}"</c>
+        // — null collapses the entire slot so the icon takes zero space,
+        // including its Margin. <see cref="Active"/> changes raise
+        // <c>PropertyChanged(nameof(StatusBarControl))</c> so the host
+        // re-fetches and re-evaluates visibility.
+        public object StatusBarControl
+            => Active ? new AutoTrackerExtensionView { DataContext = this } : null;
+
+        public JToken SerializeToJson() => null;
+        public bool DeserializeFromJson(JToken token) => true;
+
+        void OnAnyPackageLoadStarting(object sender, EmoTracker.Data.Sessions.PackageLoader.PackageLoadEventArgs e)
+        {
+            // Filter to OUR state. PackageLoader fires the event for every
+            // state load; we only react to our own.
+            if (e == null) return;
+            if (!ReferenceEquals(e.Target, mState)) return;
+
+            // The state's Lua interpreter is about to be Reset() — close +
+            // re-open. Drop our memory segments now so we don't carry
+            // callbacks that reference the soon-to-be-closed interpreter.
+            // StopAutoTracking first to drain any in-flight poll cleanly;
+            // the active provider connection itself is preserved (the user
+            // chose to stay connected across reloads), but the watch list
+            // is rebuilt by the new init.lua's AddMemoryWatch calls.
+            //
+            // Without this hook, the next memory poll after reload+
+            // reconnect invokes SafeCall on a LuaFunction whose underlying
+            // Lua state is closed, which hangs the UI thread inside NLua.
+            bool wasConnected = ActiveProvider != null;
+            var preservedProvider = SelectedProvider;
+
+            // Drain in-flight + dispose stale segments. Note Clear() also
+            // clears the pending update queue.
+            Clear();
+
+            // Restore the connection target so the user doesn't have to
+            // re-pick it after init.lua repopulates the watch list.
+            if (preservedProvider != null)
+                SelectedProvider = preservedProvider;
+        }
+
+        void OnAnyPackageLoadComplete(object sender, EmoTracker.Data.Sessions.PackageLoader.PackageLoadEventArgs e)
+        {
+            // Filter to OUR state. PackageLoader fires the event for every
+            // state load; we only care about our own pack changes.
+            if (e == null) return;
+            if (!ReferenceEquals(e.Target, mState)) return;
+
+            if (e.Package != null)
+                ActivePlatform = e.Package.Platform;
+            else
+                ActivePlatform = default;
+
+            NotifyPropertyChanged(nameof(Active));
+            NotifyPropertyChanged(nameof(StatusBarControl));
+        }
+
+        // Forward MemorySegments / MemoryTimers mutations on the per-
+        // state ScriptManager onto Active + StatusBarControl. Hook is
+        // installed in OnAttachedToState; ScriptManager raises these
+        // PropertyChanged events from AddMemoryWatch / AddMemoryTimer /
+        // RemoveMemoryWatch / RemoveMemoryTimer / AdoptForkedSegment /
+        // Reset.
+        void OnScriptsPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ScriptManager.MemorySegments)
+                || e.PropertyName == nameof(ScriptManager.MemoryTimers))
+            {
+                NotifyPropertyChanged(nameof(Active));
+                NotifyPropertyChanged(nameof(StatusBarControl));
+            }
         }
 
         public bool Active
         {
-            get { return mApplicableProviders.Count > 0 && mActiveMemoryUpdates.Count > 0; }
+            get
+            {
+                if (mApplicableProviders.Count == 0) return false;
+                var scripts = mState?.Scripts;
+                if (scripts == null) return false;
+                return scripts.MemorySegments.Count > 0 || scripts.MemoryTimers.Count > 0;
+            }
         }
 
         bool mbError = false;
@@ -58,9 +259,7 @@ namespace EmoTracker.Extensions.AutoTracker
             private set { SetProperty(ref mbError, value); }
         }
 
-        #endregion
-
-        #region -- Provider Management --
+        // ---------- Provider Management -----------------------------------
 
         bool mbConnected = false;
         public bool Connected
@@ -77,25 +276,35 @@ namespace EmoTracker.Extensions.AutoTracker
             {
                 if (SetProperty(ref mActivePlatform, value))
                 {
-                    mApplicableProviders.Clear();
+                    // Dispose previously-owned provider instances before
+                    // replacing the list. GetProvidersForPack now mints
+                    // fresh per-state instances, so leaving old ones
+                    // un-disposed leaks their underlying OS handles
+                    // (USB / serial / network sockets).
+                    DisposeProviders();
 
-                    if (Tracker.Instance.ActiveGamePackage != null)
+                    // Use THIS state's pack rather than the app's primary —
+                    // multiple states across windows may have different
+                    // packs loaded.
+                    var pkg = mState?.PackageInstance?.GamePackage;
+                    if (pkg != null)
                     {
-                        var providers = AutoTrackingProviderRegistry.Instance.GetProvidersForPack(Tracker.Instance.ActiveGamePackage);
+                        var providers = AutoTrackingProviderRegistry.Instance.GetProvidersForPack(pkg);
                         foreach (var provider in providers)
-                        {
                             mApplicableProviders.Add(provider);
-                        }
                     }
+                    NotifyPropertyChanged(nameof(ApplicableProviders));
+                    // Provider count is one of the two inputs to Active;
+                    // when the platform changes we may be flipping from
+                    // "no providers" to "has providers" or vice versa.
+                    NotifyPropertyChanged(nameof(Active));
+                    NotifyPropertyChanged(nameof(StatusBarControl));
                 }
             }
         }
 
         ObservableCollection<IAutoTrackingProvider> mApplicableProviders = new ObservableCollection<IAutoTrackingProvider>();
-        public IEnumerable<IAutoTrackingProvider> ApplicableProviders
-        {
-            get { return mApplicableProviders; }
-        }
+        public IEnumerable<IAutoTrackingProvider> ApplicableProviders => mApplicableProviders;
 
         IAutoTrackingProvider mSelectedProvider;
         public IAutoTrackingProvider SelectedProvider
@@ -119,12 +328,18 @@ namespace EmoTracker.Extensions.AutoTracker
 
         private void SelectedProvider_AvailableDevicesChanged(object sender, EventArgs e)
         {
-            // Auto-select first device if the previously selected one is gone or none was chosen
-            if (SelectedProvider != null && SelectedProvider.DefaultDevice == null && SelectedProvider.AvailableDevices.Count > 0)
-                SelectedProvider.DefaultDevice = SelectedProvider.AvailableDevices[0];
-
+            // SNI fires AvailableDevicesChanged from a worker thread on
+            // device hot-plug / disconnect. Anything that touches provider
+            // state (including DefaultDevice writes, which can trigger
+            // device verification inside SNI) MUST run on the UI thread —
+            // otherwise SNI logs "Call from invalid thread" and the
+            // shared singleton ends up in a corrupted state visible to
+            // every per-state AT subscribed to it.
             Dispatch.BeginInvoke(() =>
             {
+                if (SelectedProvider != null && SelectedProvider.DefaultDevice == null && SelectedProvider.AvailableDevices.Count > 0)
+                    SelectedProvider.DefaultDevice = SelectedProvider.AvailableDevices[0];
+
                 InvalidateCommandAvailability();
                 NotifyPropertyChanged(nameof(SelectedProvider));
             });
@@ -163,15 +378,18 @@ namespace EmoTracker.Extensions.AutoTracker
 
         private void ActiveProvider_ConnectionStatusChanged(object sender, bool connected)
         {
-            if (mActiveProvider != null)
+            // SNI fires ConnectionStatusChanged from worker threads on
+            // socket-level connect/disconnect. Marshal to the UI thread
+            // before mutating Connected (which fires PropertyChanged
+            // observed by Avalonia bindings).
+            Dispatch.BeginInvoke(() =>
             {
-                Connected = connected;
-            }
+                if (mActiveProvider != null)
+                    Connected = connected;
+            });
         }
 
-        #endregion
-
-        #region -- Raw Read API --
+        // ---------- Raw Read API ------------------------------------------
 
         public byte ReadU8(ulong address, byte defaultVal = 0)
         {
@@ -186,17 +404,14 @@ namespace EmoTracker.Extensions.AutoTracker
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputError("Error occurred during raw byte read via AutoTracker");
-                ScriptManager.Instance.OutputException(e);
+                mState?.Scripts?.OutputError("Error occurred during raw byte read via AutoTracker");
+                mState?.Scripts?.OutputException(e);
             }
-
             return defaultVal;
         }
 
         public sbyte Read8(ulong address, sbyte defaultVal = 0)
-        {
-            return unchecked((sbyte)ReadU8(address, unchecked((byte)defaultVal)));
-        }
+            => unchecked((sbyte)ReadU8(address, unchecked((byte)defaultVal)));
 
         public ushort ReadU16(ulong address, ushort defaultVal = 0)
         {
@@ -211,50 +426,21 @@ namespace EmoTracker.Extensions.AutoTracker
             }
             catch (Exception e)
             {
-                ScriptManager.Instance.OutputError("Error occurred during raw word read via AutoTracker");
-                ScriptManager.Instance.OutputException(e);
+                mState?.Scripts?.OutputError("Error occurred during raw word read via AutoTracker");
+                mState?.Scripts?.OutputException(e);
             }
-
             return defaultVal;
         }
 
         public short Read16(ulong address, short defaultVal = 0)
-        {
-            return unchecked((short)ReadU16(address, unchecked((ushort)defaultVal)));
-        }
+            => unchecked((short)ReadU16(address, unchecked((ushort)defaultVal)));
 
-        #endregion
+        // ---------- Commands ----------------------------------------------
 
-        #region -- Commands --
-
-        DelegateCommand mStartCommand;
-        DelegateCommand mStopCommand;
-        DelegateCommand mSetProviderCommand;
-        DelegateCommand mSetDeviceCommand;
-
-        public DelegateCommand StartCommand
-        {
-            get { return mStartCommand; }
-            set { SetProperty(ref mStartCommand, value); }
-        }
-
-        public DelegateCommand StopCommand
-        {
-            get { return mStopCommand; }
-            set { SetProperty(ref mStopCommand, value); }
-        }
-
-        public DelegateCommand SetProviderCommand
-        {
-            get { return mSetProviderCommand; }
-            set { SetProperty(ref mSetProviderCommand, value); }
-        }
-
-        public DelegateCommand SetDeviceCommand
-        {
-            get { return mSetDeviceCommand; }
-            set { SetProperty(ref mSetDeviceCommand, value); }
-        }
+        public DelegateCommand StartCommand { get; }
+        public DelegateCommand StopCommand { get; }
+        public DelegateCommand SetProviderCommand { get; }
+        public DelegateCommand SetDeviceCommand { get; }
 
         void InvalidateCommandAvailability()
         {
@@ -270,11 +456,8 @@ namespace EmoTracker.Extensions.AutoTracker
                 SelectedProvider = provider;
                 await provider.RefreshDevicesAsync();
 
-                // Auto-select first device if none selected
                 if (provider.DefaultDevice == null && provider.AvailableDevices.Count > 0)
-                {
                     provider.DefaultDevice = provider.AvailableDevices[0];
-                }
 
                 InvalidateCommandAvailability();
                 NotifyPropertyChanged(nameof(SelectedProvider));
@@ -287,32 +470,25 @@ namespace EmoTracker.Extensions.AutoTracker
             if (device != null && SelectedProvider != null)
             {
                 SelectedProvider.DefaultDevice = device;
-
                 if (CanStartAutoTracking())
                     StartAutoTracking();
             }
         }
 
-        private bool CanStopAutoTracking(object obj = null)
-        {
-            return ActiveProvider != null;
-        }
+        private bool CanStopAutoTracking(object obj = null) => ActiveProvider != null;
 
         private void StopAutoTracking(object obj = null)
         {
             WaitForPendingMemoryUpdate();
-
             bool bWasActive = ActiveProvider != null;
             ActiveProvider = null;
 
-            if (bWasActive)
-                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStopped);
+            if (bWasActive && mState != null)
+                ((IScriptManager)mState.Scripts).InvokeStandardCallback(StandardCallback.AutoTrackerStopped);
         }
 
         private bool CanStartAutoTracking(object obj = null)
-        {
-            return ActiveProvider == null && SelectedProvider != null && SelectedProvider.DefaultDevice != null;
-        }
+            => ActiveProvider == null && SelectedProvider != null && SelectedProvider.DefaultDevice != null;
 
         private async void StartAutoTracking(object obj = null)
         {
@@ -320,18 +496,23 @@ namespace EmoTracker.Extensions.AutoTracker
             {
                 if (SelectedProvider != null)
                 {
-                    //  Force mark all memory updates as dirty to ensure they update
-                    foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
+                    // Mark every per-state segment dirty so the next poll
+                    // ignores its "I read recently, skip me" guard and
+                    // forces a fresh read against the just-connected
+                    // device.
+                    var scripts = mState?.Scripts;
+                    if (scripts != null)
                     {
-                        update.MarkDirty();
+                        foreach (var seg in scripts.MemorySegments) seg.MarkDirty();
+                        foreach (var t in scripts.MemoryTimers) t.MarkDirty();
                     }
 
                     try
                     {
                         await SelectedProvider.ConnectAsync();
                         ActiveProvider = SelectedProvider;
-
-                        ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AutoTrackerStarted);
+                        if (mState != null)
+                            ((IScriptManager)mState.Scripts).InvokeStandardCallback(StandardCallback.AutoTrackerStarted);
                     }
                     catch
                     {
@@ -340,74 +521,75 @@ namespace EmoTracker.Extensions.AutoTracker
             }
         }
 
-        #endregion
-
-        public AutoTrackerExtension()
-        {
-            StartCommand = new DelegateCommand(StartAutoTracking, CanStartAutoTracking);
-            StopCommand = new DelegateCommand(StopAutoTracking, CanStopAutoTracking);
-            SetProviderCommand = new DelegateCommand(SetProvider);
-            SetDeviceCommand = new DelegateCommand(SetDevice);
-        }
+        // ---------- Memory polling ----------------------------------------
 
         System.Timers.Timer mUpdateTimer;
+        Task mActiveUpdateTask = null;
 
-        public void Start()
+        void BootTimer()
         {
-            ScriptManager.Instance.SetGlobalObject("AutoTracker", this);
-            ScriptManager.Instance.SetMemoryWatchService(this);
-
+            if (mUpdateTimer != null) return;
             mUpdateTimer = new System.Timers.Timer(30);
             mUpdateTimer.Elapsed += (s, e) => UpdateMemoryHooks(s, e);
             mUpdateTimer.AutoReset = true;
             mUpdateTimer.Start();
         }
 
-        Task mActiveUpdateTask = null;
-
-        private bool HasPendingMemoryUpdate()
+        void DisposeTimer()
         {
-            return mActiveUpdateTask != null;
+            if (mUpdateTimer != null)
+            {
+                mUpdateTimer.Stop();
+                mUpdateTimer.Dispose();
+                mUpdateTimer = null;
+            }
         }
+
+        private bool HasPendingMemoryUpdate() => mActiveUpdateTask != null;
 
         public void WaitForPendingMemoryUpdate()
         {
             if (mActiveUpdateTask != null)
-            {
                 mActiveUpdateTask.Wait(1000);
-            }
-
             mActiveUpdateTask = null;
         }
 
         private void UpdateMemoryHooks(object sender, EventArgs e)
         {
             DateTime now = DateTime.Now;
-
-            if (HasPendingMemoryUpdate())
-                return;
+            if (HasPendingMemoryUpdate()) return;
 
             if (ActiveProvider != null && Connected)
             {
-                foreach (IUpdateWithConnector update in mActiveMemoryUpdates)
+                // Phase 7.13: source-of-truth for what to poll is the
+                // per-state ScriptManager — it owns LuaMemorySegment +
+                // MemoryTimer instances directly. Iterate both.
+                var scripts = mState?.Scripts;
+                if (scripts != null)
                 {
-                    if (update.ShouldUpdate(now))
+                    foreach (var seg in scripts.MemorySegments)
                     {
-                        PushPendingMemoryUpdate(update);
+                        if (seg.ShouldUpdate(now))
+                            PushPendingMemoryUpdate(seg);
+                    }
+                    foreach (var t in scripts.MemoryTimers)
+                    {
+                        if (t.ShouldUpdate(now))
+                            PushPendingMemoryUpdate(t);
                     }
                 }
 
                 PackageManager.Game game = null;
-                if (Tracker.Instance.ActiveGamePackage != null)
+                var packForGame = mState?.PackageInstance?.GamePackage;
+                if (packForGame != null)
                 {
-                    PackageManager.Game gameInstance = PackageManager.Instance.FindGame(Tracker.Instance.ActiveGamePackage.Game);
+                    PackageManager.Game gameInstance = PackageManager.Instance.FindGame(packForGame.Game);
                     if (gameInstance != PackageManager.Instance.DefaultGame)
                         game = gameInstance;
                 }
 
                 var providerInstance = ActiveProvider;
 
-                //  Detect disconnection — stop autotracking automatically
                 if (providerInstance != null && !providerInstance.IsConnected)
                 {
                     Dispatch.BeginInvoke(() => StopAutoTracking());
@@ -418,11 +600,9 @@ namespace EmoTracker.Extensions.AutoTracker
                 mActiveUpdateTask = Task.Run(() =>
                 {
                     bool bError = false;
-
                     try
                     {
                         int countAtStart = GetPendingMemoryUpdateCount();
-
                         Stopwatch sw = new Stopwatch();
                         sw.Start();
 
@@ -434,13 +614,10 @@ namespace EmoTracker.Extensions.AutoTracker
                             {
                                 if (update.UpdateWithConnector(providerInstance, game) != MemoryUpdateResult.Success)
                                     bError = true;
-
                                 ++count;
                             }
                             else
-                            {
                                 break;
-                            }
                         }
                     }
                     finally
@@ -455,98 +632,27 @@ namespace EmoTracker.Extensions.AutoTracker
             }
         }
 
-        public void Stop()
-        {
-            StopAutoTracking();
+        // ---------- Memory polling queue ----------------------------------
+        // Phase 7.13: segments + timers are owned by the per-state
+        // ScriptManager. The polling loop above pulls from
+        // mState.Scripts.MemorySegments / MemoryTimers each tick and
+        // queues entries that are due for an update here.
 
-            if (mUpdateTimer != null)
-            {
-                mUpdateTimer.Stop();
-                mUpdateTimer.Dispose();
-                mUpdateTimer = null;
-            }
-        }
-
-        public JToken SerializeToJson()
-        {
-            return null;
-        }
-
-        public bool DeserializeFromJson(JToken token)
-        {
-            return true;
-        }
-
-        List<IUpdateWithConnector> mActiveMemoryUpdates = new List<IUpdateWithConnector>();
-
-        public IMemorySegment AddMemoryWatch(string name, ulong startAddress, ulong length, Func<IMemorySegment, bool> callback, Action<IMemorySegment> disposeCallback, int period)
-        {
-            lock (this)
-            {
-                MemorySegment segment = new MemorySegment(name, startAddress, length, callback, disposeCallback, period);
-                mActiveMemoryUpdates.Add(segment);
-                NotifyPropertyChanged("Active");
-
-                return segment;
-            }
-        }
-
-        public void RemoveMemoryWatch(IMemorySegment segmentBase)
-        {
-            lock (this)
-            {
-                MemorySegment segment = segmentBase as MemorySegment;
-                if (segment != null && mActiveMemoryUpdates.Contains(segment))
-                {
-                    mActiveMemoryUpdates.Remove(segment);
-                    segment.Dispose();
-                }
-            }
-        }
-
-        public MemoryTimer AddMemoryTimer(string name, Func<IAutoTrackingProvider, PackageManager.Game, bool> callback, int period)
-        {
-            lock (this)
-            {
-                MemoryTimer timer = new MemoryTimer(name, callback, period);
-                mActiveMemoryUpdates.Add(timer);
-                NotifyPropertyChanged("Active");
-
-                return timer;
-            }
-        }
-
-        public void RemoveMemoryTimer(MemoryTimer timer)
-        {
-            lock (this)
-            {
-                if (timer != null && mActiveMemoryUpdates.Contains(timer))
-                {
-                    mActiveMemoryUpdates.Remove(timer);
-                    DisposeObject(timer);
-                }
-            }
-        }
-
-        Queue<IUpdateWithConnector> mPendingMemoryUpdateTasks = new Queue<IUpdateWithConnector>();
+        readonly Queue<IUpdateWithConnector> mPendingMemoryUpdateTasks = new Queue<IUpdateWithConnector>();
 
         void PushPendingMemoryUpdate(IUpdateWithConnector update)
         {
             lock (mPendingMemoryUpdateTasks)
             {
                 if (!mPendingMemoryUpdateTasks.Contains(update))
-                {
                     mPendingMemoryUpdateTasks.Enqueue(update);
-                }
             }
         }
 
         int GetPendingMemoryUpdateCount()
         {
             lock (mPendingMemoryUpdateTasks)
-            {
                 return mPendingMemoryUpdateTasks.Count;
-            }
         }
 
         IUpdateWithConnector PopPendingMemoryUpdate()
@@ -570,14 +676,20 @@ namespace EmoTracker.Extensions.AutoTracker
         void Clear()
         {
             WaitForPendingMemoryUpdate();
-
             lock (this)
             {
                 mPendingMemoryUpdateTasks.Clear();
-
-                DisposeCollection(mActiveMemoryUpdates);
-                mActiveMemoryUpdates.Clear();
+                // Segments / timers themselves are owned by the per-state
+                // ScriptManager and disposed via its Reset path; we just
+                // drop the in-flight queue here.
             }
+        }
+
+        public override void Dispose()
+        {
+            if (mState != null)
+                OnDetachedFromState(mState);
+            base.Dispose();
         }
     }
 }

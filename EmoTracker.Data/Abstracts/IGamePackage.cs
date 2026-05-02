@@ -30,15 +30,23 @@ namespace EmoTracker.Data
 
         IEnumerable<IGamePackageVariant> AvailableVariants { get; }
 
-        IGamePackageVariant ActiveVariant { get; set; }
-
         IGamePackageVariant FindVariant(string uid);
 
         string OverridePath { get; }
 
-        System.IO.Stream Open(string path, bool ignoreVariants = false, bool ignoreOverrides = false);
+        /// <summary>
+        /// Open <paramref name="path"/> from the pack, optionally with
+        /// variant-aware resolution. Pass the active <see cref="IGamePackageVariant"/>
+        /// for the calling context (typically the
+        /// <see cref="Sessions.PackageInstance.ActiveVariant"/> of the
+        /// state on whose behalf the open runs); pass null for non-variant
+        /// resolution. Resolution order: variant override path → variant
+        /// base path → pack override path → pack base path.
+        /// </summary>
+        System.IO.Stream Open(string path, IGamePackageVariant variant = null, bool ignoreVariants = false, bool ignoreOverrides = false);
 
-        bool Exists(string path, bool ignoreVariants = false, bool ignoreOverrides = false);
+        /// <summary>Like <see cref="Open"/> but only checks existence.</summary>
+        bool Exists(string path, IGamePackageVariant variant = null, bool ignoreVariants = false, bool ignoreOverrides = false);
 
         void ExportUserOverride(string filename);
 

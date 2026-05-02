@@ -1,53 +1,75 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace EmoTracker.Data.Locations
 {
     public class AccessibilityRule
     {
+        // Phase 7.2: the static cache + EnableCache toggle moved off this
+        // type onto a per-state AccessibilityRuleCache held by each
+        // LocationDatabase. EnableCache is preserved as a process-wide
+        // override that propagates to every state's cache on next access
+        // (so unit tests that disable caching see consistent behavior).
         static bool sbEnableCache = true;
+
+        /// <summary>
+        /// Phase 7.2: the cache itself is per-state, but this app-wide flag
+        /// is consulted at the top of each rule evaluation. When false, the
+        /// rule bypasses the per-state cache entirely (read-through every
+        /// call). Setting it to false also clears every active state's
+        /// cache via the <see cref="EnableCacheChanged"/> hook installed by
+        /// <see cref="LocationDatabase"/>.
+        /// </summary>
         public static bool EnableCache
         {
             get { return sbEnableCache; }
-            set { sbEnableCache = value; ClearCaches(); }
-        }
-
-        private struct AccessibilityResult
-        {
-            public AccessibilityLevel Level;
-            public uint ProvidedCount;
-        }
-
-        static Dictionary<string, AccessibilityResult> mAccessiblityCache = new Dictionary<string, AccessibilityResult>();
-
-        public static void ClearCaches()
-        {
-            mAccessiblityCache.Clear();
-        }
-
-        static uint GetProviderCountForCode(string code, out AccessibilityLevel maxAccessibility)
-        {
-            if (sbEnableCache)
+            set
             {
-                AccessibilityResult cachedResult;
-                if (mAccessiblityCache.TryGetValue(code, out cachedResult))
-                {
-                    maxAccessibility = cachedResult.Level;
-                    return cachedResult.ProvidedCount;
-                }
+                if (sbEnableCache == value) return;
+                sbEnableCache = value;
+                EnableCacheChanged?.Invoke(value);
+            }
+        }
+
+        /// <summary>
+        /// Phase 7.2 hook: <see cref="LocationDatabase"/> subscribes so a
+        /// process-wide <see cref="EnableCache"/> flip propagates to every
+        /// per-state cache.
+        /// </summary>
+        internal static event Action<bool> EnableCacheChanged;
+
+        static uint GetProviderCountForCode(string code, Sessions.TrackerState state, out AccessibilityLevel maxAccessibility)
+        {
+            // Phase 7.2 / 7.1.h fix: lookup goes through the per-state cache
+            // first, then through the state-level ICodeProvider dispatcher
+            // (state.ProviderCountForCode), which routes `@`-prefixed codes
+            // to LocationDatabase, `$`-prefixed codes to ScriptManager (Lua
+            // accessibility functions), and bare codes to ItemDatabase.
+            // The Phase 7.2 refactor mistakenly hard-routed every lookup
+            // through state.Items, which silently returned 0 for `@` and
+            // `$` codes — making rules like "ow_vanilla_1b,@OW Castle Courtyard"
+            // (and any pack with Lua-driven accessibility, e.g. CodeTracker)
+            // evaluate to None for everything.
+            var cache = state?.Locations?.RuleCache;
+
+            if (sbEnableCache && cache != null && cache.TryGet(code, out var cachedLevel, out var cachedCount))
+            {
+                maxAccessibility = cachedLevel;
+                return cachedCount;
             }
 
-            ICodeProvider provider = Tracker.Instance;
-
-            AccessibilityLevel maxAccessibilityForCode;
-            uint count = provider.ProviderCountForCode(code, out maxAccessibilityForCode);
-
-            if (sbEnableCache)
+            if (state == null)
             {
-                mAccessiblityCache[code] = new AccessibilityResult() { Level = maxAccessibilityForCode, ProvidedCount = count };
+                maxAccessibility = AccessibilityLevel.None;
+                return 0;
             }
 
-            maxAccessibility = maxAccessibilityForCode;
+            // Dispatch via the state's ICodeProvider — handles @ / $ prefixes.
+            uint count = state.ProviderCountForCode(code, out maxAccessibility);
+
+            if (sbEnableCache && cache != null)
+                cache.Put(code, maxAccessibility, count);
+
             return count;
         }
 
@@ -121,44 +143,47 @@ namespace EmoTracker.Data.Locations
             }
         }
 
-        public AccessibilityLevel AccessibilityLevel
+        /// <summary>
+        /// Phase 7.2: evaluates this rule against the given state's item
+        /// catalog and per-state accessibility cache. Replaces the previous
+        /// parameterless <c>AccessibilityLevel</c> property which read from
+        /// a static cache + the singleton <c>Tracker.Instance</c>.
+        /// </summary>
+        public AccessibilityLevel GetAccessibilityLevel(Sessions.TrackerState state)
         {
-            get
+            AccessibilityLevel level = AccessibilityLevel.Normal;
+            foreach (CodeRule rule in mCodes)
             {
-                AccessibilityLevel level = AccessibilityLevel.Normal;
-                foreach (CodeRule rule in mCodes)
+                AccessibilityLevel maxAccessibilityForCode;
+                uint count = GetProviderCountForCode(rule.mCode, state, out maxAccessibilityForCode);
+
+                if (!rule.mbIsSequenceBreakable && count < rule.mRequiredCount)
                 {
-                    AccessibilityLevel maxAccessibilityForCode;
-                    uint count = GetProviderCountForCode(rule.mCode, out maxAccessibilityForCode);
-
-                    if (!rule.mbIsSequenceBreakable && count < rule.mRequiredCount)
-                    {
-                        level = AccessibilityLevel.None;
-                        break;
-                    }
-
-                    if (rule.mbIsSequenceBreakable && count < rule.mRequiredCount)
-                    {
-#if ENABLE_GLITCH
-                        if (rule.mbIsGlitch)
-                            level = Min(AccessibilityLevel.Glitch, level);
-                        else
-                            level = Min(AccessibilityLevel.SequenceBreak, level);
-#else
-                        level = AccessibilityLevel.SequenceBreak;
-#endif
-                    }
-                    else
-                    {
-                        level = Min(maxAccessibilityForCode, level);
-                    }
+                    level = AccessibilityLevel.None;
+                    break;
                 }
 
-                if (mbIsInspectable && level >= AccessibilityLevel.Glitch)
-                    level = AccessibilityLevel.Inspect;
-
-                return level;
+                if (rule.mbIsSequenceBreakable && count < rule.mRequiredCount)
+                {
+#if ENABLE_GLITCH
+                    if (rule.mbIsGlitch)
+                        level = Min(AccessibilityLevel.Glitch, level);
+                    else
+                        level = Min(AccessibilityLevel.SequenceBreak, level);
+#else
+                    level = AccessibilityLevel.SequenceBreak;
+#endif
+                }
+                else
+                {
+                    level = Min(maxAccessibilityForCode, level);
+                }
             }
+
+            if (mbIsInspectable && level >= AccessibilityLevel.Glitch)
+                level = AccessibilityLevel.Inspect;
+
+            return level;
         }
     }
 }

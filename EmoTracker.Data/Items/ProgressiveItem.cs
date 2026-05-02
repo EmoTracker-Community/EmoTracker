@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
@@ -7,7 +8,7 @@ using System.Collections.Generic;
 namespace EmoTracker.Data.Items
 {
     [JsonTypeTags("progressive")]
-    public class ProgressiveItem : ItemBase
+    public partial class ProgressiveItem : ItemBase
     {
         public class Stage : CodeProvider
         {
@@ -15,19 +16,19 @@ namespace EmoTracker.Data.Items
             public string Name { get; set; }
         }
 
+        // Definition data: parsed once at pack-load. Kept as private fields so
+        // forks share by reference rather than going through the KV store boundary
+        // (Stage / List<Stage> are reference-typed and don't fit IDeepCopyable
+        // cleanly). Forks rewire these in OnForked.
         protected List<Stage> StagesInternal = new List<Stage>();
         string mDisabledImageMods;
-        bool mbLoop = false;
+
+        [KVMutable]
+        public partial bool Loop { get; set; }
 
         public IEnumerable<Stage> Stages
         {
             get { return StagesInternal; }
-        }
-
-        public bool Loop
-        {
-            get { return mbLoop; }
-            set { SetProperty(ref mbLoop, value); }
         }
 
         private Stage CurrentStageInstance
@@ -41,6 +42,9 @@ namespace EmoTracker.Data.Items
             }
         }
 
+        // Hand-written: clamps the input to [0, StagesInternal.Count) before
+        // queueing the transaction; out-of-range writes are silently ignored.
+        // Cannot be expressed via [KVTransactable] because of the bounds check.
         [DependentProperty("CurrentStageInstance")]
         public int CurrentStage
         {
@@ -261,6 +265,18 @@ namespace EmoTracker.Data.Items
 
             CurrentStage = stageIdx;
             return true;
+        }
+
+        protected override void OnForked(ModelTypeBase source)
+        {
+            base.OnForked(source);
+            var src = (ProgressiveItem)source;
+            // StagesInternal is mutated only during ParseDataInternal; once a fork
+            // exists, the list is effectively read-only. Sharing by reference is
+            // safe and matches how the legacy code's mInactiveIcon-style fields
+            // were implicitly shared via the singleton ItemDatabase.
+            StagesInternal = src.StagesInternal;
+            mDisabledImageMods = src.mDisabledImageMods;
         }
     }
 }

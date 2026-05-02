@@ -20,9 +20,6 @@ namespace EmoTracker
 
         public override void OnFrameworkInitializationCompleted()
         {
-            Data.Core.Transactions.TransactionProcessor.SetTransactionProcessor(
-                new Data.Core.Transactions.Processors.LocalTransactionProcessorWithUndo());
-
             Core.Services.Backends.LogService.SetServiceBackend(new Services.LogService());
             Core.Services.Backends.DispatchService.SetServiceBackend(new Services.DispatchService());
 
@@ -37,7 +34,7 @@ namespace EmoTracker
                         buffered: true,
                         flushToDiskInterval: TimeSpan.FromSeconds(5))
                     .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
-                    .WriteTo.DeveloperConsole()
+                    .WriteTo.DeveloperTerminal()
                     .CreateLogger();
             }
             catch (Exception)

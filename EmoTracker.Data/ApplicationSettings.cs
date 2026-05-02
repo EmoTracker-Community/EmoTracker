@@ -50,44 +50,145 @@ namespace EmoTracker.Data
         bool mbPromptOnRefreshClose = false;
         string mbVoiceInputDeviceName;
 
-        private bool mbDisplayAllLocations = false;
-        private bool mbIgnoreAllLogic = false;
-        private bool mbAutoUnpinLocationsOnClear = true;
-        private bool mbAlwaysAllowClearing = false;
-        private bool mbPinLocationsOnItemCapture = true;
+        // Phase 7.3: these seven settings moved to per-state SessionSettings.
+        // The fields here serve as a "seed" that's:
+        //   - Used as the source for new TrackerStates' Settings (via SeedIntoSession).
+        //   - Kept in sync with the active state's Settings on writes (so
+        //     reads from code that doesn't have an OwnerState handle still
+        //     observe the user's most recent toggle).
+        //   - Persisted to ApplicationSettings.json as a fallback / migration
+        //     source for pre-Phase-7 saves.
+        //
+        // Direct reads / writes via ApplicationSettings.Instance.X are
+        // forwarders to the active state's Settings if any; otherwise the
+        // backing seed field is used.
+        bool mbSeedDisplayAllLocations = Sessions.SessionSettings.DefaultDisplayAllLocations;
+        bool mbSeedIgnoreAllLogic = Sessions.SessionSettings.DefaultIgnoreAllLogic;
+        bool mbSeedAutoUnpinLocationsOnClear = Sessions.SessionSettings.DefaultAutoUnpinLocationsOnClear;
+        bool mbSeedAlwaysAllowClearing = Sessions.SessionSettings.DefaultAlwaysAllowClearing;
+        bool mbSeedPinLocationsOnItemCapture = Sessions.SessionSettings.DefaultPinLocationsOnItemCapture;
+
+        // Phase 7.1 cleanup: ApplicationSettings is a process-wide singleton
+        // and must NOT consult an ambient state slot. Cross-assembly hookup:
+        // ApplicationModel installs <see cref="ActiveSessionSettingsResolver"/>
+        // at startup so per-state values flow through whichever state the
+        // app currently treats as the active primary. The resolver, like
+        // <see cref="Data.Tracker.ResolveReloadTarget"/>, evaluates the
+        // relevant state at call time — no slot is held here.
+        public static Func<Sessions.SessionSettings> ActiveSessionSettingsResolver { get; set; }
+
+        Sessions.SessionSettings ActiveSessionSettings
+            => ActiveSessionSettingsResolver?.Invoke();
+
+        /// <summary>
+        /// Phase 7.3: copy this app-settings instance's seed values onto a
+        /// freshly-constructed <see cref="Sessions.SessionSettings"/>.
+        /// Called from <see cref="Sessions.TrackerState"/>'s adoption ctor
+        /// so a primary state inherits the user's pre-existing preferences
+        /// loaded from <c>ApplicationSettings.json</c>.
+        /// </summary>
+        internal void SeedIntoSession(Sessions.SessionSettings target)
+        {
+            if (target == null) return;
+            target.IgnoreAllLogic = mbSeedIgnoreAllLogic;
+            target.DisplayAllLocations = mbSeedDisplayAllLocations;
+            target.AlwaysAllowClearing = mbSeedAlwaysAllowClearing;
+            target.AutoUnpinLocationsOnClear = mbSeedAutoUnpinLocationsOnClear;
+            target.PinLocationsOnItemCapture = mbSeedPinLocationsOnItemCapture;
+        }
 
         public bool IgnoreAllLogic
         {
-            get { return mbIgnoreAllLogic; }
+            get
+            {
+                var s = ActiveSessionSettings;
+                return s != null ? s.IgnoreAllLogic : mbSeedIgnoreAllLogic;
+            }
             set
             {
-                if (SetProperty(ref mbIgnoreAllLogic, value))
-                    LocationDatabase.Instance.RefeshAccessibility();
+                // Update both the seed and (if any) the active state's
+                // setting. The state's setter triggers RefeshAccessibility
+                // via its OnChanged hook, mirroring the legacy behavior.
+                bool changed = false;
+                if (SetProperty(ref mbSeedIgnoreAllLogic, value))
+                    changed = true;
+                var s = ActiveSessionSettings;
+                if (s != null && s.IgnoreAllLogic != value)
+                {
+                    s.IgnoreAllLogic = value;
+                    changed = true;
+                }
+                if (changed)
+                    NotifyPropertyChanged(nameof(IgnoreAllLogic));
             }
         }
 
         public bool AutoUnpinLocationsOnClear
         {
-            get { return mbAutoUnpinLocationsOnClear; }
-            set { SetProperty(ref mbAutoUnpinLocationsOnClear, value); }
+            get
+            {
+                var s = ActiveSessionSettings;
+                return s != null ? s.AutoUnpinLocationsOnClear : mbSeedAutoUnpinLocationsOnClear;
+            }
+            set
+            {
+                SetProperty(ref mbSeedAutoUnpinLocationsOnClear, value);
+                var s = ActiveSessionSettings;
+                if (s != null && s.AutoUnpinLocationsOnClear != value)
+                    s.AutoUnpinLocationsOnClear = value;
+                NotifyPropertyChanged(nameof(AutoUnpinLocationsOnClear));
+            }
         }
 
         public bool AlwaysAllowClearing
         {
-            get { return mbAlwaysAllowClearing; }
-            set { SetProperty(ref mbAlwaysAllowClearing, value); }
+            get
+            {
+                var s = ActiveSessionSettings;
+                return s != null ? s.AlwaysAllowClearing : mbSeedAlwaysAllowClearing;
+            }
+            set
+            {
+                SetProperty(ref mbSeedAlwaysAllowClearing, value);
+                var s = ActiveSessionSettings;
+                if (s != null && s.AlwaysAllowClearing != value)
+                    s.AlwaysAllowClearing = value;
+                NotifyPropertyChanged(nameof(AlwaysAllowClearing));
+            }
         }
 
         public bool PinLocationsOnItemCapture
         {
-            get { return mbPinLocationsOnItemCapture; }
-            set { SetProperty(ref mbPinLocationsOnItemCapture, value); }
+            get
+            {
+                var s = ActiveSessionSettings;
+                return s != null ? s.PinLocationsOnItemCapture : mbSeedPinLocationsOnItemCapture;
+            }
+            set
+            {
+                SetProperty(ref mbSeedPinLocationsOnItemCapture, value);
+                var s = ActiveSessionSettings;
+                if (s != null && s.PinLocationsOnItemCapture != value)
+                    s.PinLocationsOnItemCapture = value;
+                NotifyPropertyChanged(nameof(PinLocationsOnItemCapture));
+            }
         }
 
         public bool DisplayAllLocations
         {
-            get { return mbDisplayAllLocations; }
-            set { SetProperty(ref mbDisplayAllLocations, value); }
+            get
+            {
+                var s = ActiveSessionSettings;
+                return s != null ? s.DisplayAllLocations : mbSeedDisplayAllLocations;
+            }
+            set
+            {
+                SetProperty(ref mbSeedDisplayAllLocations, value);
+                var s = ActiveSessionSettings;
+                if (s != null && s.DisplayAllLocations != value)
+                    s.DisplayAllLocations = value;
+                NotifyPropertyChanged(nameof(DisplayAllLocations));
+            }
         }
 
         bool mbFastTooltips = false;

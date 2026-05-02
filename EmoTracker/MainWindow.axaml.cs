@@ -19,14 +19,75 @@ namespace EmoTracker
         // so we can capture the accurate normal-state bounds before saving.
         private bool mIsRestoreClosing = false;
 
-        public MainWindow()
+        /// <summary>
+        /// Phase 7.6: per-window context — exposes the OpenStates / ActiveState
+        /// for this window. Bound by the bottom-bar state manager (7.7) and tab
+        /// strip (7.8). DataContext remains <see cref="ApplicationModel.Instance"/>
+        /// for backwards compat with existing XAML bindings; this surface is
+        /// reachable via <c>{Binding $self.WindowContext.X}</c> for new
+        /// per-window bindings, or via Tag for code-behind helpers.
+        /// </summary>
+        public WindowContext WindowContext { get; }
+
+        // Owned per-window tracker that watches title-bar drags and merges
+        // this window's tabs into another EmoTracker window when the user
+        // drops the source window inside the target. Disposed on window
+        // close.
+        readonly UI.WindowMergeTracker mMergeTracker;
+
+        // Phase 7.9: helper for ApplicationModel.FindTabStripAtScreenPoint —
+        // returns this window's tab strip control if hosted, else null.
+        public UI.StateTabStripControl GetTabStrip()
+            => this.FindControl<UI.StateTabStripControl>("StateTabStrip");
+
+        public MainWindow() : this(seedWithPrimaryState: true) { }
+
+        /// <summary>
+        /// Phase 7.6 / 7.9: secondary windows opened via tear-off pass
+        /// <paramref name="seedWithPrimaryState"/> = false so the new
+        /// window's WindowContext starts empty. The caller (typically
+        /// <see cref="ApplicationModel.OpenStateInNewWindow"/>) then
+        /// explicitly adds the torn-off state.
+        /// </summary>
+        public MainWindow(bool seedWithPrimaryState)
         {
+            // Phase 7.6: allocate per-window context BEFORE InitializeComponent
+            // so XAML bindings via {Binding ElementName} can resolve it.
+            WindowContext = new WindowContext("primary") { OwnerWindow = this };
+
             InitializeComponent();
 
             ApplicationModel.Instance.Initialize();
             DataContext = ApplicationModel.Instance;
             ApplicationModel.Instance.PropertyChanged += Instance_PropertyChanged;
-            Tracker.Instance.PropertyChanged += Tracker_PropertyChanged;
+            ApplicationModel.Instance.PropertyChanged += AllowResizePropertyChanged;
+
+            // Phase 7.6: register with the app's window collection. The
+            // first window seeds its WindowContext with the active primary
+            // state so existing UI works unchanged. Tear-off windows
+            // (seedWithPrimaryState=false) start empty; the caller adds
+            // the torn-off state explicitly.
+            ApplicationModel.Instance.RegisterWindow(WindowContext);
+            if (seedWithPrimaryState)
+            {
+                var primary = ApplicationModel.Instance.PrimaryState;
+                if (primary != null)
+                    WindowContext.AddState(primary);
+            }
+            ApplicationModel.Instance.CurrentlyActiveWindowContext = WindowContext;
+            this.Activated += (_, __) => ApplicationModel.Instance.CurrentlyActiveWindowContext = WindowContext;
+            this.Closed += (_, __) => ApplicationModel.Instance.UnregisterWindow(WindowContext);
+
+            // Phase 7 XAML migration: drive per-window layout refresh from
+            // this window's WindowContext.ActiveState changes (rather than
+            // the previously-used global ApplicationModel.TrackerLayout
+            // slot, which couldn't differentiate between multiple windows).
+            WindowContext.PropertyChanged += OnWindowContextPropertyChanged;
+            EmoTracker.Data.Sessions.PackageLoader.OnPackageLoadComplete += OnAnyPackageLoadComplete;
+            // Hook the seeded ActiveState's AllowResize-change notification
+            // up front; OnWindowContextPropertyChanged rebinds it whenever
+            // the active tab switches.
+            RebindActiveStateAllowResize();
 
             if (ApplicationSettings.Instance.InitialWidth >= 0.0)
                 Width = ApplicationSettings.Instance.InitialWidth;
@@ -48,6 +109,29 @@ namespace EmoTracker
             // handles shortcuts before any child control can consume the key.
             this.AddHandler(KeyDownEvent, MainWindow_KeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             this.PointerWheelChanged += MainWindow_PointerWheelChanged;
+
+            // Drag-window-onto-window merge: when the user title-bar-drags
+            // this window into another EmoTracker window's bounds and lets
+            // go (idle ~300ms), the tracker moves all of this window's
+            // tabs into the target and closes this window.
+            mMergeTracker = new UI.WindowMergeTracker(this);
+
+            // Per-window broadcast lifecycle. Each MainWindow owns its own
+            // visible BroadcastView (lazy, opened via menu / F2) and its
+            // own off-screen HiddenBroadcastWindow (auto-managed based on
+            // settings + the host's active broadcast layout). Both bind to
+            // this window's WindowContext.BroadcastLayout, so each
+            // window's broadcast feed follows its own active tab.
+            WindowContext.PropertyChanged += OnWindowContextBroadcastChanged;
+            ApplicationSettings.Instance.PropertyChanged += OnAppSettingsBroadcastChanged;
+            this.Closed += (_, __) =>
+            {
+                WindowContext.PropertyChanged -= OnWindowContextBroadcastChanged;
+                ApplicationSettings.Instance.PropertyChanged -= OnAppSettingsBroadcastChanged;
+                CloseBroadcastView();
+                DestroyHiddenBroadcast();
+            };
+            ReconcileHiddenBroadcast();
 
             // Set initial layout and resize mode
             RefreshTrackerLayout();
@@ -134,6 +218,22 @@ namespace EmoTracker
             if (installedMenu == null)
                 return;
 
+            // Unsubscribe old items from command events before clearing.
+            // MenuItem internally subscribes to ICommand.CanExecuteChanged when
+            // Command is assigned. Clearing the collection leaves orphaned
+            // subscriptions alive on the singleton ActivatePackCommand.
+            foreach (var item in installedMenu.Items)
+            {
+                if (item is MenuItem outerMi)
+                {
+                    outerMi.Command = null;
+                    foreach (var sub in outerMi.Items)
+                    {
+                        if (sub is MenuItem innerMi)
+                            innerMi.Command = null;
+                    }
+                }
+            }
             installedMenu.Items.Clear();
 
             var groups = ApplicationModel.Instance.InstalledPackagesGroupedView;
@@ -198,7 +298,7 @@ namespace EmoTracker
                 });
             }
 
-            if (Tracker.Instance.ActiveGamePackage == package)
+            if (ApplicationModel.Instance.ActiveGamePackage == package)
             {
                 panel.Children.Add(new Border
                 {
@@ -225,7 +325,7 @@ namespace EmoTracker
             var panel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
             panel.Children.Add(new Avalonia.Controls.TextBlock { Text = variant.DisplayName, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
 
-            if (Tracker.Instance.ActiveGamePackageVariant == variant)
+            if (ApplicationModel.Instance.ActiveGamePackageVariant == variant)
             {
                 panel.Children.Add(new Border
                 {
@@ -315,10 +415,15 @@ namespace EmoTracker
                 e.Handled = true;
                 return;
             }
+            else if (e.Key == Key.T && HasCmdModifier(e.KeyModifiers))
+            {
+                ApplicationModel.Instance.NewEmptyTabCommand?.Execute(null);
+                e.Handled = true;
+                return;
+            }
             else if (e.Key == Key.Z && HasCmdModifier(e.KeyModifiers))
             {
-                if (TransactionProcessor.Current is IUndoableTransactionProcessor undo)
-                    undo.Undo();
+                (ApplicationModel.Instance.PrimaryState?.Transactions as IUndoableTransactionProcessor)?.Undo();
                 e.Handled = true;
                 return;
             }
@@ -368,33 +473,174 @@ namespace EmoTracker
                 // For Phase 6 just close — async dialog in Phase 7
             }
 
-            if (DeveloperConsole != null)
+            if (DeveloperTerminal != null)
             {
-                DeveloperConsole.Close();
-                DeveloperConsole = null;
+                DeveloperTerminal.Close();
+                DeveloperTerminal = null;
             }
 
-            var broadcastView = ApplicationModel.Instance.BroadcastView;
-            if (broadcastView != null)
-            {
-                broadcastView.Close();
-            }
+            // Note: this window's per-window BroadcastView and
+            // HiddenBroadcastWindow are closed via the Closed lambda
+            // wired in the ctor; nothing to do here for them.
+
+            // If this window IS the desktop's MainWindow and there's
+            // another live EmoTracker window, promote that window so the
+            // app stays alive after this close. Without this, the user
+            // closing the original window via the X button would shut
+            // down the entire process even when other windows are still
+            // open — App.axaml.cs sets ShutdownMode.OnMainWindowClose.
+            ApplicationModel.Instance.PromoteAlternativeMainWindowIfNeeded(this);
 
             base.OnClosing(e);
         }
 
-        private void Tracker_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        private void AllowResizePropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Tracker.AllowResize))
+            if (e.PropertyName == nameof(ApplicationModel.AllowResize)
+                || e.PropertyName == nameof(ApplicationModel.PrimaryState))
                 UpdateResizeMode();
         }
 
+        // Read the resize policy from THIS WINDOW's active state, not
+        // from the singleton ApplicationModel. Per-window UX matters
+        // when multiple windows are open and the user is switching
+        // tabs in this window: the resize policy belongs to the pack
+        // that's currently visible HERE, not to whichever state happens
+        // to be the global PrimaryState.
+        //
+        // When the policy turns OFF (locked size), drop SizeToContent
+        // back to Manual immediately and re-engage WidthAndHeight on a
+        // post-layout dispatcher tick. The deferral lets the pending
+        // layout invalidations from the surrounding code path flow
+        // through a measure pass before WidthAndHeight re-locks the
+        // window to the natural size of the now-final content.
+        // Specifically:
+        //   - RefreshTrackerLayout just nulled+reassigned
+        //     TrackerLayout.DataContext; the LayoutControl's new
+        //     measure happens on the next layout pass, not at the
+        //     point of assignment.
+        //   - The tab strip's IsVisible flips on the OpenStates count
+        //     transition (1→2 makes it visible). When the user adds a
+        //     second tab and then switches back to the fixed-size tab,
+        //     the natural window height = strip + tracker layout +
+        //     status bar — the strip's emergence is part of that
+        //     measure and must have settled before the lock.
+        // Without the deferral, WidthAndHeight measures partially-
+        // realized content and the window locks too short — visible
+        // symptom: tab strip + tracker layout exceed the window's
+        // height and the layout clips at the bottom.
+        //
+        // We always go through Manual on the way back to WidthAndHeight
+        // (rather than skipping when current is already Manual). The
+        // assignment is what triggers the re-measure; if we read
+        // "already WidthAndHeight" and skipped, a second AllowResize=
+        // false tick that arrives during the same layout cycle wouldn't
+        // re-measure either.
         private void UpdateResizeMode()
         {
-            if (!Tracker.Instance.AllowResize)
+            // Prefer this window's active state; fall back to the
+            // application-wide AllowResize for early-init paths where
+            // WindowContext.ActiveState isn't bound yet.
+            var state = WindowContext?.ActiveState;
+            bool allow = state != null
+                ? state.AllowResize
+                : ApplicationModel.Instance.AllowResize;
+
+            if (!allow)
             {
                 CanResize = false;
-                SizeToContent = SizeToContent.WidthAndHeight;
+                // Release any current SizeToContent so the dispatcher
+                // tick below re-engages it as a fresh assignment that
+                // Avalonia treats as an invalidation worth measuring.
+                SizeToContent = SizeToContent.Manual;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    // Re-check resize policy on dispatch — the active
+                    // state could have flipped while we were queued
+                    // (e.g. user clicked a different tab between the
+                    // synchronous Manual assignment and this tick).
+                    // Skip when the new policy is now resizable; the
+                    // tab-switch handler that ran in the meantime
+                    // already wrote the correct CanResize/SizeToContent.
+                    var s2 = WindowContext?.ActiveState;
+                    bool a2 = s2 != null
+                        ? s2.AllowResize
+                        : ApplicationModel.Instance.AllowResize;
+                    if (a2) return;
+
+                    // Drop any pinned Width/Height carried over from the
+                    // prior Manual phase. While SizeToContent was Manual
+                    // (the resizable previous tab) Avalonia retained the
+                    // window's current bounds as explicit Width/Height
+                    // values; if those bounds were smaller than the
+                    // fixed-size pack's natural size + a now-visible tab
+                    // strip, the WidthAndHeight assignment below would
+                    // measure but stay pinned. NaN is Avalonia's
+                    // "no explicit size" sentinel — the SizeToContent
+                    // auto-sizer is then unconstrained.
+                    //
+                    // Repro this fixes: open a fixed-size pack alone
+                    // (tab strip hidden, n=1) → Ctrl+T to add an empty
+                    // resizable tab (strip becomes visible, n=2) → click
+                    // back to the fixed-size tab. Without the NaN reset,
+                    // the window stays at the prior height which fits
+                    // fixed_layout + status_bar but NOT the now-visible
+                    // strip; the bottom row of the tracker layout is
+                    // clipped behind the status bar.
+                    Width = double.NaN;
+                    Height = double.NaN;
+                    CanResize = false;
+
+                    // The fundamental obstacle here: Avalonia's
+                    // Window-level measure pass — even under
+                    // SizeToContent.WidthAndHeight — does NOT pass
+                    // infinite available size to its content. It
+                    // passes the current Bounds (e.g. 300x258 from
+                    // the prior locked-down state). Children with a
+                    // RowDefinition="*" or VerticalAlignment="Stretch"
+                    // path then report DesiredSize that's clipped to
+                    // that constraint, even when their natural
+                    // content is larger.
+                    //
+                    // Concretely on this repro: with the strip now
+                    // visible (28px) and the status bar (22px), the
+                    // tracker-layout row gets 258 - 28 - 22 = 208 px
+                    // and reports DesiredSize=208 even though its
+                    // true natural height is 236 px. SizeToContent
+                    // sees 258 as the total and locks the window at
+                    // its existing height — the bottom of the
+                    // tracker layout clips behind the status bar.
+                    //
+                    // Workaround: drive the measure ourselves with
+                    // an unconstrained available size, then assign
+                    // the resulting DesiredSize as the window's new
+                    // explicit Width/Height while SizeToContent is
+                    // still Manual. Re-engage WidthAndHeight only
+                    // after the natural-size pass has landed.
+                    //
+                    // The explicit Measure(infinity) call asks every
+                    // descendant to report its TRUE natural size,
+                    // ignoring the Window's current bounds.
+                    InvalidateMeasure();
+                    Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var nat = ((Avalonia.Layout.Layoutable)this).DesiredSize;
+
+                    // Pin Width/Height to the unconstrained natural
+                    // size, then turn on WidthAndHeight. The Window
+                    // adopts these as its new auto-size and the
+                    // subsequent layout pass arranges children to
+                    // match — since Width/Height now match the
+                    // natural total, the constrained-measure cycle
+                    // doesn't trigger again.
+                    if (nat.Width > 0 && nat.Height > 0
+                        && !double.IsInfinity(nat.Width) && !double.IsInfinity(nat.Height))
+                    {
+                        Width = nat.Width;
+                        Height = nat.Height;
+                    }
+                    SizeToContent = SizeToContent.WidthAndHeight;
+                    UpdateLayout();
+                }, Avalonia.Threading.DispatcherPriority.Background);
             }
             else
             {
@@ -415,11 +661,109 @@ namespace EmoTracker
             double h = Bounds.Height > 0 ? Bounds.Height : Height;
             double w = Bounds.Width > 0 ? Bounds.Width : Width;
             bool vertical = h > w;
-            var layout = vertical
-                ? ApplicationModel.Instance.TrackerVerticalLayout
-                : ApplicationModel.Instance.TrackerHorizontalLayout;
+
+            // Phase 7 XAML migration: pull layouts from THIS window's
+            // active state, not the global ApplicationModel.TrackerXxxLayout
+            // slot. This makes per-window content selection work — each
+            // window renders the layouts of its own active state, even
+            // when multiple windows exist or tabs from different packs
+            // are mixed.
+            EmoTracker.Data.Layout.Layout layout = null;
+            var layouts = WindowContext?.ActiveState?.Layouts;
+            if (layouts != null)
+            {
+                layout = vertical
+                    ? layouts.FindLayout("tracker_vertical") ?? layouts.FindLayout("tracker_default")
+                    : layouts.FindLayout("tracker_horizontal") ?? layouts.FindLayout("tracker_default");
+            }
+            // Fallback to ApplicationModel global slot if this window's
+            // state isn't fully populated yet (early-startup race).
+            if (layout == null)
+            {
+                layout = vertical
+                    ? ApplicationModel.Instance.TrackerVerticalLayout
+                    : ApplicationModel.Instance.TrackerHorizontalLayout;
+            }
             if (TrackerLayout != null)
-                TrackerLayout.DataContext = layout;
+            {
+                // Phase 7 polish: assigning a different Layout instance to
+                // DataContext doesn't always trigger a full visual-subtree
+                // rebuild in Avalonia (the existing bound DataTemplates
+                // re-use their visual children with the new DataContext).
+                // For per-window content swap to actually refresh the
+                // displayed items + map markers, we explicitly clear
+                // DataContext first to force the inner ContentControl /
+                // ItemsControl to release their existing visual children.
+                if (!ReferenceEquals(TrackerLayout.DataContext, layout))
+                {
+                    TrackerLayout.DataContext = null;
+                    TrackerLayout.DataContext = layout;
+                }
+            }
+        }
+
+        // Phase 7 XAML migration: forward WindowContext.ActiveState
+        // changes into a layout refresh on this window. Also re-wire
+        // the per-state AllowResize subscription + push the new
+        // resize mode immediately so a tab switch into a fixed-size
+        // pack snaps the window into its constrained shape without
+        // waiting for the next ApplicationModel.AllowResize tick.
+        private EmoTracker.Data.Sessions.TrackerState mActiveStateForResize;
+
+        private void OnWindowContextPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(WindowContext.ActiveState))
+            {
+                RefreshTrackerLayout();
+                RebindActiveStateAllowResize();
+                UpdateResizeMode();
+            }
+        }
+
+        // Hook the new active state's AllowResize PropertyChanged so a
+        // pack-reload that flips the flag (or a save-load that restores
+        // a previously fixed-size pack) drives a resize-mode update on
+        // this window. Drops the previous state's hook to avoid
+        // re-firing for other windows' state changes.
+        private void RebindActiveStateAllowResize()
+        {
+            var newState = WindowContext?.ActiveState;
+            if (ReferenceEquals(newState, mActiveStateForResize)) return;
+            if (mActiveStateForResize != null)
+                mActiveStateForResize.PropertyChanged -= OnActiveStateAllowResizeChanged;
+            mActiveStateForResize = newState;
+            if (mActiveStateForResize != null)
+                mActiveStateForResize.PropertyChanged += OnActiveStateAllowResizeChanged;
+        }
+
+        private void OnActiveStateAllowResizeChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(EmoTracker.Data.Sessions.TrackerState.AllowResize))
+                UpdateResizeMode();
+        }
+
+        // When any pack-load completes, if this window's active state was
+        // the load target, refresh layout (its Layouts are now populated)
+        // and snap the resize mode + size to the freshly-loaded pack's
+        // AllowResize. Without the resize update here, opening a fixed-
+        // size pack into the active tab would render the layout but
+        // leave the window at its previous (resizable) bounds.
+        private void OnAnyPackageLoadComplete(object sender, EmoTracker.Data.Sessions.PackageLoader.PackageLoadEventArgs e)
+        {
+            if (e?.Target != null && ReferenceEquals(e.Target, WindowContext?.ActiveState))
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    RefreshTrackerLayout();
+                    UpdateResizeMode();
+                    // Notify BroadcastLayout subscribers (HiddenBroadcastWindow,
+                    // BroadcastView, ReconcileHiddenBroadcast) that the layout
+                    // instance was replaced by the reload. ActiveState didn't
+                    // change so the normal ActiveState-setter notification never
+                    // fires — this explicit call is the only trigger.
+                    WindowContext?.RefreshBroadcastLayout();
+                });
+            }
         }
 
         protected override void OnSizeChanged(SizeChangedEventArgs e)
@@ -434,20 +778,128 @@ namespace EmoTracker
         }
 
 
-        public UI.DeveloperConsole DeveloperConsole { get; private set; }
+        public UI.DeveloperTerminal DeveloperTerminal { get; private set; }
 
-        public void ShowDeveloperConsole()
+        public void ShowDeveloperTerminal()
         {
-            if (DeveloperConsole == null)
+            if (DeveloperTerminal == null)
             {
-                DeveloperConsole = new UI.DeveloperConsole();
-                DeveloperConsole.Closing += (_, _) => DeveloperConsole = null;
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => DeveloperConsole.Show());
+                DeveloperTerminal = new UI.DeveloperTerminal();
+                DeveloperTerminal.Closing += (_, _) => DeveloperTerminal = null;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => DeveloperTerminal.Show());
             }
             else
             {
-                DeveloperConsole.Activate();
+                DeveloperTerminal.Activate();
             }
+        }
+
+        // =================================================================
+        //  Per-window broadcast (visible BroadcastView + hidden NDI window)
+        // =================================================================
+        //
+        // Each MainWindow owns its own pair of broadcast windows so that
+        // the user can have multiple tracker windows broadcasting their
+        // own active-tab content simultaneously. Both windows bind to
+        // this window's WindowContext.BroadcastLayout, so switching tabs
+        // in this window automatically updates this window's broadcast
+        // feed without affecting any other window's feed.
+
+        private UI.BroadcastView mBroadcastView;
+        private Extensions.NDI.HiddenBroadcastWindow mHiddenBroadcast;
+
+        /// <summary>
+        /// The visible broadcast window for THIS app window, or null if
+        /// the user hasn't opened it. Exposed so the screenshot tooling
+        /// and similar can find a per-window broadcast view.
+        /// </summary>
+        public UI.BroadcastView BroadcastView => mBroadcastView;
+
+        /// <summary>
+        /// Lazy-creates and shows this window's <see cref="UI.BroadcastView"/>
+        /// (or activates an existing one). The view binds to this window's
+        /// <see cref="WindowContext.BroadcastLayout"/> and follows the
+        /// active tab in this window.
+        /// </summary>
+        public void ShowBroadcastView()
+        {
+            if (mBroadcastView == null)
+            {
+                mBroadcastView = new UI.BroadcastView(WindowContext);
+                mBroadcastView.Closing += (_, _) => mBroadcastView = null;
+                // No owner so the broadcast view is an independent
+                // top-level window — passing this as owner forces the OS
+                // to keep the broadcast view above the host window at
+                // all times, which the user almost never wants.
+                mBroadcastView.Show();
+            }
+            else
+            {
+                mBroadcastView.Activate();
+            }
+        }
+
+        void CloseBroadcastView()
+        {
+            if (mBroadcastView != null)
+            {
+                try { mBroadcastView.Close(); } catch { /* defensive */ }
+                mBroadcastView = null;
+            }
+        }
+
+        // -- Hidden broadcast (per-window background NDI) ----------------
+
+        // Reconciliation triggered by:
+        //   * App-wide setting flip (EnableBackgroundNdi)
+        //   * Active tab switch in this window (BroadcastLayout fires)
+        //   * Pack load completion that populates this window's layout
+        //
+        // The hidden window is created when the setting is on AND the
+        // host's active tab has a broadcast layout with content; destroyed
+        // otherwise.
+        void ReconcileHiddenBroadcast()
+        {
+            bool settingEnabled = ApplicationSettings.Instance.EnableBackgroundNdi;
+            bool hasContent = WindowContext?.BroadcastLayout?.Root != null;
+            bool shouldExist = settingEnabled && hasContent;
+
+            if (shouldExist && mHiddenBroadcast == null)
+                CreateHiddenBroadcast();
+            else if (!shouldExist && mHiddenBroadcast != null)
+                DestroyHiddenBroadcast();
+        }
+
+        void CreateHiddenBroadcast()
+        {
+            try
+            {
+                mHiddenBroadcast = new Extensions.NDI.HiddenBroadcastWindow(WindowContext, this);
+                mHiddenBroadcast.Show();
+            }
+            catch
+            {
+                mHiddenBroadcast = null;
+            }
+        }
+
+        void DestroyHiddenBroadcast()
+        {
+            if (mHiddenBroadcast == null) return;
+            try { mHiddenBroadcast.Close(); } catch { /* defensive */ }
+            mHiddenBroadcast = null;
+        }
+
+        void OnWindowContextBroadcastChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(WindowContext.BroadcastLayout))
+                Avalonia.Threading.Dispatcher.UIThread.Post(ReconcileHiddenBroadcast);
+        }
+
+        void OnAppSettingsBroadcastChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ApplicationSettings.EnableBackgroundNdi))
+                Avalonia.Threading.Dispatcher.UIThread.Post(ReconcileHiddenBroadcast);
         }
     }
 }

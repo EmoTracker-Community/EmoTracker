@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace EmoTracker.Data.Core.Transactions
 {
@@ -15,9 +15,9 @@ namespace EmoTracker.Data.Core.Transactions
     {
         TransactionStatus Status { get; }
 
-        bool HasPropertyValue(TransactableObject src, string propertyName);
+        bool HasPropertyValue(ITransactableObject src, string propertyName);
 
-        T GetPropertyValue<T>(TransactableObject src, string propertyName);
+        T GetPropertyValue<T>(ITransactableObject src, string propertyName);
     }
 
     public interface ITransactionScope : IDisposable
@@ -29,15 +29,10 @@ namespace EmoTracker.Data.Core.Transactions
     {
         /// <summary>
         /// Opens a new transaction, which will be closed upon the returned ITransactionScope being
-        /// disposed.
+        /// disposed. Obtained from a model via <c>model.OpenTransaction()</c>; the static
+        /// <c>TransactionProcessor.Current</c> slot was retired in favour of per-state
+        /// processors owned by <c>TrackerState.Transactions</c>.
         /// </summary>
-        /// <returns></returns>
-        /// <example>
-        /// using (TransactionProcessor.Current.OpenTransaction())
-        /// {
-        ///     // Do work
-        /// }
-        /// </example>
         ITransactionScope OpenTransaction();
 
         ITransactionScope CurrentScope { get; }
@@ -46,30 +41,6 @@ namespace EmoTracker.Data.Core.Transactions
         /// Attempt to write a new property value (attached to obj) into the current transaction, or
         /// open/close a new transaction if necessary.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="obj"></param>
-        /// <param name="fieldName"></param>
-        /// <param name="value"></param>
-        void WriteProperty<T>(TransactableObject obj, string fieldName, T value, Action<ITransaction> transactionStateCallback = null);
-    }
-
-    public static class TransactionProcessor
-    {
-        static ITransactionProcessor mProcessor;
-
-        public static ITransactionProcessor Current
-        {
-            get { return mProcessor; }
-        }
-
-        public static void SetTransactionProcessor(ITransactionProcessor processor)
-        {
-            if (Current != null)
-            {
-                //  Do error checking; e.g. check for open transaction scopes, etc.
-            }
-
-            mProcessor = processor;
-        }
+        void WriteProperty<T>(ITransactableObject obj, string fieldName, T value, Action<ITransaction> transactionStateCallback = null);
     }
 }

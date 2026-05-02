@@ -13,6 +13,21 @@ namespace EmoTracker.Extensions.McpServer.Tools
     [McpServerToolType]
     public class NoteTools
     {
+        // Phase 6 step 11: app-level helper resolving the active LocationDatabase
+        // through the primary state, with a singleton fallback for the
+        // pre-pack-load window.
+        static LocationDatabase ActiveLocations
+        {
+            get
+            {
+                var primary = ApplicationModel.Instance?.PrimaryState?.Locations;
+                if (primary != null) return primary;
+#pragma warning disable CS0618 // legacy fallback; pre-pack-load no PrimaryState exists
+                return ApplicationModel.Instance?.PrimaryState?.Locations;
+#pragma warning restore CS0618
+            }
+        }
+
         [McpServerTool(Name = "add_note")]
         [Description("Add a text note to a location")]
         public static async Task<string> AddNote(
@@ -23,7 +38,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var loc = LocationDatabase.Instance.FindLocation(locationName);
+                    var loc = ActiveLocations.FindLocation(locationName);
                     if (loc == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{locationName}' not found" });
 
@@ -49,7 +64,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var loc = LocationDatabase.Instance.FindLocation(locationName);
+                var loc = ActiveLocations.FindLocation(locationName);
                 if (loc == null)
                     return JsonSerializer.Serialize(new { found = false, error = $"Location '{locationName}' not found" });
 
@@ -97,7 +112,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
             {
                 try
                 {
-                    var loc = LocationDatabase.Instance.FindLocation(locationName);
+                    var loc = ActiveLocations.FindLocation(locationName);
                     if (loc == null)
                         return JsonSerializer.Serialize(new { success = false, error = $"Location '{locationName}' not found" });
 

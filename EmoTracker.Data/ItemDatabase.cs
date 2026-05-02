@@ -1,4 +1,4 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
 using EmoTracker.Data.Items;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
@@ -12,8 +12,20 @@ using System.IO;
 
 namespace EmoTracker.Data
 {
-    public class ItemDatabase : Singleton<ItemDatabase>, ICodeProvider
+    /// <summary>
+    /// Phase 7.1: <see cref="ItemDatabase"/> is per-state. Each
+    /// <c>TrackerState</c> owns one. There is no global accessor — code
+    /// reaches an <c>ItemDatabase</c> via the holder's
+    /// <see cref="ModelTypeBase.OwnerState"/> (for model code) or via
+    /// <c>ApplicationModel.Instance.PrimaryState.Items</c> /
+    /// <c>Sessions.SessionContext.ActiveState.Items</c> (for app-level
+    /// code without a holder).
+    /// </summary>
+    public class ItemDatabase : ICodeProvider
     {
+        // Phase 6 step 11: back-reference to the owning TrackerState.
+        internal Sessions.TrackerState State { get; set; }
+
         ObservableCollection<ITrackableItem> mItems = new ObservableCollection<ITrackableItem>();
         Dictionary<ITrackableItem, int> mItemIndex = new Dictionary<ITrackableItem, int>();
 
@@ -23,6 +35,16 @@ namespace EmoTracker.Data
         Dictionary<string, List<ITrackableItem>> mCodeToProviders = new Dictionary<string, List<ITrackableItem>>(StringComparer.OrdinalIgnoreCase);
         List<ITrackableItem> mDynamicCodeItems = new List<ITrackableItem>();
         bool mCodeIndexBuilt = false;
+
+        // Dirty flag: set whenever something invalidates the index
+        // (item registered, item callback rebound, etc.). Read by
+        // EnsureCodeIndex() to lazily rebuild on the next code lookup.
+        // This is the long-term defense against ordering bugs like
+        // the fork-time "BuildCodeIndex before LuaItem rewire" issue
+        // — even if a caller forgets to invoke BuildCodeIndex at the
+        // right moment, the next ProviderCountForCode call gets a
+        // fresh, correctly-classified index.
+        bool mCodeIndexDirty = false;
 
         public IEnumerable<ITrackableItem> Items
         {
@@ -90,6 +112,93 @@ namespace EmoTracker.Data
             }
 
             mCodeIndexBuilt = true;
+            mCodeIndexDirty = false;
+        }
+
+        /// <summary>
+        /// Marks the code-provider index as needing a rebuild on the
+        /// next lookup. Cheap — just flips a flag; the actual rebuild
+        /// happens lazily via <see cref="EnsureCodeIndex"/> on the
+        /// next <see cref="ProviderCountForCode"/> /
+        /// <see cref="FindProvidingItemForCode"/> call. Call this
+        /// from any path that adds an item or changes an item's
+        /// advertised codes when an explicit
+        /// <see cref="BuildCodeIndex"/> at the right moment isn't
+        /// guaranteed.
+        /// </summary>
+        public void InvalidateCodeIndex()
+        {
+            mCodeIndexDirty = true;
+        }
+
+        /// <summary>
+        /// Build the index now if it's stale. The lookup hot paths
+        /// each call this on entry — keeps the index consistent
+        /// without burdening callers with explicit ordering. The
+        /// guard is a single bool read in the steady state.
+        /// </summary>
+        void EnsureCodeIndex()
+        {
+            if (!mCodeIndexBuilt || mCodeIndexDirty) BuildCodeIndex();
+        }
+
+        /// <summary>
+        /// Drops <paramref name="item"/> from every bucket in
+        /// <c>mCodeToProviders</c> and from <c>mDynamicCodeItems</c>,
+        /// then re-inserts it under whatever
+        /// <see cref="ItemBase.GetAllProvidedCodes"/> currently returns.
+        /// Used to reflect runtime changes in an item's advertised code
+        /// set (e.g. a LuaItem whose code-list callback depends on state).
+        ///
+        /// <para>
+        /// No-op if the index has not been built yet — the next
+        /// <see cref="BuildCodeIndex"/> call will pick up the item's
+        /// current codes from scratch.
+        /// </para>
+        /// </summary>
+        public void ReindexItem(ITrackableItem item)
+        {
+            if (item == null) return;
+            if (!mCodeIndexBuilt) return;
+
+            // Remove from every existing bucket. Walking each list once
+            // is acceptable because mCodeToProviders is small (one entry
+            // per provided code across the whole catalog) and items
+            // appear in only a handful of buckets each.
+            foreach (var list in mCodeToProviders.Values)
+            {
+                list.Remove(item);
+            }
+            mDynamicCodeItems.Remove(item);
+
+            // Re-classify based on the current GetAllProvidedCodes result.
+            if (item is ItemBase itemBase)
+            {
+                var codes = itemBase.GetAllProvidedCodes();
+                if (codes == null)
+                {
+                    mDynamicCodeItems.Add(item);
+                }
+                else
+                {
+                    foreach (string code in codes)
+                    {
+                        if (string.IsNullOrEmpty(code)) continue;
+                        if (!mCodeToProviders.TryGetValue(code, out var list))
+                        {
+                            list = new List<ITrackableItem>();
+                            mCodeToProviders[code] = list;
+                        }
+                        list.Add(item);
+                    }
+                }
+            }
+            else
+            {
+                // Non-ItemBase implementors — treat as dynamic (matches
+                // BuildCodeIndex's branch).
+                mDynamicCodeItems.Add(item);
+            }
         }
 
         public void RegisterItem(ITrackableItem item)
@@ -98,44 +207,69 @@ namespace EmoTracker.Data
             {
                 mItemIndex[item] = mItems.Count;
                 mItems.Add(item);
+                // The new item hasn't been classified into the
+                // code-provider index. Mark dirty so the next lookup
+                // rebuilds and picks it up.
+                mCodeIndexDirty = true;
             }
         }
 
-        public bool LegacyLoad(IGamePackage package)
+        public bool LegacyLoad(IGamePackage package, Sessions.TrackerState state)
         {
             //  Do not load legacy data if we already have new-style data
             if (mItems.Count > 0)
                 return true;
 
             //  This is to support legacy-packages only
-            return IncrementalLoad("items.json", package, true);
+            return IncrementalLoad("items.json", package, true, state);
         }
 
-        public bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false)
+        public bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false, Sessions.TrackerState state = null)
         {
             bool bSuccess = false;
 
             if (bLegacy)
-                ScriptManager.Instance.OutputWarning("Loading legacy items");
+                this.State?.Scripts.OutputWarning("Loading legacy items");
             else
-                ScriptManager.Instance.Output("Loading Items: {0}", path);
+                this.State?.Scripts.Output("Loading Items: {0}", path);
 
-            using (new LoggingBlock())
+            using (new LoggingBlock(state?.Scripts))
             {
                 try
                 {
-                    using (new LocationDatabase.SuspendRefreshScope())
+                    using (new LocationDatabase.SuspendRefreshScope(state?.Locations))
                     {
-                        using (StreamReader reader = new StreamReader(package.Open(path)))
+                        using (StreamReader reader = new StreamReader(package.Open(path, state?.PackageInstance?.ActiveVariant)))
                         {
                             JArray items = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
                             foreach (JObject item in items)
                             {
-                                ITrackableItem instance = ItemBase.CreateItem(item, package);
+                                ITrackableItem instance = ItemBase.CreateItem(item, package, state);
                                 if (instance != null)
                                 {
                                     mItemIndex[instance] = mItems.Count;
                                     mItems.Add(instance);
+                                    // Invalidate the code-provider index. Items
+                                    // loaded LATER in this stream (or in a
+                                    // subsequent IncrementalLoad call from a
+                                    // different items.json) need the next
+                                    // FindProvidingItemForCode lookup to see
+                                    // them — without this flip, the lazy
+                                    // EnsureCodeIndex sees mCodeIndexBuilt=true
+                                    // (set by an earlier wrapper item's
+                                    // parse-time lookup) and skips the rebuild,
+                                    // producing a stale index that misses the
+                                    // newly-added items. Concretely: a
+                                    // toggle_badged wrapper whose base toggle
+                                    // appears AFTER the first wrapper item in
+                                    // the JSON would resolve its base_item
+                                    // against a stale index and silently end
+                                    // up with BaseItem=null.
+                                    mCodeIndexDirty = true;
+                                    if (instance is global::EmoTracker.Core.DataModel.ModelTypeBase mtb)
+                                    {
+                                        state?.Resolver.Register(mtb);
+                                    }
                                 }
                             }
                         }
@@ -145,7 +279,7 @@ namespace EmoTracker.Data
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                 }
             }
 
@@ -154,6 +288,7 @@ namespace EmoTracker.Data
 
         internal bool CodeIsProvided(string code)
         {
+            EnsureCodeIndex();
             if (mCodeIndexBuilt)
             {
                 // Check indexed items
@@ -196,6 +331,7 @@ namespace EmoTracker.Data
             //  Item codes never constrain accessibility
             maxAccessibilityLevel = AccessibilityLevel.Normal;
 
+            EnsureCodeIndex();
             if (mCodeIndexBuilt)
             {
                 uint nCount = 0;
@@ -228,6 +364,7 @@ namespace EmoTracker.Data
             if (string.IsNullOrWhiteSpace(code))
                 return null;
 
+            EnsureCodeIndex();
             if (mCodeIndexBuilt)
             {
                 if (mCodeToProviders.TryGetValue(code, out var indexed))
@@ -264,6 +401,7 @@ namespace EmoTracker.Data
             if (string.IsNullOrWhiteSpace(code))
                 return found.ToArray();
 
+            EnsureCodeIndex();
             if (mCodeIndexBuilt)
             {
                 if (mCodeToProviders.TryGetValue(code, out var indexed))
@@ -308,7 +446,7 @@ namespace EmoTracker.Data
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                 }
             }
 
@@ -329,7 +467,7 @@ namespace EmoTracker.Data
                         item = ResolvePersistableItemReference(itemData.GetValue<string>("item_reference"), true);
                         if (item != null)
                         {
-                            ScriptManager.Instance.OutputWarning("Item index consistency issue found (and allowed) for reference \"{0}\" while loading a save. Ensure that items are loaded/created in a consistent order.", itemData.GetValue<string>("item_reference"));
+                            this.State?.Scripts.OutputWarning("Item index consistency issue found (and allowed) for reference \"{0}\" while loading a save. Ensure that items are loaded/created in a consistent order.", itemData.GetValue<string>("item_reference"));
                         }
 
                         if (item == null)

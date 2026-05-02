@@ -6,17 +6,23 @@ using Serilog.Core;
 using Serilog.Events;
 using System;
 
+// Phase 6 step 11: this file is the Serilog → developer-terminal bridge —
+// pure logging, by definition app-wide. The ApplicationModel.Instance?.PrimaryState?.Scripts accesses
+// here are the documented "logging-only callsites are an acceptable
+// fallback" case from the [Obsolete] message on ApplicationModel.Instance?.PrimaryState?.Scripts.
+#pragma warning disable CS0618
+
 namespace EmoTracker.Services
 {
-    class DeveloperConsoleSink : ILogEventSink
+    class DeveloperTerminalSink : ILogEventSink
     {
         private readonly IFormatProvider mFormatProvider;
 
         // Log messages from these subsystems are internal infrastructure concerns
-        // and should not surface in the pack developer console.
+        // and should not surface in the pack developer terminal.
         private static readonly string[] sExcludedPrefixes = { "[Voice]", "[NDI]", "[MCP]", "[SNI]", "[NWA]" };
 
-        public DeveloperConsoleSink(IFormatProvider formatProvider)
+        public DeveloperTerminalSink(IFormatProvider formatProvider)
         {
             mFormatProvider = formatProvider;
         }
@@ -38,14 +44,14 @@ namespace EmoTracker.Services
                 case LogEventLevel.Information:
                     Core.Services.Dispatch.BeginInvoke(() =>
                     {
-                        ScriptManager.Instance.Output(message);
+                        ApplicationModel.Instance?.PrimaryState?.Scripts.Output(message);
                     });
                     break;
 
                 case LogEventLevel.Warning:
                     Core.Services.Dispatch.BeginInvoke(() =>
                     {
-                        ScriptManager.Instance.OutputWarning(message);
+                        ApplicationModel.Instance?.PrimaryState?.Scripts.OutputWarning(message);
                     });
                     break;
 
@@ -53,7 +59,7 @@ namespace EmoTracker.Services
                 case LogEventLevel.Fatal:
                     Core.Services.Dispatch.BeginInvoke(() =>
                     {
-                        ScriptManager.Instance.OutputError(message);
+                        ApplicationModel.Instance?.PrimaryState?.Scripts.OutputError(message);
                     });
                     break;
             }
@@ -62,16 +68,16 @@ namespace EmoTracker.Services
             {
                 Core.Services.Dispatch.BeginInvoke(() =>
                 {
-                    ScriptManager.Instance.OutputException(logEvent.Exception);
+                    ApplicationModel.Instance?.PrimaryState?.Scripts.OutputException(logEvent.Exception);
                 });
             }
         }
     }
-    public static class DeveloperConsoleSinkExtensions
+    public static class DeveloperTerminalSinkExtensions
     {
-        public static LoggerConfiguration DeveloperConsole(this LoggerSinkConfiguration loggerConfiguration, IFormatProvider formatProvider = null)
+        public static LoggerConfiguration DeveloperTerminal(this LoggerSinkConfiguration loggerConfiguration, IFormatProvider formatProvider = null)
         {
-            return loggerConfiguration.Sink(new DeveloperConsoleSink(formatProvider));
+            return loggerConfiguration.Sink(new DeveloperTerminalSink(formatProvider));
         }
     }
 

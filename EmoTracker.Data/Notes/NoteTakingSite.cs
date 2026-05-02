@@ -8,6 +8,26 @@ namespace EmoTracker.Data.Notes
 {
     public class NoteTakingSite : ObservableObject, INoteTaking
     {
+        // Back-reference to the Location that owns this site. Set by the
+        // owning Location during construction; used to resolve item
+        // references through the owning state's ItemDatabase without
+        // consulting any ambient slot.
+        internal EmoTracker.Core.DataModel.ModelTypeBase Owner { get; set; }
+
+        // Direct OwnerState binding for sites that aren't owned by a
+        // ModelTypeBase — e.g., the per-state NoteTakingExtension's
+        // own site, which lives on a tracker-extension surface
+        // rather than under a Location. Takes precedence over the
+        // Owner-derived resolution when set.
+        Sessions.TrackerState mOwnerStateOverride;
+
+        public void SetOwnerState(Sessions.TrackerState state)
+        {
+            mOwnerStateOverride = state;
+        }
+
+        Sessions.TrackerState OwnerState
+            => mOwnerStateOverride ?? (Owner?.OwnerState as Sessions.TrackerState);
         ObservableCollection<Note> mNotes = new ObservableCollection<Note>();
 
         public IEnumerable<Note> Notes
@@ -75,7 +95,7 @@ namespace EmoTracker.Data.Notes
                             {
                                 try
                                 {
-                                    string persistableItemRef = ItemDatabase.Instance.GetPersistableItemReference(item);
+                                    string persistableItemRef = OwnerState?.Items.GetPersistableItemReference(item);
                                     if (!string.IsNullOrWhiteSpace(persistableItemRef))
                                         itemsArray.Add(JToken.FromObject(persistableItemRef));
                                 }
@@ -120,7 +140,7 @@ namespace EmoTracker.Data.Notes
                         {
                             foreach (string itemRef in itemsArray)
                             {
-                                ITrackableItem item = ItemDatabase.Instance.ResolvePersistableItemReference(itemRef);
+                                ITrackableItem item = OwnerState?.Items.ResolvePersistableItemReference(itemRef);
                                 if (item != null)
                                     note.AddItem(item);
                             }

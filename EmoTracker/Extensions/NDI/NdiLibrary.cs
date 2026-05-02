@@ -57,7 +57,17 @@ namespace EmoTracker.Extensions.NDI
 
             foreach (string envVar in runtimeEnvVars)
             {
+                // Probe process scope first (cheapest), then fall back to
+                // machine scope. The NDI Tools installer writes the runtime
+                // dir to MACHINE scope; processes that started before the
+                // installer ran (or were launched from a context that didn't
+                // refresh its environment block) will have the value visible
+                // ONLY at machine scope. Without this fallback, a user with
+                // NDI 6 properly installed gets a "Unable to load DLL 'NDILib'"
+                // error after running EmoTracker from such a stale-env shell.
                 string dir = Environment.GetEnvironmentVariable(envVar);
+                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+                    dir = Environment.GetEnvironmentVariable(envVar, EnvironmentVariableTarget.Machine);
                 if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
                     continue;
 

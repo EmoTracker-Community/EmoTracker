@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      Roslyn analyzers / source generators must target netstandard2.0 so they can
+      load into the analyzer host (the same compiler process that builds the
+      consuming projects). Even though the rest of the solution is on net10.0,
+      this project is intentionally pinned to netstandard2.0.
+    -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>EmoTracker.SourceGenerators</RootNamespace>
+    <AssemblyName>EmoTracker.SourceGenerators</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <!--
+      RS2008 (analyzer release tracking) is intended for analyzers shipped as
+      versioned NuGet packages. This generator is internal-only, so the noise is
+      not actionable. Suppress at the project level rather than per-rule.
+    -->
+    <NoWarn>$(NoWarn);RS2008</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

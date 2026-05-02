@@ -34,3 +34,14 @@ using System.Runtime.InteropServices;
 // [assembly: AssemblyVersion("3.0.1.11")]
 [assembly: AssemblyVersion("3.0.2.2")]
 [assembly: AssemblyFileVersion("3.0.2.2")]
+
+// Expose internals to the source-generator test project so unit tests can
+// drive otherwise-internal seeding helpers (e.g. TabPanel.Tab.SeedDefinition)
+// that are part of the parse-time setup path. Production callers don't need
+// them — they go through the JSON parse entry point.
+[assembly: InternalsVisibleTo("EmoTracker.SourceGenerators.Tests")]
+// Expose internals to the main app so per-state extensions
+// (AutoTrackerExtension's fork-replay path) can read ScriptManager's
+// fork-time hooks (ForkSource, ForkCloner, MemoryWatchRegistrations)
+// without forcing those onto the public API surface.
+[assembly: InternalsVisibleTo("EmoTracker")]

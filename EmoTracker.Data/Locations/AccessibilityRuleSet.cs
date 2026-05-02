@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace EmoTracker.Data.Locations
 {
@@ -22,74 +22,71 @@ namespace EmoTracker.Data.Locations
             mRules.Add(rule);
         }
 
-        public AccessibilityLevel Accessibility
+        /// <summary>
+        /// Phase 7.2: evaluates the rule set in the context of <paramref name="state"/>.
+        /// Replaces the previous parameterless <c>Accessibility</c> property which
+        /// read through a static cache + <c>Tracker.Instance</c>.
+        /// </summary>
+        public AccessibilityLevel GetAccessibility(Sessions.TrackerState state)
         {
-            get
+            // Phase 7.3: prefer per-state IgnoreAllLogic; fall back to the
+            // app-wide forwarder (which itself reads through to active state
+            // when one is present).
+            bool ignoreLogic = state?.Settings?.IgnoreAllLogic ?? ApplicationSettings.Instance.IgnoreAllLogic;
+            if (ignoreLogic)
+                return AccessibilityLevel.Normal;
+
+            if (mRules.Count == 0)
+                return AccessibilityLevel.Normal;
+
+            AccessibilityLevel level = AccessibilityLevel.None;
+            foreach (AccessibilityRule rule in mRules)
             {
-                if (ApplicationSettings.Instance.IgnoreAllLogic)
-                    return AccessibilityLevel.Normal;
-
-                if (mRules.Count == 0)
-                    return AccessibilityLevel.Normal;
-
-                AccessibilityLevel level = AccessibilityLevel.None;
-                foreach (AccessibilityRule rule in mRules)
-                {
-                    if (rule.AccessibilityLevel > level)
-                        level = rule.AccessibilityLevel;
-                }
-
-                return level;
+                var ruleLevel = rule.GetAccessibilityLevel(state);
+                if (ruleLevel > level)
+                    level = ruleLevel;
             }
+
+            return level;
         }
 
-        public AccessibilityLevel AccessibilityWithoutModifiers
+        public AccessibilityLevel GetAccessibilityWithoutModifiers(Sessions.TrackerState state)
         {
-            get
+            // Phase 7.3: prefer per-state IgnoreAllLogic; fall back to the
+            // app-wide forwarder (which itself reads through to active state
+            // when one is present).
+            bool ignoreLogic = state?.Settings?.IgnoreAllLogic ?? ApplicationSettings.Instance.IgnoreAllLogic;
+            if (ignoreLogic)
+                return AccessibilityLevel.Normal;
+
+            if (mRules.Count == 0)
+                return AccessibilityLevel.Normal;
+
+            AccessibilityLevel level = AccessibilityLevel.None;
+            foreach (AccessibilityRule rule in mRules)
             {
-                if (ApplicationSettings.Instance.IgnoreAllLogic)
-                    return AccessibilityLevel.Normal;
-
-                if (mRules.Count == 0)
-                    return AccessibilityLevel.Normal;
-
-                AccessibilityLevel level = AccessibilityLevel.None;
-                foreach (AccessibilityRule rule in mRules)
-                {
-                    AccessibilityLevel local = rule.AccessibilityLevel;
-                    /*
-                    if (local == AccessibilityLevel.Unlockable)
-                        local = AccessibilityLevel.Normal;
-*/
-                    if (local != AccessibilityLevel.Inspect && local > level)
-                        level = local;
-                }
-
-                return level;
+                AccessibilityLevel local = rule.GetAccessibilityLevel(state);
+                if (local != AccessibilityLevel.Inspect && local > level)
+                    level = local;
             }
+
+            return level;
         }
 
-        public AccessibilityLevel AccessibilityForVisibility
+        public AccessibilityLevel GetAccessibilityForVisibility(Sessions.TrackerState state)
         {
-            get
+            if (mRules.Count == 0)
+                return AccessibilityLevel.Normal;
+
+            AccessibilityLevel level = AccessibilityLevel.None;
+            foreach (AccessibilityRule rule in mRules)
             {
-                if (mRules.Count == 0)
-                    return AccessibilityLevel.Normal;
-
-                AccessibilityLevel level = AccessibilityLevel.None;
-                foreach (AccessibilityRule rule in mRules)
-                {
-                    AccessibilityLevel local = rule.AccessibilityLevel;
-                    /*
-                    if (local == AccessibilityLevel.Unlockable)
-                        local = AccessibilityLevel.Normal;
-*/
-                    if (local != AccessibilityLevel.Inspect && local > level)
-                        level = local;
-                }
-
-                return level;
+                AccessibilityLevel local = rule.GetAccessibilityLevel(state);
+                if (local != AccessibilityLevel.Inspect && local > level)
+                    level = local;
             }
+
+            return level;
         }
     }
 }

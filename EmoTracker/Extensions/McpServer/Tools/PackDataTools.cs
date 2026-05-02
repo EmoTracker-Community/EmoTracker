@@ -16,17 +16,44 @@ namespace EmoTracker.Extensions.McpServer.Tools
     [McpServerToolType]
     public class PackDataTools
     {
+        // Phase 6 step 11: app-level helpers resolving the active catalogs
+        // through the primary state, with a singleton fallback for the
+        // pre-pack-load window.
+        static ItemDatabase ActiveItems
+        {
+            get
+            {
+                var primary = ApplicationModel.Instance?.PrimaryState?.Items;
+                if (primary != null) return primary;
+#pragma warning disable CS0618
+                return ApplicationModel.Instance?.PrimaryState?.Items;
+#pragma warning restore CS0618
+            }
+        }
+
+        static LocationDatabase ActiveLocations
+        {
+            get
+            {
+                var primary = ApplicationModel.Instance?.PrimaryState?.Locations;
+                if (primary != null) return primary;
+#pragma warning disable CS0618
+                return ApplicationModel.Instance?.PrimaryState?.Locations;
+#pragma warning restore CS0618
+            }
+        }
+
         [McpServerTool(Name = "get_loaded_pack")]
         [Description("Get information about the currently loaded game pack")]
         public static async Task<string> GetLoadedPack()
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var pack = Tracker.Instance.ActiveGamePackage;
+                var pack = ApplicationModel.Instance.ActiveGamePackage;
                 if (pack == null)
                     return JsonSerializer.Serialize(new { loaded = false });
 
-                var variant = Tracker.Instance.ActiveGamePackageVariant;
+                var variant = ApplicationModel.Instance.ActiveGamePackageVariant;
                 var variants = pack.AvailableVariants?.Select(v => new
                 {
                     uniqueId = v.UniqueID,
@@ -59,7 +86,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var items = ItemDatabase.Instance.Items;
+                var items = ActiveItems.Items;
                 if (items == null)
                     return JsonSerializer.Serialize(Array.Empty<object>());
 
@@ -105,7 +132,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var locations = LocationDatabase.Instance.AllLocations;
+                var locations = ActiveLocations.AllLocations;
                 if (locations == null)
                     return JsonSerializer.Serialize(Array.Empty<object>());
 
@@ -148,7 +175,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var items = ItemDatabase.Instance.Items;
+                var items = ActiveItems.Items;
                 if (items == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -192,7 +219,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var item = ItemDatabase.Instance.FindObjectForCode(code) as ITrackableItem;
+                var item = ActiveItems.FindObjectForCode(code) as ITrackableItem;
                 if (item == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -206,7 +233,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var items = ItemDatabase.Instance.Items;
+                var items = ActiveItems.Items;
                 if (items == null)
                     return JsonSerializer.Serialize(new { found = false });
 
@@ -234,7 +261,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 try
                 {
                     ITrackableItem item = null;
-                    foreach (var i in ItemDatabase.Instance.Items)
+                    foreach (var i in ActiveItems.Items)
                     {
                         if (i?.Name != null && i.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                         {
@@ -246,7 +273,11 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     if (item == null)
                         return JsonSerializer.Serialize(new { success = false, error = "Item not found" });
 
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    var transactable = item as EmoTracker.Data.Core.DataModel.TransactableModelTypeBase;
+                    if (transactable == null)
+                        return JsonSerializer.Serialize(new { success = false, error = $"Item is not transactable: {item.GetType().Name}" });
+
+                    using (transactable.OpenTransaction())
                     {
                         if (item is ToggleItem toggle)
                         {
@@ -293,12 +324,22 @@ namespace EmoTracker.Extensions.McpServer.Tools
                     var nameList = names.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
                     var results = new List<object>();
 
-                    using (TransactionProcessor.Current.OpenTransaction())
+                    // Open the transaction scope on the primary state's processor —
+                    // every item's OnLeftClick mutates its own transactable Active /
+                    // CurrentStage via SetTransactableProperty which routes through
+                    // the item's OwnerState.Transactions. As long as every item
+                    // batched here belongs to the same primary state, opening on
+                    // primary.Transactions matches.
+                    var primaryProcessor = ApplicationModel.Instance.PrimaryState?.Transactions;
+                    if (primaryProcessor == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "No active TrackerState" });
+
+                    using (primaryProcessor.OpenTransaction())
                     {
                         foreach (var name in nameList)
                         {
                             ITrackableItem found = null;
-                            foreach (var item in ItemDatabase.Instance.Items)
+                            foreach (var item in ActiveItems.Items)
                             {
                                 if (item?.Name != null && item.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                                 {

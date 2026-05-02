@@ -1,4 +1,5 @@
-﻿using EmoTracker.Core;
+using EmoTracker.Core;
+using EmoTracker.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Media;
@@ -9,20 +10,38 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+
 namespace EmoTracker.Data
 {
-    public class LocationDatabase : ObservableSingleton<LocationDatabase>, ICodeProvider
+    /// <summary>
+    /// Phase 7.1: <see cref="LocationDatabase"/> is per-state. Each
+    /// <c>TrackerState</c> owns one. Reach via the holder's
+    /// <see cref="ModelTypeBase.OwnerState"/>, or via
+    /// <c>ApplicationModel.Instance.PrimaryState.Locations</c> /
+    /// <c>Sessions.SessionContext.ActiveState.Locations</c>.
+    /// </summary>
+    public class LocationDatabase : ObservableObject, ICodeProvider
     {
+        // Phase 6 step 11: back-reference to the owning TrackerState.
+        internal Sessions.TrackerState State { get; set; }
+
         public class SuspendRefreshScope : IDisposable
         {
-            public SuspendRefreshScope()
+            // Capture the target LocationDatabase at construction so a state
+            // swap mid-scope doesn't push on one instance and pop on another.
+            // Construction always requires an explicit target — there is no
+            // ambient state slot to fall back to.
+            readonly LocationDatabase mTarget;
+
+            public SuspendRefreshScope(LocationDatabase target)
             {
-                LocationDatabase.Instance.PushSuspendRefresh();
+                mTarget = target;
+                mTarget?.PushSuspendRefresh();
             }
 
             public virtual void Dispose()
             {
-                LocationDatabase.Instance.PopSuspendRefresh();
+                mTarget?.PopSuspendRefresh();
             }
         }
 
@@ -34,39 +53,37 @@ namespace EmoTracker.Data
         ObservableCollection<Location> mPinnedLocations = new ObservableCollection<Location>();
         ObservableCollection<Location> mVisibleLocations = new ObservableCollection<Location>();
 
+        private struct SuspendRefreshRequest
+        {
+            public string CallStack { get; set; }
+        };
+
+        private Stack<SuspendRefreshRequest> mSuspendRefreshStack = new Stack<SuspendRefreshRequest>();
+
         public bool SuspendRefresh
         {
-            get { return mSuspendRefreshCount > 0; }
-            set
-            {
-                // Legacy compatibility: direct assignment is discouraged.
-                // Prefer SuspendRefreshScope for reentrant-safe scoping.
-                if (value)
-                    PushSuspendRefresh();
-                else
-                    PopSuspendRefresh();
-            }
+            get { return mSuspendRefreshStack.Count > 0; }
         }
 
         internal void PushSuspendRefresh()
         {
-            ++mSuspendRefreshCount;
+            mSuspendRefreshStack.Push(new SuspendRefreshRequest() { CallStack = Environment.StackTrace });
         }
 
         internal void PopSuspendRefresh()
         {
-            if (mSuspendRefreshCount <= 0)
+            if (mSuspendRefreshStack.Count == 0)
             {
-                ScriptManager.Instance.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
+                this.State?.Scripts.OutputError("PopSuspendRefresh called with no matching Push — possible over-close bug");
                 System.Diagnostics.Debug.Fail("PopSuspendRefresh: underflow — more Pops than Pushes");
                 return;
             }
 
-            --mSuspendRefreshCount;
+            mSuspendRefreshStack.Pop();
 
-            if (mSuspendRefreshCount == 0)
+            if (mSuspendRefreshStack.Count == 0)
             {
-                RefeshAccessibility(bPendingOnly: true);
+                RefreshAccessibility(bPendingOnly: true);
             }
         }
 
@@ -97,8 +114,48 @@ namespace EmoTracker.Data
             get { return mPinnedLocations; }
         }
 
+        // Phase 7.2: per-state accessibility-rule cache. Lives here so it
+        // shares the LocationDatabase's lifetime (one per state) and is
+        // reachable from rule consumers via state.Locations.RuleCache.
+        // Cloned on TrackerState.Fork via SeedRuleCacheFromFork so the fork
+        // starts pre-warmed with the source's evaluations.
+        readonly Locations.AccessibilityRuleCache mRuleCache = new Locations.AccessibilityRuleCache();
+        internal Locations.AccessibilityRuleCache RuleCache => mRuleCache;
+
         public LocationDatabase()
         {
+            // Phase 7.2: keep the per-instance cache enabled flag in sync
+            // with the process-wide AccessibilityRule.EnableCache toggle,
+            // so a unit test (or the legacy debug setting) that flips that
+            // global propagates to this state's cache.
+            mRuleCache.Enabled = Locations.AccessibilityRule.EnableCache;
+            Locations.AccessibilityRule.EnableCacheChanged += OnEnableCacheChanged;
+
+            // Invalidate the lazy name-index whenever the location set
+            // changes membership. Lazy-rebuilt on next FindLocation call.
+            mAllLocations.CollectionChanged += (_, __) => InvalidateNameIndex();
+        }
+
+        void OnEnableCacheChanged(bool enabled)
+        {
+            mRuleCache.Enabled = enabled;
+        }
+
+        /// <summary>
+        /// Phase 7.2: seed this database's rule cache from a source
+        /// database's cache (used at <c>TrackerState.Fork</c> time so the
+        /// fork starts pre-warmed and avoids cold-start re-evaluation).
+        /// </summary>
+        internal void SeedRuleCacheFromFork(LocationDatabase source)
+        {
+            if (source == null) return;
+            mRuleCache.Clear();
+            var clone = source.mRuleCache.CloneForFork();
+            // Adopt the cloned entries by replaying — we don't expose
+            // bulk-set on the cache type; entries are public via Put.
+            // The cache class deliberately keeps mEntries private to avoid
+            // callers reaching past the API. Use a small adoption helper:
+            mRuleCache.AdoptFrom(clone);
         }
 
         public void Reset()
@@ -108,12 +165,14 @@ namespace EmoTracker.Data
             mLocationIndex.Clear();
             mPinnedLocations.Clear();
             mVisibleLocations.Clear();
-            mRoot = new Location()
-            {
-                Color = "#212121",
-                OpenChestImage = ImageReference.FromExternalURI(new Uri("pack://application:,,,/EmoTracker;component/Resources/chest_open.png")),
-                ClosedChestImage = ImageReference.FromExternalURI(new Uri("pack://application:,,,/EmoTracker;component/Resources/chest_closed.png"))
-            };
+            // Stamp OwnerState + register before property setters fire so
+            // any [OnChanged] hooks resolve the owning state.
+            mRoot = new Location();
+            mRoot.OwnerState = this.State;
+            this.State?.RegisterModel(mRoot);
+            mRoot.Color = "#212121";
+            mRoot.OpenChestImage = ImageReference.FromExternalURI(new Uri("pack://application:,,,/EmoTracker;component/Resources/chest_open.png"));
+            mRoot.ClosedChestImage = ImageReference.FromExternalURI(new Uri("pack://application:,,,/EmoTracker;component/Resources/chest_closed.png"));
         }
 
         public void ParseLocationVisualProperties(JObject data, LocationVisualProperties visual, IGamePackage package)
@@ -142,30 +201,30 @@ namespace EmoTracker.Data
             }
         }
 
-        public bool LegacyLoad(IGamePackage package)
+        public bool LegacyLoad(IGamePackage package, Sessions.TrackerState state)
         {
             //  Do not load legacy data if we already have new-style data
             if (mAllLocations.Count > 0)
                 return true;
 
-            return IncrementalLoad("locations.json", package, true);
+            return IncrementalLoad("locations.json", package, true, state);
         }
 
 
-        internal bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false)
+        internal bool IncrementalLoad(string path, IGamePackage package, bool bLegacy = false, Sessions.TrackerState state = null)
         {
             if (bLegacy)
-                ScriptManager.Instance.OutputWarning("Loading legacy locations");
+                this.State?.Scripts.OutputWarning("Loading legacy locations");
             else
-                ScriptManager.Instance.Output("Loading Locations: {0}", path);
+                this.State?.Scripts.Output("Loading Locations: {0}", path);
 
-            using (new LoggingBlock())
+            using (new LoggingBlock(state?.Scripts))
             {
                 try
                 {
                     PushSuspendRefresh();
 
-                    using (Stream s = package.Open(path))
+                    using (Stream s = package.Open(path, state?.PackageInstance?.ActiveVariant))
                     {
                         if (s != null)
                         {
@@ -174,7 +233,7 @@ namespace EmoTracker.Data
                                 JArray locations = (JArray)JToken.ReadFrom(new JsonTextReader(reader));
                                 foreach (JObject location in locations)
                                 {
-                                    Location child = LoadLocation(package, mRoot, location);
+                                    Location child = LoadLocation(package, mRoot, location, state);
                                     if (child != null)
                                         mRoot.AddChild(child);
                                 }
@@ -182,20 +241,20 @@ namespace EmoTracker.Data
                         }
                         else
                         {
-                            ScriptManager.Instance.Output("File not found");
+                            this.State?.Scripts.Output("File not found");
                         }
                     }
                 }
                 catch (Exception e)
                 {
-                    ScriptManager.Instance.OutputException(e);
+                    this.State?.Scripts.OutputException(e);
                 }
                 finally
                 {
                     PopSuspendRefresh();
                 }
 
-                RefeshAccessibility();
+                RefreshAccessibility();
             }
 
             return true;
@@ -270,18 +329,159 @@ namespace EmoTracker.Data
             return null;
         }
 
+        // Lazy-built case-insensitive name → Location index. Backs
+        // FindLocation, which is hammered during accessibility refresh
+        // for every @-prefixed code rule. The legacy linear scan
+        // re-fetched each Location.Name through MutableKeyValueStore +
+        // DeepCopyForStore on every call, which (per profile) burned
+        // ~62ms / 437ms (14%) of refresh time on a CodeTracker lamp
+        // toggle. The index amortizes that to one Name read per
+        // location across the index build, hit by O(1) thereafter.
+        //
+        // Invalidation: cleared whenever AllLocations changes
+        // membership (Add/Remove/Reset). Mid-session name renames
+        // without a membership change would leave the index stale; in
+        // practice Location.Name is set during pack-load and rarely
+        // mutates after that. If a future feature renames Locations
+        // dynamically it should call InvalidateNameIndex() explicitly.
+        Dictionary<string, Location> mNameIndex;
+
+        void EnsureNameIndex()
+        {
+            if (mNameIndex != null) return;
+            var idx = new Dictionary<string, Location>(StringComparer.OrdinalIgnoreCase);
+            foreach (Location location in mAllLocations)
+            {
+                if (location == null) continue;
+                var nm = location.Name;
+                if (string.IsNullOrEmpty(nm)) continue;
+                // Preserve "first match wins" semantics from the legacy
+                // linear scan: do not overwrite an existing entry.
+                if (!idx.ContainsKey(nm))
+                    idx[nm] = location;
+            }
+            mNameIndex = idx;
+        }
+
+        internal void InvalidateNameIndex()
+        {
+            mNameIndex = null;
+        }
+
         public Location FindLocation(string name)
         {
-            if (!string.IsNullOrWhiteSpace(name))
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            EnsureNameIndex();
+            return mNameIndex.TryGetValue(name, out var loc) ? loc : null;
+        }
+
+        /// <summary>
+        /// Phase 6 step 8: appends a Location to this database's
+        /// AllLocations + index. Used by <c>TrackerState.Fork()</c>'s
+        /// coordinated walk to populate the fork's location database
+        /// without re-running pack-load. Internal to the assembly so
+        /// production code goes through the parse path; tests +
+        /// TrackerState see it via <c>InternalsVisibleTo</c>.
+        /// </summary>
+        internal void AddLocationFromFork(Location location)
+        {
+            if (location == null) return;
+            mLocationIndex[location] = mAllLocations.Count;
+            mAllLocations.Add(location);
+
+            // Mirror the pack-load guard at line 664: locations whose
+            // own subtree contributes sections (HasLocalItems) belong to
+            // the visible-locations index. Without this, a forked state's
+            // mVisibleLocations stays empty even though its tree carries
+            // sections — and LocationDatabase.Save iterates only
+            // mVisibleLocations to build the JSON entries, so the entire
+            // "location_database" key gets stripped from the save file
+            // (the "any properties?" guard at line 863 strips the
+            // wrapper when no entries were emitted). On reload Load()
+            // finds no key, short-circuits, and chest counts / captured
+            // items / cleared state are silently dropped.
+            //
+            // The sibling Group.AddLocation call from pack-load's
+            // visibility branch is INTENTIONALLY omitted here: Group.Fork
+            // rebuilds its own mLocationRefs via OnForked, so duplicating
+            // the AddLocation call would double-register the location in
+            // the group on the fork side.
+            if (location.HasLocalItems)
+                mVisibleLocations.Add(location);
+        }
+
+        /// <summary>
+        /// Strip the synthetic <see cref="Root"/> entry from
+        /// <c>mAllLocations</c> / <c>mLocationIndex</c> after a fork walk
+        /// and re-index the remaining real locations to match the source
+        /// state's order one-for-one.
+        ///
+        /// <para>
+        /// <b>Why this is necessary:</b> pack-load's <c>LoadLocation</c>
+        /// never adds <c>mRoot</c> to <c>mAllLocations</c> — the synthetic
+        /// root is a parent placeholder that real locations attach to as
+        /// children. The fork path, however, registers the root via the
+        /// generic <c>RegisterLocationTreeOnFork</c> recursive walk
+        /// (<c>TrackerState.cs:725</c>), which calls
+        /// <see cref="AddLocationFromFork"/> for every node in the tree
+        /// — root included. Without correction, fork's <c>mAllLocations</c>
+        /// is shifted by one slot relative to the source's: root sits at
+        /// fork-index 0, while the source's first real location sits at
+        /// source-index 0.
+        /// </para>
+        ///
+        /// <para>
+        /// That shift breaks save / load round-trips. Save serialises
+        /// indices using the FORK's <c>mLocationIndex</c>, so a saved
+        /// reference reads e.g. <c>"3:Master Sword Pedestal"</c>. On load,
+        /// <see cref="ResolvePersistableLocationReference"/> indexes into
+        /// the FRESHLY-pack-loaded state's <c>mAllLocations</c> (which
+        /// has no root entry), so position 3 resolves to a different
+        /// location, the name-match check fails, and
+        /// <see cref="Load"/> bails returning <c>false</c> — silently
+        /// dropping every section's chest counts, captured items, and
+        /// pinned-status state on reload.
+        /// </para>
+        ///
+        /// <para>
+        /// This method clears the locations index and rebuilds it by
+        /// walking the source's <c>mAllLocations</c> in order (which
+        /// already excludes root) and resolving each entry to its
+        /// fork-side counterpart through <paramref name="identityMap"/>.
+        /// After the call, fork-side index N maps to the same logical
+        /// location as source-side index N.
+        /// </para>
+        ///
+        /// <para>
+        /// <c>mVisibleLocations</c> is left alone — it was populated by
+        /// <see cref="AddLocationFromFork"/>'s <c>HasLocalItems</c> guard
+        /// in the same pre-order DFS the source's pack-load used, so
+        /// its order already matches the source's <c>mVisibleLocations</c>
+        /// without re-walking.
+        /// </para>
+        /// </summary>
+        internal void ReindexFromSource(LocationDatabase source, System.Collections.Generic.Dictionary<object, object> identityMap)
+        {
+            mAllLocations.Clear();
+            mLocationIndex.Clear();
+            foreach (Location srcLoc in source.mAllLocations)
             {
-                foreach (Location location in AllLocations)
+                if (identityMap.TryGetValue(srcLoc, out object forkObj) && forkObj is Location forkLoc)
                 {
-                    if (name.Equals(location.Name, StringComparison.OrdinalIgnoreCase))
-                        return location;
+                    mLocationIndex[forkLoc] = mAllLocations.Count;
+                    mAllLocations.Add(forkLoc);
                 }
             }
+        }
 
-            return null;
+        /// <summary>
+        /// Phase 6 step 8: sets <see cref="Root"/> on the fork. Used by
+        /// <c>TrackerState.Fork()</c> after the source's root location is
+        /// forked via Phase 3's coordinated <c>Location.Fork</c>.
+        /// </summary>
+        internal void SetRootFromFork(Location root)
+        {
+            mRoot = root;
         }
 
         public void PinLocation(Location location)
@@ -301,13 +501,40 @@ namespace EmoTracker.Data
             mPinnedLocations.Remove(location);
         }
 
-        int mSuspendRefreshCount = 0;
         bool mbInRefresh = false;
         uint mPendingRefreshCount = 0;
 
-        internal void RefeshAccessibility(bool bPendingOnly = false)
+        // Holder-aware script-manager lookup for standard-callback dispatch.
+        // Prefers mRoot's per-state ScriptManager when a pack root has been
+        // parsed; otherwise falls back to the owning state's Scripts.
+        // Returns null when this LocationDatabase has no state context
+        // (test scenarios) — callers must null-check.
+        IScriptManager GetActiveScriptManager()
         {
-            if (mSuspendRefreshCount == 0)
+            if (mRoot != null) return mRoot.GetScriptManager();
+            return State?.Scripts;
+        }
+
+        // Peer-catalog access: the State back-ref is set when this
+        // LocationDatabase is wired into a TrackerState. Returns null in
+        // test scenarios where no state is installed.
+        MapDatabase ActiveMaps()
+        {
+            return State?.Maps;
+        }
+
+        /// <summary>
+        /// Triggers an accessibility-refresh sweep over this state's
+        /// locations. Public so cross-assembly callers (ApplicationModel,
+        /// extensions) can force a refresh after operations like
+        /// fork-then-adopt where the fork's cached values may be stale
+        /// relative to a fresh evaluation. Pass <c>bPendingOnly: true</c>
+        /// for the legacy "only refresh if there are pending requests"
+        /// semantics.
+        /// </summary>
+        public void RefreshAccessibility(bool bPendingOnly = false)
+        {
+            if (!SuspendRefresh)
             {
                 if (!bPendingOnly)
                     ++mPendingRefreshCount;
@@ -315,6 +542,7 @@ namespace EmoTracker.Data
                 if (!mbInRefresh)
                 {
                     bool bRefreshedAccessibility = false;
+
 
                     try
                     {
@@ -327,15 +555,21 @@ namespace EmoTracker.Data
                                 mPendingRefreshCount = 0;
                                 bRefreshedAccessibility = true;
 
-                                AccessibilityRule.ClearCaches();
-                                ScriptManager.Instance.ClearExpressionCache();
+                                // Phase 7.2: per-state cache clear (was static AccessibilityRule.ClearCaches).
+                                mRuleCache.Clear();
+                                this.State?.Scripts.ClearExpressionCache();
 
-                                ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdating);
+                                // Phase 5 step 5: route the standard-callback through the
+                                // holder-aware path. mRoot is a Location (ModelTypeBase),
+                                // so its GetScriptManager() override (Phase 6) returns the
+                                // owning state's ScriptManager. Falls back to the singleton
+                                // host when no pack is loaded (mRoot == null).
+                                GetActiveScriptManager()?.InvokeStandardCallback(StandardCallback.AccessibilityUpdating);
 
                                 if (mRoot != null)
                                     mRoot.RefreshAccessibility();
 
-                                MapDatabase.Instance.MarkVisibilityDirty();
+                                ActiveMaps()?.MarkVisibilityDirty();
                             }
                         } // queued PropertyChanged notifications fire here, before AccessibilityUpdated
                     }
@@ -348,11 +582,11 @@ namespace EmoTracker.Data
                         // any rule evaluations triggered by that callback benefit from the cache.
                         // Clearing here negated all caching, reproducing the slow-update symptom
                         // that enable_accessibility_rule_caching was introduced to fix.
-                        MapDatabase.Instance.UpdateVisibilityIfNecessary();
+                        ActiveMaps()?.UpdateVisibilityIfNecessary();
 
                         if (bRefreshedAccessibility)
                         {
-                            ScriptManager.Instance.InvokeStandardCallback(ScriptManager.StandardCallback.AccessibilityUpdated);
+                            GetActiveScriptManager()?.InvokeStandardCallback(StandardCallback.AccessibilityUpdated);
                         }
                     }
                 }
@@ -360,12 +594,13 @@ namespace EmoTracker.Data
             }
             else
             {
-                AccessibilityRule.ClearCaches();
+                // Phase 7.2: per-state cache clear.
+                mRuleCache.Clear();
                 ++mPendingRefreshCount;
             }
         }
 
-        void LoadLocationList(IGamePackage package, Location parent, JArray locationNodes)
+        void LoadLocationList(IGamePackage package, Location parent, JArray locationNodes, Sessions.TrackerState state)
         {
             if (locationNodes != null)
             {
@@ -374,21 +609,24 @@ namespace EmoTracker.Data
                     //  NOTE: We do not assume that the parent that was passed in
                     //  is the parent that we ulimately attach to. This can be 
                     //  overriden by a `parent` attribute
-                    Location child = LoadLocation(package, parent, location);
+                    Location child = LoadLocation(package, parent, location, state);
                     if (child != null && child.Parent != null)
                         child.Parent.AddChild(child);
                 }
             }
         }
 
-        Location LoadLocation(IGamePackage package, Location parent, JObject data)
+        Location LoadLocation(IGamePackage package, Location parent, JObject data, Sessions.TrackerState state)
         {
-            Location instance = new Location()
-            {
-                Name = data.GetValue<string>("name"),
-                ShortName = data.GetValue<string>("short_name"),
-                Parent = parent
-            };
+            // Stamp OwnerState before any property setters fire so any
+            // [OnChanged] hooks (accessibility refresh, etc.) resolve the
+            // owning state on the first invocation.
+            Location instance = new Location();
+            instance.OwnerState = state;
+            state?.RegisterModel(instance);
+            instance.Name = data.GetValue<string>("name");
+            instance.ShortName = data.GetValue<string>("short_name");
+            instance.Parent = parent;
 
             //  Allow for an explicit parent override
             string parentOverride = data.GetValue<string>("parent");
@@ -420,6 +658,8 @@ namespace EmoTracker.Data
                 foreach (JObject sectionData in sections)
                 {
                     Section section = new Section(instance);
+                    section.OwnerState = state;
+                    state?.RegisterModel(section);
                     ParseLocationVisualProperties(sectionData, section, package);
 
                     section.Name = sectionData.GetValue<string>("name");
@@ -488,7 +728,19 @@ namespace EmoTracker.Data
                     section.HostedItemCode = sectionData.GetValue<string>("hosted_item");
                     section.GateItemCode = sectionData.GetValue<string>("gate_item");
 
-                    if (section.ChestCount > 0 || section.HostedItem != null)
+                    // Phase 7.1 fix: gate on the raw HostedItemCode string
+                    // rather than the resolved HostedItem instance. Item
+                    // resolution at parse time can lag behind the location
+                    // parse (item code-index isn't built until BuildCodeIndex
+                    // runs at the end of PackageLoader.LoadInto), and per-state
+                    // OwnerState routing through transactable HostedItemId
+                    // can leave the cache stale until the first explicit read.
+                    // The intent of the original condition was "skip empty
+                    // placeholder sections that have neither chests nor a
+                    // hosted item" — using the JSON-supplied code is the
+                    // correct invariant for that intent and resolves at
+                    // pack-author-time, not runtime.
+                    if (section.ChestCount > 0 || !string.IsNullOrWhiteSpace(section.HostedItemCode))
                         instance.AddSection(section);
                 }
             }
@@ -506,7 +758,7 @@ namespace EmoTracker.Data
                     foreach (JObject entry in mapEntries)
                     {
                         //  TODO: We need to improve referencing to support late binding
-                        Map map = MapDatabase.Instance.FindMap(entry.GetValue<string>("map"));
+                        Map map = ActiveMaps()?.FindMap(entry.GetValue<string>("map"));
                         if (map != null)
                         {
                             double x = entry.GetValue<double>("x");
@@ -518,7 +770,15 @@ namespace EmoTracker.Data
                             size = size < 0 ? map.LocationSize : size;
                             bordersize = bordersize < 0 ? map.LocationBorderThickness : bordersize;
 
-                            MapLocation mapLocation = new MapLocation() { X = x, Y = y, Size = size, BorderThickness = bordersize, Location = instance };
+                            // Stamp OwnerState + register before setters fire.
+                            MapLocation mapLocation = new MapLocation();
+                            mapLocation.OwnerState = state;
+                            state?.RegisterModel(mapLocation);
+                            mapLocation.X = x;
+                            mapLocation.Y = y;
+                            mapLocation.Size = size;
+                            mapLocation.BorderThickness = bordersize;
+                            mapLocation.Location = instance;
 
                             mapLocation.AlwaysVisible = entry.GetValue<bool>("always_visible", false);
                             mapLocation.EnableBadgeHitTest = entry.GetValue<bool>("enable_badge_hit_test", false);
@@ -586,7 +846,7 @@ namespace EmoTracker.Data
             mAllLocations.Add(instance);
 
             var children = data.GetValue<JArray>("children");
-            LoadLocationList(package, instance, children);
+            LoadLocationList(package, instance, children, state);
 
             return instance;
         }
@@ -616,7 +876,11 @@ namespace EmoTracker.Data
                             sectionData["available_chest_count"] = section.AvailableChestCount;
 
                             if (section.CapturedItem != null)
-                                sectionData["captured_item"] = ItemDatabase.Instance.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
+                            {
+                                // Phase 6 step 11: prefer the peer ItemDatabase from this state.
+                                var itemDb = this.State?.Items;
+                                sectionData["captured_item"] = itemDb?.GetPersistableItemReference(section.CapturedItem, allowAnyType: true);
+                            }
 
                             sectionDataArray.Add(sectionData);
                         }
@@ -723,7 +987,9 @@ namespace EmoTracker.Data
 
                         string capturedItemRef = sectionData.GetValue<string>("captured_item");
                         {
-                            ITrackableItem captureItem = ItemDatabase.Instance.ResolvePersistableItemReference(capturedItemRef);
+                            // Phase 6 step 11: prefer the peer ItemDatabase from this state.
+                            var itemDb = this.State?.Items;
+                            ITrackableItem captureItem = itemDb?.ResolvePersistableItemReference(capturedItemRef);
 
                             if (!string.IsNullOrWhiteSpace(capturedItemRef) && captureItem == null)
                                 return false;
@@ -752,7 +1018,8 @@ namespace EmoTracker.Data
 
                             if (!string.IsNullOrEmpty(imagePath))
                             {
-                                ImageReference imageRef = ImageReference.FromPackRelativePath(imagePath, filter);
+                                var pkg = this.State?.PackageInstance?.GamePackage;
+                                ImageReference imageRef = ImageReference.FromPackRelativePath(pkg, imagePath, filter);
                                 if (imageRef != null)
                                     location.AddBadge(key, imageRef, null, ox, oy);
                             }

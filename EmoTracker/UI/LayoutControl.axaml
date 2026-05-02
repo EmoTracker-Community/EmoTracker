@@ -582,7 +582,7 @@
             <ContentControl Content="{Binding Location}">
                 <ContentControl.ContentTemplate>
                     <DataTemplate>
-                        <local:LocationControl DataContext="{Binding LastClearedLocation, Source={x:Static data:LocationDatabase.Instance}}"
+                        <local:LocationControl DataContext="{Binding PrimaryState.Locations.LastClearedLocation, Source={x:Static app:ApplicationModel.Instance}}"
                                                Compact="{Binding DataContext.CompactDisplay, RelativeSource={RelativeSource Self}}" />
                     </DataTemplate>
                 </ContentControl.ContentTemplate>
