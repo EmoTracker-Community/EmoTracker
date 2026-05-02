@@ -352,7 +352,7 @@ namespace EmoTracker.Data.Locations
                     // Drop-captured-on-clear cascade, gated by the same exclusions
                     // as pre-Phase-3 (CaptureBadge / mSuppressCaptureClearing /
                     // CapturePersist).
-                    if (value == 0 && CapturedItem != null && !mSuppressCaptureClearing && !CapturePersist)
+                    if (value == 0 && AvailableChestCount > 0 && CapturedItem != null && !mSuppressCaptureClearing && !CapturePersist)
                     {
                         CapturedItem.AdvanceToCode();
                         CapturedItem = null;
