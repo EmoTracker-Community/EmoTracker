@@ -756,6 +756,12 @@ namespace EmoTracker
                 {
                     RefreshTrackerLayout();
                     UpdateResizeMode();
+                    // Notify BroadcastLayout subscribers (HiddenBroadcastWindow,
+                    // BroadcastView, ReconcileHiddenBroadcast) that the layout
+                    // instance was replaced by the reload. ActiveState didn't
+                    // change so the normal ActiveState-setter notification never
+                    // fires — this explicit call is the only trigger.
+                    WindowContext?.RefreshBroadcastLayout();
                 });
             }
         }

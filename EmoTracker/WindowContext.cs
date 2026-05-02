@@ -79,14 +79,22 @@ namespace EmoTracker
         ///
         /// <para>
         /// Recomputed on every read (cheap dictionary lookup). Fires
-        /// PropertyChanged when <see cref="ActiveState"/> changes; pack
-        /// reload also drives a refresh because the layout instance lives
-        /// on <see cref="TrackerState.Layouts"/> which is rebuilt during
-        /// pack-load.
+        /// PropertyChanged when <see cref="ActiveState"/> changes or when
+        /// <see cref="RefreshBroadcastLayout"/> is called explicitly (e.g.
+        /// after a pack reload repopulates <see cref="TrackerState.Layouts"/>).
         /// </para>
         /// </summary>
         public EmoTracker.Data.Layout.Layout BroadcastLayout
             => mActiveState?.Layouts?.FindLayout("tracker_broadcast");
+
+        /// <summary>
+        /// Re-fires PropertyChanged for <see cref="BroadcastLayout"/>.
+        /// Call this after a pack reload so that the
+        /// <see cref="Extensions.NDI.HiddenBroadcastWindow"/> and any other
+        /// subscribers pick up the new layout instance.
+        /// </summary>
+        public void RefreshBroadcastLayout()
+            => NotifyPropertyChanged(nameof(BroadcastLayout));
 
         /// <summary>
         /// The aggregated extensions surfaced in this window's status
