@@ -78,7 +78,7 @@ namespace EmoTracker.Data
                                     mapObj.Name = map.GetValue<string>("name");
                                     mapObj.LocationSize = map.GetValue<double>("location_size", 70);
                                     mapObj.LocationBorderThickness = map.GetValue<double>("location_border_thickness", 8);
-                                    mapObj.Image = ImageReference.FromPackRelativePath(package, map.GetValue<string>("img"), map.GetValue<string>("img_mods"));
+                                    mapObj.Image = ImageReference.FromPackRelativePath(state?.PackageInstance, map.GetValue<string>("img"), map.GetValue<string>("img_mods"));
                                     mMaps.Add(mapObj);
                                 }
                             }

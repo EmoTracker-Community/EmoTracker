@@ -236,10 +236,11 @@ namespace EmoTracker.Data.Items
             mCodeProvider.Clear();
             mCodeProvider.AddCodes(data.GetValue<string>("codes"));
 
-            mFullIcon = ImageReference.FromPackRelativePath(package, data.GetValue<string>("img"), data.GetValue<string>("img_mods"));
+            var pi = (this.OwnerState as Sessions.TrackerState)?.PackageInstance;
+            mFullIcon = ImageReference.FromPackRelativePath(pi, data.GetValue<string>("img"), data.GetValue<string>("img_mods"));
 
             //  Allow loading a custom disabled image, and then apply filters
-            mEmptyIcon = ImageReference.FromPackRelativePath(package, data.GetValue<string>("disabled_img"), data.GetValue<string>("disabled_img_mods") ?? DisabledImageFilterSpec);
+            mEmptyIcon = ImageReference.FromPackRelativePath(pi, data.GetValue<string>("disabled_img"), data.GetValue<string>("disabled_img_mods") ?? DisabledImageFilterSpec);
             if (mEmptyIcon == null)
                 mEmptyIcon = ImageReference.FromImageReference(mFullIcon, data.GetValue<string>("disabled_img_mods") ?? DisabledImageFilterSpec);
 

@@ -251,10 +251,10 @@ namespace EmoTracker.Data.Media
 
         public static ImageReference FromPackRelativePath(string path, string filter = null)
         {
-            return FromPackRelativePath(Sessions.ActiveSession.Primary?.PackageInstance?.GamePackage, path, filter);
+            return FromPackRelativePath(Sessions.ActiveSession.Primary?.PackageInstance, path, filter);
         }
 
-        public static ImageReference FromPackRelativePath(IGamePackage package, string path, string filter = null)
+        public static ImageReference FromPackRelativePath(Sessions.PackageInstance pi, string path, string filter = null)
         {
             if (string.IsNullOrWhiteSpace(path))
                 return null;
@@ -262,6 +262,7 @@ namespace EmoTracker.Data.Media
             path = path.Trim();
             path = path.TrimStart(',', '/', '\\');
 
+            var package = pi?.GamePackage;
             if (package == null || !package.Exists(path))
                 return null;
 
@@ -274,13 +275,10 @@ namespace EmoTracker.Data.Media
             {
                 URI = new Uri(path),
                 Filter = filter,
-                // Phase 7.1.h: stamp the owning PackageInstance so the
-                // resolver can find this reference's cache + open the
-                // file directly without consulting an ambient session.
-                PackageInstance = Sessions.ActiveSession.FindPackageInstanceFor(package),
+                PackageInstance = pi,
             };
 
-            PopulateDimensions(result, package, result.PackageInstance?.ActiveVariant, path);
+            PopulateDimensions(result, package, pi?.ActiveVariant, path);
             NotifyCreated(result);
 
             return result;

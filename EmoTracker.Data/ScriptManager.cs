@@ -39,7 +39,7 @@ namespace EmoTracker.Data
 
         public ImageReference FromPackRelativePath(string path, string filter = null)
         {
-            return ImageReference.FromPackRelativePath(mState.PackageInstance?.GamePackage, path, filter);
+            return ImageReference.FromPackRelativePath(mState.PackageInstance, path, filter);
         }
 
         public ImageReference FromImageReference(ImageReference existingReference, string filter = null)

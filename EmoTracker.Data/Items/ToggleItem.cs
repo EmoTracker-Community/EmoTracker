@@ -133,12 +133,13 @@ namespace EmoTracker.Data.Items
         protected override void ParseDataInternal(JObject data, IGamePackage package)
         {
             string imgName = data.GetValue<string>("img");
-            ActiveIcon = ImageReference.FromPackRelativePath(package, imgName, data.GetValue<string>("img_mods"));
+            var pi = (this.OwnerState as Sessions.TrackerState)?.PackageInstance;
+            ActiveIcon = ImageReference.FromPackRelativePath(pi, imgName, data.GetValue<string>("img_mods"));
 
             string disabledImgMods = data.GetValue<string>("disabled_img_spec", DisabledImageFilterSpec);
             disabledImgMods = data.GetValue<string>("disabled_img_mods", disabledImgMods);
 
-            mInactiveIcon = ImageReference.FromPackRelativePath(package, data.GetValue<string>("disabled_img"), disabledImgMods);
+            mInactiveIcon = ImageReference.FromPackRelativePath(pi, data.GetValue<string>("disabled_img"), disabledImgMods);
 
             if (mActiveIcon != null && mInactiveIcon == null)
                 mInactiveIcon = ImageReference.FromImageReference(mActiveIcon, disabledImgMods);
