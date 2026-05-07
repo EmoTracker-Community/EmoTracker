@@ -115,7 +115,7 @@ namespace EmoTracker.Data.Items
             foreach (JObject imageData in imageMap)
             {
                 string imgName = imageData.GetValue<string>("img");
-                var img = ImageReference.FromPackRelativePath(package, imgName, imageData.GetValue<string>("img_mods"));
+                var img = ImageReference.FromPackRelativePath((this.OwnerState as Sessions.TrackerState)?.PackageInstance, imgName, imageData.GetValue<string>("img_mods"));
 
                 if (img != null)
                 {

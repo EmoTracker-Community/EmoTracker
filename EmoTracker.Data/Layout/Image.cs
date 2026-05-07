@@ -20,7 +20,7 @@ namespace EmoTracker.Data.Layout
         protected override void PopulateDefinitionData(JObject data, IGamePackage package, Dictionary<string, object> definition)
         {
             definition[nameof(Content) + "__def"] = ImageReference.FromPackRelativePath(
-                package, data.GetValue<string>("image"), data.GetValue<string>("image_filter"));
+                (this.OwnerState as Sessions.TrackerState)?.PackageInstance, data.GetValue<string>("image"), data.GetValue<string>("image_filter"));
         }
 
         protected override bool TryParseInternal(JObject data, IGamePackage package)

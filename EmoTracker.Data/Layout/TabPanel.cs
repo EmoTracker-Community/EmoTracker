@@ -152,7 +152,7 @@ namespace EmoTracker.Data.Layout
                         tab.OwnerState = this.OwnerState;
                         tab.SeedDefinition(
                             entry.GetValue<string>("title"),
-                            ImageReference.FromPackRelativePath(package, entry.GetValue<string>("icon"), entry.GetValue<string>("icon_image_spec")),
+                            ImageReference.FromPackRelativePath((this.OwnerState as Sessions.TrackerState)?.PackageInstance, entry.GetValue<string>("icon"), entry.GetValue<string>("icon_image_spec")),
                             layout);
                         mTabs.Add(tab);
                     }

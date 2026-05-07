@@ -215,10 +215,11 @@ namespace EmoTracker.Data.Items
 
             string codes = "";
 
+            var pi = (this.OwnerState as Sessions.TrackerState)?.PackageInstance;
             JArray stages = (JArray)data.GetValue("stages");
             foreach (JObject stageData in stages)
             {
-                var img = ImageReference.FromPackRelativePath(package, stageData.GetValue<string>("img"), stageData.GetValue<string>("img_mods"));
+                var img = ImageReference.FromPackRelativePath(pi, stageData.GetValue<string>("img"), stageData.GetValue<string>("img_mods"));
 
                 //  Reset the code inheritance chain if requested
                 bool bInheritCodes = stageData.GetValue<bool>("inherit_codes", true);

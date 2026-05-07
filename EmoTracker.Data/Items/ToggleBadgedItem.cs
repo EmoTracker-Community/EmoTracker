@@ -140,8 +140,9 @@ namespace EmoTracker.Data.Items
             string disabledImgMods = data.GetValue<string>("disabled_img_spec");
             disabledImgMods = data.GetValue<string>("disabled_img_mods", disabledImgMods);
 
-            mInactiveIcon = ImageReference.FromPackRelativePath(package, data.GetValue<string>("disabled_img"), disabledImgMods ?? DisabledImageFilterSpec);
-            ActiveIcon = ImageReference.FromPackRelativePath(package, data.GetValue<string>("img"), data.GetValue<string>("img_mods"));
+            var pi = (this.OwnerState as Sessions.TrackerState)?.PackageInstance;
+            mInactiveIcon = ImageReference.FromPackRelativePath(pi, data.GetValue<string>("disabled_img"), disabledImgMods ?? DisabledImageFilterSpec);
+            ActiveIcon = ImageReference.FromPackRelativePath(pi, data.GetValue<string>("img"), data.GetValue<string>("img_mods"));
 
             Active = data.GetValue<bool>("initial_active_state", Active);
             AddProvidedCodes(data.GetValue<string>("codes"));

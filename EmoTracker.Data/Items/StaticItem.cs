@@ -53,7 +53,7 @@ namespace EmoTracker.Data.Items
 
         protected override void ParseDataInternal(JObject data, IGamePackage package)
         {
-            Icon = ImageReference.FromPackRelativePath(package, data.GetValue<string>("img"), data.GetValue<string>("img_mods"));
+            Icon = ImageReference.FromPackRelativePath((this.OwnerState as Sessions.TrackerState)?.PackageInstance, data.GetValue<string>("img"), data.GetValue<string>("img_mods"));
             mCodeProvider.AddCodes(data.GetValue<string>("codes"));
             Capturable = data.GetValue<bool>("capturable", false);
         }

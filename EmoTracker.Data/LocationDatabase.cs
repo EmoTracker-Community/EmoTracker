@@ -177,11 +177,11 @@ namespace EmoTracker.Data
 
         public void ParseLocationVisualProperties(JObject data, LocationVisualProperties visual, IGamePackage package)
         {
-            ImageReference openImg = ImageReference.FromPackRelativePath(package, data.GetValue<string>("chest_opened_img"));
+            ImageReference openImg = ImageReference.FromPackRelativePath(this.State?.PackageInstance, data.GetValue<string>("chest_opened_img"));
             if (openImg != null)
                 visual.OpenChestImage = openImg;
 
-            ImageReference closedImg = ImageReference.FromPackRelativePath(package, data.GetValue<string>("chest_unopened_img"));
+            ImageReference closedImg = ImageReference.FromPackRelativePath(this.State?.PackageInstance, data.GetValue<string>("chest_unopened_img"));
             if (closedImg != null)
                 visual.ClosedChestImage = closedImg;
 
@@ -723,7 +723,7 @@ namespace EmoTracker.Data
 
                     string thumbnailPath = sectionData.GetValue<string>("thumbnail");
                     if (!string.IsNullOrWhiteSpace(thumbnailPath))
-                        section.Thumbnail = ImageReference.FromPackRelativePath(package, thumbnailPath);
+                        section.Thumbnail = ImageReference.FromPackRelativePath(this.State?.PackageInstance, thumbnailPath);
 
                     section.HostedItemCode = sectionData.GetValue<string>("hosted_item");
                     section.GateItemCode = sectionData.GetValue<string>("gate_item");
@@ -1018,8 +1018,7 @@ namespace EmoTracker.Data
 
                             if (!string.IsNullOrEmpty(imagePath))
                             {
-                                var pkg = this.State?.PackageInstance?.GamePackage;
-                                ImageReference imageRef = ImageReference.FromPackRelativePath(pkg, imagePath, filter);
+                                ImageReference imageRef = ImageReference.FromPackRelativePath(this.State?.PackageInstance, imagePath, filter);
                                 if (imageRef != null)
                                     location.AddBadge(key, imageRef, null, ox, oy);
                             }

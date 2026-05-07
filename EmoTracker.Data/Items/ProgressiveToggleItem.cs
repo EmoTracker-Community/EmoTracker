@@ -178,11 +178,12 @@ namespace EmoTracker.Data.Items
 
             uint stageIdx = 0;
 
+            var pi = (this.OwnerState as Sessions.TrackerState)?.PackageInstance;
             JArray stages = (JArray)data.GetValue("stages");
             foreach (JObject stageData in stages)
             {
-                var img = ImageReference.FromPackRelativePath(package, stageData.GetValue<string>("img"), stageData.GetValue<string>("img_mods"));
-                var disabledImg = ImageReference.FromPackRelativePath(package, stageData.GetValue<string>("disabled_img"), stageData.GetValue<string>("disabled_img_mods") ?? DisabledImageFilterSpec);
+                var img = ImageReference.FromPackRelativePath(pi, stageData.GetValue<string>("img"), stageData.GetValue<string>("img_mods"));
+                var disabledImg = ImageReference.FromPackRelativePath(pi, stageData.GetValue<string>("disabled_img"), stageData.GetValue<string>("disabled_img_mods") ?? DisabledImageFilterSpec);
 
                 if (img != null)
                 {

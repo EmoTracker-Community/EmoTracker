@@ -66,7 +66,7 @@ namespace EmoTracker.Data.Layout
         {
             definition[nameof(Style) + "__def"] = data.GetEnumValue<ButtonStyle>("style", ButtonStyle.Settings);
             definition[nameof(Image) + "__def"] = ImageReference.FromPackRelativePath(
-                package, data.GetValue<string>("image"), data.GetValue<string>("image_filter"));
+                (this.OwnerState as Sessions.TrackerState)?.PackageInstance, data.GetValue<string>("image"), data.GetValue<string>("image_filter"));
             definition[nameof(PopupBackground) + "__def"] = data.GetValue<string>("popup_background", "#ff212121");
             definition[nameof(MaskInput) + "__def"] = data.GetValue<bool>("mask_input", false);
             definition[nameof(LayoutKey)] = data.GetValue<string>("layout");
