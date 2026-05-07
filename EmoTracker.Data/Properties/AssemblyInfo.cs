@@ -32,8 +32,8 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("3.0.1.11")]
-[assembly: AssemblyVersion("3.0.3.0")]
-[assembly: AssemblyFileVersion("3.0.3.0")]
+[assembly: AssemblyVersion("3.0.3.1")]
+[assembly: AssemblyFileVersion("3.0.3.1")]
 
 // Expose internals to the source-generator test project so unit tests can
 // drive otherwise-internal seeding helpers (e.g. TabPanel.Tab.SeedDefinition)
