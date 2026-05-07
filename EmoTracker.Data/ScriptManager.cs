@@ -156,6 +156,27 @@ namespace EmoTracker.Data
             set { mState.Settings.AutoUnpinLocationsOnClear = value; }
         }
 
+        public string CurrentPlatform
+        {
+            get
+            {
+                if (OperatingSystem.IsWindows()) return "windows";
+                if (OperatingSystem.IsMacOS()) return "macos";
+                if (OperatingSystem.IsLinux()) return "linux";
+                return "unknown";
+            }
+        }
+
+        public string UserDirectory
+        {
+            get { return EmoTracker.Core.UserDirectory.Path; }
+        }
+
+        public string ConcatenatePaths(params string[] paths)
+        {
+            return System.IO.Path.Combine(paths);
+        }
+
     }
 
     class LayoutScriptInterface
