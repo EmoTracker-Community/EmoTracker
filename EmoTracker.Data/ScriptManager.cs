@@ -162,7 +162,8 @@ namespace EmoTracker.Data
             {
                 if (OperatingSystem.IsWindows()) return "windows";
                 if (OperatingSystem.IsMacOS()) return "macos";
-                return "linux";
+                if (OperatingSystem.IsLinux()) return "linux";
+                return "unknown";
             }
         }
 
