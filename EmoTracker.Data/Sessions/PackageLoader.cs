@@ -223,6 +223,8 @@ namespace EmoTracker.Data.Sessions
                     (kvp.Value as IDisposable)?.Dispose();
                 pi.SourceImageCache.Clear();
             }
+            foreach (var kvp in pi.ImageCache)
+                (kvp.Value as IDisposable)?.Dispose();
             pi.ImageCache.Clear();
         }
 
