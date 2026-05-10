@@ -264,9 +264,12 @@
                         <TabControl.Template>
                             <ControlTemplate>
                                 <Grid RowDefinitions="Auto,*">
+                                    <!-- ZIndex="1" ensures the tab strip always renders above content
+                                         that overflows its row due to the global ClipToBounds=False style. -->
                                     <ItemsPresenter Name="PART_ItemsPresenter"
                                                     Grid.Row="0"
-                                                    HorizontalAlignment="Center"
+                                                    ZIndex="1"
+                                                    HorizontalAlignment="{Binding HorizontalAlignment, Converter={x:Static converters:TrivialEnumConverter.Instance}}"
                                                     Margin="0,3">
                                         <ItemsPresenter.ItemsPanel>
                                             <ItemsPanelTemplate>
