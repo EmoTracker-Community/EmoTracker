@@ -54,15 +54,19 @@ namespace EmoTracker.Data.Sessions
         public partial bool IgnoreAllLogic { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(SyncSeedsToApplicationSettings))]
         public partial bool DisplayAllLocations { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(SyncSeedsToApplicationSettings))]
         public partial bool AlwaysAllowClearing { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(SyncSeedsToApplicationSettings))]
         public partial bool AutoUnpinLocationsOnClear { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(SyncSeedsToApplicationSettings))]
         public partial bool PinLocationsOnItemCapture { get; set; }
 
         [KVMutable]
@@ -111,6 +115,12 @@ namespace EmoTracker.Data.Sessions
             // ApplicationSettings.IgnoreAllLogic's setter.
             var state = OwnerState as TrackerState;
             state?.Locations.RefreshAccessibility();
+            SyncSeedsToApplicationSettings();
+        }
+
+        protected void SyncSeedsToApplicationSettings()
+        {
+            ApplicationSettings.Instance?.SyncSeedsFromSession(this);
         }
 
         // ----------- Fork support ---------------------------------------------

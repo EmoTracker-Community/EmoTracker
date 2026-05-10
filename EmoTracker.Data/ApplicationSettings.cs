@@ -86,6 +86,10 @@ namespace EmoTracker.Data
         /// Called from <see cref="Sessions.TrackerState"/>'s adoption ctor
         /// so a primary state inherits the user's pre-existing preferences
         /// loaded from <c>ApplicationSettings.json</c>.
+        /// Also called from <see cref="Sessions.TrackerState.ActivatePackage"/>
+        /// to reset settings to the saved defaults before init.lua runs,
+        /// ensuring pack scripts start from the user's preferences and may
+        /// optionally override them.
         /// </summary>
         internal void SeedIntoSession(Sessions.SessionSettings target)
         {
@@ -95,6 +99,54 @@ namespace EmoTracker.Data
             target.AlwaysAllowClearing = mbSeedAlwaysAllowClearing;
             target.AutoUnpinLocationsOnClear = mbSeedAutoUnpinLocationsOnClear;
             target.PinLocationsOnItemCapture = mbSeedPinLocationsOnItemCapture;
+        }
+
+        /// <summary>
+        /// Called by <see cref="Sessions.SessionSettings"/> when a tracked
+        /// property changes, so UI-driven setting changes are persisted to
+        /// <c>ApplicationSettings.json</c> as the new defaults for future
+        /// sessions / pack loads.
+        ///
+        /// <para>
+        /// No-ops when called while a pack is loading (i.e.
+        /// <see cref="Sessions.PackageLoader.IsLoading"/> is true) to avoid
+        /// init.lua-driven changes overwriting the user's saved preferences.
+        /// </para>
+        /// </summary>
+        internal void SyncSeedsFromSession(Sessions.SessionSettings source)
+        {
+            if (source == null) return;
+            if (Sessions.PackageLoader.IsLoading) return;
+
+            bool changed = false;
+            if (mbSeedIgnoreAllLogic != source.IgnoreAllLogic)
+            {
+                mbSeedIgnoreAllLogic = source.IgnoreAllLogic;
+                changed = true;
+            }
+            if (mbSeedDisplayAllLocations != source.DisplayAllLocations)
+            {
+                mbSeedDisplayAllLocations = source.DisplayAllLocations;
+                changed = true;
+            }
+            if (mbSeedAlwaysAllowClearing != source.AlwaysAllowClearing)
+            {
+                mbSeedAlwaysAllowClearing = source.AlwaysAllowClearing;
+                changed = true;
+            }
+            if (mbSeedAutoUnpinLocationsOnClear != source.AutoUnpinLocationsOnClear)
+            {
+                mbSeedAutoUnpinLocationsOnClear = source.AutoUnpinLocationsOnClear;
+                changed = true;
+            }
+            if (mbSeedPinLocationsOnItemCapture != source.PinLocationsOnItemCapture)
+            {
+                mbSeedPinLocationsOnItemCapture = source.PinLocationsOnItemCapture;
+                changed = true;
+            }
+
+            if (changed)
+                WriteSettings();
         }
 
         public bool IgnoreAllLogic

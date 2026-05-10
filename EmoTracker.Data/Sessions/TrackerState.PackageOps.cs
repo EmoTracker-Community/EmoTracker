@@ -134,6 +134,11 @@ namespace EmoTracker.Data.Sessions
                 PackageManager.Instance.RefreshActiveState();
                 NotifyPropertyChanged(nameof(ActiveVariantUID));
 
+                // Reset tracking settings to the user's saved defaults before
+                // running init.lua, so pack scripts start from the user's
+                // preferences and may optionally override them (issue #83).
+                ApplicationSettings.Instance.SeedIntoSession(Settings);
+
                 PackageLoader.LoadInto(this, package, variant);
             }
             finally

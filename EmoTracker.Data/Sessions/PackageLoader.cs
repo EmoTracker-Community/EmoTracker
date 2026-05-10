@@ -76,6 +76,14 @@ namespace EmoTracker.Data.Sessions
         static bool mInProgress;
 
         /// <summary>
+        /// True while <see cref="LoadInto"/> is executing on this thread.
+        /// Used by <see cref="ApplicationSettings.SyncSeedsFromSession"/> to
+        /// suppress seed-writes driven by pack-script (init.lua) changes,
+        /// so only explicit user UI changes update the saved defaults.
+        /// </summary>
+        internal static bool IsLoading => mInProgress;
+
+        /// <summary>
         /// Loads <paramref name="package"/> (with optional <paramref name="variant"/>)
         /// into <paramref name="target"/>'s catalogs. Caller is responsible for
         /// having the <c>target</c>'s catalogs already wired (the
