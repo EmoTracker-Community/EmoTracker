@@ -84,6 +84,14 @@ namespace EmoTracker.Data.Layout
             }
         }
 
+        [KVOverridable]
+        public partial HorizontalAlignment TabStripHorizontalAlignment { get; set; }
+
+        protected override void PopulateDefinitionData(Newtonsoft.Json.Linq.JObject data, IGamePackage package, System.Collections.Generic.Dictionary<string, object> definition)
+        {
+            definition[nameof(TabStripHorizontalAlignment) + "__def"] = data.GetEnumValue<HorizontalAlignment>("tabstrip_h_alignment", HorizontalAlignment.Center);
+        }
+
         ObservableCollection<Tab> mTabs = new ObservableCollection<Tab>();
 
         public IEnumerable<Tab> Tabs
