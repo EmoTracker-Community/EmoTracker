@@ -76,6 +76,14 @@ namespace EmoTracker.Data.Sessions
         static bool mInProgress;
 
         /// <summary>
+        /// True while <see cref="LoadInto"/> is executing on this thread.
+        /// Used by <see cref="ApplicationSettings.SyncSeedsFromSession"/> to
+        /// suppress seed-writes driven by pack-script (init.lua) changes,
+        /// so only explicit user UI changes update the saved defaults.
+        /// </summary>
+        internal static bool IsLoading => mInProgress;
+
+        /// <summary>
         /// Loads <paramref name="package"/> (with optional <paramref name="variant"/>)
         /// into <paramref name="target"/>'s catalogs. Caller is responsible for
         /// having the <c>target</c>'s catalogs already wired (the
@@ -125,6 +133,13 @@ namespace EmoTracker.Data.Sessions
                 target.Locations.Reset();
                 target.Items.Reset();
                 target.Scripts.Reset();
+
+                // Flush the PackageInstance's decoded-image caches. Old
+                // ImageReference keys from the now-reset catalogs would
+                // otherwise keep both the source SKBitmaps and the resolved
+                // IImages alive across every Reload, accumulating ~250 MB per
+                // reload for large packs.
+                FlushImageCaches(target.PackageInstance);
 
                 ApplicationColors.Instance.LoadColors();
 
@@ -194,6 +209,21 @@ namespace EmoTracker.Data.Sessions
                     }
                 }
             }
+        }
+
+        // Dispose and clear both image caches on a PackageInstance. Called
+        // before each load so stale SKBitmaps and resolved IImages from the
+        // previous load are released rather than accumulated in memory.
+        static void FlushImageCaches(PackageInstance pi)
+        {
+            if (pi == null) return;
+            lock (pi.SourceImageCacheLock)
+            {
+                foreach (var kvp in pi.SourceImageCache)
+                    (kvp.Value as IDisposable)?.Dispose();
+                pi.SourceImageCache.Clear();
+            }
+            pi.ImageCache.Clear();
         }
 
         // Phase 7.1.g: pack-driven UI flags now live on the per-state

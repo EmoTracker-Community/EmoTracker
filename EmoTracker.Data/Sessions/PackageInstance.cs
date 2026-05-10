@@ -189,6 +189,24 @@ namespace EmoTracker.Data.Sessions
             return mStates.TryGetValue(stateId, out var state) ? state : null;
         }
 
+        /// <summary>
+        /// Transfers <paramref name="state"/> from this PackageInstance to
+        /// <paramref name="destination"/> without firing lifecycle events or
+        /// disposing anything. Used by <c>ApplicationModel.LoadProgress</c>
+        /// when a save-file load creates a new PI: the existing primary state
+        /// is moved to the new PI so the old PI can be safely disposed without
+        /// touching the still-live state.
+        /// </summary>
+        internal void MigrateStateTo(TrackerState state, PackageInstance destination)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (destination == null) throw new ArgumentNullException(nameof(destination));
+            if (mStates.Remove(state.Id))
+                destination.mStates[state.Id] = state;
+            // state.PackageInstance is already pointing at destination —
+            // TrackerState.LoadProgress set it before calling LoadInto.
+        }
+
         public override void Dispose()
         {
             // Tear down the live states first, then the definitional state.
