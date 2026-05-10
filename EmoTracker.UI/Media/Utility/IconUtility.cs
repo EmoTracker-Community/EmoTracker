@@ -48,17 +48,19 @@ namespace EmoTracker.UI.Media.Utility
         // ── Avalonia / SkiaSharp image pipeline ──────────────────────────────────
 
         // Alpha masks keyed by IImage: bool[] of length (width * height), true = opaque.
-        // ConcurrentDictionary because the background image worker writes masks while
-        // the UI thread reads them (InputMaskingImage.HitTest via GetAlphaMask).
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<IImage, (bool[] mask, int w, int h)> sAlphaMasks = new();
+        // ConditionalWeakTable so entries are freed automatically when the IImage key
+        // becomes unreachable (e.g. after a pack reload clears PackageInstance.ImageCache).
+        // All public CWT members are thread-safe.
+        private sealed class AlphaMaskEntry { public bool[] Pixels; public int Width, Height; }
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IImage, AlphaMaskEntry> sAlphaMasks = new();
 
         // Cached Skia-encoded PNG bytes for each IImage produced by SkToAvalonia.
         // Used by ToSkBitmap to bypass Avalonia's Bitmap.Save(Stream), which may strip the
         // alpha channel on some platforms — causing overlay compositing to treat every pixel
         // as fully opaque and completely hide the base layer.
-        // ConcurrentDictionary because the background image worker writes entries while
-        // filter resolution may read them concurrently.
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<IImage, byte[]> sPngCache = new();
+        // ConditionalWeakTable so entries are freed automatically when the IImage key
+        // becomes unreachable, preventing static accumulation across pack reloads.
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IImage, byte[]> sPngCache = new();
 
         // HTTP/HTTPS image download cache. null value means "download in progress".
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IImage?> sHttpCache = new();
@@ -74,7 +76,7 @@ namespace EmoTracker.UI.Media.Utility
         public static (bool[] mask, int w, int h)? GetAlphaMask(IImage image)
         {
             if (image != null && sAlphaMasks.TryGetValue(image, out var entry))
-                return entry;
+                return (entry.Pixels, entry.Width, entry.Height);
             return null;
         }
 
@@ -231,7 +233,7 @@ namespace EmoTracker.UI.Media.Utility
             {
                 var mask = ComputeAlphaMask(bmp);
                 var avBitmap = SkToAvaloniaCore(bmp);
-                sAlphaMasks[avBitmap] = (mask, bmp.Width, bmp.Height);
+                sAlphaMasks.AddOrUpdate(avBitmap, new AlphaMaskEntry { Pixels = mask, Width = bmp.Width, Height = bmp.Height });
                 bmp.Dispose();
                 return avBitmap;
             }
@@ -250,7 +252,7 @@ namespace EmoTracker.UI.Media.Utility
             if (storeMask)
             {
                 var mask = ComputeAlphaMask(bmp);
-                sAlphaMasks[avBitmap] = (mask, bmp.Width, bmp.Height);
+                sAlphaMasks.AddOrUpdate(avBitmap, new AlphaMaskEntry { Pixels = mask, Width = bmp.Width, Height = bmp.Height });
             }
 
             return avBitmap;
@@ -267,7 +269,7 @@ namespace EmoTracker.UI.Media.Utility
             byte[] pngBytes = encoded.ToArray();
             var avBitmap = new Avalonia.Media.Imaging.Bitmap(new MemoryStream(pngBytes));
 
-            sPngCache[avBitmap] = pngBytes;
+            sPngCache.AddOrUpdate(avBitmap, pngBytes);
 
             return avBitmap;
         }

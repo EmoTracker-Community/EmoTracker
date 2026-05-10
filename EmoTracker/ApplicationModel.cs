@@ -1549,6 +1549,11 @@ Failed to save workspace to ```{0}```.
             var target = PrimaryState;
             if (target == null) return false;
 
+            // Snapshot the PI before the load. TrackerState.LoadProgress creates
+            // a brand-new PackageInstance for the save's (pack, variant), leaving
+            // the old one stranded in mPackageInstances and never disposed.
+            var oldPi = target.PackageInstance;
+
             if (target.LoadProgress(path, (JObject root) =>
             {
                 WindowService.Instance.MainWindowWidth = root.GetValue<double>("main_window_width", WindowService.Instance.MainWindowWidth);
@@ -1566,6 +1571,21 @@ Failed to save workspace to ```{0}```.
                 }
             }))
             {
+                // If LoadProgress swapped to a new PI, transfer the state so
+                // the old PI can be cleanly disposed (freeing its image caches,
+                // definitional state, and Lua interpreter — ~600 MB for large packs).
+                var newPi = target.PackageInstance;
+                if (!ReferenceEquals(oldPi, newPi))
+                {
+                    oldPi?.MigrateStateTo(target, newPi);
+                    mPackageInstances.Add(newPi);
+                    if (ReferenceEquals(mActivePackageInstance, oldPi))
+                        ActivePackageInstance = newPi;
+                    mPackageInstances.Remove(oldPi);
+                    if (oldPi != null && oldPi.States.Count == 0)
+                        oldPi.Dispose();
+                }
+
                 AcquireLayouts();
                 // Phase 7.11 polish: a freshly-loaded state isn't dirty
                 // — clear the modified marker for the active state.
