@@ -63,6 +63,7 @@
                         <Grid VerticalAlignment="Bottom"
                               HorizontalAlignment="Right"
                               MaxWidth="{Binding IconWidth, RelativeSource={RelativeSource AncestorType=local:TrackableItemControl}}"
+                              MaxHeight="{Binding BadgeText, Converter={x:Static converters:NonEmptyStringToMaxHeightConverter.Instance}, FallbackValue=0}"
                               Opacity="{Binding BadgeText, Converter={x:Static converters:NonEmptyStringToOpacityConverter.Instance}, FallbackValue=0}"
                               IsHitTestVisible="{Binding BadgeText, Converter={x:Static converters:NonEmptyStringToBoolConverter.Instance}, FallbackValue=False}">
                             <TextBlock Text="{Binding BadgeText}"
