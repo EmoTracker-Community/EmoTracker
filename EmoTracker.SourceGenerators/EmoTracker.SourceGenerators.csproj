@@ -23,6 +23,24 @@
     <NoWarn>$(NoWarn);RS2008</NoWarn>
   </PropertyGroup>
 
+  <!--
+    The Avalonia VS Code Language Server (AvaloniaUI.VSCodeServer.dll) builds this
+    project in-process, loads EmoTracker.SourceGenerators.dll as a Roslyn analyzer,
+    and keeps a file lock on it for the entire VS Code session. This prevents
+    regular builds from copying an updated DLL to the same location.
+
+    Fix: when building via VS Code tasks (which pass /p:EmoTrackerRegularBuild=1),
+    redirect the output to a separate "-build" directory so regular builds and the
+    language server write to different paths and never contend on the same file.
+
+    The consuming project (EmoTracker.Data) resolves the analyzer path via
+    $(TargetPath) which follows $(OutputPath), so both the generator and its
+    consumer use the correct path within the same build invocation.
+  -->
+  <PropertyGroup Condition="'$(EmoTrackerRegularBuild)' == '1'">
+    <OutputPath>bin\$(Configuration)-build\$(TargetFramework)\</OutputPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />

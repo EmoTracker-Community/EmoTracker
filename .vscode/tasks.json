@@ -9,7 +9,8 @@
                 "build",
                 "${workspaceFolder}/EmoTracker.sln",
                 "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary"
+                "/consoleloggerparameters:NoSummary",
+                "/p:EmoTrackerRegularBuild=1"
             ],
             "problemMatcher": "$msCompile",
             "group": {
@@ -29,8 +30,10 @@
                 "--configuration",
                 "Debug",
                 "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary"
+                "/consoleloggerparameters:NoSummary",
+                "/p:EmoTrackerRegularBuild=1"
             ],
+
             "problemMatcher": "$msCompile"
         },
         {
@@ -45,8 +48,10 @@
                 "--configuration",
                 "Release",
                 "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary"
+                "/consoleloggerparameters:NoSummary",
+                "/p:EmoTrackerRegularBuild=1"
             ],
+
             "problemMatcher": "$msCompile"
         },
         {
@@ -59,8 +64,10 @@
                 "--configuration",
                 "Release",
                 "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary"
+                "/consoleloggerparameters:NoSummary",
+                "/p:EmoTrackerRegularBuild=1"
             ],
+
             "problemMatcher": "$msCompile"
         },
         {

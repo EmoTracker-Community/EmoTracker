@@ -62,6 +62,22 @@ namespace EmoTracker.UI.Converters
     }
 
     /// <summary>
+    /// Returns <c>0.0</c> (zero height) when the value is null or empty; otherwise returns
+    /// <c>Double.PositiveInfinity</c> (no maximum). Use for MaxHeight bindings on badge overlays
+    /// that should have zero layout footprint when there is no badge text, preventing the
+    /// invisible badge from inflating the parent container's measured height while keeping
+    /// data bindings active (avoiding the blank-text flash that <c>IsVisible</c> can cause).
+    /// </summary>
+    public class NonEmptyStringToMaxHeightConverter : Singleton<NonEmptyStringToMaxHeightConverter>, IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => value is string s && s.Length > 0 ? double.PositiveInfinity : 0.0;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
     /// Returns <c>true</c> when the integer/uint value is non-zero.
     /// </summary>
     public class NonZeroToBoolConverter : Singleton<NonZeroToBoolConverter>, IValueConverter
