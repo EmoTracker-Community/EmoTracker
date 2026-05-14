@@ -33,7 +33,7 @@ namespace EmoTracker.Data.AutoTracking
     /// data (override <see cref="OnSegmentDataUpdated"/>).
     /// </para>
     /// </summary>
-    public class MemorySegment : ModelTypeBase, IMemorySegment, IUpdateWithConnector, IDisposable
+    public abstract class MemorySegment : ModelTypeBase, IMemorySegment, IUpdateWithConnector, IDisposable
     {
         #region -- Global Event Hooks --
 
@@ -339,9 +339,7 @@ namespace EmoTracker.Data.AutoTracking
         /// overrides to dispatch onto the UI thread and SafeCall the
         /// pack-supplied LuaFunction callback.
         /// </summary>
-        protected virtual void OnSegmentDataUpdated()
-        {
-        }
+        protected abstract void OnSegmentDataUpdated();
 
         public override void Dispose()
         {
