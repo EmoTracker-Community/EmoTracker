@@ -667,6 +667,8 @@ namespace EmoTracker.Data.Debugging
 
         internal void EnterExceptionPause(string errMessage, string traceback)
         {
+            if (!(LuaDebugServer.Instance?.HasActiveSession ?? false)) return;
+
             // Always log so we can confirm the upcall actually
             // reached us — the Lua-side handler's pcall around the
             // upcall would otherwise silently swallow any throw.

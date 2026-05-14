@@ -58,8 +58,6 @@ namespace EmoTracker.Data.AutoTracking
 
         protected override void OnSegmentDataUpdated()
         {
-            base.OnSegmentDataUpdated();
-
             var state = this.OwnerState as Sessions.TrackerState;
             if (state == null) return;
             var scripts = state.Scripts;
@@ -76,10 +74,15 @@ namespace EmoTracker.Data.AutoTracking
             {
                 try
                 {
+                    object[] result;
                     using (new LocationDatabase.SuspendRefreshScope(state.Locations))
                     {
-                        scripts.SafeCall(callback, this);
+                        result = scripts.SafeCall(callback, this);
                     }
+                    bool succeeded = result != null && result.Length > 0
+                        && result[0] != null && !(result[0] is bool b && !b);
+                    if (succeeded)
+                        Dirty = false;
                 }
                 catch (Exception ex)
                 {
