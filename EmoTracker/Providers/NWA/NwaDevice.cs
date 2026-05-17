@@ -190,7 +190,7 @@ namespace EmoTracker.Providers.NWA
         /// </summary>
         async Task<byte[]> ReadRawDomainAsync(string domain, ulong offset, int length)
         {
-            string command = $"CORE_READ {domain} ${offset:X};${length:X}";
+            string command = $"CORE_READ {domain};${offset:X};${length:X}";
             byte[] data = await SendReadCommandAsync(command).ConfigureAwait(false);
             return data ?? Array.Empty<byte>();
         }
