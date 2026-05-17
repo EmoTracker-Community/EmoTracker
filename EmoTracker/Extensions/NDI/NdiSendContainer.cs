@@ -206,6 +206,24 @@ namespace EmoTracker.Extensions.NDI
             public NDIlib.FourCC_type_e FourCC;
         }
 
+        // Cache of the most recent successfully sent frame, used to keep the NDI
+        // feed alive when the capture pipeline is idle.  Receivers like OBS will
+        // declare an NDI source dead if no frames arrive for several seconds; the
+        // hidden background broadcast window's capture loop is driven by the main
+        // window's RequestAnimationFrame, which stops firing during long periods
+        // of user inactivity (see issue #92).  When the send thread times out
+        // waiting for a new frame, it re-transmits this cached frame so the feed
+        // never goes silent.  Only the send thread reads/writes these fields, so
+        // no synchronization is needed.
+        private byte[] _lastSentPixels;
+        private int _lastSentWidth;
+        private int _lastSentHeight;
+        private int _lastSentStride;
+        private int _lastSentFrameRateNum;
+        private int _lastSentFrameRateDen;
+        private float _lastSentAspect;
+        private NDIlib.FourCC_type_e _lastSentFourCC;
+
         // -------------------------------------------------------------------------
         // Visual tree attachment — start / stop NDI with the window lifetime
         // -------------------------------------------------------------------------
@@ -592,7 +610,13 @@ namespace EmoTracker.Extensions.NDI
         private void ProcessOneFrame()
         {
             if (!_pendingFrames.TryTake(out PendingFrame frame, 250))
+            {
+                // No new frame arrived during the wait window.  Re-transmit the
+                // last good frame so NDI receivers don't declare the source dead
+                // while the capture pipeline is idle (see issue #92).
+                SendCachedHeartbeatFrame();
                 return;
+            }
 
             // Drop stale frames to prevent lag accumulation.
             while (_pendingFrames.Count > 1)
@@ -613,24 +637,61 @@ namespace EmoTracker.Extensions.NDI
             int scaledWidth  = frame.Width  * frame.Scale;
             int scaledHeight = frame.Height * frame.Scale;
             int stride       = scaledWidth  * 4;
-            int bufferSize   = scaledHeight * stride;
+            float aspect     = (float)frame.Width / frame.Height;
 
+            if (SendVideoFrame(pixels, scaledWidth, scaledHeight, stride,
+                               frame.FourCC, frame.FrameRateNum, frame.FrameRateDen, aspect))
+            {
+                // Cache the post-processed pixels (un-premultiplied, drop-shadow
+                // composited, and scaled) so the heartbeat path can resend them
+                // verbatim without redoing the work.  The byte[] reference keeps
+                // the buffer alive until the next successful send replaces it.
+                _lastSentPixels       = pixels;
+                _lastSentWidth        = scaledWidth;
+                _lastSentHeight       = scaledHeight;
+                _lastSentStride       = stride;
+                _lastSentFrameRateNum = frame.FrameRateNum;
+                _lastSentFrameRateDen = frame.FrameRateDen;
+                _lastSentAspect       = aspect;
+                _lastSentFourCC       = frame.FourCC;
+            }
+        }
+
+        private void SendCachedHeartbeatFrame()
+        {
+            if (_lastSentPixels == null || _disposed || _exitThread)
+                return;
+            if (_sendInstancePtr == IntPtr.Zero)
+                return;
+
+            SendVideoFrame(_lastSentPixels, _lastSentWidth, _lastSentHeight,
+                           _lastSentStride, _lastSentFourCC,
+                           _lastSentFrameRateNum, _lastSentFrameRateDen,
+                           _lastSentAspect);
+        }
+
+        private bool SendVideoFrame(byte[] pixels, int width, int height, int stride,
+                                    NDIlib.FourCC_type_e fourCC, int frameRateNum,
+                                    int frameRateDen, float aspect)
+        {
+            int bufferSize = height * stride;
             IntPtr bufferPtr = Marshal.AllocHGlobal(bufferSize);
+            bool sent = false;
             try
             {
                 Marshal.Copy(pixels, 0, bufferPtr, bufferSize);
 
                 NDIlib.video_frame_v2_t videoFrame = new NDIlib.video_frame_v2_t
                 {
-                    xres                 = scaledWidth,
-                    yres                 = scaledHeight,
+                    xres                 = width,
+                    yres                 = height,
                     // FourCC is derived from the snapshot's reported pixel format at
                     // capture time — see TriggerCaptureAsync — so it matches whatever
                     // the compositor backend actually produced.
-                    FourCC               = frame.FourCC,
-                    frame_rate_N         = frame.FrameRateNum,
-                    frame_rate_D         = frame.FrameRateDen,
-                    picture_aspect_ratio = (float)frame.Width / frame.Height,
+                    FourCC               = fourCC,
+                    frame_rate_N         = frameRateNum,
+                    frame_rate_D         = frameRateDen,
+                    picture_aspect_ratio = aspect,
                     frame_format_type    = NDIlib.frame_format_type_e.frame_format_type_progressive,
                     timecode             = NDIlib.send_timecode_synthesize,
                     p_data               = bufferPtr,
@@ -639,7 +700,6 @@ namespace EmoTracker.Extensions.NDI
                     timestamp            = 0,
                 };
 
-                bool sent = false;
                 if (Monitor.TryEnter(_sendInstanceLock, 250))
                 {
                     try
@@ -663,6 +723,7 @@ namespace EmoTracker.Extensions.NDI
             {
                 Marshal.FreeHGlobal(bufferPtr);
             }
+            return sent;
         }
 
         // Throttled heartbeat showing that frames are actually being sent.
@@ -717,6 +778,7 @@ namespace EmoTracker.Extensions.NDI
                 _pendingFrames.CompleteAdding();
                 _rtb?.Dispose();
                 _rtb = null;
+                _lastSentPixels = null;
             }
 
             try
