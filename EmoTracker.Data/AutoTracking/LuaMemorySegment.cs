@@ -62,8 +62,7 @@ namespace EmoTracker.Data.AutoTracking
             if (state == null) return;
             var scripts = state.Scripts;
             if (scripts == null) return;
-            var callback = mCallback;
-            if (callback == null) return;
+            if (mCallback == null) return;
 
             // Memory polling fires on a worker thread. The callback may
             // mutate items / locations, both of which expect UI-thread
@@ -74,10 +73,19 @@ namespace EmoTracker.Data.AutoTracking
             {
                 try
                 {
+                    // Re-read mCallback at execution time. A pack reload
+                    // between the queue-time check above and now would have
+                    // torn down our Lua state and called Dispose() on this
+                    // segment (which nulls mCallback). Invoking SafeCall
+                    // with a LuaFunction whose underlying state is closed
+                    // hangs the UI thread inside NLua — issue #93.
+                    var liveCallback = mCallback;
+                    if (liveCallback == null) return;
+                    if (!scripts.IsLuaLoaded) return;
                     object[] result;
                     using (new LocationDatabase.SuspendRefreshScope(state.Locations))
                     {
-                        result = scripts.SafeCall(callback, this);
+                        result = scripts.SafeCall(liveCallback, this);
                     }
                     bool succeeded = result != null && result.Length > 0
                         && result[0] != null && !(result[0] is bool b && !b);

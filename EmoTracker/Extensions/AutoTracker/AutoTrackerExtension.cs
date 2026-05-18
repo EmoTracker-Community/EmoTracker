@@ -186,27 +186,28 @@ namespace EmoTracker.Extensions.AutoTracker
             if (!ReferenceEquals(e.Target, mState)) return;
 
             // The state's Lua interpreter is about to be Reset() — close +
-            // re-open. Drop our memory segments now so we don't carry
-            // callbacks that reference the soon-to-be-closed interpreter.
-            // StopAutoTracking first to drain any in-flight poll cleanly;
-            // the active provider connection itself is preserved (the user
-            // chose to stay connected across reloads), but the watch list
-            // is rebuilt by the new init.lua's AddMemoryWatch calls.
+            // re-open. Fully stop autotracking before the reload: keeping
+            // the connection alive across reload left the extension stuck
+            // in an "active/running" state that didn't actually refresh
+            // (the new pack's init.lua re-registers watches against the
+            // new Lua state, but the throttle / dirty bookkeeping carried
+            // from the old run prevents updates from landing until the
+            // user manually stops and restarts).
             //
-            // Without this hook, the next memory poll after reload+
-            // reconnect invokes SafeCall on a LuaFunction whose underlying
-            // Lua state is closed, which hangs the UI thread inside NLua.
-            bool wasConnected = ActiveProvider != null;
-            var preservedProvider = SelectedProvider;
-
-            // Drain in-flight + dispose stale segments. Note Clear() also
-            // clears the pending update queue.
+            // StopAutoTracking drains any in-flight poll, disconnects the
+            // active provider, and fires the AutoTrackerStopped callback.
+            // Clear() then drops the pending-update queue. The user will
+            // re-Start once the pack finishes loading.
+            StopAutoTracking();
             Clear();
 
-            // Restore the connection target so the user doesn't have to
-            // re-pick it after init.lua repopulates the watch list.
-            if (preservedProvider != null)
-                SelectedProvider = preservedProvider;
+            // Surface the now-stopped state to bindings; OnAnyPackageLoad-
+            // Complete will re-emit these too once new segments / timers
+            // are registered, but raise them here so the status bar
+            // reflects "not running" during the reload window rather than
+            // showing stale running state.
+            NotifyPropertyChanged(nameof(Active));
+            NotifyPropertyChanged(nameof(StatusBarControl));
         }
 
         void OnAnyPackageLoadComplete(object sender, EmoTracker.Data.Sessions.PackageLoader.PackageLoadEventArgs e)
