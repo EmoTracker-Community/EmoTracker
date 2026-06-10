@@ -505,13 +505,25 @@ namespace EmoTracker.Data.Sessions
             // store via InitializeAsForkOf — but tying the lifecycle to
             // ItemBase.Fork's machinery here is more boilerplate than just
             // copying the seven scalar bools, so we bulk-copy directly.
-            copy.Settings.IgnoreAllLogic = this.Settings.IgnoreAllLogic;
-            copy.Settings.DisplayAllLocations = this.Settings.DisplayAllLocations;
-            copy.Settings.AlwaysAllowClearing = this.Settings.AlwaysAllowClearing;
-            copy.Settings.AutoUnpinLocationsOnClear = this.Settings.AutoUnpinLocationsOnClear;
-            copy.Settings.PinLocationsOnItemCapture = this.Settings.PinLocationsOnItemCapture;
-            copy.Settings.MapEnabled = this.Settings.MapEnabled;
-            copy.Settings.SwapLeftRight = this.Settings.SwapLeftRight;
+            // Hooks are suppressed for the copy: the fork's layout tree was
+            // forked above from the source's already-mirrored shape, so
+            // SwapLeftRight's reload-on-change hook must not re-run pack
+            // load against the half-built fork.
+            copy.Settings.SuppressOnChangedHooks = true;
+            try
+            {
+                copy.Settings.IgnoreAllLogic = this.Settings.IgnoreAllLogic;
+                copy.Settings.DisplayAllLocations = this.Settings.DisplayAllLocations;
+                copy.Settings.AlwaysAllowClearing = this.Settings.AlwaysAllowClearing;
+                copy.Settings.AutoUnpinLocationsOnClear = this.Settings.AutoUnpinLocationsOnClear;
+                copy.Settings.PinLocationsOnItemCapture = this.Settings.PinLocationsOnItemCapture;
+                copy.Settings.MapEnabled = this.Settings.MapEnabled;
+                copy.Settings.SwapLeftRight = this.Settings.SwapLeftRight;
+            }
+            finally
+            {
+                copy.Settings.SuppressOnChangedHooks = false;
+            }
 
             // ---- Per-state pack-driven scalar settings ---------------------
             // AllowResize / DisabledImageFilterSpec are populated on the

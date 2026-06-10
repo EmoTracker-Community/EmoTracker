@@ -54,21 +54,27 @@ namespace EmoTracker.Data.Sessions
         public partial bool IgnoreAllLogic { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(OnDisplayAllLocationsChanged))]
         public partial bool DisplayAllLocations { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(OnAlwaysAllowClearingChanged))]
         public partial bool AlwaysAllowClearing { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(OnAutoUnpinLocationsOnClearChanged))]
         public partial bool AutoUnpinLocationsOnClear { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(OnPinLocationsOnItemCaptureChanged))]
         public partial bool PinLocationsOnItemCapture { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(OnMapEnabledChanged))]
         public partial bool MapEnabled { get; set; }
 
         [KVMutable]
+        [OnChanged(nameof(OnSwapLeftRightChanged))]
         public partial bool SwapLeftRight { get; set; }
 
         // ----------- Construction ---------------------------------------------
@@ -103,6 +109,22 @@ namespace EmoTracker.Data.Sessions
 
         // ----------- OnChanged hooks ------------------------------------------
 
+        /// <summary>
+        /// Set by <see cref="TrackerState.Fork"/> around its settings
+        /// bulk-copy so propagating values into a fork doesn't fire
+        /// side-effectful OnChanged hooks (e.g. a pack reload) against the
+        /// half-built fork state.
+        /// </summary>
+        internal bool SuppressOnChangedHooks;
+
+        protected void OnSwapLeftRightChanged() => ReloadOwnerState();
+        protected void OnMapEnabledChanged() => ReloadOwnerState();
+
+        protected void OnDisplayAllLocationsChanged() => SyncForwarder(nameof(DisplayAllLocations));
+        protected void OnAlwaysAllowClearingChanged() => SyncForwarder(nameof(AlwaysAllowClearing));
+        protected void OnAutoUnpinLocationsOnClearChanged() => SyncForwarder(nameof(AutoUnpinLocationsOnClear));
+        protected void OnPinLocationsOnItemCaptureChanged() => SyncForwarder(nameof(PinLocationsOnItemCapture));
+
         protected void OnIgnoreAllLogicChanged()
         {
             // Drive a refresh on the owning state's LocationDatabase so the
@@ -111,6 +133,42 @@ namespace EmoTracker.Data.Sessions
             // ApplicationSettings.IgnoreAllLogic's setter.
             var state = OwnerState as TrackerState;
             state?.Locations.RefreshAccessibility();
+            SyncForwarder(nameof(IgnoreAllLogic));
+        }
+
+        /// <summary>
+        /// SwapLeftRight and MapEnabled are consumed at pack parse time
+        /// (<c>LayoutItem.TryParse</c> mirrors dock/margin definition
+        /// values; <c>MapPanel.TryParseInternal</c> bails when the map is
+        /// disabled), so a new value only takes effect after re-parsing
+        /// the pack — the legacy <c>Tracker</c> setters called
+        /// <c>Reload()</c> for the same reason. No pack loaded means
+        /// nothing to re-parse, so skip rather than pointlessly resetting
+        /// empty catalogs.
+        /// </summary>
+        void ReloadOwnerState()
+        {
+            if (SuppressOnChangedHooks) return;
+            var state = OwnerState as TrackerState;
+            if (state?.PackageInstance?.GamePackage == null) return;
+            state.Reload();
+        }
+
+        /// <summary>
+        /// <see cref="ApplicationSettings"/> keeps forwarder properties
+        /// (plus seeds persisted to ApplicationSettings.json) for code and
+        /// XAML bound to the process-wide singleton rather than a state's
+        /// Settings (e.g. LocationMapControl's DisplayAllLocations
+        /// multibinding). Writes through this state's setters must fan out
+        /// to the singleton or those bindings go stale — that asymmetry is
+        /// why the "Show All Locations" menu toggle (bound per-state) had
+        /// no visible effect while the F11 hotkey (routed through the
+        /// forwarder) worked.
+        /// </summary>
+        void SyncForwarder(string propertyName)
+        {
+            if (SuppressOnChangedHooks) return;
+            ApplicationSettings.Instance.SyncSeedsFromSession(this, propertyName);
         }
 
         // ----------- Fork support ---------------------------------------------
