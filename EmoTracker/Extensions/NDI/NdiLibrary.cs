@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -18,9 +19,31 @@ namespace EmoTracker.Extensions.NDI
     /// runtime directory to the process PATH so the loader can find the DLL
     /// without requiring it to be copied next to the application binary.
     ///
-    /// On macOS and Linux, NDI Tools installs libndi.dylib / libndi.so.5 into
-    /// system library directories that are already on the default search path,
-    /// so no PATH manipulation is needed.
+    /// On macOS/Linux, NDILibDotNetCoreBase's own static constructor already
+    /// registers a NativeLibrary.SetDllImportResolver for its assembly (do NOT
+    /// register a second one here - .NET only allows one per assembly, and a
+    /// second SetDllImportResolver call throws inside that cctor, permanently
+    /// breaking NDIlib for the process). Decompiling that resolver shows:
+    ///   - Linux: it only tries loading the single absolute path
+    ///     "<app base directory>/libndi.so" - no system paths, wrong version
+    ///     suffix (real installs ship libndi.so.5, not libndi.so).
+    ///   - macOS: it does a bare NativeLibrary.TryLoad("libndi.dylib") with no
+    ///     path. This reliably fails on Apple Silicon, where .NET executables
+    ///     get automatic ad-hoc code signing, which macOS treats as a
+    ///     "restricted" process - dyld strips DYLD_*-based fallback search
+    ///     (e.g. /usr/local/lib) for restricted processes, so the system
+    ///     install is never found even though it's present.
+    /// When that resolver returns IntPtr.Zero, .NET's default P/Invoke
+    /// resolution runs next and probes the app's own base directory for
+    /// "NDILib"/"NDILib.dylib"/"libNDILib.dylib"/"libNDILib" (Linux:
+    /// "NDILib"/"NDILib.so"/"libNDILib.so"). That full-path, same-directory
+    /// load isn't subject to the restricted-process search restriction, which
+    /// is exactly why manually copying the installed library into the app
+    /// directory under one of those names (confirmed by a reporter in issue
+    /// #100) works around this. EnsureRuntimeOnPath() automates that: it
+    /// locates the system-installed NDI library and symlinks it into the app's
+    /// base directory under the name each platform's own resolution path
+    /// already expects, without touching SetDllImportResolver.
     ///
     /// Version compatibility note:
     ///   NDILibDotNetCoreBase requires NDI SDK 5.x or 6.x.  NDI 4.0/4.1 have an
@@ -40,6 +63,29 @@ namespace EmoTracker.Extensions.NDI
             if (_initialized)
                 return;
             _initialized = true;
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                // Matches NDILibDotNetCoreBase's own default-resolution fallback
+                // name (the one that actually worked for the issue #100 reporter),
+                // not the vendor resolver's bare "libndi.dylib" attempt, which
+                // fails under Apple Silicon's restricted-process dyld rules.
+                LinkSystemLibrary(
+                    linkName: "libNDILib.dylib",
+                    candidateTargets: new[] { "/usr/local/lib/libndi.dylib", "/opt/homebrew/lib/libndi.dylib" });
+                return;
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                // Matches the vendor resolver's own hardcoded expectation exactly
+                // (decompiled: Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "libndi.so")),
+                // so this is found on the vendor resolver's first attempt.
+                LinkSystemLibrary(
+                    linkName: "libndi.so",
+                    candidateTargets: FindLinuxNdiLibrary());
+                return;
+            }
 
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 return;
@@ -83,6 +129,77 @@ namespace EmoTracker.Extensions.NDI
             // If no runtime env var resolves, NDI Tools is not installed.
             // NDIlib.initialize() will fail and the caller should surface an
             // appropriate error to the user.
+        }
+
+        // Symlinks the first candidate that exists into the app's own base
+        // directory under linkName, so the app-directory probing described
+        // above finds it. Leaves things alone if linkName already exists
+        // (real file or symlink, broken or not) - e.g. a user's own manual
+        // workaround - and is best-effort: any failure (missing candidates,
+        // unwritable app directory) is silently ignored, and NDIlib.initialize()
+        // fails visibly via the existing warning/exception logging.
+        private static void LinkSystemLibrary(string linkName, string[] candidateTargets)
+        {
+            try
+            {
+                string linkPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, linkName);
+                var linkInfo = new FileInfo(linkPath);
+                if (linkInfo.Exists || linkInfo.LinkTarget != null)
+                    return;
+
+                foreach (string candidate in candidateTargets)
+                {
+                    if (File.Exists(candidate))
+                    {
+                        File.CreateSymbolicLink(linkPath, candidate);
+                        return;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        // NDI's Linux installer doesn't standardize on a single directory, so
+        // ask the dynamic linker cache (populated by ldconfig at install time)
+        // rather than guessing distro-specific paths. Falls back to a couple of
+        // common locations if ldconfig is unavailable or the cache lookup fails.
+        private static string[] FindLinuxNdiLibrary()
+        {
+            try
+            {
+                var startInfo = new ProcessStartInfo("ldconfig", "-p")
+                {
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                };
+
+                using Process process = Process.Start(startInfo);
+                string output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit(2000);
+
+                foreach (string line in output.Split('\n'))
+                {
+                    int arrow = line.IndexOf("=>", StringComparison.Ordinal);
+                    if (arrow < 0)
+                        continue;
+
+                    string name = line.Substring(0, arrow).Trim();
+                    if (name.StartsWith("libndi.so", StringComparison.Ordinal))
+                        return new[] { line.Substring(arrow + 2).Trim() };
+                }
+            }
+            catch
+            {
+            }
+
+            return new[]
+            {
+                "/usr/lib/libndi.so.5",
+                "/usr/local/lib/libndi.so.5",
+                "/usr/lib/x86_64-linux-gnu/libndi.so.5",
+            };
         }
     }
 }
