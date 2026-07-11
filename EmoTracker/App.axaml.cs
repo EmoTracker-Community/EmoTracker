@@ -32,7 +32,8 @@ namespace EmoTracker
                     .WriteTo.File(Path.Combine(logDirectory, "emotracker_log.txt"),
                         rollingInterval: RollingInterval.Day,
                         buffered: true,
-                        flushToDiskInterval: TimeSpan.FromSeconds(5))
+                        flushToDiskInterval: TimeSpan.FromSeconds(5),
+                        restrictedToMinimumLevel: LogEventLevel.Information)
                     .WriteTo.Console(restrictedToMinimumLevel: LogEventLevel.Information)
                     .WriteTo.DeveloperTerminal()
                     .CreateLogger();
