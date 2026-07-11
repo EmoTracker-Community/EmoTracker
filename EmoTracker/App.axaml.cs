@@ -25,7 +25,7 @@ namespace EmoTracker
 
             try
             {
-                string logDirectory = Path.Combine(UserDirectory.Path, "logs");
+                string logDirectory = UserDirectory.LogPath;
                 Log.Logger = new LoggerConfiguration()
                     .MinimumLevel.Verbose()
                     .Enrich.FromLogContext()
