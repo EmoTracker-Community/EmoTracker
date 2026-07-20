@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Grpc.Core;
 
 namespace EmoTracker.Providers.SNI
 {
@@ -81,6 +82,16 @@ namespace EmoTracker.Providers.SNI
 
                 mDetectedMapping = detectResponse.MemoryMapping;
                 Log.Debug("[SNI] Connected to {DisplayName}, detected mapping: {Mapping}", mDisplayName, mDetectedMapping);
+                mConnected = true;
+                ConnectionStatusChanged?.Invoke(this, true);
+            }
+            catch (RpcException ex)
+            {
+                //SNI Memory Mapping Detection isn't implemented for these devices, but we are connected if we're getting this response
+                if(ex.StatusCode == StatusCode.Unimplemented) 
+                    Log.Debug("[SNI] Device does not implement mapping_detect however we are connected as we " +
+                              "explicitly received the Unimplemented status {DisplayName}: {Message}", 
+                        mDisplayName, ex.Message);
                 mConnected = true;
                 ConnectionStatusChanged?.Invoke(this, true);
             }
