@@ -6,6 +6,7 @@ using EmoTracker.Data.AutoTracking;
 using EmoTracker.Data.Packages;
 using EmoTracker.Data.Scripting;
 using EmoTracker.Data.Sessions;
+using Avalonia.Threading;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -269,6 +270,21 @@ namespace EmoTracker.Extensions.AutoTracker
             private set { SetProperty(ref mbConnected, value); }
         }
 
+        bool mbReconnecting = false;
+
+        /// <summary>
+        /// True while a lost provider connection is being transparently
+        /// healed in the background. The tracker stays armed (polling
+        /// resumes automatically once reconnected) rather than stopping, but
+        /// the status icon renders a transient warning so the user sees the
+        /// device is briefly unreachable.
+        /// </summary>
+        public bool Reconnecting
+        {
+            get { return mbReconnecting; }
+            private set { SetProperty(ref mbReconnecting, value); }
+        }
+
         GamePlatform mActivePlatform;
         public GamePlatform ActivePlatform
         {
@@ -385,9 +401,145 @@ namespace EmoTracker.Extensions.AutoTracker
             // observed by Avalonia bindings).
             Dispatch.BeginInvoke(() =>
             {
-                if (mActiveProvider != null)
-                    Connected = connected;
+                if (mActiveProvider == null) return;
+
+                Connected = connected;
+
+                if (connected)
+                {
+                    // Connection healed (by BeginReconnect's retry loop or a
+                    // user-triggered reconnect). Resume tracking transparently.
+                    CompleteReconnect();
+                }
+                else
+                {
+                    // Socket-level disconnect. Don't stop tracking — attempt
+                    // to heal the connection; warn while it recovers.
+                    BeginReconnect();
+                }
             });
+        }
+
+        // ---------- Automatic reconnect ----------------------------------
+        // On a connection loss the tracker stays armed and a retry loop
+        // transparently re-establishes the connection. While healing, the
+        // device is in a transient warning state (Reconnecting == true) so
+        // the icon reflects the temporary unreachability instead of lying
+        // green or stopping outright. The underlying provider also has its
+        // own reconnect scan timer; this is a secondary, faster retry.
+
+        System.Timers.Timer mReconnectTimer;
+        int mReconnectAttempts;
+
+        void BeginReconnect()
+        {
+            if (mbReconnecting || mActiveProvider == null)
+                return;
+
+            Connected = false;
+
+            // Respect the configured attempt budget. A budget of 0 means
+            // auto-reconnect is disabled — settle straight into the normal
+            // disconnected state without retrying.
+            if (ApplicationSettings.Instance.AutoTrackerMaxReconnectAttempts == 0)
+            {
+                Reconnecting = false;
+                mbReconnecting = false;
+                return;
+            }
+
+            mbReconnecting = true;
+            Reconnecting = true;
+            Error = false;
+            mReconnectAttempts = 0;
+
+            // Mark every per-state segment dirty so the next post-reconnect
+            // poll forces a fresh read rather than trusting stale buffers.
+            MarkAllSegmentsDirty();
+
+            if (mReconnectTimer == null)
+            {
+                mReconnectTimer = new System.Timers.Timer(2000);
+                mReconnectTimer.Elapsed += OnReconnectTimerElapsed;
+                mReconnectTimer.AutoReset = true;
+            }
+            mReconnectTimer.Stop();
+            mReconnectTimer.Start();
+        }
+
+        async void OnReconnectTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            try
+            {
+                var provider = mActiveProvider;
+                if (provider == null) { Dispatch.BeginInvoke(CompleteReconnect); return; }
+                if (provider.IsConnected) { Dispatch.BeginInvoke(CompleteReconnect); return; }
+
+                int maxAttempts = ApplicationSettings.Instance.AutoTrackerMaxReconnectAttempts;
+                if (mReconnectAttempts >= maxAttempts)
+                {
+                    // Exhausted the attempt budget — give up and settle into
+                    // the normal disconnected state (user can Stop / restart).
+                    Dispatch.BeginInvoke(GiveUpReconnect);
+                    return;
+                }
+
+                ++mReconnectAttempts;
+                await provider.ConnectAsync();
+                if (provider.IsConnected)
+                    Dispatch.BeginInvoke(CompleteReconnect);
+            }
+            catch
+            {
+                // Keep retrying on the next tick.
+            }
+        }
+
+        void CompleteReconnect()
+        {
+            if (mReconnectTimer != null)
+            {
+                mReconnectTimer.Stop();
+                mReconnectTimer.Dispose();
+                mReconnectTimer = null;
+            }
+            mbReconnecting = false;
+            Reconnecting = false;
+            Connected = mActiveProvider?.IsConnected ?? false;
+            MarkAllSegmentsDirty();
+        }
+
+        void GiveUpReconnect()
+        {
+            if (mReconnectTimer != null)
+            {
+                mReconnectTimer.Stop();
+                mReconnectTimer.Dispose();
+                mReconnectTimer = null;
+            }
+            mbReconnecting = false;
+            Reconnecting = false;
+            Connected = false;
+        }
+
+        void MarkAllSegmentsDirty()
+        {
+            var scripts = mState?.Scripts;
+            if (scripts == null) return;
+            foreach (var seg in scripts.MemorySegments) seg.MarkDirty();
+            foreach (var t in scripts.MemoryTimers) t.MarkDirty();
+        }
+
+        void CancelReconnect()
+        {
+            if (mReconnectTimer != null)
+            {
+                mReconnectTimer.Stop();
+                mReconnectTimer.Dispose();
+                mReconnectTimer = null;
+            }
+            mbReconnecting = false;
+            Reconnecting = false;
         }
 
         // ---------- Raw Read API ------------------------------------------
@@ -396,6 +548,13 @@ namespace EmoTracker.Extensions.AutoTracker
         {
             try
             {
+                // NOTE: deliberately a live device read, not a cached
+                // segment snapshot. Packs (e.g. SMZ3) use AutoTracker:ReadU8
+                // for live reads to detect game mode and register/unregister
+                // memory watches; returning a stale cached byte would change
+                // that behavior. The SNI read is deadline-bounded, so a
+                // stalled connection surfaces as a transient stall rather
+                // than the unbounded UI-thread hang (issue #105).
                 if (ActiveProvider != null && Connected)
                 {
                     byte val = defaultVal;
@@ -418,6 +577,7 @@ namespace EmoTracker.Extensions.AutoTracker
         {
             try
             {
+                // Live device read (see ReadU8).
                 if (ActiveProvider != null && Connected)
                 {
                     ushort val = defaultVal;
@@ -476,11 +636,138 @@ namespace EmoTracker.Extensions.AutoTracker
             }
         }
 
+        // ------------------------------------------------------------------
+        //  MCP / test-harness facing control helpers
+        //  These surface the same driver logic the UI commands use, but await
+        //  the async device refresh so a headless caller (the smoke runner
+        //  via the MCP server) can drive auto-tracking deterministically.
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Select a provider, refresh its device list, and pick the first
+        /// available device (if none is chosen yet) as the default.
+        /// Must be called from the UI thread (MCP tools marshal to it).
+        /// </summary>
+        public async Task SelectProviderAsync(IAutoTrackingProvider provider)
+        {
+            if (provider == null)
+                return;
+
+            SelectedProvider = provider;
+            await provider.RefreshDevicesAsync();
+
+            if (provider.DefaultDevice == null && provider.AvailableDevices.Count > 0)
+                provider.DefaultDevice = provider.AvailableDevices[0];
+
+            InvalidateCommandAvailability();
+            NotifyPropertyChanged(nameof(SelectedProvider));
+        }
+
+        /// <summary>
+        /// Select a specific device as the provider's default device.
+        /// Must be called from the UI thread.
+        /// </summary>
+        public Task SelectDeviceAsync(IAutoTrackingDevice device)
+        {
+            if (device != null && SelectedProvider != null)
+                SelectedProvider.DefaultDevice = device;
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Set a provider option (e.g. SNI address_space / memory_mapping) by
+        /// key. Must be called from the UI thread. Returns whether an option
+        /// was found and set.
+        /// </summary>
+        public bool SetProviderOption(string key, object value)
+        {
+            if (SelectedProvider == null)
+                return false;
+            foreach (var opt in SelectedProvider.Options)
+            {
+                if (opt.Key?.Equals(key, StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    opt.Value = value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Start auto-tracking on the currently selected provider/device.
+        /// Must be called from the UI thread. Returns true when a provider
+        /// became active.
+        /// </summary>
+        public async Task<bool> StartAutoTrackingAsync()
+        {
+            if (!CanStartAutoTracking())
+                return false;
+
+            CancelReconnect();
+            MarkAllSegmentsDirty();
+
+            try
+            {
+                await SelectedProvider.ConnectAsync();
+                ActiveProvider = SelectedProvider;
+                if (mState != null)
+                    ((IScriptManager)mState.Scripts).InvokeStandardCallback(StandardCallback.AutoTrackerStarted);
+                return ActiveProvider != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Stop auto-tracking (drains in-flight updates and clears the active
+        /// provider). Must be called from the UI thread.
+        /// </summary>
+        public Task StopAutoTrackingAsync()
+        {
+            StopAutoTracking();
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Poll (on the caller's dispatcher) until a predicate over this
+        /// extension returns true or the timeout elapses. Returns the last
+        /// predicate result and whether it succeeded within the timeout.
+        /// </summary>
+        public async Task<(bool success, Exception error)> WaitUntilAsync(Func<AutoTrackerExtension, bool> predicate, int timeoutMs, int intervalMs = 100)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                Exception error = null;
+                bool ok = false;
+                try
+                {
+                    ok = await Dispatcher.UIThread.InvokeAsync(() => predicate(this));
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+
+                if (ok)
+                    return (true, error);
+                if (error != null)
+                    return (false, error);
+
+                await Task.Delay(intervalMs);
+            }
+            return (false, null);
+        }
+
         private bool CanStopAutoTracking(object obj = null) => ActiveProvider != null;
 
         private void StopAutoTracking(object obj = null)
         {
             WaitForPendingMemoryUpdate();
+            CancelReconnect();
             bool bWasActive = ActiveProvider != null;
             ActiveProvider = null;
 
@@ -497,16 +784,8 @@ namespace EmoTracker.Extensions.AutoTracker
             {
                 if (SelectedProvider != null)
                 {
-                    // Mark every per-state segment dirty so the next poll
-                    // ignores its "I read recently, skip me" guard and
-                    // forces a fresh read against the just-connected
-                    // device.
-                    var scripts = mState?.Scripts;
-                    if (scripts != null)
-                    {
-                        foreach (var seg in scripts.MemorySegments) seg.MarkDirty();
-                        foreach (var t in scripts.MemoryTimers) t.MarkDirty();
-                    }
+                    CancelReconnect();
+                    MarkAllSegmentsDirty();
 
                     try
                     {
@@ -593,8 +872,11 @@ namespace EmoTracker.Extensions.AutoTracker
 
                 if (providerInstance != null && !providerInstance.IsConnected)
                 {
-                    Dispatch.BeginInvoke(() => StopAutoTracking());
-                    Error = true;
+                    // Connection lost but the ConnectionStatusChanged event
+                    // hasn't been processed yet. Kick off transparent
+                    // reconnect on the UI thread instead of stopping
+                    // tracking (the event handler drives the warning state).
+                    Dispatch.BeginInvoke(() => BeginReconnect());
                     return;
                 }
 

@@ -23,6 +23,8 @@ namespace EmoTracker.Providers.NWA
         IAutoTrackingDevice mDefaultDevice;
         Timer mScanTimer;
         bool mScanning;
+        EventHandler<bool> mConnectionStatusChanged;
+        EventHandler mAvailableDevicesChanged;
 
         static readonly IReadOnlyList<GamePlatform> sSupportedPlatforms = new[]
         {
@@ -77,7 +79,36 @@ namespace EmoTracker.Providers.NWA
         public override IAutoTrackingDevice DefaultDevice
         {
             get => mDefaultDevice;
-            set => mDefaultDevice = value;
+            set
+            {
+                if (mDefaultDevice != null)
+                    mDefaultDevice.ConnectionStatusChanged -= OnDeviceConnectionStatusChanged;
+                mDefaultDevice = value;
+                if (mDefaultDevice != null)
+                    mDefaultDevice.ConnectionStatusChanged += OnDeviceConnectionStatusChanged;
+            }
+        }
+
+        void OnDeviceConnectionStatusChanged(object sender, bool connected)
+        {
+            // Route the active device's connection changes onto the provider
+            // so subscribers (the per-state AutoTrackerExtension) observe
+            // them regardless of which device is currently selected.
+            mConnectionStatusChanged?.Invoke(this, connected);
+        }
+
+        public override bool IsConnected => mDefaultDevice?.IsConnected ?? false;
+
+        public override event EventHandler<bool> ConnectionStatusChanged
+        {
+            add { mConnectionStatusChanged += value; }
+            remove { mConnectionStatusChanged -= value; }
+        }
+
+        public override event EventHandler AvailableDevicesChanged
+        {
+            add { mAvailableDevicesChanged += value; }
+            remove { mAvailableDevicesChanged -= value; }
         }
 
         public override IReadOnlyList<IProviderOption> Options => mOptions;
@@ -124,7 +155,22 @@ namespace EmoTracker.Providers.NWA
             mScanning = true;
             try
             {
-                Log.Debug("[NWA] Refreshing device list...");
+                await RefreshDevicesCoreAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                mScanning = false;
+            }
+        }
+
+        /// <summary>
+        /// Body of a device refresh. Does NOT own the <see cref="mScanning"/>
+        /// guard so both the public <see cref="RefreshDevicesAsync"/> and the
+        /// reconnect scan (<see cref="ScanDevicesAsync"/>) can share it.
+        /// </summary>
+        async Task RefreshDevicesCoreAsync()
+        {
+            Log.Debug("[NWA] Refreshing device list...");
 
                 // Index existing devices by port so we can reuse instances
                 var existingByPort = new Dictionary<int, NwaDevice>();
@@ -219,17 +265,46 @@ namespace EmoTracker.Providers.NWA
                 {
                     mScanTimer = new Timer(OnScanTimerElapsed, null, ScanIntervalMs, ScanIntervalMs);
                 }
+
+                mAvailableDevicesChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        void OnScanTimerElapsed(object state)
+        {
+            // Fire-and-forget; ScanDevicesAsync guards against re-entrancy
+            _ = ScanDevicesAsync();
+        }
+
+        public override async Task ConnectAsync()
+        {
+            if (mDefaultDevice != null)
+                await mDefaultDevice.ConnectAsync().ConfigureAwait(false);
+
+            // Ensure the scan timer is running so the device list stays fresh
+            if (mScanTimer == null)
+                mScanTimer = new Timer(OnScanTimerElapsed, null, ScanIntervalMs, ScanIntervalMs);
+        }
+
+        public override async Task DisconnectAsync()
+        {
+            if (mDefaultDevice != null)
+                await mDefaultDevice.DisconnectAsync().ConfigureAwait(false);
+        }
+
+        async Task ScanDevicesAsync()
+        {
+            if (mScanning)
+                return;
+
+            mScanning = true;
+            try
+            {
+                await RefreshDevicesCoreAsync().ConfigureAwait(false);
             }
             finally
             {
                 mScanning = false;
             }
-        }
-
-        void OnScanTimerElapsed(object state)
-        {
-            // Fire-and-forget; RefreshDevicesAsync guards against re-entrancy
-            _ = RefreshDevicesAsync();
         }
 
         /// <summary>

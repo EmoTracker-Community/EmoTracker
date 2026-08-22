@@ -21,6 +21,7 @@ namespace EmoTracker.Providers.NWA
         readonly string mDisplayName;
         readonly NwaProvider mParentProvider;
         readonly SemaphoreSlim mLock = new SemaphoreSlim(1, 1);
+        readonly SemaphoreSlim mConnectLock = new SemaphoreSlim(1, 1);
 
         TcpClient mClient;
         NetworkStream mStream;
@@ -59,39 +60,58 @@ namespace EmoTracker.Providers.NWA
             if (mConnected)
                 return;
 
-            Log.Debug("[NWA] Connecting to {Host}:{Port}...", mHost, mPort);
+            // Serialize connection attempts (the extension's reconnect
+            // retry and the provider's scan can both call us) so we never
+            // create two concurrent TcpClients.
+            if (!await mConnectLock.WaitAsync(LockTimeoutMs).ConfigureAwait(false))
+            {
+                Log.Warning("[NWA] Timed out waiting to connect to {Host}:{Port}", mHost, mPort);
+                return;
+            }
 
             try
             {
-                mClient = new TcpClient();
-                mClient.ReceiveTimeout = 5000;
-                mClient.SendTimeout = 5000;
-                await mClient.ConnectAsync(mHost, mPort).ConfigureAwait(false);
-                mStream = mClient.GetStream();
+                if (mConnected)
+                    return;
 
-                // Identify ourselves
-                string clientName = $"EmoTracker {Core.ApplicationVersion.Current}";
-                var nameReply = await SendCommandAsync($"MY_NAME_IS {clientName}").ConfigureAwait(false);
-                Log.Debug("[NWA] Identified as: {Name}", nameReply.GetValueOrDefault("name", clientName));
+                Log.Debug("[NWA] Connecting to {Host}:{Port}...", mHost, mPort);
 
-                // Record current core/game/platform for change detection
-                await RefreshCoreInfoAsync().ConfigureAwait(false);
+                try
+                {
+                    mClient = new TcpClient();
+                    mClient.ReceiveTimeout = 5000;
+                    mClient.SendTimeout = 5000;
+                    await mClient.ConnectAsync(mHost, mPort).ConfigureAwait(false);
+                    mStream = mClient.GetStream();
 
-                // Refresh memory regions
-                await RefreshMemoryRegionsAsync().ConfigureAwait(false);
+                    // Identify ourselves
+                    string clientName = $"EmoTracker {Core.ApplicationVersion.Current}";
+                    var nameReply = await SendCommandAsync($"MY_NAME_IS {clientName}").ConfigureAwait(false);
+                    Log.Debug("[NWA] Identified as: {Name}", nameReply.GetValueOrDefault("name", clientName));
 
-                // Initialize address map — prefer System Bus, fall back to platform-specific map
-                await InitializeAddressMapAsync().ConfigureAwait(false);
+                    // Record current core/game/platform for change detection
+                    await RefreshCoreInfoAsync().ConfigureAwait(false);
 
-                mConnected = true;
-                Log.Debug("[NWA] Connected to {DisplayName} at {Host}:{Port}", mDisplayName, mHost, mPort);
-                ConnectionStatusChanged?.Invoke(this, true);
+                    // Refresh memory regions
+                    await RefreshMemoryRegionsAsync().ConfigureAwait(false);
+
+                    // Initialize address map — prefer System Bus, fall back to platform-specific map
+                    await InitializeAddressMapAsync().ConfigureAwait(false);
+
+                    mConnected = true;
+                    Log.Debug("[NWA] Connected to {DisplayName} at {Host}:{Port}", mDisplayName, mHost, mPort);
+                    ConnectionStatusChanged?.Invoke(this, true);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("[NWA] Failed to connect to {Host}:{Port}: {Message}", mHost, mPort, ex.Message);
+                    CleanupConnection();
+                    ConnectionStatusChanged?.Invoke(this, false);
+                }
             }
-            catch (Exception ex)
+            finally
             {
-                Log.Warning("[NWA] Failed to connect to {Host}:{Port}: {Message}", mHost, mPort, ex.Message);
-                CleanupConnection();
-                ConnectionStatusChanged?.Invoke(this, false);
+                mConnectLock.Release();
             }
         }
 

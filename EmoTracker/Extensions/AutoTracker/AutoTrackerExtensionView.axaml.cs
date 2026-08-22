@@ -59,6 +59,7 @@ namespace EmoTracker.Extensions.AutoTracker
             {
                 case nameof(AutoTrackerExtension.Connected):
                 case nameof(AutoTrackerExtension.Error):
+                case nameof(AutoTrackerExtension.Reconnecting):
                 case nameof(AutoTrackerExtension.ActiveProvider):
                 case nameof(AutoTrackerExtension.SelectedProvider):
                     UpdateStatusColor();
@@ -125,6 +126,13 @@ namespace EmoTracker.Extensions.AutoTracker
             {
                 StopPulse();
                 icon.Foreground = SolidColorBrush.Parse(ApplicationColors.Instance.Status_Generic_Error);
+            }
+            else if (_extension.Reconnecting)
+            {
+                // Transient warning while the connection heals in the
+                // background instead of stopping outright.
+                StopPulse();
+                icon.Foreground = SolidColorBrush.Parse(ApplicationColors.Instance.Status_Generic_Warning);
             }
             else if (!_extension.Connected && _extension.ActiveProvider != null)
             {
