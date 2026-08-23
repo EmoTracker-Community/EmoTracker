@@ -40,10 +40,11 @@ jobs:
       - name: Install the emosaru ALttPR reference pack into the dev packs dir
         run: |
           mkdir -p "$HOME/Documents/EmoTracker/dev/packs"
+          # Use the install-ready pack zip (manifest.json at zip root) from the
+          # EmoTracker-Service repo, NOT the git source archive (which nests all
+          # files under <repo>-<ref>/ so EmoTracker can't find manifest.json).
           curl -fsSL -o "$HOME/Documents/EmoTracker/dev/packs/alttpr_emotracker_emosaru.zip" \
-            https://github.com/emosaru/alttpr_emotracker_emosaru/archive/refs/heads/master.zip
-          # The archive root dir won't match; EmoTracker scans the zip. Download the
-          # release artifact that IS the pack zip if available, else build from commit.
+            https://raw.githubusercontent.com/EmoTracker-Community/EmoTracker-Service/main/service/packages/alttpr_emotracker_emosaru.zip
         shell: bash
 
       - name: Build (Debug, includes MCP server)
