@@ -171,6 +171,7 @@ namespace EmoTracker.Extensions.McpServer
                 .WithTools<Tools.WindowTools>()
                 .WithTools<Tools.NoteTools>()
                 .WithTools<Tools.ExtensionTools>()
+                .WithTools<Tools.AutoTrackerControlTools>()
                 .WithTools<Tools.PackageTools>()
                 .WithTools<Tools.ImageCacheTools>()
                 .WithTools<Tools.NotificationTools>()

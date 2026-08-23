@@ -105,19 +105,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         ["type"] = item.GetType().Name
                     };
 
-                    if (item is ToggleItem toggle)
-                    {
-                        entry["active"] = toggle.Active;
-                    }
-                    else if (item is ConsumableItem consumable)
-                    {
-                        entry["acquiredCount"] = consumable.AcquiredCount;
-                        entry["maxCount"] = consumable.MaxCount;
-                    }
-                    else if (item is ProgressiveItem progressive)
-                    {
-                        entry["currentStage"] = progressive.CurrentStage;
-                    }
+                    AddItemTypeState(entry, item);
 
                     result.Add(entry);
                 }
@@ -193,17 +181,7 @@ namespace EmoTracker.Extensions.McpServer.Tools
                             ["capturable"] = item.Capturable
                         };
 
-                        if (item is ToggleItem toggle)
-                            entry["active"] = toggle.Active;
-                        else if (item is ConsumableItem consumable)
-                        {
-                            entry["acquiredCount"] = consumable.AcquiredCount;
-                            entry["maxCount"] = consumable.MaxCount;
-                        }
-                        else if (item is ProgressiveItem progressive)
-                        {
-                            entry["currentStage"] = progressive.CurrentStage;
-                        }
+                        AddItemTypeState(entry, item);
 
                         return JsonSerializer.Serialize(entry);
                     }
@@ -251,10 +229,13 @@ namespace EmoTracker.Extensions.McpServer.Tools
         }
 
         [McpServerTool(Name = "set_item_state")]
-        [Description("Directly set an item's state: active flag for toggles, stage index for progressive, count for consumable")]
+        [Description("Directly set an item's state: active flag for toggles, stage index for progressive, count for consumable. Options can set per-type state (active/stage/consumed).")]
         public static async Task<string> SetItemState(
             [Description("The item name")] string name,
-            [Description("For toggle items: 'true' or 'false'. For progressive: stage index (0-based). For consumable: acquired count.")] string value)
+            [Description("For toggle items: 'true' or 'false'. For progressive: stage index (0-based). For consumable: acquired count.")] string value,
+            [Description("Set active flag for toggle-like types (progressive_toggle, toggle_badged).")] string active = null,
+            [Description("Set stage index for progressive_toggle.")] string stage = null,
+            [Description("Set consumed count for consumable items.")] string consumed = null)
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -285,17 +266,34 @@ namespace EmoTracker.Extensions.McpServer.Tools
                                 return JsonSerializer.Serialize(new { success = false, error = "Expected true/false for toggle item" });
                             toggle.Active = boolVal;
                         }
+                        else if (item is ToggleBadgedItem badged)
+                        {
+                            if (!bool.TryParse(value, out var boolVal))
+                                return JsonSerializer.Serialize(new { success = false, error = "Expected true/false for badged toggle item" });
+                            badged.Active = boolVal;
+                        }
                         else if (item is ProgressiveItem progressive)
                         {
-                            if (!int.TryParse(value, out var stage))
+                            if (!int.TryParse(value, out var stg))
                                 return JsonSerializer.Serialize(new { success = false, error = "Expected integer stage index" });
-                            progressive.CurrentStage = stage;
+                            progressive.CurrentStage = stg;
+                        }
+                        else if (item is ProgressiveToggleItem pt)
+                        {
+                            if (!string.IsNullOrEmpty(active) && bool.TryParse(active, out var av))
+                                pt.Active = av;
+                            if (!string.IsNullOrEmpty(stage) && uint.TryParse(stage, out var sv))
+                                pt.CurrentStage = sv;
+                            if (string.IsNullOrEmpty(active) && string.IsNullOrEmpty(stage)
+                                && int.TryParse(value, out var stg))
+                                pt.CurrentStage = (uint)stg;
                         }
                         else if (item is ConsumableItem consumable)
                         {
-                            if (!int.TryParse(value, out var count))
-                                return JsonSerializer.Serialize(new { success = false, error = "Expected integer count" });
-                            consumable.AcquiredCount = count;
+                            if (!string.IsNullOrEmpty(consumed) && int.TryParse(consumed, out var consumedVal))
+                                consumable.ConsumedCount = consumedVal;
+                            if (!string.IsNullOrEmpty(value) && int.TryParse(value, out var count))
+                                consumable.AcquiredCount = count;
                         }
                         else
                         {
@@ -369,6 +367,107 @@ namespace EmoTracker.Extensions.McpServer.Tools
             });
         }
 
+        [McpServerTool(Name = "get_item_codes")]
+        [Description("Return the set of codes an item could provide (statically) and whether it currently provides each. Distinguishes static vs dynamic code items.")]
+        public static async Task<string> GetItemCodes([Description("The exact item name")] string name)
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                foreach (var item in ActiveItems.Items)
+                {
+                    if (item?.Name != null && item.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var all = item.GetAllProvidedCodes();
+                        var codes = all != null ? all.ToArray() : null;
+                        var providedNow = new List<string>();
+                        if (all != null)
+                        {
+                            foreach (var c in all)
+                                if (item.ProvidesCode(c) > 0)
+                                    providedNow.Add(c);
+                        }
+                        return JsonSerializer.Serialize(new
+                        {
+                            name = item.Name,
+                            type = item.GetType().Name,
+                            dynamic = all == null,
+                            codes,
+                            providedNow
+                        });
+                    }
+                }
+                return JsonSerializer.Serialize(new { found = false });
+            });
+        }
+
+        [McpServerTool(Name = "advance_item_to_code")]
+        [Description("Advance an item to the stage/state that provides the given code (wraps ItemBase.AdvanceToCode).")]
+        public static async Task<string> AdvanceItemToCode(
+            [Description("The exact item name")] string name,
+            [Description("The code to advance toward")] string code)
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                foreach (var item in ActiveItems.Items)
+                {
+                    if (item?.Name != null && item.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        item.AdvanceToCode(code);
+                        return JsonSerializer.Serialize(SerializeItemDetails(item, true));
+                    }
+                }
+                return JsonSerializer.Serialize(new { found = false });
+            });
+        }
+
+        [McpServerTool(Name = "get_layout_tree")]
+        [Description("Walk the loaded pack's layout tree and return every layout node with its C# type, JSON tag, unique id, and key. Lets tests assert all layout element types are present and structurally valid.")]
+        public static async Task<string> GetLayoutTree()
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var layouts = ApplicationModel.Instance?.PrimaryState?.Layouts;
+                    if (layouts == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "No layouts manager" });
+
+                    var result = new List<object>();
+                    foreach (var kv in layouts.AllLayouts)
+                    {
+                        var layout = kv.Value;
+                        var nodes = new List<object>();
+                        WalkLayout(layout.Root, nodes);
+                        result.Add(new
+                        {
+                            key = kv.Key,
+                            rootType = layout.Root?.GetType().Name,
+                            elementCount = nodes.Count,
+                            elements = nodes
+                        });
+                    }
+                    return JsonSerializer.Serialize(new { success = true, layouts = result });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+                }
+            });
+        }
+
+        static void WalkLayout(EmoTracker.Data.Layout.LayoutItem node, List<object> outNodes)
+        {
+            if (node == null) return;
+            outNodes.Add(new
+            {
+                type = node.GetType().Name,
+                uid = node.UniqueID,
+                childCount = node.EnumerateChildren()?.Count() ?? 0
+            });
+            foreach (var child in node.EnumerateChildren())
+                WalkLayout(child, outNodes);
+        }
+
         private static Dictionary<string, object> SerializeItemDetails(ITrackableItem item, bool includeFound)
         {
             var entry = new Dictionary<string, object>();
@@ -384,6 +483,17 @@ namespace EmoTracker.Extensions.McpServer.Tools
             entry["capturable"] = item.Capturable;
             entry["ignoreUserInput"] = item.IgnoreUserInput;
 
+            AddItemTypeState(entry, item);
+
+            return entry;
+        }
+
+        /// <summary>
+        /// Adds per-concrete-type observable state so tests can assert on every
+        /// item type via the MCP surface. Additive — never removes existing keys.
+        /// </summary>
+        private static void AddItemTypeState(Dictionary<string, object> entry, ITrackableItem item)
+        {
             if (item is ToggleItem toggle)
             {
                 entry["active"] = toggle.Active;
@@ -403,8 +513,32 @@ namespace EmoTracker.Extensions.McpServer.Tools
                 entry["currentStage"] = progressive.CurrentStage;
                 entry["loop"] = progressive.Loop;
             }
-
-            return entry;
+            else if (item is ProgressiveToggleItem pt)
+            {
+                entry["active"] = pt.Active;
+                entry["currentStage"] = pt.CurrentStage;
+                entry["stageCount"] = pt.StageCount;
+                entry["swapActions"] = pt.SwapActions;
+            }
+            else if (item is ToggleBadgedItem badged)
+            {
+                entry["active"] = badged.Active;
+                entry["baseItem"] = badged.BaseItem?.Name;
+            }
+            else if (item is SectionChestsProxyItem proxy)
+            {
+                entry["count"] = proxy.Count;
+                var section = proxy.Section;
+                if (section != null)
+                {
+                    entry["section"] = section.Name;
+                    entry["chestCount"] = section.ChestCount;
+                    entry["availableChestCount"] = section.AvailableChestCount;
+                }
+            }
+            // CompositeToggleItem, StaticItem, BlankItem, LuaItem expose no own
+            // mutable state; composite children and lua state are asserted via the
+            // sibling items and lua globals respectively.
         }
     }
 }

@@ -17,8 +17,9 @@ performs functional/smoke testing).
 - **Endpoint:** `http://localhost:27125/` (localhost only — no auth/token).
 - **Capabilities:** tools only — **no** custom resources or prompts are
   registered.
-- **Tool count:** 57 tools (49 core + 8 auto-tracker control, plus 3 optional
-  helpers compiled only with `DEBUG_PHASE7_INSPECT`).
+- **Tool count:** 62 tools (49 core + 8 auto-tracker control + 5 new
+  item/map/advance/layout/screenshot helpers, plus 3 optional helpers compiled
+  only with `DEBUG_PHASE7_INSPECT`).
 
 ## Building
 
@@ -160,18 +161,28 @@ tool/parameter description; no-default parameters are required).
 | Tool | Description | Params |
 |------|-------------|--------|
 | `get_loaded_pack` | Info about the loaded pack | — |
+| `get_layout_tree` | Walk the pack's layout tree (every element type/uid/children) | — |
 | `list_items` | List items with state | `filter` (opt) |
 | `list_locations` | List locations with accessibility | `filter` (opt) |
 | `get_item_by_name` | Find item by exact name | `name` (req) |
 | `find_item_by_code` | Find item by internal code (e.g. `bow`) | `code` (req) |
-| `get_item_details` | Extended item details | `name` (req) |
-| `set_item_state` | Directly set item state | `name` (req), `value` (req) |
+| `get_item_details` | Extended item details (per-type state) | `name` (req) |
+| `get_item_codes` | Codes an item can/will provide (static vs dynamic) | `name` (req) |
+| `advance_item_to_code` | Advance an item to the stage providing a code | `name`, `code` (req) |
+| `set_item_state` | Directly set item state (active/stage/count/consumed) | `name`, `value` (req); `active`, `stage`, `consumed` (opt) |
 | `batch_toggle_items` | Toggle multiple items in one transaction | `names` (req, comma-separated) |
+
+`get_item_details` now surfaces per-type state for every concrete item type:
+ProgressiveToggleItem (`active`/`currentStage`/`stageCount`/`swapActions`),
+ToggleBadgedItem (`active`/`baseItem`), SectionChestsProxyItem
+(`count`/`section`/`chestCount`/`availableChestCount`), in addition to the existing
+ToggleItem / ConsumableItem / ProgressiveItem fields.
 
 ### Locations
 | Tool | Description | Params |
 |------|-------------|--------|
 | `get_location` | Full location details | `name` (req) |
+| `get_maps` | List maps + map-location counts | — |
 | `pin_location` / `unpin_location` | Pin/unpin a location | `name` (req) |
 | `list_pinned_locations` | List pinned locations | — |
 | `clear_section` | Clear a section (decrement chest count) | `locationName`, `sectionName` (req) |
@@ -194,6 +205,7 @@ tool/parameter description; no-default parameters are required).
 | `get_window_bounds` | Main window position/size | — |
 | `list_ui_elements` | List visible UI elements | `type` (opt) |
 | `capture_main_window` / `capture_broadcast_view` | Screenshot as base64 PNG | — |
+| `save_main_window_screenshot` | Capture main window PNG to a file path | `path` (req) |
 
 ### Notes / save / extensions / Lua / misc
 | Tool | Description | Params |

@@ -1,0 +1,63 @@
+[
+  {
+    "name": "Smoke Dungeon",
+    "sections": [
+      {
+        "name": "Chest Room",
+        "capture_item": true,
+        "access_rules": [ "smoke_key:2" ],
+        "item_count": 3
+      },
+      {
+        "name": "Boss Room",
+        "capture_item": true,
+        "access_rules": [ "smoke_bow,smoke_lua" ],
+        "item_count": 1
+      },
+      {
+        "name": "Always Room",
+        "capture_item": true,
+        "access_rules": [ "{}" ],
+        "item_count": 1
+      }
+    ]
+  },
+  {
+    "name": "Smoke Overworld",
+    "children": [
+      {
+        "name": "Minor Cave",
+        "sections": [
+          {
+            "name": "Cave",
+            "capture_item": true,
+            "access_rules": [ "smoke_sword" ],
+            "item_count": 1
+          }
+        ]
+      },
+      {
+        "name": "Big Tower",
+        "sections": [
+          {
+            "name": "Top",
+            "capture_item": true,
+            "access_rules": [ "smoke_composite,smoke_badge", "smoke_static" ],
+            "item_count": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "Sword Cave",
+    "sections": [
+      {
+        "name": "Cave",
+        "capture_item": true,
+        "access_rules": [ "smoke_sword" ],
+        "item_count": 1
+      }
+    ]
+  }
+]
