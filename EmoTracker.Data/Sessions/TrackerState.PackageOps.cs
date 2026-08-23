@@ -71,6 +71,20 @@ namespace EmoTracker.Data.Sessions
             set { SetProperty(ref mAllowResize, value); }
         }
 
+        string mDefaultItemCaptureLayout = "tracker_capture_item";
+        /// <summary>
+        /// Pack-wide default item-capture layout grid used by attachable
+        /// markdown notes that aren't covered by a Location-level
+        /// <c>capture_item_layout</c>. Set by <c>settings.json</c>'s
+        /// <c>capture_item_layout_default</c> key during pack load; falls
+        /// back to <c>"tracker_capture_item"</c>.
+        /// </summary>
+        public string DefaultItemCaptureLayout
+        {
+            get => mDefaultItemCaptureLayout;
+            set { SetProperty(ref mDefaultItemCaptureLayout, value); }
+        }
+
         // ---- Reload / Activate ------------------------------------------
 
         bool mbReloadInProgress;

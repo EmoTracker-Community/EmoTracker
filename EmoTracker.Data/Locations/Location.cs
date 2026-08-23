@@ -115,6 +115,31 @@ namespace EmoTracker.Data.Locations
             set { ColorRaw = value; NotifyPropertyChanged(); }
         }
 
+        // Item capture layout: per-location override, inherited by child
+        // Locations until overridden deeper in the hierarchy. Used by
+        // attachable markdown notes to resolve the item grid they present.
+        [KVMutable]
+        private partial string ItemCaptureLayoutRaw { get; set; }
+
+        public string ItemCaptureLayout
+        {
+            get
+            {
+                var raw = ItemCaptureLayoutRaw;
+                if (!string.IsNullOrWhiteSpace(raw)) return raw;
+
+                var parent = Parent;
+                if (parent != null) return parent.ItemCaptureLayout;
+
+                var state = this.OwnerState as Sessions.TrackerState;
+                var packDefault = state?.DefaultItemCaptureLayout;
+                if (!string.IsNullOrWhiteSpace(packDefault)) return packDefault;
+
+                return "tracker_capture_item";
+            }
+            set { ItemCaptureLayoutRaw = value; NotifyPropertyChanged(); }
+        }
+
         [KVMutable]
         public partial ImageReference Thumbnail { get; set; }
 

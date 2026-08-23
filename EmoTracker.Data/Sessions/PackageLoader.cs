@@ -235,6 +235,7 @@ namespace EmoTracker.Data.Sessions
         {
             target.AllowResize = true;
             target.DisabledImageFilterSpec = TrackerDefaults.DisabledImageFilterSpec;
+            target.DefaultItemCaptureLayout = TrackerDefaults.ItemCaptureLayout;
         }
 
         // Mirrors Tracker.LoadPackageSettings, but operates on the target's
@@ -261,6 +262,10 @@ namespace EmoTracker.Data.Sessions
                                 string spec = root.GetValue<string>("disabled_image_filter", null);
                                 if (spec != null)
                                     target.DisabledImageFilterSpec = spec;
+
+                                string defaultLayout = root.GetValue<string>("capture_item_layout_default", null);
+                                if (!string.IsNullOrWhiteSpace(defaultLayout))
+                                    target.DefaultItemCaptureLayout = defaultLayout;
 
                                 target.Locations.ParseLocationVisualProperties(root, target.Locations.Root, package);
 
@@ -313,5 +318,6 @@ namespace EmoTracker.Data.Sessions
     static class TrackerDefaults
     {
         public const string DisabledImageFilterSpec = "grayscale, dim";
+        public const string ItemCaptureLayout = "tracker_capture_item";
     }
 }
