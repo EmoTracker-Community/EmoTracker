@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace EmoTracker.Smoke;
 
@@ -39,6 +40,39 @@ public sealed class MockClient : IDisposable
         // spacing not required; normalize by joining pairs
         string normalized = hexBytes.Replace(" ", "").Replace(",", "");
         var resp = await mHttp.PostAsJsonAsync(mBase + "write", new { bus = bus.ToString("X"), bytes = HexPairs(normalized) });
+        resp.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Select the cartridge profile ("alttp" | "smz3").</summary>
+    public async Task SetProfileAsync(string profile)
+    {
+        var resp = await mHttp.PostAsJsonAsync(mBase + "profile", new { profile });
+        resp.EnsureSuccessStatusCode();
+    }
+
+    public async Task<string> GetProfileAsync()
+    {
+        var resp = await mHttp.GetAsync(mBase + "profile");
+        resp.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        return doc.RootElement.GetProperty("profile").GetString() ?? "";
+    }
+
+    /// <summary>Read hex bytes from a bus address; returns raw byte array.</summary>
+    public async Task<byte[]> ReadBusAsync(ulong bus, int length)
+    {
+        var resp = await mHttp.GetAsync($"{mBase}read?bus={bus:X}&len={length}");
+        resp.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+        string bytes = doc.RootElement.GetProperty("bytes").GetString() ?? "";
+        return bytes.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(h => Convert.ToByte(h, 16)).ToArray();
+    }
+
+    /// <summary>In SMZ3 mode, switch the simulated current game (sm=true → Super Metroid).</summary>
+    public async Task SwitchGameAsync(bool sm)
+    {
+        var resp = await mHttp.PostAsJsonAsync(mBase + "game", new { sm });
         resp.EnsureSuccessStatusCode();
     }
 

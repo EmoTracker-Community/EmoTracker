@@ -67,16 +67,17 @@ public sealed class DeviceMemoryMockService : DeviceMemory.DeviceMemoryBase
 
     public override Task<DetectMemoryMappingResponse> MappingDetect(DetectMemoryMappingRequest request, ServerCallContext context)
     {
+        bool exhirom = mCore.Session.ActiveProfile == Memory.CartridgeProfile.Smz3ExHiRom;
         byte[] header;
         if (request.HasRomHeader00FFB0 && request.RomHeader00FFB0.Length > 0)
             header = request.RomHeader00FFB0.ToByteArray();
         else
-            header = mCore.Session.ReadBus(0x00FFB0, 0x50);
+            header = mCore.Session.ReadBus(exhirom ? 0x40FFB0UL : 0x00FFB0UL, 0x50);
 
         var resp = new DetectMemoryMappingResponse
         {
             Uri = request.Uri,
-            MemoryMapping = MemoryMapping.LoRom,
+            MemoryMapping = exhirom ? MemoryMapping.ExHiRom : MemoryMapping.LoRom,
             Confidence = true
         };
         resp.RomHeader00FFB0 = ByteString.CopyFrom(header);
@@ -178,7 +179,7 @@ public sealed class DeviceInfoMockService : DeviceInfo.DeviceInfoBase
                 Field.DeviceVersion => "1.0.0",
                 Field.CoreName => mCore.Kind == SniCore.BackendKind.Emulator ? "Snes9x" : "FXPakPro",
                 Field.CorePlatform => "SNES",
-                Field.RomFileName => "mock-alttp.sfc",
+                Field.RomFileName => mCore.Session.ActiveProfile == Memory.CartridgeProfile.Smz3ExHiRom ? "mock-smz3.sfc" : "mock-alttp.sfc",
                 _ => ""
             });
         }

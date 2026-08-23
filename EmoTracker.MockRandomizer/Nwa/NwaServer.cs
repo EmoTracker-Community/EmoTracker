@@ -173,9 +173,9 @@ public sealed class NwaServer
     ulong SizeFor(string name) => name switch
     {
         "System Bus" => 0x800000,
-        "WRAM" => 0x20000,
-        "CARTROM" => Memory.SnesBus.CartRomSize,
-        "SRAM" => Memory.SnesBus.SramSize,
+        "WRAM" => (ulong)mSession.Wram.Length,
+        "CARTROM" => (ulong)mSession.CartRom.Length,
+        "SRAM" => (ulong)mSession.Sram.Length,
         "APURAM" => 0x10000,
         "VRAM" => 0x10000,
         _ => 0

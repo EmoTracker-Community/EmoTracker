@@ -16,6 +16,7 @@ public static class Program
         bool atOnly = false;
         string tier = "core";
         string screenshot = "";
+        string spoiler = "";
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -29,6 +30,7 @@ public static class Program
                 case "--at-only": atOnly = true; break;
                 case "--tier": tier = args[++i]; break;
                 case "--screenshot": screenshot = args[++i]; break;
+                case "--spoiler": spoiler = args[++i]; break;
             }
         }
 
@@ -36,6 +38,33 @@ public static class Program
         Console.WriteLine($"  mcp={mcpUrl} mock={mockUrl} pack={pack} variant={variant} backend={backend} tier={tier}");
 
         await using var mcp = await McpClient.ConnectAsync(mcpUrl, "smoke-runner");
+
+        // Seed replay: play through a real SMZ3 seed from its spoiler log against
+        // the mock, with realistic delays (long-term autotracking stress).
+        if (tier.Equals("replay", StringComparison.OrdinalIgnoreCase))
+        {
+            string spoilerPath = spoiler;
+            if (string.IsNullOrEmpty(spoilerPath))
+                spoilerPath = Environment.GetEnvironmentVariable("SMZ3_SPOILER") ?? "";
+            if (!File.Exists(spoilerPath))
+            {
+                Console.WriteLine($"[FAIL] spoiler path not found: {spoilerPath} (use --spoiler <path> or SMZ3_SPOILER)");
+                return 1;
+            }
+            using var mockReplay = new MockClient(mockUrl);
+            return await SeedReplayTier.RunAsync(mcp, mockReplay, backend, spoilerPath);
+        }
+
+        // SMZ3 long-term autotracking stress tier: real SMZ3 pack + mock in
+        // SMZ3/ExHiROM profile, churning game switches + item toggles.
+        if (tier.Equals("smz3", StringComparison.OrdinalIgnoreCase))
+        {
+            int iters;
+            try { iters = int.Parse(Environment.GetEnvironmentVariable("EMOTRACKER_SMZ3_ITERATIONS") ?? ""); }
+            catch { iters = 40; }
+            using var mockSmz3 = new MockClient(mockUrl);
+            return await Smz3StressTier.RunAsync(mcp, mockSmz3, backend, iters);
+        }
 
         // Full item-type / accessibility / Lua tier uses the synthetic pack.
         if (tier.Equals("items", StringComparison.OrdinalIgnoreCase))

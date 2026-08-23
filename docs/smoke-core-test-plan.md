@@ -292,6 +292,27 @@ This runs in `smoke.sh items` mode whenever Ollama is reachable; it is informati
 - `--tier items` with layout + vision: **70/70 PASS** + vision render confirmation
 - existing backend mode (`sni-fxpakpro`): **22/22 PASS** (no regression)
 
+### SMZ3 autotracking stress + seed replay
+The `EmoTracker.MockRandomizer` additionally simulates the **SMZ3** (Super Metroid +
+LttP combo Randomizer) memory space: an **ExHiROM** cartridge profile with both games'
+live WRAM plus cross-game ExHiROM SRAM (`0xA06000`+ LTTP mirror, `0xA17900`/`0xA17B00`
+SM/LTTP item mirrors, `0xA173FE` which-game byte). Global + per-reset cartridge-profile
+switching is exposed via the control API (`/profile`, `/game`).
+
+Two long-running SMZ3 tiers (real `smalttprando_gilgatex_emotracker3` pack):
+- `--tier smz3` — randomized game-switch/location/item/boss churn with stuck detection.
+- `--tier replay` — plays through an actual **seed spoiler log**, walking its playthrough
+  in sphere order, travelling between worlds, clearing each pickup's location and
+  granting the item (live WRAM + cross-game mirror) with realistic pickup delays.
+  `EMOTRACKER_REPLAY_FAST=1` shortens delays for CI.
+
+```bash
+bash scripts/smoke/smoke.sh smz3 sni-fxpakpro 3 40        # randomized SMZ3 churn
+SMZ3_SPOILER=~/Downloads/...Spoiler.txt \
+SMZ3_PACK_ZIP=.../smalttprando_gilgatex_emotracker3.zip \
+  EMOTRACKER_REPLAY_FAST=1 bash scripts/smoke/smoke.sh replay sni-fxpakpro 1
+```
+
 ### Run
 ```bash
 bash scripts/smoke/smoke.sh items 3          # full item-type / accessibility / Lua tier

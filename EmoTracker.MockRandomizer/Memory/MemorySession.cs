@@ -1,10 +1,21 @@
 namespace EmoTracker.MockRandomizer.Memory;
 
+/// <summary>Which randomizer cartridge profile the virtual console is booting.</summary>
+public enum CartridgeProfile
+{
+    /// <summary>A Link to the Past Randomizer — LoROM, pure WRAM tracking.</summary>
+    AlttpLoRom,
+
+    /// <summary>Super Metroid + LttP combo Randomizer (SMZ3) — ExHiROM, with both
+    /// games' live data in WRAM and cross-game data mirrored into ExHiROM SRAM.</summary>
+    Smz3ExHiRom
+}
+
 /// <summary>
 /// The single mutable backing store shared by all mock backends (SNI gRPC and
 /// NWA TCP). Holds the virtual WRAM, CARTROM, and SRAM images plus a live
-/// "in-game" flag that simulates the room-load state the emosaru pack watches at
-/// <c>0x7E0010</c>.
+/// "in-game" flag that simulates the room-load state the packs watch at
+/// <c>0x7E0010</c> (ALttPR) and the which-game byte at <c>0xA173FE</c> (SMZ3).
 /// </summary>
 public sealed class MemorySession
 {
@@ -14,29 +25,107 @@ public sealed class MemorySession
 
     readonly object mLock = new();
 
+    public CartridgeProfile ActiveProfile { get; private set; } = CartridgeProfile.AlttpLoRom;
+
     public MemorySession()
     {
         Reset();
     }
 
-    /// <summary>Restores the default image (WRAM zeroed, header in place, in-game).</summary>
+    /// <summary>Selects a cartridge profile and reloads its default image.</summary>
+    public void SetProfile(CartridgeProfile profile)
+    {
+        lock (mLock)
+        {
+            ActiveProfile = profile;
+            ResetLocked();
+        }
+    }
+
+    /// <summary>Restores the default image for the active profile.</summary>
     public void Reset()
     {
         lock (mLock)
         {
-            Wram = new byte[SnesBus.WramSize * 2]; // banks 7E-7F
-            CartRom = new byte[SnesBus.CartRomSize];
-            Sram = new byte[SnesBus.SramSize];
+            ResetLocked();
+        }
+    }
 
-            // Place a valid LoROM header at both candidate offsets so both the
-            // NWA SnesAddressMap (0x7FB0/0xFFB0/0x40FFB0) and SNI MappingDetect
-            // (0x00FFB0 bus) resolve LoROM.
-            var header = SnesBus.BuildLoRomHeader();
-            Array.Copy(header, 0, CartRom, 0x7FB0, 0x50);
-            Array.Copy(header, 0, CartRom, 0xFFB0, 0x50);
+    void ResetLocked()
+    {
+        Wram = new byte[SnesBus.WramSize * 2]; // banks 7E-7F
+        CartRom = new byte[SnesBus.CartRomSize];
+        Sram = new byte[ActiveProfile == CartridgeProfile.Smz3ExHiRom
+            ? SnesBus.SramSizeExHiRom
+            : SnesBus.SramSizeLoRom];
 
-            // In-game flag: 0x06+ means the player is in-game (emosaru watches this).
-            WriteBusLocked(0x7E0010, new byte[] { 0x06 });
+        if (ActiveProfile == CartridgeProfile.Smz3ExHiRom)
+            InitSmz3Image();
+        else
+            InitAlttpImage();
+    }
+
+    void InitAlttpImage()
+    {
+        // Place a valid LoROM header at both candidate offsets so both the
+        // NWA SnesAddressMap (0x7FB0/0xFFB0/0x40FFB0) and SNI MappingDetect
+        // (0x00FFB0 bus) resolve LoROM.
+        var header = SnesBus.BuildLoRomHeader();
+        Array.Copy(header, 0, CartRom, 0x7FB0, 0x50);
+        Array.Copy(header, 0, CartRom, 0xFFB0, 0x50);
+
+        // In-game flag: 0x06+ means the player is in-game (emosaru watches this).
+        WriteBusLocked(0x7E0010, new byte[] { 0x06 });
+    }
+
+    void InitSmz3Image()
+    {
+        // ExHiROM ROM header (SMZ3 is ExHiROM). The mock's bus map resolves the
+        // header-detection reads MappingDetect issues: LoROM reads bus $00:FFB0
+        // → CartRom 0x7FB0; HiROM/ExHiROM reads bus $40:FFB0 → CartRom 0x207FB0.
+        // The ExHiROM enum is returned by MappingDetect regardless, but placing
+        // the header at both offsets keeps detection self-consistent.
+        var header = SnesBus.BuildExHiRomHeader();
+        Array.Copy(header, 0, CartRom, 0x7FB0, 0x50);
+        Array.Copy(header, 0, CartRom, 0x207FB0, 0x50);
+
+        // Which-game byte read by updateGame(): 0x00 = LTTP, 0xFF = SM.
+        // Default to LTTP and mark both games "in-game ready".
+        WriteBusLocked(0xA173FE, new byte[] { 0x00 });
+        WriteBusLocked(0x7E0010, new byte[] { 0x06 });   // LTTP in-game module
+        WriteBusLocked(0x7E0998, new byte[] { 0x07 });   // SM in-game module
+        WriteBusLocked(0xA17402, new byte[] { 0x00 });   // SM done (brain)
+        WriteBusLocked(0xA17506, new byte[] { 0x00 });   // LTTP done (ganon)
+    }
+
+    /// <summary>
+    /// In SMZ3 mode, switches the simulated "current game". EmoTracker's
+    /// <c>updateGame()</c> watches <c>0xA173FE</c> (which game) and re-registers
+    /// its memory watches accordingly; the corresponding in-game module flag is
+    /// set so live data is applied. No-op in ALttP mode.
+    /// </summary>
+    public void SwitchSmz3Game(bool sm)
+    {
+        lock (mLock)
+        {
+            if (ActiveProfile != CartridgeProfile.Smz3ExHiRom)
+                return;
+
+            WriteBusLocked(0xA173FE, new byte[] { sm ? (byte)0xFF : (byte)0x00 });
+            if (sm)
+                WriteBusLocked(0x7E0998, new byte[] { 0x07 }); // SM in-game module
+            else
+                WriteBusLocked(0x7E0010, new byte[] { 0x06 }); // LTTP in-game module
+        }
+    }
+
+    /// <summary>Returns whether SMZ3 mode is currently simulating the SM game.</summary>
+    public bool IsSmz3GameSm()
+    {
+        lock (mLock)
+        {
+            if (ActiveProfile != CartridgeProfile.Smz3ExHiRom) return false;
+            return ReadBusLocked(0xA173FE, 1).FirstOrDefault() == 0xFF;
         }
     }
 
@@ -46,11 +135,16 @@ public sealed class MemorySession
     {
         lock (mLock)
         {
-            var region = SnesBus.Map(busAddress);
-            if (region == null) return new byte[length];
-            byte[] bytes = GetRegionBytes(region.Value.Domain);
-            return Slice(bytes, region.Value.Offset, length);
+            return ReadBusLocked(busAddress, length);
         }
+    }
+
+    byte[] ReadBusLocked(ulong busAddress, int length)
+    {
+        var region = SnesBus.Map(busAddress);
+        if (region == null) return new byte[length];
+        byte[] bytes = GetRegionBytes(region.Value.Domain);
+        return Slice(bytes, region.Value.Offset, length);
     }
 
     public void WriteBus(ulong busAddress, byte[] data)

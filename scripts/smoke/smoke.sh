@@ -140,6 +140,174 @@ if [ "$ARGS1" = "items" ]; then
   exit $?
 fi
 
+# ---------------- SMZ3 stress mode ----------------
+# Long-term autotracking stress against the real SMZ3 pack + mock in the
+# SMZ3/ExHiROM profile. Usage: ./smoke.sh smz3 [backend] [retries] [iterations]
+#   backend    = sni-fxpakpro | sni-emulator | nwa   (default: sni-fxpakpro)
+#   iterations = number of game-switch churn loops (default: 40)
+if [ "$ARGS1" = "smz3" ]; then
+  BACKEND="${2:-sni-fxpakpro}"
+  RETRIES="${3:-3}"
+  ITER="${4:-40}"
+  echo "== Mode: smz3 (long-term SMZ3 autotracking stress, backend=$BACKEND, iterations=$ITER) =="
+
+  # Install the real SMZ3 pack into the app's packs dir (from SMZ3_PACK_ZIP or
+  # auto-discovery). Needed so MCP load_pack can load it.
+  SMZ3_SRC="${SMZ3_PACK_ZIP:-}"
+  if [ -z "$SMZ3_SRC" ] || [ ! -s "$SMZ3_SRC" ]; then
+    for cand in \
+      "$HOME/Code/EmoTracker-Service/service/packages/smalttprando_gilgatex_emotracker3.zip" \
+      "$HOME/.local/share/EmoTracker/packs/smalttprando_gilgatex_emotracker3.zip" \
+      "$PACKS_DIR/smalttprando_gilgatex_emotracker3.zip"; do
+      if [ -s "$cand" ]; then SMZ3_SRC="$cand"; break; fi
+    done
+  fi
+  if [ -z "$SMZ3_SRC" ] || [ ! -s "$SMZ3_SRC" ]; then
+    echo "  [FAIL] SMZ3 pack zip not found. Set SMZ3_PACK_ZIP=/path/to/smalttprando_gilgatex_emotracker3.zip"
+    exit 1
+  fi
+  mkdir -p "$PACKS_DIR"
+  cp -f "$SMZ3_SRC" "$PACKS_DIR/smalttprando_gilgatex_emotracker3.zip"
+  echo "  Installed SMZ3 pack: $PACKS_DIR/smalttprando_gilgatex_emotracker3.zip"
+
+  case "$BACKEND" in
+    sni-fxpakpro) MOCK_ARGS="--sni fxpakpro --sni-port $SNI_PORT --profile smz3 --run";;
+    sni-emulator) MOCK_ARGS="--sni emulator --sni-port $SNI_PORT --profile smz3 --run";;
+    nwa)          MOCK_ARGS="--nwa --nwa-port $NWA_PORT --profile smz3 --run";;
+    *) echo "unknown smz3 backend $BACKEND"; exit 2;;
+  esac
+  if [ "$BACKEND" = "nwa" ]; then export NWA_PORT_RANGE="$NWA_PORT-$NWA_PORT"; fi
+
+  for attempt in $(seq 1 "$RETRIES"); do
+    echo "--- attempt $attempt/$RETRIES ---"
+    kill_all
+
+    dotnet "$MOCK/bin/Debug/net10.0/EmoTracker.MockRandomizer.dll" $MOCK_ARGS < /dev/null \
+      > "$LOGDIR/mock_${BACKEND}_smz3.log" 2>&1 &
+    dotnet run --project "$APP/EmoTracker.csproj" --configuration Debug --no-build -- -dev -localservice \
+      > "$LOGDIR/app_${BACKEND}_smz3.log" 2>&1 &
+    APP_PID=$!
+
+    MCP_OK=0
+    for i in $(seq 1 60); do
+      if curl -s -o /dev/null http://localhost:$MCP_PORT/ -m 2 2>/dev/null; then MCP_OK=1; break; fi
+      if ! kill -0 "$APP_PID" 2>/dev/null; then break; fi
+      sleep 1
+    done
+    if [ "$MCP_OK" != "1" ]; then echo "  [SKIP] MCP server did not come up (attempt $attempt)"; kill_all; continue; fi
+
+    EMOTRACKER_SMZ3_ITERATIONS="$ITER" \
+    dotnet run --project "$RUNNER/EmoTracker.Smoke.csproj" --no-build -- \
+      --mcp http://localhost:$MCP_PORT --mock http://localhost:9090 --tier smz3 --backend "$BACKEND" 2>&1 \
+      | tee "$LOGDIR/run_${BACKEND}_smz3.log"
+    RC=${PIPESTATUS[0]}
+
+    sleep 2
+    CRASH=$(crash_scan "$LOGDIR/app_${BACKEND}_smz3.log")
+    if [ "$RC" -eq 0 ] && [ -z "$CRASH" ]; then
+      echo "  [PASS] smz3 stress ($BACKEND, $ITER iters) attempt $attempt"
+      kill_all
+      echo "== ALL GREEN (smz3) =="
+      exit 0
+    else
+      echo "  [FAIL] smz3 stress ($BACKEND) rc=$RC"
+      [ -n "$CRASH" ] && { echo "  crash:"; echo "$CRASH"; }
+      FAIL=$((FAIL+1)); kill_all
+    fi
+  done
+  echo
+  echo "== SUMMARY smz3: $PASS pass / $FAIL fail =="
+  [ "$FAIL" -eq 0 ]
+  exit $?
+fi
+
+# ---------------- Seed replay mode ----------------
+# Plays through a real SMZ3 seed using its spoiler log, driving the mock's memory
+# so the real SMZ3 pack autotracks the whole run with realistic pickup delays.
+# Usage: ./smoke.sh replay <backend> [retries]
+#   backend = sni-fxpakpro | sni-emulator | nwa   (default: sni-fxpakpro)
+# Requires the spoiler log path via SMZ3_SPOILER env (or --spoiler arg to the runner).
+# Set EMOTRACKER_REPLAY_FAST=1 for a shortened smoke-speed run (CI-friendly).
+if [ "$ARGS1" = "replay" ]; then
+  BACKEND="${2:-sni-fxpakpro}"
+  RETRIES="${3:-3}"
+  FAST="${EMOTRACKER_REPLAY_FAST:-0}"
+  SPOILER="${SMZ3_SPOILER:-}"
+  if [ -z "$SPOILER" ] || [ ! -s "$SPOILER" ]; then
+    echo "  [FAIL] no spoiler log. Set SMZ3_SPOILER=/path/to/...Spoiler.txt"
+    exit 1
+  fi
+  echo "== Mode: replay (seed playthrough, backend=$BACKEND, fast=$FAST, spoiler=$SPOILER) =="
+
+  # Install the real SMZ3 pack (same discovery as smz3 mode).
+  SMZ3_SRC="${SMZ3_PACK_ZIP:-}"
+  if [ -z "$SMZ3_SRC" ] || [ ! -s "$SMZ3_SRC" ]; then
+    for cand in \
+      "$HOME/Code/EmoTracker-Service/service/packages/smalttprando_gilgatex_emotracker3.zip" \
+      "$HOME/.local/share/EmoTracker/packs/smalttprando_gilgatex_emotracker3.zip" \
+      "$PACKS_DIR/smalttprando_gilgatex_emotracker3.zip"; do
+      if [ -s "$cand" ]; then SMZ3_SRC="$cand"; break; fi
+    done
+  fi
+  if [ -z "$SMZ3_SRC" ] || [ ! -s "$SMZ3_SRC" ]; then
+    echo "  [FAIL] SMZ3 pack zip not found. Set SMZ3_PACK_ZIP=.../smalttprando_gilgatex_emotracker3.zip"
+    exit 1
+  fi
+  mkdir -p "$PACKS_DIR"
+  cp -f "$SMZ3_SRC" "$PACKS_DIR/smalttprando_gilgatex_emotracker3.zip"
+  echo "  Installed SMZ3 pack: $PACKS_DIR/smalttprando_gilgatex_emotracker3.zip"
+
+  case "$BACKEND" in
+    sni-fxpakpro) MOCK_ARGS="--sni fxpakpro --sni-port $SNI_PORT --profile smz3 --run";;
+    sni-emulator) MOCK_ARGS="--sni emulator --sni-port $SNI_PORT --profile smz3 --run";;
+    nwa)          MOCK_ARGS="--nwa --nwa-port $NWA_PORT --profile smz3 --run";;
+    *) echo "unknown replay backend $BACKEND"; exit 2;;
+  esac
+  if [ "$BACKEND" = "nwa" ]; then export NWA_PORT_RANGE="$NWA_PORT-$NWA_PORT"; fi
+
+  for attempt in $(seq 1 "$RETRIES"); do
+    echo "--- attempt $attempt/$RETRIES ---"
+    kill_all
+
+    dotnet "$MOCK/bin/Debug/net10.0/EmoTracker.MockRandomizer.dll" $MOCK_ARGS < /dev/null \
+      > "$LOGDIR/mock_${BACKEND}_replay.log" 2>&1 &
+    dotnet run --project "$APP/EmoTracker.csproj" --configuration Debug --no-build -- -dev -localservice \
+      > "$LOGDIR/app_${BACKEND}_replay.log" 2>&1 &
+    APP_PID=$!
+
+    MCP_OK=0
+    for i in $(seq 1 60); do
+      if curl -s -o /dev/null http://localhost:$MCP_PORT/ -m 2 2>/dev/null; then MCP_OK=1; break; fi
+      if ! kill -0 "$APP_PID" 2>/dev/null; then break; fi
+      sleep 1
+    done
+    if [ "$MCP_OK" != "1" ]; then echo "  [SKIP] MCP server did not come up (attempt $attempt)"; kill_all; continue; fi
+
+    EMOTRACKER_REPLAY_FAST="$FAST" \
+    dotnet run --project "$RUNNER/EmoTracker.Smoke.csproj" --no-build -- \
+      --mcp http://localhost:$MCP_PORT --mock http://localhost:9090 --tier replay --backend "$BACKEND" --spoiler "$SPOILER" 2>&1 \
+      | tee "$LOGDIR/run_${BACKEND}_replay.log"
+    RC=${PIPESTATUS[0]}
+
+    sleep 2
+    CRASH=$(crash_scan "$LOGDIR/app_${BACKEND}_replay.log")
+    if [ "$RC" -eq 0 ] && [ -z "$CRASH" ]; then
+      echo "  [PASS] seed replay ($BACKEND) attempt $attempt"
+      kill_all
+      echo "== ALL GREEN (replay) =="
+      exit 0
+    else
+      echo "  [FAIL] seed replay ($BACKEND) rc=$RC"
+      [ -n "$CRASH" ] && { echo "  crash:"; echo "$CRASH"; }
+      FAIL=$((FAIL+1)); kill_all
+    fi
+  done
+  echo
+  echo "== SUMMARY replay: $PASS pass / $FAIL fail =="
+  [ "$FAIL" -eq 0 ]
+  exit $?
+fi
+
 # ---------------- backend mode ----------------
 BACKEND="$ARGS1"
 case "$BACKEND" in

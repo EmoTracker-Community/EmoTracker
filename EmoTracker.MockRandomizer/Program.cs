@@ -9,17 +9,22 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-var (sniEnabled, nwaEnabled, sniPort, nwaPort, kindStr, systemBus, runForever) = ParseArgs(args);
+var (sniEnabled, nwaEnabled, sniPort, nwaPort, kindStr, systemBus, runForever, profileStr) = ParseArgs(args);
 
 SniCore.BackendKind kind = kindStr.Equals("emulator", StringComparison.OrdinalIgnoreCase)
     ? SniCore.BackendKind.Emulator
     : SniCore.BackendKind.FxPakPro;
 
-Console.WriteLine("=== EmoTracker MockLttP Randomizer ===");
+var session = new MemorySession();
+var profile = profileStr.Equals("smz3", StringComparison.OrdinalIgnoreCase)
+    ? CartridgeProfile.Smz3ExHiRom
+    : CartridgeProfile.AlttpLoRom;
+session.SetProfile(profile);
+
+Console.WriteLine("=== EmoTracker Mock Randomizer ===");
 Console.WriteLine($"  SNI gRPC : {(sniEnabled ? "on" : "off")}, port {sniPort}, flavor {kind}");
 Console.WriteLine($"  NWA TCP  : {(nwaEnabled ? "on" : "off")}, port {nwaPort}, system-bus {(systemBus ? "on" : "off")}");
-
-var session = new MemorySession();
+Console.WriteLine($"  Profile  : {(profile == CartridgeProfile.Smz3ExHiRom ? "SMZ3 (ExHiROM)" : "ALttPR (LoROM)")}");
 var core = new SniCore(session, kind);
 
 // ---------- SNI gRPC host ----------
@@ -83,11 +88,12 @@ await control.StopAsync();
 nwa?.Stop();
 return 0;
 
-static (bool sni, bool nwa, int sniPort, int nwaPort, string kind, bool systemBus, bool runForever) ParseArgs(string[] args)
+static (bool sni, bool nwa, int sniPort, int nwaPort, string kind, bool systemBus, bool runForever, string profile) ParseArgs(string[] args)
 {
     bool sni = false, nwa = false, systemBus = true, runForever = false;
     int sniPort = 8191, nwaPort = 0xBEEF;
     string kind = "fxpakpro";
+    string profile = "alttp";
 
     for (int i = 0; i < args.Length; i++)
     {
@@ -103,11 +109,12 @@ static (bool sni, bool nwa, int sniPort, int nwaPort, string kind, bool systemBu
             case "--nwa-port": nwaPort = int.Parse(args[++i]); break;
             case "--no-system-bus": systemBus = false; break;
             case "--run": runForever = true; break;
+            case "--profile": profile = args[++i]; break;
         }
     }
 
     // Default: if neither backend requested, start SNI (fxpakpro) so the tool
     // is useful out of the box.
     if (!sni && !nwa) sni = true;
-    return (sni, nwa, sniPort, nwaPort, kind, systemBus, runForever);
+    return (sni, nwa, sniPort, nwaPort, kind, systemBus, runForever, profile);
 }
