@@ -1,0 +1,115 @@
+{
+  "shared_item_grid": {
+    "type": "array",
+    "orientation": "horizontal",
+    "content": [
+      {
+        "type": "itemgrid",
+        "item_margin": "1,2",
+        "rows": [
+          [ "smoke_bow", "smoke_toggle_loop", "smoke_key", "smoke_charge", "smoke_consuming", "smoke_sword", "smoke_crystals" ],
+          [ "smoke_badge", "smoke_composite", "smoke_blue", "smoke_red", "smoke_static", "smoke_lua", "smoke_chests" ]
+        ]
+      }
+    ]
+  },
+
+  "smoke_settings_popup": {
+    "type": "array",
+    "content": [
+      { "type": "text", "text": "Smoke Settings", "font_size": 14 },
+      { "type": "item", "item": "smoke_static" }
+    ]
+  },
+
+  "tracker_all_types": {
+    "type": "container",
+    "content": {
+      "type": "dock",
+      "content": [
+        {
+          "type": "dock",
+          "dock": "left",
+          "content": [
+            {
+              "type": "group",
+              "header": "Panels",
+              "content": {
+                "type": "array",
+                "orientation": "vertical",
+                "content": [
+                  {
+                    "type": "array",
+                    "orientation": "horizontal",
+                    "content": [
+                      { "type": "text", "uid": "smoke_text", "text": "Hello", "font_size": 12 },
+                      { "type": "image", "uid": "smoke_image", "image": "img/icon.png" }
+                    ]
+                  },
+                  {
+                    "type": "tabbed",
+                    "uid": "smoke_tabs",
+                    "tabs": [
+                      { "title": "Tab A", "content": { "type": "text", "text": "Tab A body" } },
+                      { "title": "Tab B", "content": { "type": "item", "item": "smoke_bow" } }
+                    ]
+                  },
+                  {
+                    "type": "group",
+                    "uid": "smoke_group",
+                    "header": "A Group",
+                    "header_content": {
+                      "type": "button_popup",
+                      "image": "img/icon.png",
+                      "layout": "smoke_settings_popup"
+                    },
+                    "content": { "type": "text", "text": "group body" }
+                  },
+                  { "type": "scroll", "uid": "smoke_scroll", "content": { "type": "text", "text": "scrollable" } },
+                  { "type": "viewbox", "uid": "smoke_viewbox", "content": { "type": "text", "text": "scaled" } },
+                  {
+                    "type": "canvas",
+                    "uid": "smoke_canvas",
+                    "content": [
+                      { "type": "text", "text": "canvas node" }
+                    ]
+                  },
+                  { "type": "recentpins", "uid": "smoke_recentpins", "style": "wrap", "orientation": "vertical", "compact": true },
+                  { "type": "last_cleared_location", "uid": "smoke_lastcleared" },
+                  { "type": "button_popup", "uid": "smoke_button", "image": "img/icon.png", "layout": "smoke_settings_popup" },
+                  {
+                    "type": "itemgrid",
+                    "uid": "smoke_itemgrid",
+                    "rows": [ [ "smoke_bow", "smoke_key" ] ]
+                  },
+                  { "type": "item", "uid": "smoke_single_item", "item": "smoke_sword" },
+                  { "type": "layout", "key": "shared_item_grid" }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "type": "dock",
+          "dock": "right",
+          "content": [
+            { "type": "map", "uid": "smoke_map" }
+          ]
+        }
+      ]
+    }
+  },
+
+  "tracker_default": {
+    "type": "layout",
+    "key": "tracker_all_types"
+  },
+  "tracker_horizontal": {
+    "type": "layout",
+    "key": "tracker_all_types"
+  },
+  "tracker_vertical": {
+    "type": "layout",
+    "key": "tracker_all_types"
+  }
+}

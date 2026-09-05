@@ -26,7 +26,7 @@ namespace EmoTracker.Data.Notes
             mOwnerStateOverride = state;
         }
 
-        Sessions.TrackerState OwnerState
+        internal Sessions.TrackerState OwnerState
             => mOwnerStateOverride ?? (Owner?.OwnerState as Sessions.TrackerState);
         ObservableCollection<Note> mNotes = new ObservableCollection<Note>();
 
@@ -51,6 +51,8 @@ namespace EmoTracker.Data.Notes
             {
                 note.PropertyChanged += Note_PropertyChanged;
                 mNotes.Add(note);
+                if (note is MarkdownTextWithItemsNote itemNote)
+                    itemNote.Site = this;
                 return true;
             }
 

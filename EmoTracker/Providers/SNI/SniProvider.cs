@@ -26,7 +26,6 @@ namespace EmoTracker.Providers.SNI
         GrpcChannel mChannel;
         Timer mScanTimer;
         bool mScanning;
-        bool mReconnectEnabled;
         EventHandler<bool> mConnectionStatusChanged;
         EventHandler mAvailableDevicesChanged;
 
@@ -130,20 +129,16 @@ namespace EmoTracker.Providers.SNI
 
         public override async Task ConnectAsync()
         {
-            mReconnectEnabled = true;
-
             if (mDefaultDevice != null)
                 await mDefaultDevice.ConnectAsync().ConfigureAwait(false);
 
-            // Ensure the scan timer is running so reconnect attempts fire every 5 seconds
+            // Ensure the scan timer is running so the device list stays fresh
             if (mScanTimer == null)
                 mScanTimer = new Timer(OnScanTimerElapsed, null, ScanIntervalMs, ScanIntervalMs);
         }
 
         public override async Task DisconnectAsync()
         {
-            mReconnectEnabled = false;
-
             if (mDefaultDevice != null)
                 await mDefaultDevice.DisconnectAsync().ConfigureAwait(false);
         }
@@ -171,10 +166,6 @@ namespace EmoTracker.Providers.SNI
                     DefaultDevice = null;
                     mConnectionStatusChanged?.Invoke(this, false);
                 }
-
-                // Try to reconnect if we have a device but are not currently connected
-                if (mReconnectEnabled && mDefaultDevice != null && !IsConnected)
-                    await mDefaultDevice.ConnectAsync().ConfigureAwait(false);
             }
             finally
             {
@@ -190,7 +181,8 @@ namespace EmoTracker.Providers.SNI
             {
                 var channel = EnsureChannel();
                 var devicesClient = new Devices.DevicesClient(channel);
-                var response = await devicesClient.ListDevicesAsync(new DevicesRequest()).ConfigureAwait(false);
+                var response = await devicesClient.ListDevicesAsync(new DevicesRequest(),
+                    new Grpc.Core.CallOptions(deadline: DateTime.UtcNow.AddSeconds(5))).ConfigureAwait(false);
 
                 Log.Debug("[SNI] Found {Count} device(s)", response.Devices.Count);
 
@@ -230,8 +222,6 @@ namespace EmoTracker.Providers.SNI
         public override void Dispose()
         {
             Log.Debug("[SNI] Disposing provider");
-
-            mReconnectEnabled = false;
 
             if (mScanTimer != null)
             {

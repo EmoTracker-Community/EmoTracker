@@ -22,6 +22,50 @@ namespace EmoTracker.Providers.SNI
         DeviceMemory.DeviceMemoryClient mMemoryClient;
         DeviceControl.DeviceControlClient mControlClient;
 
+        // Bounded timeout for every SNI gRPC call. Without a deadline a
+        // stalled server (e.g. a black-holed socket after an emulator
+        // reset) blocks the sync wrappers forever, which freezes the
+        // autotracker poll loop (issue #98) and, when reached from a Lua
+        // watch callback on the UI dispatcher, hangs the whole app
+        // (issue #105).
+        static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(2);
+
+        static Grpc.Core.CallOptions CreateCallOptions()
+            => new Grpc.Core.CallOptions(deadline: DateTime.UtcNow.Add(ReadTimeout));
+
+        // Serializes connection attempts so concurrent reconnect calls (the
+        // extension's retry and the provider's scan timer) never race.
+        static readonly System.Threading.SemaphoreSlim sConnectLock = new System.Threading.SemaphoreSlim(1, 1);
+
+        // Distinguishes transport/connection-level failures (which mean
+        // the device is no longer reachable) from per-request errors that a
+        // reconnect would not fix (bad address space, mapping mismatch,
+        // invalid argument). Only the former demote the connection.
+        static bool IsConnectionLevelFailure(Exception ex)
+        {
+            if (ex is Grpc.Core.RpcException rpc)
+            {
+                switch (rpc.StatusCode)
+                {
+                    case Grpc.Core.StatusCode.Cancelled:
+                    case Grpc.Core.StatusCode.Unknown:
+                    case Grpc.Core.StatusCode.DeadlineExceeded:
+                    case Grpc.Core.StatusCode.Internal:
+                    case Grpc.Core.StatusCode.Aborted:
+                    case Grpc.Core.StatusCode.ResourceExhausted:
+                    case Grpc.Core.StatusCode.DataLoss:
+                    case Grpc.Core.StatusCode.Unavailable:
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+
+            return ex is System.Net.Http.HttpRequestException
+                || ex is System.IO.IOException
+                || ex is ObjectDisposedException;
+        }
+
         public SniDevice(string uri, string displayName, SniProvider parentProvider)
         {
             mUri = uri;
@@ -58,37 +102,53 @@ namespace EmoTracker.Providers.SNI
             if (mConnected)
                 return;
 
-            Log.Debug("[SNI] Connecting to device {DisplayName} ({Uri})...", mDisplayName, mUri);
+            if (!await sConnectLock.WaitAsync(5000).ConfigureAwait(false))
+            {
+                Log.Warning("[SNI] Timed out waiting to connect to {DisplayName}", mDisplayName);
+                return;
+            }
 
             try
             {
-                GrpcChannel channel = mParentProvider.Channel;
-                if (channel == null)
-                {
-                    Log.Warning("[SNI] Cannot connect — gRPC channel is null");
+                if (mConnected)
                     return;
-                }
 
-                mMemoryClient = new DeviceMemory.DeviceMemoryClient(channel);
-                mControlClient = new DeviceControl.DeviceControlClient(channel);
+                Log.Debug("[SNI] Connecting to device {DisplayName} ({Uri})...", mDisplayName, mUri);
 
-                // Verify device is reachable by attempting a mapping detect
-                var detectResponse = await mMemoryClient.MappingDetectAsync(new DetectMemoryMappingRequest
+                try
                 {
-                    Uri = mUri,
-                    FallbackMemoryMapping = MemoryMapping.Unknown
-                }).ConfigureAwait(false);
+                    GrpcChannel channel = mParentProvider.Channel;
+                    if (channel == null)
+                    {
+                        Log.Warning("[SNI] Cannot connect — gRPC channel is null");
+                        return;
+                    }
 
-                mDetectedMapping = detectResponse.MemoryMapping;
-                Log.Debug("[SNI] Connected to {DisplayName}, detected mapping: {Mapping}", mDisplayName, mDetectedMapping);
-                mConnected = true;
-                ConnectionStatusChanged?.Invoke(this, true);
+                    mMemoryClient = new DeviceMemory.DeviceMemoryClient(channel);
+                    mControlClient = new DeviceControl.DeviceControlClient(channel);
+
+                    // Verify device is reachable by attempting a mapping detect
+                    var detectResponse = await mMemoryClient.MappingDetectAsync(new DetectMemoryMappingRequest
+                    {
+                        Uri = mUri,
+                        FallbackMemoryMapping = MemoryMapping.Unknown
+                    }, CreateCallOptions()).ConfigureAwait(false);
+
+                    mDetectedMapping = detectResponse.MemoryMapping;
+                    Log.Debug("[SNI] Connected to {DisplayName}, detected mapping: {Mapping}", mDisplayName, mDetectedMapping);
+                    mConnected = true;
+                    ConnectionStatusChanged?.Invoke(this, true);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("[SNI] Failed to connect to {DisplayName}: {Message}", mDisplayName, ex.Message);
+                    mConnected = false;
+                    ConnectionStatusChanged?.Invoke(this, false);
+                }
             }
-            catch (Exception ex)
+            finally
             {
-                Log.Warning("[SNI] Failed to connect to {DisplayName}: {Message}", mDisplayName, ex.Message);
-                mConnected = false;
-                ConnectionStatusChanged?.Invoke(this, false);
+                sConnectLock.Release();
             }
         }
 
@@ -142,7 +202,7 @@ namespace EmoTracker.Providers.SNI
                 {
                     Uri = mUri,
                     FallbackMemoryMapping = MemoryMapping.Unknown
-                }).ConfigureAwait(false);
+                }, CreateCallOptions()).ConfigureAwait(false);
 
                 mDetectedMapping = response.MemoryMapping;
                 Log.Debug("[SNI] Re-detected mapping: {Mapping}", mDetectedMapping);
@@ -178,7 +238,7 @@ namespace EmoTracker.Providers.SNI
                             RequestMemoryMapping = memoryMapping,
                             Size = (uint)length
                         }
-                    }).ConfigureAwait(false);
+                    }, CreateCallOptions()).ConfigureAwait(false);
 
                     byte[] data = response.Response.Data.ToByteArray();
                     Log.Debug("[SNI] Read {Length} bytes from 0x{Address:X6} (space={Space}, mapping={Mapping})", length, startAddress, addressSpace, memoryMapping);
@@ -200,7 +260,7 @@ namespace EmoTracker.Providers.SNI
                             RequestMemoryMapping = memoryMapping,
                             Size = (uint)length
                         }
-                    }).ConfigureAwait(false);
+                    }, CreateCallOptions()).ConfigureAwait(false);
 
                     byte[] data = response.Response.Data.ToByteArray();
                     Log.Debug("[SNI] Read {Length} bytes from 0x{Address:X6} after re-detect (mapping={Mapping})", length, startAddress, memoryMapping);
@@ -210,6 +270,19 @@ namespace EmoTracker.Providers.SNI
             catch (Exception ex)
             {
                 Log.Warning("[SNI] Read failed at 0x{Address:X6} ({Length} bytes): {Message}", startAddress, length, ex.Message);
+
+                // A connection-level failure means the device is no longer
+                // reachable. Demote IsConnected so the tracker surfaces a
+                // disconnect (warning state) instead of silently returning
+                // stale data while appearing active, and so the provider's
+                // reconnect timer re-establishes the connection (issue #98).
+                if (IsConnectionLevelFailure(ex) && mConnected)
+                {
+                    Log.Warning("[SNI] Read failure indicates connection loss; marking device disconnected");
+                    mConnected = false;
+                    ConnectionStatusChanged?.Invoke(this, false);
+                }
+
                 return (false, null);
             }
         }
@@ -269,7 +342,7 @@ namespace EmoTracker.Providers.SNI
                             RequestMemoryMapping = memoryMapping,
                             Data = ByteString.CopyFrom(buffer)
                         }
-                    }).ConfigureAwait(false);
+                    }, CreateCallOptions()).ConfigureAwait(false);
                     Log.Debug("[SNI] Wrote {Length} bytes to 0x{Address:X6} (space={Space}, mapping={Mapping})", buffer.Length, startAddress, addressSpace, memoryMapping);
                     return true;
                 }
@@ -289,7 +362,7 @@ namespace EmoTracker.Providers.SNI
                             RequestMemoryMapping = memoryMapping,
                             Data = ByteString.CopyFrom(buffer)
                         }
-                    }).ConfigureAwait(false);
+                    }, CreateCallOptions()).ConfigureAwait(false);
                     Log.Debug("[SNI] Wrote {Length} bytes to 0x{Address:X6} after re-detect (mapping={Mapping})", buffer.Length, startAddress, memoryMapping);
                     return true;
                 }
@@ -297,6 +370,14 @@ namespace EmoTracker.Providers.SNI
             catch (Exception ex)
             {
                 Log.Warning("[SNI] Write failed at 0x{Address:X6} ({Length} bytes): {Message}", startAddress, buffer.Length, ex.Message);
+
+                if (IsConnectionLevelFailure(ex) && mConnected)
+                {
+                    Log.Warning("[SNI] Write failure indicates connection loss; marking device disconnected");
+                    mConnected = false;
+                    ConnectionStatusChanged?.Invoke(this, false);
+                }
+
                 return false;
             }
         }

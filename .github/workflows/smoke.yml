@@ -1,0 +1,97 @@
+name: Smoke Test
+
+on:
+  workflow_dispatch:        # manual trigger
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  smoke:
+    name: MCP smoke test (all backends)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]        # xvfb needed for the Avalonia GUI; add windows/macos later if desired
+        backend: [sni-fxpakpro, sni-emulator, nwa]
+        retries: ['3']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Enable Windows targeting (non-Windows runners)
+        run: |
+          echo "EnableWindowsTargeting=true" >> $GITHUB_ENV
+
+      - name: Install xvfb + audio bits for the Avalonia headless GUI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb pulseaudio libpulse0 alsa-base
+
+      - name: Install the emosaru ALttPR reference pack into the dev packs dir
+        run: |
+          mkdir -p "$HOME/Documents/EmoTracker/dev/packs"
+          # Use the install-ready pack zip (manifest.json at zip root) from the
+          # EmoTracker-Service repo, NOT the git source archive (which nests all
+          # files under <repo>-<ref>/ so EmoTracker can't find manifest.json).
+          curl -fsSL -o "$HOME/Documents/EmoTracker/dev/packs/alttpr_emotracker_emosaru.zip" \
+            https://raw.githubusercontent.com/EmoTracker-Community/EmoTracker-Service/main/service/packages/alttpr_emotracker_emosaru.zip
+        shell: bash
+
+      - name: Build (Debug, includes MCP server)
+        run: dotnet build EmoTracker.sln --configuration Debug -v q
+
+      - name: Run smoke suite (backend ${{ matrix.backend }})
+        run: |
+          xvfb-run -a bash scripts/smoke/smoke.sh ${{ matrix.backend }} ${{ matrix.retries }}
+        shell: bash
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs-${{ matrix.backend }}
+          path: /tmp/emotracker_smoke/
+
+  items:
+    name: MCP smoke test (full item-type / accessibility / Lua tier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Enable Windows targeting (non-Windows runners)
+        run: echo "EnableWindowsTargeting=true" >> $GITHUB_ENV
+
+      - name: Install xvfb for the Avalonia headless GUI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb pulseaudio libpulse0 alsa-base
+
+      - name: Build (Debug, includes MCP server)
+        run: dotnet build EmoTracker.sln --configuration Debug -v q
+
+      - name: Run full item-type / accessibility / Lua tier
+        run: |
+          xvfb-run -a bash scripts/smoke/smoke.sh items 3
+        shell: bash
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs-items
+          path: /tmp/emotracker_smoke/

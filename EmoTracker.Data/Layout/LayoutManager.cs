@@ -33,6 +33,15 @@ namespace EmoTracker.Data.Layout
             return null;
         }
 
+        /// <summary>
+        /// Enumerates every (key → layout) pair registered in this manager
+        /// (used by the smoke harness to verify the pack's layout tree).
+        /// </summary>
+        public IEnumerable<KeyValuePair<string, Layout>> AllLayouts
+        {
+            get { return mKeyToLayout; }
+        }
+
         public LayoutItem FindElement(string uid)
         {
             LayoutItem result = null;

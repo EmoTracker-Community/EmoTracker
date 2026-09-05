@@ -31,6 +31,34 @@ namespace EmoTracker.Extensions.McpServer.Tools
             }
         }
 
+        [McpServerTool(Name = "get_maps")]
+        [Description("List all maps in the loaded pack with their names and map-location counts.")]
+        public static async Task<string> GetMaps()
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var maps = ApplicationModel.Instance?.PrimaryState?.Maps?.Maps;
+                    if (maps == null)
+                        return JsonSerializer.Serialize(Array.Empty<object>());
+                    var result = maps
+                        .Where(m => m != null)
+                        .Select(m => new
+                        {
+                            name = m.Name,
+                            locationCount = m.Locations?.Count() ?? 0
+                        })
+                        .ToArray();
+                    return JsonSerializer.Serialize(result);
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { error = ex.Message });
+                }
+            });
+        }
+
         [McpServerTool(Name = "get_location")]
         [Description("Get full details for a location by name, including sections, children, pinned state, badges, and notes")]
         public static async Task<string> GetLocation([Description("The location name")] string name)

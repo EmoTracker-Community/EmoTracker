@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>EmoTracker.MockRandomizer</RootNamespace>
+    <AssemblyName>EmoTracker.MockRandomizer</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- In-process gRPC host (SNI server) -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.67.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.69.0" PrivateAssets="All" />
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+  </ItemGroup>
+
+  <!-- Compile the shared SNI proto as a SERVER for the mock. -->
+  <ItemGroup>
+    <Protobuf Include="..\EmoTracker\Providers\SNI\Protos\sni.proto" GrpcServices="Server"
+              ProtoRoot="..\EmoTracker\Providers\SNI\Protos" />
+  </ItemGroup>
+
+</Project>

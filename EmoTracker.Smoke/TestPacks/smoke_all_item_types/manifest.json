@@ -1,0 +1,13 @@
+{
+  "name": "Smoke Test: All Item Types",
+  "game_name": "Smoke Test Game",
+  "platform": "snes",
+  "package_version": "1.0.0.0",
+  "package_uid": "smoke_all_item_types",
+  "author": "EmoTracker Smoke Harness",
+  "variants": {
+    "standard": {
+      "display_name": "Standard"
+    }
+  }
+}

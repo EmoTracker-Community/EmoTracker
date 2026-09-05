@@ -48,7 +48,16 @@ namespace EmoTracker.Data
         bool mbEnableNoteTaking = true;
         bool mbEnableVariantSwitcher = false;
         bool mbPromptOnRefreshClose = false;
+        int mAutoTrackerMaxReconnectAttempts = AutoTrackerMaxReconnectAttemptsDefault;
         string mbVoiceInputDeviceName;
+
+        /// <summary>
+        /// Default maximum number of transparent auto-reconnect attempts the
+        /// autotracker performs after a connection loss before giving up and
+        /// settling into a normal disconnected state. A value of 0 disables
+        /// auto-reconnect entirely.
+        /// </summary>
+        public const int AutoTrackerMaxReconnectAttemptsDefault = 10;
 
         // Phase 7.3: these seven settings moved to per-state SessionSettings.
         // The fields here serve as a "seed" that's:
@@ -314,6 +323,18 @@ namespace EmoTracker.Data
             set { SetProperty(ref mbPromptOnRefreshClose, value); }
         }
 
+        /// <summary>
+        /// Maximum number of transparent auto-reconnect attempts performed
+        /// by the autotracker after a connection loss. 0 disables
+        /// auto-reconnect (a dropped connection goes straight to the normal
+        /// disconnected state).
+        /// </summary>
+        public int AutoTrackerMaxReconnectAttempts
+        {
+            get { return mAutoTrackerMaxReconnectAttempts; }
+            set { SetProperty(ref mAutoTrackerMaxReconnectAttempts, Math.Max(value, 0)); }
+        }
+
         public bool EnableDiscordRichPresence
         {
             get { return mbEnableDiscordRichPresence; }
@@ -445,6 +466,7 @@ namespace EmoTracker.Data
                         EnableVariantSwitcher = root.GetValue<bool>("enable_variant_switcher", false);
                         VoiceInputDeviceName = root.GetValue<string>("voice_input_device_name");
                         PromptOnRefreshClose = root.GetValue<bool>("prompt_on_refresh_close", false);
+                        AutoTrackerMaxReconnectAttempts = root.GetValue<int>("auto_tracking_max_reconnect_attempts", AutoTrackerMaxReconnectAttemptsDefault);
                         LastActivePackage = root.GetValue<string>("last_active_package");
                         LastActivePackageVariant = root.GetValue<string>("last_active_package_variant");
                         TwitchChannelName = root.GetValue<string>("twitch_channel");
@@ -559,6 +581,7 @@ namespace EmoTracker.Data
                         if (!string.IsNullOrWhiteSpace(VoiceInputDeviceName))
                             root.Add("voice_input_device_name", JToken.FromObject(VoiceInputDeviceName));
                         root.Add("prompt_on_refresh_close", JToken.FromObject(PromptOnRefreshClose));
+                        root.Add("auto_tracking_max_reconnect_attempts", JToken.FromObject(AutoTrackerMaxReconnectAttempts));
 
                         if (!string.IsNullOrWhiteSpace(ServiceBaseURL))
                             root.Add("service_base_url", JToken.FromObject(ServiceBaseURL));

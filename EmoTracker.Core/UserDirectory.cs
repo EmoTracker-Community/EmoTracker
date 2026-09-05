@@ -23,6 +23,15 @@ namespace EmoTracker.Core
             get { return Instance.mbDev; }
         }
 
+        public static string LogPath
+        {
+            get
+            {
+                string localPath = IsDevMode ? System.IO.Path.Combine("EmoTracker", "dev") : "EmoTracker";
+                return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), localPath, "logs");
+            }
+        }
+
         private bool CreateFolder(string path)
         {
             try

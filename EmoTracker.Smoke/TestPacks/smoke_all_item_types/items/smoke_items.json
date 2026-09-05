@@ -1,0 +1,128 @@
+[
+  // ---- base toggles referenced by composite / badged ----
+  {
+    "name": "Smoke Blue Boomerang",
+    "type": "toggle",
+    "img": "img/icon.png",
+    "codes": "smoke_blue"
+  },
+  {
+    "name": "Smoke Red Boomerang",
+    "type": "toggle",
+    "img": "img/icon.png",
+    "codes": "smoke_red"
+  },
+  {
+    "name": "Smoke Base",
+    "type": "toggle",
+    "img": "img/icon.png",
+    "codes": "smoke_base"
+  },
+
+  // ---- toggle ----
+  {
+    "name": "Smoke Bow",
+    "type": "toggle",
+    "img": "img/icon.png",
+    "codes": "smoke_bow"
+  },
+
+  // ---- toggle with loop ----
+  {
+    "name": "Smoke Loop Toggle",
+    "type": "toggle",
+    "img": "img/icon.png",
+    "codes": "smoke_toggle_loop",
+    "loop": true
+  },
+
+  // ---- consumables ----
+  {
+    "name": "Smoke Key",
+    "type": "consumable",
+    "img": "img/icon.png",
+    "codes": "smoke_key",
+    "max_quantity": 2
+  },
+  {
+    "name": "Smoke Charge",
+    "type": "consumable",
+    "img": "img/icon.png",
+    "codes": "smoke_charge",
+    "max_quantity": 5
+  },
+
+  // ---- consuming toggle (links to Smoke Charge) ----
+  {
+    "name": "Smoke Consuming Toggle",
+    "type": "toggle",
+    "img": "img/icon.png",
+    "codes": "smoke_consuming",
+    "consume": "smoke_charge"
+  },
+
+  // ---- progressive ----
+  {
+    "name": "Smoke Sword",
+    "type": "progressive",
+    "img": "img/icon.png",
+    "stages": [
+      { "img": "img/icon.png", "codes": "smoke_sword" },
+      { "img": "img/icon.png", "codes": "smoke_sword,smoke_big_sword" }
+    ]
+  },
+
+  // ---- progressive_toggle ----
+  {
+    "name": "Smoke Crystals",
+    "type": "progressive_toggle",
+    "img": "img/icon.png",
+    "stages": [
+      { "img": "img/icon.png", "codes": "smoke_crystals,smoke_crystal_1" },
+      { "img": "img/icon.png", "codes": "smoke_crystals,smoke_crystal_2", "secondary_codes": "smoke_crystal_2b" }
+    ]
+  },
+
+  // ---- toggle_badged (references Smoke Base) ----
+  {
+    "name": "Smoke Badge",
+    "type": "toggle_badged",
+    "img": "img/icon.png",
+    "base_item": "smoke_base",
+    "codes": "smoke_badge"
+  },
+
+  // ---- composite_toggle (references Smoke Blue/Red Boomerang) ----
+  {
+    "name": "Smoke Composite",
+    "type": "composite_toggle",
+    "codes": "smoke_composite",
+    "item_left": "smoke_blue",
+    "item_right": "smoke_red",
+    "images": [
+      { "left": false, "right": false, "img": "img/icon.png", "img_mods": "@disabled" },
+      { "left": true,  "right": false, "img": "img/icon.png" },
+      { "left": false, "right": true,  "img": "img/icon.png" },
+      { "left": true,  "right": true,  "img": "img/icon.png" }
+    ]
+  },
+
+  // ---- static ----
+  {
+    "name": "Smoke Static",
+    "type": "static",
+    "img": "img/icon.png",
+    "codes": "smoke_static"
+  },
+
+  // ---- blank ----
+  {
+    "name": "Smoke Blank",
+    "type": "blank",
+    "img": "img/icon.png"
+  }
+
+  // NOTE: the sectionchests item and the lua item are registered separately
+  // (in init.lua / items_lua) because sectionchests needs a location section to
+  // exist before parse, and lua items cannot be declared via JSON type tags.
+]

@@ -1,0 +1,10 @@
+[
+  // Registered AFTER locations load so the proxied Section resolves.
+  {
+    "name": "Smoke Chests",
+    "type": "sectionchests",
+    "img": "img/icon.png",
+    "codes": "smoke_chests",
+    "section": "@Smoke Dungeon/Chest Room"
+  }
+]

@@ -643,6 +643,8 @@ namespace EmoTracker.Data
             if (!string.IsNullOrWhiteSpace(color))
                 instance.Color = color;
 
+            instance.ItemCaptureLayout = data.GetValue<string>("capture_item_layout");
+
             JArray rules = data.GetValue<JArray>("access_rules");
             if (rules != null)
             {

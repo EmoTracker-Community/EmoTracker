@@ -22,16 +22,18 @@ namespace EmoTracker.Extensions.McpServer.Tools
     public class ApplicationControlTools
     {
         [McpServerTool(Name = "list_packs")]
-        [Description("List all available game packs that can be loaded")]
+        [Description("List all game packs that can be loaded (installed packs + repository packs)")]
         public static async Task<string> ListPacks()
         {
             return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var packages = PackageManager.Instance.AvailablePackages;
                 var result = new List<object>();
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                foreach (var entry in packages)
+                // Repository-listed packs.
+                foreach (var entry in PackageManager.Instance.AvailablePackages)
                 {
+                    if (entry.UID != null) seen.Add(entry.UID);
                     result.Add(new
                     {
                         name = entry.Name,
@@ -40,6 +42,23 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         author = entry.Author,
                         version = entry.Version?.ToString(),
                         installed = entry.ExistingPackage != null
+                    });
+                }
+
+                // Locally-installed packs not present in any repository (e.g.
+                // smoke-test packs) — ensure they're listed and loadable.
+                foreach (var pack in PackageManager.Instance.InstalledPackages)
+                {
+                    if (pack.UniqueID != null && !seen.Add(pack.UniqueID)) continue;
+                    result.Add(new
+                    {
+                        name = pack.DisplayName,
+                        uniqueId = pack.UniqueID,
+                        game = pack.Game,
+                        author = pack.Author,
+                        version = pack.Version?.ToString(),
+                        installed = true,
+                        local = true
                     });
                 }
 
@@ -70,30 +89,63 @@ namespace EmoTracker.Extensions.McpServer.Tools
                         }
                     }
 
-                    if (found?.ExistingPackage == null)
-                        return JsonSerializer.Serialize(new { success = false, error = "Pack not found or not installed" });
-
-                    var pack = found.ExistingPackage;
-
-                    if (!string.IsNullOrEmpty(variant))
+                    if (found?.ExistingPackage != null)
                     {
-                        var v = pack.FindVariant(variant);
-                        if (v != null)
+                        var pack = found.ExistingPackage;
+                        return JsonSerializer.Serialize(new
                         {
-                            ApplicationModel.Instance.ActivatePackage(pack, v);
-                            return JsonSerializer.Serialize(new { success = true, variant = v.DisplayName });
-                        }
-                        return JsonSerializer.Serialize(new { success = false, error = "Variant not found" });
+                            success = true,
+                            uniqueId = pack.UniqueID,
+                            variant = ActivateVariant(pack, variant)
+                        });
                     }
 
-                    ApplicationModel.Instance.ActivatePackage(pack, null);
-                    return JsonSerializer.Serialize(new { success = true });
+                    // Fall back to a locally-installed pack (not in any repo).
+                    foreach (var pack in PackageManager.Instance.InstalledPackages)
+                    {
+                        if (pack.UniqueID?.Equals(uniqueId, StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            ApplicationModel.Instance.ActivatePackage(pack, SelectVariant(pack, variant));
+                            return JsonSerializer.Serialize(new
+                            {
+                                success = true,
+                                uniqueId = pack.UniqueID,
+                                variant = variant,
+                                local = true
+                            });
+                        }
+                    }
+
+                    return JsonSerializer.Serialize(new { success = false, error = "Pack not found or not installed" });
                 }
                 catch (Exception ex)
                 {
                     return JsonSerializer.Serialize(new { success = false, error = ex.Message });
                 }
             });
+        }
+
+        static EmoTracker.Data.IGamePackageVariant SelectVariant(IGamePackage pack, string variant)
+        {
+            if (string.IsNullOrEmpty(variant)) return null;
+            foreach (var v in pack.AvailableVariants)
+                if (v.UniqueID?.Equals(variant, StringComparison.OrdinalIgnoreCase) == true)
+                    return v;
+            return null;
+        }
+
+        // Returns the selected variant's UniqueID (serialization-safe string),
+        // having activated it on the package.
+        static string ActivateVariant(IGamePackage pack, string variant)
+        {
+            if (string.IsNullOrEmpty(variant))
+            {
+                ApplicationModel.Instance.ActivatePackage(pack, null);
+                return null;
+            }
+            var v = SelectVariant(pack, variant);
+            ApplicationModel.Instance.ActivatePackage(pack, v);
+            return v?.UniqueID;
         }
 
         [McpServerTool(Name = "toggle_item")]

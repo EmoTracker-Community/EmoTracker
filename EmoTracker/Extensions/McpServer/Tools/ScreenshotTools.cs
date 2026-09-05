@@ -70,6 +70,45 @@ namespace EmoTracker.Extensions.McpServer.Tools
             });
         }
 
+        [McpServerTool(Name = "save_main_window_screenshot")]
+        [Description("Capture the main tracker window as a PNG and write it to disk at the given path. Returns the file path and byte size.")]
+        public static async Task<string> SaveMainWindowScreenshot(
+            [Description("Absolute path to write the PNG to")] string path)
+        {
+            return await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                try
+                {
+                    var window = GetMainWindow();
+                    if (window == null)
+                        return JsonSerializer.Serialize(new { success = false, error = "Main window not found" });
+
+                    var json = CaptureWindow(window);
+                    using var doc = JsonDocument.Parse(json);
+                    if (!doc.RootElement.TryGetProperty("image", out var img))
+                        return JsonSerializer.Serialize(new { success = false, error = "Capture failed" });
+
+                    var dir = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                    var bytes = Convert.FromBase64String(img.GetString());
+                    File.WriteAllBytes(path, bytes);
+
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = true,
+                        path,
+                        bytes = bytes.Length,
+                        width = doc.RootElement.TryGetProperty("width", out var w) ? w.GetInt32() : 0,
+                        height = doc.RootElement.TryGetProperty("height", out var h) ? h.GetInt32() : 0
+                    });
+                }
+                catch (Exception ex)
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = ex.Message });
+                }
+            });
+        }
+
         private static Window GetMainWindow()
         {
             var lifetime = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
