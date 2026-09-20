@@ -29,16 +29,23 @@
     and keeps a file lock on it for the entire VS Code session. This prevents
     regular builds from copying an updated DLL to the same location.
 
-    Fix: when building via VS Code tasks (which pass /p:EmoTrackerRegularBuild=1),
-    redirect the output to a separate "-build" directory so regular builds and the
-    language server write to different paths and never contend on the same file.
+    Fix: VS Code build tasks pass /p:EmoTrackerRegularBuild=1, which redirects
+    the output to a separate "bin\<Config>-build\" directory. The lock stays on
+    the server's "bin\<Config>\" copy; regular builds write to "-build\" freely.
 
     The consuming project (EmoTracker.Data) resolves the analyzer path via
-    $(TargetPath) which follows $(OutputPath), so both the generator and its
-    consumer use the correct path within the same build invocation.
+    $(TargetPath) which follows $(OutputPath) + AppendTargetFrameworkToOutputPath,
+    so both the generator and its consumer use the correct path within the same
+    build invocation. /nodeReuse:false in the tasks ensures no stale MSBuild node
+    cache from the server can override this property.
   -->
   <PropertyGroup Condition="'$(EmoTrackerRegularBuild)' == '1'">
-    <OutputPath>bin\$(Configuration)-build\$(TargetFramework)\</OutputPath>
+    <!--
+      Do NOT include $(TargetFramework) here — AppendTargetFrameworkToOutputPath=true
+      (default) will append netstandard2.0 automatically. Including it manually
+      would produce a doubled path like "netstandard2.0\netstandard2.0\".
+    -->
+    <OutputPath>bin\$(Configuration)-build\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>

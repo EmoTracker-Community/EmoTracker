@@ -201,7 +201,18 @@ namespace EmoTracker.Extensions.McpServer
                         UpdateClientConnectedFlag();
                     }
 
-                    await next(ctx);
+                    try
+                    {
+                        await next(ctx);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Client disconnected mid-request; this is normal for
+                        // long-running SSE streams and streaming POST responses.
+                        // Suppress so it doesn't surface as an unhandled exception.
+                        if (!ctx.Response.HasStarted)
+                            ctx.Response.StatusCode = 499; // Client Closed Request
+                    }
                 });
 
                 mApp.MapMcp();
