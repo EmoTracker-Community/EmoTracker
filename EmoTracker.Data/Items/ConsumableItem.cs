@@ -274,11 +274,10 @@ namespace EmoTracker.Data.Items
             if (acquired < 0 || consumed < 0)
                 return false;
 
-            AcquiredCount = acquired;
-            ConsumedCount = consumed;
-
             MaxCount = data.GetValue<int>("max_count", MaxCount);
             MinCount = data.GetValue<int>("min_count", MinCount);
+            AcquiredCount = acquired;
+            ConsumedCount = consumed;
 
             return true;
         }
