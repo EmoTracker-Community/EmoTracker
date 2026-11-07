@@ -277,9 +277,12 @@
                                             </ItemsPanelTemplate>
                                         </ItemsPresenter.ItemsPanel>
                                     </ItemsPresenter>
-                                    <ContentPresenter Name="PART_SelectedContentHost" Grid.Row="1"
-                                                      Content="{TemplateBinding SelectedContent}"
-                                                      ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+                                    <!-- All tabs stay realized; TabContentHost toggles IsVisible
+                                         instead of swapping SelectedContent, so switching back to
+                                         a tab does not rebuild its control tree. -->
+                                    <local:TabContentHost Grid.Row="1"
+                                                          Tabs="{Binding Tabs}"
+                                                          CurrentTab="{Binding CurrentTab}" />
                                 </Grid>
                             </ControlTemplate>
                         </TabControl.Template>
@@ -330,13 +333,6 @@
                                 </StackPanel>
                             </DataTemplate>
                         </TabControl.ItemTemplate>
-                        <TabControl.ContentTemplate>
-                            <DataTemplate>
-                                <ContentControl Content="{Binding Content}"
-                                                HorizontalContentAlignment="Stretch"
-                                                VerticalContentAlignment="Stretch" />
-                            </DataTemplate>
-                        </TabControl.ContentTemplate>
                     </TabControl>
                 </Grid>
             </LayoutTransformControl>
