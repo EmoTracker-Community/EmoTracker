@@ -3,6 +3,7 @@
              xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:EmoTracker.UI"
+             xmlns:controls="clr-namespace:EmoTracker.UI.Controls;assembly=EmoTracker.UI"
              xmlns:converters="clr-namespace:EmoTracker.UI.Converters;assembly=EmoTracker.UI"
              xmlns:data="clr-namespace:EmoTracker.Data"
              Background="Transparent"
@@ -34,7 +35,7 @@
                 </Button.Template>
                 <Button.ContentTemplate>
                     <DataTemplate>
-                        <Image Source="{Binding PotentialIcon.ResolvedImage, FallbackValue={x:Null}}"
+                        <Image controls:HeldImage.Reference="{Binding PotentialIcon}"
                                Width="32" Height="32"/>
                     </DataTemplate>
                 </Button.ContentTemplate>
@@ -46,7 +47,7 @@
             <ToggleButton.Template>
                 <ControlTemplate TargetType="ToggleButton">
                     <Grid Width="32" Height="32">
-                        <Image Source="{Binding CapturedItem.PotentialIcon.ResolvedImage, FallbackValue={x:Null}}"
+                        <Image controls:HeldImage.Reference="{Binding CapturedItem.PotentialIcon}"
                                Width="32" Height="32"/>
                         <Grid Name="UnknownControl"
                               IsVisible="{Binding CapturedItem, Converter={x:Static converters:NullToTrueConverter.Instance}}">

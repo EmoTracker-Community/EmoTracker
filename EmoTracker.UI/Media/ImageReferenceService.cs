@@ -153,6 +153,27 @@ namespace EmoTracker.UI.Media
             return GetPlaceholder(imageRef.SourceWidth, imageRef.SourceHeight);
         }
 
+        /// <summary>
+        /// True when <paramref name="image"/> is one of the transparent
+        /// stand-ins <see cref="GetPlaceholder(int, int)"/> hands out.
+        /// A decoded icon is never the same instance.
+        /// </summary>
+        public static bool IsPlaceholder(object image)
+        {
+            if (image == null)
+                return false;
+
+            lock (sPlaceholderLock)
+            {
+                foreach (var entry in sPlaceholderCache.Values)
+                {
+                    if (ReferenceEquals(entry, image))
+                        return true;
+                }
+            }
+            return false;
+        }
+
         // ── Worker Queues ────────────────────────────────────────────────
         // Visible images use one worker per logical CPU. Everything else
         // uses a single lowest-priority worker that waits until the
