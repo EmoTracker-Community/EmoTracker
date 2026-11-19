@@ -1,6 +1,7 @@
 using EmoTracker.Core;
 using EmoTracker.Core.DataModel;
 using EmoTracker.Data.Core.Transactions;
+using EmoTracker.Data.Items;
 using EmoTracker.Data.Media;
 using System;
 using System.Collections.Generic;
@@ -233,6 +234,9 @@ namespace EmoTracker.Data.Locations
                         Guid commitedId = GetTransactableProperty<Guid>(nameof(CapturedItemIdStored));
                         if (mCapturedItemRef.DefinitionId != commitedId)
                             mCapturedItemRef.Set(commitedId);
+                        // Before the binding updates, so the picture the slot
+                        // is about to show is already ahead of prefetch.
+                        ItemBase.NotifyDisplayed(value);
                         NotifyPropertyChanged(nameof(CapturedItem));
                         // Phase 6 step 11: prefer the owning state's
                         // LocationDatabase; fall back to singleton when

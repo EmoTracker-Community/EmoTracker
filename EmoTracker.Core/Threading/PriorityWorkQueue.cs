@@ -103,6 +103,12 @@ namespace EmoTracker.Core.Threading
         }
 
         /// <summary>
+        /// When non-null, a worker will not start a queued item while
+        /// this returns false. The worker rechecks about every 25 ms.
+        /// </summary>
+        public Func<bool> CanStartWork { get; set; }
+
+        /// <summary>
         /// Number of items currently in the queue (NOT counting work
         /// that's already running on a worker thread).
         /// </summary>
@@ -111,8 +117,38 @@ namespace EmoTracker.Core.Threading
             get { lock (mLock) { return mQueue.Count; } }
         }
 
+        /// <summary>
+        /// True when nothing is queued and no worker is inside a delegate.
+        /// </summary>
+        public bool IsQuiet
+        {
+            get
+            {
+                lock (mLock)
+                    return mQueue.Count == 0 && Volatile.Read(ref mActiveWorkerCount) == 0;
+            }
+        }
+
         /// <summary>True iff <see cref="Start"/> has been called and Stop hasn't.</summary>
         public bool IsRunning => mWorkers != null;
+
+        /// <summary>
+        /// True when a queued item has a better priority than
+        /// <paramref name="priority"/>. Lower numeric value is better.
+        /// Items already running are not counted.
+        /// </summary>
+        public bool HasQueuedPriorityBetterThan(int priority)
+        {
+            lock (mLock)
+            {
+                foreach (var existing in mIndex.Values)
+                {
+                    if (existing.Priority < priority)
+                        return true;
+                }
+                return false;
+            }
+        }
 
         /// <summary>
         /// Start the worker threads. Idempotent — repeated calls are
@@ -257,14 +293,22 @@ namespace EmoTracker.Core.Threading
         {
             while (!mShutdown)
             {
+                // Wait() returns immediately while the signal is already
+                // set, so a closed gate has to sleep instead of spinning.
+                if (CanStartWork != null && !CanStartWork())
+                {
+                    Thread.Sleep(25);
+                    continue;
+                }
+
                 mSignal.Wait();
                 if (mShutdown) break;
 
-                while (TryDequeue(out var entry))
+                while (!mShutdown && (CanStartWork == null || CanStartWork()))
                 {
-                    if (mShutdown) break;
+                    if (!TryDequeue(out var entry))
+                        break;
 
-                    Interlocked.Increment(ref mActiveWorkerCount);
                     try
                     {
                         entry.Work();
@@ -311,6 +355,7 @@ namespace EmoTracker.Core.Threading
                     mQueue.Remove(key);
                     mIndex.Remove(entry.Key);
                 }
+                Interlocked.Increment(ref mActiveWorkerCount);
                 return true;
             }
         }

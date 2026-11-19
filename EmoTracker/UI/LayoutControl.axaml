@@ -277,9 +277,11 @@
                                             </ItemsPanelTemplate>
                                         </ItemsPresenter.ItemsPanel>
                                     </ItemsPresenter>
-                                    <ContentPresenter Name="PART_SelectedContentHost" Grid.Row="1"
-                                                      Content="{TemplateBinding SelectedContent}"
-                                                      ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+                                    <!-- Every tab stays realized. Switching shows a tree that was
+                                         already built instead of reconstructing it. -->
+                                    <local:TabContentHost Grid.Row="1"
+                                                          Tabs="{Binding Tabs}"
+                                                          CurrentTab="{Binding CurrentTab}" />
                                 </Grid>
                             </ControlTemplate>
                         </TabControl.Template>
@@ -330,13 +332,6 @@
                                 </StackPanel>
                             </DataTemplate>
                         </TabControl.ItemTemplate>
-                        <TabControl.ContentTemplate>
-                            <DataTemplate>
-                                <ContentControl Content="{Binding Content}"
-                                                HorizontalContentAlignment="Stretch"
-                                                VerticalContentAlignment="Stretch" />
-                            </DataTemplate>
-                        </TabControl.ContentTemplate>
                     </TabControl>
                 </Grid>
             </LayoutTransformControl>
@@ -649,7 +644,10 @@
                             <DropShadowDirectionEffect Opacity="0.8" BlurRadius="20" ShadowDepth="3" />
                         </Border.Effect>
                         <Grid Margin="0">
-                            <ContentControl Content="{Binding Layout.Root}" />
+                            <!-- Built when the popup opens, and dropped when it closes. -->
+                            <local:PreparedLayoutHost Layout="{Binding Layout}"
+                                                      HorizontalContentAlignment="Stretch"
+                                                      VerticalContentAlignment="Stretch" />
                         </Grid>
                     </Border>
                 </Popup>
@@ -659,10 +657,8 @@
     </UserControl.DataTemplates>
 
     <Grid>
-        <Grid DataContext="{Binding Root}">
-            <ContentControl Content="{Binding}"
-                            HorizontalContentAlignment="Stretch"
-                            VerticalContentAlignment="Stretch" />
-        </Grid>
+        <ContentControl x:Name="RootHost"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
     </Grid>
 </UserControl>

@@ -47,7 +47,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Image Source="{Binding ResolvedImage}"
+                            <Image controls:HeldImage.Reference="{Binding}"
                                    Margin="2" Width="32"
                                    RenderOptions.BitmapInterpolationMode="None" />
                         </DataTemplate>
@@ -153,7 +153,7 @@
                                                             </Viewbox.RenderTransform>
                                                             <controls:InputMaskingImage
                                                                 IsHitTestVisible="{Binding DataContext.EnableBadgeHitTest, ElementName=MinifiedLocation}"
-                                                                Source="{Binding Image.ResolvedImage}" />
+                                                                controls:HeldImage.Reference="{Binding Image}" />
                                                         </Viewbox>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>

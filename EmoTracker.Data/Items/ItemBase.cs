@@ -4,6 +4,7 @@ using EmoTracker.Data.Core.DataModel;
 using EmoTracker.Data.JSON;
 using EmoTracker.Data.Media;
 using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -127,7 +128,43 @@ namespace EmoTracker.Data.Items
             {
                 MutableData.SetValue(nameof(PotentialIcon), value);
                 NotifyPropertyChanged();
+
+                // The grid shows Icon. Capture slots and the capture list
+                // show PotentialIcon. A stage change writes both, and a Lua
+                // script can write either one. Pack load writes them too,
+                // and the listener ignores the event until the layout is up.
+                var shown = value ?? Icon;
+                if (shown != null)
+                    DisplayedIconChanged?.Invoke(shown);
             }
+        }
+
+        /// <summary>
+        /// Raised when an image the user is looking at changes: <see cref="Icon"/>,
+        /// <see cref="PotentialIcon"/>, a captured item, or an item added to a
+        /// note. Pack load raises it too, so listeners that decode should ignore
+        /// the event until the visible layout has been shown.
+        /// </summary>
+        public static event Action<ImageReference> DisplayedIconChanged;
+
+        /// <summary>
+        /// Raises <see cref="DisplayedIconChanged"/> for the pictures
+        /// <paramref name="item"/> is about to show. <see cref="ITrackableItem.PotentialIcon"/>
+        /// falls back to <see cref="ITrackableItem.Icon"/>, so a second event
+        /// is raised only when those are different images.
+        /// </summary>
+        public static void NotifyDisplayed(ITrackableItem item)
+        {
+            if (item == null)
+                return;
+
+            var shown = item.PotentialIcon;
+            if (shown != null)
+                DisplayedIconChanged?.Invoke(shown);
+
+            var icon = item.Icon;
+            if (icon != null && !ReferenceEquals(icon, shown))
+                DisplayedIconChanged?.Invoke(icon);
         }
 
         /// <summary>
@@ -141,6 +178,10 @@ namespace EmoTracker.Data.Items
             // Phase 6 step 11: prefer the owning state's LocationDatabase.
             var locDb = (this.OwnerState as Sessions.TrackerState)?.Locations;
             locDb?.RefreshAccessibility();
+
+            var icon = Icon;
+            if (icon != null)
+                DisplayedIconChanged?.Invoke(icon);
         }
 
         // ---------------------------------------------------------- Fork

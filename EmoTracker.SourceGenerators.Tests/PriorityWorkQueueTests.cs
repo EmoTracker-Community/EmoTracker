@@ -218,5 +218,42 @@ namespace EmoTracker.SourceGenerators.Tests
             // assert lifecycle, not scheduling.
             Assert.False(q.IsRunning);
         }
+
+        // -------- Gate ---------------------------------------------------
+
+        [Fact]
+        public void CanStartWorkHoldsQueuedItems()
+        {
+            using var q = new PriorityWorkQueue<int>("test-gate", workerCount: 1);
+            bool allow = false;
+            q.CanStartWork = () => allow;
+            int ran = 0;
+            q.Enqueue(1, 0, () => Interlocked.Increment(ref ran));
+            q.Start();
+
+            Thread.Sleep(80);
+            Assert.Equal(0, ran);
+
+            allow = true;
+            var deadline = DateTime.UtcNow.AddSeconds(2);
+            while (ran == 0 && DateTime.UtcNow < deadline)
+                Thread.Sleep(20);
+
+            Assert.Equal(1, ran);
+        }
+
+        [Fact]
+        public void HasQueuedPriorityBetterThanReportsHigherItemsOnly()
+        {
+            using var q = new PriorityWorkQueue<int>("test-priority-query", workerCount: 1);
+            Assert.False(q.HasQueuedPriorityBetterThan(1000));
+
+            q.Enqueue(1, 1000, () => { });
+            Assert.False(q.HasQueuedPriorityBetterThan(1000));
+
+            q.Enqueue(2, 100, () => { });
+            Assert.True(q.HasQueuedPriorityBetterThan(1000));
+            Assert.False(q.HasQueuedPriorityBetterThan(100));
+        }
     }
 }
