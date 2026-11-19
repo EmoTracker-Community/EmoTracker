@@ -241,5 +241,19 @@ namespace EmoTracker.SourceGenerators.Tests
 
             Assert.Equal(1, ran);
         }
+
+        [Fact]
+        public void HasQueuedPriorityBetterThanReportsHigherItemsOnly()
+        {
+            using var q = new PriorityWorkQueue<int>("test-priority-query", workerCount: 1);
+            Assert.False(q.HasQueuedPriorityBetterThan(1000));
+
+            q.Enqueue(1, 1000, () => { });
+            Assert.False(q.HasQueuedPriorityBetterThan(1000));
+
+            q.Enqueue(2, 100, () => { });
+            Assert.True(q.HasQueuedPriorityBetterThan(1000));
+            Assert.False(q.HasQueuedPriorityBetterThan(100));
+        }
     }
 }

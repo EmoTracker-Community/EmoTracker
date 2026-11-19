@@ -105,8 +105,6 @@ namespace EmoTracker.Core.Threading
         /// <summary>
         /// When non-null, a worker will not start a queued item while
         /// this returns false. The worker rechecks about every 25 ms.
-        /// Used to hold a low-priority queue until a higher-priority
-        /// queue is quiet.
         /// </summary>
         public Func<bool> CanStartWork { get; set; }
 
@@ -133,6 +131,24 @@ namespace EmoTracker.Core.Threading
 
         /// <summary>True iff <see cref="Start"/> has been called and Stop hasn't.</summary>
         public bool IsRunning => mWorkers != null;
+
+        /// <summary>
+        /// True when a queued item has a better priority than
+        /// <paramref name="priority"/>. Lower numeric value is better.
+        /// Items already running are not counted.
+        /// </summary>
+        public bool HasQueuedPriorityBetterThan(int priority)
+        {
+            lock (mLock)
+            {
+                foreach (var existing in mIndex.Values)
+                {
+                    if (existing.Priority < priority)
+                        return true;
+                }
+                return false;
+            }
+        }
 
         /// <summary>
         /// Start the worker threads. Idempotent — repeated calls are

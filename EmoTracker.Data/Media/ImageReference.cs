@@ -32,6 +32,18 @@ namespace EmoTracker.Data.Media
         }
 
         /// <summary>
+        /// Set when decoding this reference fails. Listeners that are holding
+        /// a previous bitmap use this to drop it. A later successful decode
+        /// clears it.
+        /// </summary>
+        bool mResolutionFailed;
+        public bool ResolutionFailed
+        {
+            get { return mResolutionFailed; }
+            set { SetProperty(ref mResolutionFailed, value); }
+        }
+
+        /// <summary>
         /// Source image width in pixels, read from the image header at creation time.
         /// Used to create correctly-sized placeholder images so Avalonia's layout
         /// system can measure controls before the real image is resolved.

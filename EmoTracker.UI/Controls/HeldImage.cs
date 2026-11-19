@@ -16,6 +16,10 @@ namespace EmoTracker.UI.Controls
     /// so a stage change does not flash the transparent placeholder.
     /// A different item (a new DataContext) does not keep the previous
     /// bitmap: a recycled cell must not show the last item's icon.
+    /// While a bitmap is held, the incoming reference is asked for at
+    /// <see cref="ImagePriority.Immediate"/> so the swap is not left
+    /// behind prefetch. Pack load does not ask: the boost flag is still off.
+    /// A failed decode drops the held bitmap and shows the placeholder.
     /// </summary>
     public class HeldImage
     {
@@ -140,6 +144,12 @@ namespace EmoTracker.UI.Controls
                     SetSource(image, readyImage);
                     break;
                 case Action.HoldPrevious:
+                    // This control is waiting on the new bitmap. Ask for it
+                    // ahead of prefetch. The service ignores the ask until
+                    // the visible layout is up, so pack load cannot jump the queue.
+                    var images = ImageReferenceService.Instance;
+                    if (images.BoostDisplayedIcons)
+                        images.QueueResolution(incoming, ImagePriority.Immediate);
                     Listen(image, state, incoming);
                     break;
                 default:
@@ -154,29 +164,46 @@ namespace EmoTracker.UI.Controls
             PropertyChangedEventHandler handler = null;
             handler = (sender, args) =>
             {
-                if (args.PropertyName != null && args.PropertyName != nameof(ImageReference.ResolvedImage))
+                if (args.PropertyName != null
+                    && args.PropertyName != nameof(ImageReference.ResolvedImage)
+                    && args.PropertyName != nameof(ImageReference.ResolutionFailed))
                     return;
-                if (!ReferenceEquals(GetReference(image), reference))
-                {
-                    Unlisten(state);
-                    return;
-                }
-                if (!TryGetReady(reference, out var ready))
-                    return;
-                SetSource(image, ready);
-                Unlisten(state);
+                Settle(image, state, reference);
             };
             state.Reference = reference;
             state.Handler = handler;
             reference.PropertyChanged += handler;
 
-            // The decode may have finished between the ready-check above
-            // and this subscription.
-            if (TryGetReady(reference, out var already))
+            // The decode may have finished, or failed, between the
+            // ready-check above and this subscription.
+            Settle(image, state, reference);
+        }
+
+        /// <summary>
+        /// Applies a finished decode. A failure clears a bitmap this control
+        /// was holding and shows the transparent placeholder instead.
+        /// </summary>
+        static void Settle(Image image, State state, ImageReference reference)
+        {
+            if (!ReferenceEquals(GetReference(image), reference))
             {
-                SetSource(image, already);
                 Unlisten(state);
+                return;
             }
+            if (TryGetReady(reference, out var ready))
+            {
+                SetSource(image, ready);
+                Unlisten(state);
+                return;
+            }
+            if (!reference.ResolutionFailed)
+                return;
+
+            var standIn = reference.ResolvedImage as IImage;
+            if (standIn == null || !ImageReferenceService.IsPlaceholder(standIn))
+                standIn = ImageReferenceService.GetPlaceholder(reference);
+            SetSource(image, standIn);
+            Unlisten(state);
         }
 
         static void Unlisten(State state)

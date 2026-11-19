@@ -31,7 +31,6 @@ namespace EmoTracker.UI
         readonly HashSet<ContentControl> mMapTabs = new HashSet<ContentControl>();
         INotifyCollectionChanged mObservedTabs;
         Size mLastAvailableSize;
-        bool mRealizing;
 
         public IEnumerable<TabPanel.Tab> Tabs
         {
@@ -168,7 +167,6 @@ namespace EmoTracker.UI
             // Never retry a child whose template failed to apply.
             mRealized.Add(next);
             var size = FiniteSize(mLastAvailableSize);
-            mRealizing = true;
             next.IsVisible = true;
             try
             {
@@ -177,7 +175,6 @@ namespace EmoTracker.UI
             finally
             {
                 next.IsVisible = false;
-                mRealizing = false;
             }
             return true;
         }
@@ -251,14 +248,11 @@ namespace EmoTracker.UI
                 mLastAvailableSize = availableSize;
             }
 
-            var current = CurrentHost();
             double width = 0;
             double height = 0;
             foreach (var child in Children)
             {
                 if (!child.IsVisible)
-                    continue;
-                if (mRealizing && !ReferenceEquals(child, current))
                     continue;
                 child.Measure(availableSize);
                 if (child is ContentControl host)
