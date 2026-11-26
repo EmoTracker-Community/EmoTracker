@@ -25,6 +25,7 @@
     <!-- Reference the assemblies-under-test. -->
     <ProjectReference Include="..\EmoTracker.Core\EmoTracker.Core.csproj" />
     <ProjectReference Include="..\EmoTracker.Data\EmoTracker.Data.csproj" />
+    <ProjectReference Include="..\EmoTracker.UI\EmoTracker.UI.csproj" />
     <!-- Plain reference so we can instantiate KVPropertyGenerator directly in
          golden tests via the Roslyn driver API. We don't add it as an Analyzer
          here — this project doesn't host any KV-attributed types of its own. -->

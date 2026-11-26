@@ -647,6 +647,7 @@ namespace EmoTracker
             //  set, resolution falls back to synchronous on-demand behaviour.
             ImageReferenceService.Instance.SyncMode = Data.ApplicationSettings.Instance.NoAsyncImages;
             ImageReferenceService.Instance.Start();
+            LayoutWarmup.Start();
 
             //  Load and start extensions. Install the ExtensionManager
             //  as the lifecycle observer FIRST so package- and tracker-
@@ -1913,6 +1914,12 @@ Failed to save workspace to ```{0}```.
             // event stream directly (see VoiceRecognitionExtension.Start).
 
             NotifyPropertyChanged("MainWindowTitle");
+
+            // Hold idle image prefetch until the visible layout has been
+            // queued, and ignore the icon assignments pack load itself makes.
+            ImageReferenceService.Instance.BoostDisplayedIcons = false;
+            ImageReferenceService.Instance.DeferIdlePrefetch = true;
+
             // Phase 7.1.h: image caches are owned by PackageInstance now;
             // a pack-load starting on one PI doesn't disturb others, and
             // each PI's cache is freed by its Dispose. The service-level
@@ -1986,6 +1993,16 @@ Failed to save workspace to ```{0}```.
             OpenPackageDocumentationCommand.RaiseCanExecuteChanged();
 
             WindowService.Instance.FocusMainWindow();
+
+            // Run after the visible layout has been assigned (that assignment
+            // is synchronous above) so idle prefetch does not start first.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                var images = ImageReferenceService.Instance;
+                images.BoostDisplayedIcons = true;
+                images.DeferIdlePrefetch = false;
+                LayoutWarmup.Schedule();
+            }, Avalonia.Threading.DispatcherPriority.Background);
 
             PackageLoadComplete?.Invoke(this, EventArgs.Empty);
         }

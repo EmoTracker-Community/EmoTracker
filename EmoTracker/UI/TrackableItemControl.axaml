@@ -24,7 +24,7 @@
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
                             IsVisible="{Binding MaskInput, Converter={x:Static converters:BoolInverseConverter.Instance}, FallbackValue=True}"
-                            Source="{Binding Icon.ResolvedImage, FallbackValue={x:Null}}">
+                            controls:HeldImage.Reference="{Binding Icon}">
                             <Image.Width>
                                 <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Width">
                                     <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />
@@ -44,7 +44,7 @@
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
                             IsVisible="{Binding MaskInput, FallbackValue=False}"
-                            Source="{Binding Icon.ResolvedImage, FallbackValue={x:Null}}">
+                            controls:HeldImage.Reference="{Binding Icon}">
                             <controls:InputMaskingImage.Width>
                                 <MultiBinding Converter="{x:Static converters:IconDimensionMultiConverter.Instance}" ConverterParameter="Width">
                                     <Binding Path="IconWidth" RelativeSource="{RelativeSource AncestorType=local:TrackableItemControl}" />

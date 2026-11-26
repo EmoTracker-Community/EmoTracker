@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using EmoTracker.Data.Items;
 using EmoTracker.Data.Locations;
 using EmoTracker.Data.Sessions;
 
@@ -36,6 +37,7 @@ namespace EmoTracker.Data.Notes
             if (!mItems.Contains(item))
             {
                 mItems.Add(item);
+                ItemBase.NotifyDisplayed(item);
                 return true;
             }
 

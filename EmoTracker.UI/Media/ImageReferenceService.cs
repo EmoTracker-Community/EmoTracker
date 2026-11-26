@@ -1,5 +1,6 @@
 using EmoTracker.Core;
 using EmoTracker.Core.Threading;
+using EmoTracker.Data.Items;
 using EmoTracker.Data.Media;
 using EmoTracker.UI.Media.Resolvers;
 using System;
@@ -23,8 +24,13 @@ namespace EmoTracker.UI.Media
     {
         /// <summary>The UI is waiting to display this image right now.</summary>
         Immediate = 0,
-        /// <summary>Standard pre-cache priority during pack load.</summary>
+        /// <summary>Images on the layout that is currently showing.</summary>
         Normal = 100,
+        /// <summary>
+        /// Icons and layout images that are not on screen yet. Decoded
+        /// one at a time, and only while no Immediate or Normal work is running.
+        /// </summary>
+        Idle = 1000,
     }
 
     /// <summary>
@@ -147,12 +153,88 @@ namespace EmoTracker.UI.Media
             return GetPlaceholder(imageRef.SourceWidth, imageRef.SourceHeight);
         }
 
+        /// <summary>
+        /// True when <paramref name="image"/> is one of the transparent
+        /// stand-ins <see cref="GetPlaceholder(int, int)"/> hands out.
+        /// A decoded icon is never the same instance.
+        /// </summary>
+        public static bool IsPlaceholder(object image)
+        {
+            if (image == null)
+                return false;
+
+            lock (sPlaceholderLock)
+            {
+                foreach (var entry in sPlaceholderCache.Values)
+                {
+                    if (ReferenceEquals(entry, image))
+                        return true;
+                }
+            }
+            return false;
+        }
+
         // ── Worker Queue ─────────────────────────────────────────────────
-        // Generic priority queue + worker pool. One worker per logical
-        // CPU core (image decode + filter is CPU-bound). Drain event
-        // forces a UI relayout so controls sized for placeholders adopt
-        // the resolved image dimensions.
+        // One worker per logical CPU. Pack load enqueues at Idle. Anything
+        // about to be shown re-enqueues that same image at a higher
+        // priority, and the queue moves the existing entry up. While
+        // prefetch is deferred, Idle items sit aside so a worker cannot
+        // start one before the visible layout has been queued.
         PriorityWorkQueue<ImageReference> mQueue;
+        readonly object mIdleLock = new object();
+        readonly Dictionary<ImageReference, ImageReference> mDeferredIdle = new Dictionary<ImageReference, ImageReference>();
+        bool mDeferIdlePrefetch;
+        int mActiveVisible;
+
+        /// <summary>
+        /// While false, an icon change does not jump the decode queue.
+        /// Pack load assigns every item's starting icon; those stay at
+        /// idle until the visible layout is boosted. Set true once that
+        /// layout is on screen so a later stage change decodes immediately.
+        /// </summary>
+        public bool BoostDisplayedIcons { get; set; }
+
+        /// <summary>
+        /// While true, Idle items are held off the worker queue. Set for
+        /// the duration of a pack load so the visible layout can be queued
+        /// first. Clearing it releases the held items at Idle priority.
+        /// </summary>
+        public bool DeferIdlePrefetch
+        {
+            get { lock (mIdleLock) return mDeferIdlePrefetch; }
+            set
+            {
+                List<ImageReference> release = null;
+                lock (mIdleLock)
+                {
+                    if (mDeferIdlePrefetch == value)
+                        return;
+                    mDeferIdlePrefetch = value;
+                    if (!value && mDeferredIdle.Count > 0)
+                    {
+                        release = new List<ImageReference>(mDeferredIdle.Values);
+                        mDeferredIdle.Clear();
+                    }
+                }
+
+                if (release != null)
+                {
+                    foreach (var imageRef in release)
+                        EnqueueLive(imageRef, ImagePriority.Idle);
+                }
+            }
+        }
+
+        bool mIconHooked;
+
+        // Idle completions are applied a few dozen at a time so a large
+        // pack does not post one UI-thread update per decoded image.
+        readonly object mDeferredLock = new object();
+        readonly List<(List<ImageReference> instances, ImageReference fallback, IImage image)> mDeferred
+            = new List<(List<ImageReference>, ImageReference, IImage)>();
+        int mDeferredGeneration;
+        bool mDeferredPosted;
+        const int DeferredBatchSize = 32;
 
         /// <summary>
         /// When true, <see cref="RequestImage"/> resolves synchronously on the
@@ -186,27 +268,17 @@ namespace EmoTracker.UI.Media
                 return;
             }
 
+            if (!mIconHooked)
+            {
+                mIconHooked = true;
+                ItemBase.DisplayedIconChanged += OnDisplayedIconChanged;
+            }
+
             mQueue = new PriorityWorkQueue<ImageReference>(
                 name: "ImageReferenceService",
                 workerCount: -1, // ProcessorCount
                 threadPriority: ThreadPriority.BelowNormal,
                 onException: null /* swallowed; UI keeps placeholder */);
-
-            // Once a batch of work drains, force the UI to re-measure
-            // layouts so controls sized for placeholders adopt the
-            // resolved image dimensions. Posted to the UI thread at
-            // Background priority so it doesn't preempt user input.
-            mQueue.QueueDrained += () =>
-            {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (Avalonia.Application.Current?.ApplicationLifetime
-                        is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-                    {
-                        desktop.MainWindow?.InvalidateMeasure();
-                    }
-                }, DispatcherPriority.Background);
-            };
 
             ImageReference.OnImageReferenceCreated = (imageRef) =>
             {
@@ -268,11 +340,37 @@ namespace EmoTracker.UI.Media
                     imageRef.ResolvedImage = GetPlaceholder(imageRef);
                 }
 
+                // Creation is prefetch. A visible layout or a user action
+                // re-enqueues the same image at a higher priority.
                 if (shouldQueue)
-                    QueueResolution(imageRef, ImagePriority.Normal);
+                    QueueResolution(imageRef, ImagePriority.Idle);
             };
 
             mQueue.Start();
+        }
+
+        /// <summary>
+        /// Re-measure once the images the user is waiting on have finished.
+        /// Prefetch staying queued must not delay that. Posted at Background
+        /// so it runs after the resolved bitmaps have been applied.
+        /// </summary>
+        static void PostRemeasure()
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (Avalonia.Application.Current?.ApplicationLifetime
+                    is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                {
+                    desktop.MainWindow?.InvalidateMeasure();
+                }
+            }, DispatcherPriority.Background);
+        }
+
+        void OnDisplayedIconChanged(ImageReference icon)
+        {
+            if (!BoostDisplayedIcons || icon == null)
+                return;
+            QueueResolution(icon, ImagePriority.Immediate);
         }
 
         /// <summary>
@@ -287,6 +385,8 @@ namespace EmoTracker.UI.Media
                 mQueue.Dispose();
                 mQueue = null;
             }
+            lock (mIdleLock)
+                mDeferredIdle.Clear();
         }
 
         /// <summary>
@@ -298,10 +398,18 @@ namespace EmoTracker.UI.Media
         public void ClearImageCache()
         {
             mQueue?.Clear();
+            lock (mIdleLock)
+                mDeferredIdle.Clear();
             mFallbackCache.Clear();
             lock (mInstancesLock)
             {
                 mPendingInstances.Clear();
+            }
+            lock (mDeferredLock)
+            {
+                mDeferredGeneration++;
+                mDeferred.Clear();
+                mDeferredPosted = false;
             }
         }
 
@@ -317,10 +425,57 @@ namespace EmoTracker.UI.Media
             if (ContainsCached(imageRef)) return;
             if (mQueue == null) return; // sync mode or pre-Start
 
-            // Capture the imageRef into the work delegate; the queue
-            // dedupes so the closure is created once per (key, boost).
+            if (priority == ImagePriority.Idle)
+            {
+                // Already waiting at a higher priority: leave it there.
+                if (mQueue.Contains(imageRef))
+                    return;
+                lock (mIdleLock)
+                {
+                    if (mDeferIdlePrefetch)
+                    {
+                        if (!mDeferredIdle.ContainsKey(imageRef))
+                            mDeferredIdle.Add(imageRef, imageRef);
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                lock (mIdleLock)
+                    mDeferredIdle.Remove(imageRef);
+            }
+
+            EnqueueLive(imageRef, priority);
+        }
+
+        void EnqueueLive(ImageReference imageRef, ImagePriority priority)
+        {
+            if (mQueue == null)
+                return;
             var captured = imageRef;
-            mQueue.Enqueue(captured, (int)priority, () => ResolveAndPost(captured));
+            mQueue.Enqueue(captured, (int)priority, () => RunQueued(captured, priority));
+        }
+
+        void RunQueued(ImageReference imageRef, ImagePriority priority)
+        {
+            bool visible = priority != ImagePriority.Idle;
+            if (visible)
+                Interlocked.Increment(ref mActiveVisible);
+            try
+            {
+                ResolveAndPost(imageRef, deferUi: !visible);
+            }
+            finally
+            {
+                if (visible
+                    && Interlocked.Decrement(ref mActiveVisible) == 0
+                    && mQueue != null
+                    && !mQueue.HasQueuedPriorityBetterThan((int)ImagePriority.Idle))
+                {
+                    PostRemeasure();
+                }
+            }
         }
 
         /// <summary>
@@ -390,9 +545,19 @@ namespace EmoTracker.UI.Media
         }
 
         /// <summary>
-        /// Number of items currently in the background work queue.
+        /// Number of items waiting to decode, including prefetch held
+        /// until the visible layout has been queued.
         /// </summary>
-        public int QueueCount => mQueue?.QueueCount ?? 0;
+        public int QueueCount
+        {
+            get
+            {
+                int held;
+                lock (mIdleLock)
+                    held = mDeferredIdle.Count;
+                return (mQueue?.QueueCount ?? 0) + held;
+            }
+        }
 
         /// <summary>
         /// Number of resolved images in the service-wide fallback cache
@@ -447,48 +612,55 @@ namespace EmoTracker.UI.Media
 
         // Worker-thread entry point: resolve the image and post the
         // result to all instances that share the same equality key.
-        // Failures are silently swallowed (the UI keeps showing the
-        // placeholder).
-        void ResolveAndPost(ImageReference imageRef)
+        // A failure is reported so a control holding the previous bitmap
+        // can drop it.
+        void ResolveAndPost(ImageReference imageRef, bool deferUi)
         {
             // Skip if already resolved (recursive sub-resolves from
             // Filter / Layered resolvers may have populated this key).
             if (TryGetCached(imageRef, out IImage already))
             {
-                PostResolvedImage(imageRef, already);
+                PostResolvedImage(imageRef, already, deferUi);
                 return;
             }
 
+            IImage resolved = null;
             try
             {
-                if (!TryGetCached(imageRef, out IImage resolved))
+                if (!TryGetCached(imageRef, out resolved))
                     resolved = ResolveAndCache(imageRef);
-                PostResolvedImage(imageRef, resolved);
             }
             catch
             {
-                // Individual resolution failures are silently ignored.
+                // Missing file, bad filter, decode error. Report it below.
+                resolved = null;
             }
+            PostResolvedImage(imageRef, resolved, deferUi);
         }
 
-        void PostResolvedImage(ImageReference imageRef, IImage resolved)
+        void PostResolvedImage(ImageReference imageRef, IImage resolved, bool deferUi)
         {
             if (resolved == null)
             {
-                // Resolution failed (file missing, decode error,
-                // PackageInstance disposed mid-resolve, etc.). The
-                // existing pending instances stay on their
-                // placeholders, but we MUST clear the pending list
-                // for this key — otherwise a subsequent ImageReference
-                // with the same key that arrives later would skip
-                // queue (because nothing's cached but the key is
-                // tracked as in-flight) and join a list whose worker
-                // already gave up. Clearing lets a future re-creation
-                // retry the resolution.
+                // Resolution failed (file missing, bad filter, decode
+                // error, PackageInstance disposed mid-resolve, etc.).
+                // Clear the pending list so a later ImageReference with
+                // the same key can retry. Tell the instances that were
+                // waiting so a held bitmap is dropped.
+                List<ImageReference> failed;
                 lock (mInstancesLock)
                 {
-                    mPendingInstances.Remove(imageRef);
+                    if (mPendingInstances.TryGetValue(imageRef, out var list))
+                    {
+                        mPendingInstances.Remove(imageRef);
+                        failed = list;
+                    }
+                    else
+                    {
+                        failed = null;
+                    }
                 }
+                Dispatcher.UIThread.Post(() => ApplyFailed(failed, imageRef));
                 return;
             }
 
@@ -518,20 +690,105 @@ namespace EmoTracker.UI.Media
                 }
             }
 
+            if (deferUi)
+            {
+                int generation;
+                lock (mDeferredLock)
+                {
+                    generation = mDeferredGeneration;
+                    mDeferred.Add((instances, imageRef, resolved));
+                    if (mDeferredPosted)
+                        return;
+                    mDeferredPosted = true;
+                }
+                Dispatcher.UIThread.Post(
+                    () => FlushDeferred(generation),
+                    DispatcherPriority.Background);
+                return;
+            }
+
             // ResolvedImage must be set on the UI thread so that
             // PropertyChanged fires there and Avalonia bindings update.
-            Dispatcher.UIThread.Post(() =>
+            Dispatcher.UIThread.Post(() => ApplyResolved(instances, imageRef, resolved));
+        }
+
+        void FlushDeferred(int generation)
+        {
+            List<(List<ImageReference> instances, ImageReference fallback, IImage image)> batch = null;
+            bool more = false;
+            lock (mDeferredLock)
             {
-                if (instances != null)
+                if (generation != mDeferredGeneration)
                 {
-                    foreach (var instance in instances)
-                        instance.ResolvedImage = resolved;
+                    // ClearImageCache already cleared the flag. A flush
+                    // posted for the new generation owns it now.
+                    return;
                 }
-                else
+
+                int count = Math.Min(DeferredBatchSize, mDeferred.Count);
+                if (count > 0)
                 {
-                    imageRef.ResolvedImage = resolved;
+                    batch = mDeferred.GetRange(0, count);
+                    mDeferred.RemoveRange(0, count);
                 }
-            });
+                more = mDeferred.Count > 0;
+                mDeferredPosted = more;
+            }
+
+            if (batch != null)
+            {
+                foreach (var entry in batch)
+                    ApplyResolved(entry.instances, entry.fallback, entry.image);
+            }
+
+            if (more)
+            {
+                Dispatcher.UIThread.Post(
+                    () => FlushDeferred(generation),
+                    DispatcherPriority.Background);
+            }
+        }
+
+        static void ApplyResolved(List<ImageReference> instances, ImageReference fallback, IImage resolved)
+        {
+            if (resolved == null)
+                return;
+            if (instances != null)
+            {
+                foreach (var instance in instances)
+                {
+                    instance.ResolutionFailed = false;
+                    instance.ResolvedImage = resolved;
+                }
+            }
+            else if (fallback != null)
+            {
+                fallback.ResolutionFailed = false;
+                fallback.ResolvedImage = resolved;
+            }
+        }
+
+        static void ApplyFailed(List<ImageReference> instances, ImageReference fallback)
+        {
+            if (instances != null && instances.Count > 0)
+            {
+                foreach (var instance in instances)
+                    MarkFailed(instance);
+            }
+            else
+            {
+                MarkFailed(fallback);
+            }
+        }
+
+        static void MarkFailed(ImageReference imageRef)
+        {
+            if (imageRef == null)
+                return;
+            imageRef.ResolutionFailed = true;
+            var current = imageRef.ResolvedImage;
+            if (current != null && !IsPlaceholder(current))
+                imageRef.ResolvedImage = GetPlaceholder(imageRef);
         }
     }
 }
