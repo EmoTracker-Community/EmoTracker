@@ -106,6 +106,39 @@ namespace EmoTracker.Data
             target.PinLocationsOnItemCapture = mbSeedPinLocationsOnItemCapture;
         }
 
+        /// <summary>
+        /// Companion to <see cref="SeedIntoSession"/>, called by
+        /// <see cref="Sessions.SessionSettings"/>'s OnChanged hooks when a
+        /// forwarded setting is written directly on a state (menu bindings,
+        /// dev terminal, MCP tools, Lua). If the source is the active
+        /// state's settings, updates the persisted seed — unless the write
+        /// came from pack-load (init.lua), per
+        /// <see cref="Sessions.PackageLoader.IsLoading"/> — and raises
+        /// PropertyChanged so XAML bound to this singleton's forwarder
+        /// properties updates even though the write bypassed the forwarder
+        /// setter. Writes on non-active states (forks mid-pipeline,
+        /// definitional states) are ignored.
+        /// </summary>
+        internal void SyncSeedsFromSession(Sessions.SessionSettings source, string propertyName)
+        {
+            if (source == null || !ReferenceEquals(source, ActiveSessionSettings))
+                return;
+
+            if (!Sessions.PackageLoader.IsLoading)
+            {
+                switch (propertyName)
+                {
+                    case nameof(IgnoreAllLogic): mbSeedIgnoreAllLogic = source.IgnoreAllLogic; break;
+                    case nameof(DisplayAllLocations): mbSeedDisplayAllLocations = source.DisplayAllLocations; break;
+                    case nameof(AlwaysAllowClearing): mbSeedAlwaysAllowClearing = source.AlwaysAllowClearing; break;
+                    case nameof(AutoUnpinLocationsOnClear): mbSeedAutoUnpinLocationsOnClear = source.AutoUnpinLocationsOnClear; break;
+                    case nameof(PinLocationsOnItemCapture): mbSeedPinLocationsOnItemCapture = source.PinLocationsOnItemCapture; break;
+                }
+            }
+
+            NotifyPropertyChanged(propertyName);
+        }
+
         public bool IgnoreAllLogic
         {
             get
